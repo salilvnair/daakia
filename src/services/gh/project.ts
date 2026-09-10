@@ -40,6 +40,19 @@ export interface ProjectItem {
   values: Record<string, string>;
   /** Field name → the option id, for the single-selects a drag writes. */
   optionIds: Record<string, string>;
+  /**
+   * When each single-select last moved, and who moved it — 06E.
+   *
+   * GitHub carries this on the value itself, which is what lets a card say
+   * "mkulkarni moved this 40s ago" rather than "this changed somehow". It is
+   * only on the current value: there is no history here, and 07E does not
+   * pretend otherwise.
+   */
+  movedAt: Record<string, string>;
+  movedBy: Record<string, string>;
+  /** Sub-issues, and the issue this one is a sub-issue of — 07C. */
+  tracks: { number: number; title: string; state?: string }[];
+  trackedIn: { number: number; title: string }[];
 }
 
 export interface ProjectBoard {
@@ -71,12 +84,15 @@ query($owner:String!,$name:String!){
     } }
     issues(first:100, states:[OPEN,CLOSED], orderBy:{field:UPDATED_AT,direction:DESC}){ nodes {
       number
+      trackedIssues(first:20){ nodes { number title state } }
+      trackedInIssues(first:5){ nodes { number title } }
       projectItems(first:2){ nodes {
         id
         project { id }
         fieldValues(first:30){ nodes {
           ... on ProjectV2ItemFieldSingleSelectValue {
-            name optionId field { ... on ProjectV2FieldCommon { name } }
+            name optionId updatedAt creator { login }
+            field { ... on ProjectV2FieldCommon { name } }
           }
           ... on ProjectV2ItemFieldDateValue {
             date field { ... on ProjectV2FieldCommon { name } }
@@ -104,6 +120,8 @@ interface RawValue {
   text?: string;
   title?: string;
   startDate?: string;
+  updatedAt?: string;
+  creator?: { login?: string };
   field?: { name?: string };
 }
 
@@ -114,6 +132,8 @@ interface RawAnswer {
         fields?: { nodes?: (ProjectField | Record<string, never>)[] } }[] };
       issues?: { nodes?: {
         number?: number;
+        trackedIssues?: { nodes?: { number?: number; title?: string; state?: string }[] };
+        trackedInIssues?: { nodes?: { number?: number; title?: string }[] };
         projectItems?: { nodes?: {
           id?: string;
           project?: { id?: string };
@@ -182,16 +202,33 @@ export async function fetchProject(repo: string): Promise<ProjectBoard> {
 
     const values: Record<string, string> = {};
     const optionIds: Record<string, string> = {};
+    const movedAt: Record<string, string> = {};
+    const movedBy: Record<string, string> = {};
     for (const v of item.fieldValues?.nodes ?? []) {
       const field = v.field?.name;
       if (!field) continue;
       const text = textOf(v);
       if (text !== undefined) values[field] = text;
       if (v.optionId) optionIds[field] = v.optionId;
+      if (v.updatedAt) movedAt[field] = v.updatedAt;
+      if (v.creator?.login) movedBy[field] = v.creator.login;
       /* An iteration's start is the date a roadmap can place it on. */
       if (v.startDate) values[`${field} start`] = v.startDate;
     }
-    items.push({ id: item.id, number: issue.number, values, optionIds });
+    items.push({
+      id: item.id,
+      number: issue.number,
+      values,
+      optionIds,
+      movedAt,
+      movedBy,
+      tracks: (issue.trackedIssues?.nodes ?? [])
+        .filter(t => typeof t.number === 'number')
+        .map(t => ({ number: t.number!, title: t.title ?? '', state: t.state })),
+      trackedIn: (issue.trackedInIssues?.nodes ?? [])
+        .filter(t => typeof t.number === 'number')
+        .map(t => ({ number: t.number!, title: t.title ?? '' })),
+    });
   }
 
   return { repo, id: project.id, number: project.number, title: project.title, fields, items };

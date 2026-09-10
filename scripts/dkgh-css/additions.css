@@ -839,3 +839,18 @@
 */
 .dkgh .mdbody.dkgh-md > *:first-child { margin-top: 0; }
 .dkgh .mdbody.dkgh-md > *:last-child { margin-bottom: 0; }
+
+/*
+  `.fh` outside the filter rail.
+
+  The mock only ever draws it inside a `.facet`, so that is where the rule was
+  scoped — and the lane headings on the column board and the roadmap, and the
+  headings in the why panel, came out as body text with the count glued to the
+  name. The facet's own rule still wins inside a facet, so nothing there moves.
+*/
+.dkgh .fh {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--dk-faint);
+}
+.dkgh .fh .n { margin-left: auto; font-family: var(--mono); font-weight: 500; }

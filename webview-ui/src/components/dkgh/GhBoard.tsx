@@ -78,7 +78,8 @@ import { useToastStore } from '../../store/toast-store';
 import { GhColumns, GhColumnControls, type Move } from './GhColumns';
 import { GhRoadmap, type Reschedule, type Scale } from './GhRoadmap';
 import {
-  absentBecause, dateFields, projectDimensions, useProject, withProject, type ProjectField,
+  absentBecause, changedSince, dateFields, projectDimensions, recordSlips, useProject,
+  withProject, type Elsewhere, type ProjectField, type Slip,
 } from './project-store';
 import { Ico, type IcoName } from './GhIcons';
 import {
@@ -172,7 +173,16 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
   /** 06 — which single-select the columns are, and what colours the cards. */
   const [columnField, setColumnField] = useState('');
   const [colourBy, setColourBy] = useState('');
+  /** 06C — the lanes, and 06D — the columns put away. */
+  const [laneBy, setLaneBy] = useState('');
+  const [hiddenColumns, setHiddenColumns] = useState<string[]>([]);
   const [wip, setWip] = useState(0);
+  /** 06E — what moved on GitHub between two reads, and 07E's own record. */
+  const [elsewhere, setElsewhere] = useState<Elsewhere[]>([]);
+  const [slips, setSlips] = useState<Slip[]>([]);
+  /** The issues this session wrote to, which is what makes a change a conflict. */
+  const touched = useRef<Set<number>>(new Set());
+  const lastProject = useRef<typeof project>(null);
   /** 07 — how wide the roadmap's window is. */
   const [scale, setScale] = useState<Scale>('month');
   /** Issues with a Project write in flight, and what it is writing. */
@@ -188,6 +198,22 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
   */
   const addToast = useToastStore(t => t.addToast);
   const project = useProject(repo, projectRead);
+
+  /*
+    06E and 07E, both off the same pair of reads.
+
+    A change is only news if this session saw the value before it changed — so
+    the comparison is against the previous read rather than against a clock,
+    and the first read of a repository reports nothing, which is right.
+  */
+  useEffect(() => {
+    if (!project?.id) return;
+    const before = lastProject.current;
+    lastProject.current = project;
+    if (!before || before.repo !== project.repo) { setSlips(recordSlips(repo, null, project)); return; }
+    setElsewhere(changedSince(before, project, touched.current));
+    setSlips(recordSlips(repo, before, project));
+  }, [project, repo]);
 
   /** The single-selects the columns can be, and the dates a roadmap can use. */
   const columnFields = useMemo(
@@ -218,6 +244,9 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
     const item = project?.items.find(i => i.number === issue.number);
     if (!project?.id || !item) return;
 
+    /* Touched by this session, which is what turns somebody else's change on
+       the same card into a conflict rather than an update. */
+    touched.current.add(issue.number);
     setWriting(prev => new Map(prev).set(issue.number, `${field.name} = ${value}`));
     const done = (evt: MessageEvent) => {
       const msg = evt.data as Record<string, unknown>;
@@ -1243,6 +1272,10 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
             colourBy={colourBy}
             options={dimensions.filter(d => d.dimension !== columnOn?.name.toLowerCase())}
             onColour={setColourBy}
+            laneBy={laneBy}
+            onLane={setLaneBy}
+            hidden={hiddenColumns}
+            onHidden={setHiddenColumns}
             wip={wip}
             onWip={setWip}
           />
@@ -1415,9 +1448,20 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
                 project={project}
                 field={columnOn}
                 colourBy={colourBy || dimensions.find(d => /priority/i.test(d.dimension))?.dimension}
+                laneBy={laneBy || undefined}
+                hidden={hiddenColumns}
                 dimensions={dimensions}
                 wip={wip}
                 pending={writing}
+                elsewhere={elsewhere}
+                onTakeTheirs={() => setElsewhere([])}
+                onKeepMine={change => {
+                  const back = columnOn?.options?.find(o => o.name === change.was);
+                  const issue = all.find(i => i.number === change.number);
+                  if (!columnOn || !back || !issue) return;
+                  setElsewhere(prev => prev.filter(e => e !== change));
+                  writeProject(issue, columnOn, change.was, back.id);
+                }}
                 onOpen={open}
                 onMove={(move: Move) => {
                   const option = columnOn?.options?.find(o => o.name === move.to);
@@ -1433,7 +1477,10 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
                 end={endField}
                 scale={scale}
                 colourBy={colourBy || dimensions[0]?.dimension}
+                laneBy={laneBy || undefined}
                 dimensions={dimensions}
+                milestones={meta?.milestones ?? []}
+                slips={slips}
                 pending={writing}
                 onOpen={open}
                 onReschedule={(change: Reschedule) =>

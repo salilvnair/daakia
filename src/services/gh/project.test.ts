@@ -63,7 +63,46 @@ describe('fetchProject', () => {
       number: 41,
       values: { Status: 'Todo', 'Target date': '2026-09-11' },
       optionIds: { Status: 'f75ad846' },
+      movedAt: {},
+      movedBy: {},
+      tracks: [],
+      trackedIn: [],
     }]);
+  });
+
+  it('carries who last moved a value and when — 06E says so by name', async () => {
+    answers(board({
+      issues: { nodes: [{
+        number: 41,
+        projectItems: { nodes: [{
+          id: 'PVTI_41',
+          project: { id: 'PVT_1' },
+          fieldValues: { nodes: [{
+            name: 'In Progress', optionId: '47fc9ee4',
+            updatedAt: '2026-09-10T09:00:00Z', creator: { login: 'mkulkarni' },
+            field: { name: 'Status' },
+          }] },
+        }] },
+      }] },
+    }));
+    const [item] = (await fetchProject('acme/app')).items;
+    expect(item.movedBy.Status).toBe('mkulkarni');
+    expect(item.movedAt.Status).toBe('2026-09-10T09:00:00Z');
+  });
+
+  it('reads the sub-issues a roadmap draws dependencies from', async () => {
+    answers(board({
+      issues: { nodes: [{
+        number: 41,
+        trackedIssues: { nodes: [{ number: 45, title: 'The retry ceiling', state: 'OPEN' }] },
+        trackedInIssues: { nodes: [{ number: 30, title: 'SSO epic' }] },
+        projectItems: { nodes: [{ id: 'i', project: { id: 'PVT_1' },
+          fieldValues: { nodes: [] } }] },
+      }] },
+    }));
+    const [item] = (await fetchProject('acme/app')).items;
+    expect(item.tracks).toEqual([{ number: 45, title: 'The retry ceiling', state: 'OPEN' }]);
+    expect(item.trackedIn).toEqual([{ number: 30, title: 'SSO epic' }]);
   });
 
   it('keeps the option id beside the value, so a drag can write it', async () => {

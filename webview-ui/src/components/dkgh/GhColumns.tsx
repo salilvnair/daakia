@@ -19,15 +19,29 @@
  * counts and the bar goes red, because the useful thing a limit does is make an
  * overloaded column obvious in a stand-up, not stop somebody working.
  *
+ * **06C — lanes answer the other half.** Columns say *what state*; lanes say
+ * *whose*, or *which module*. Together they answer the question a standup
+ * actually opens with, which is neither of those on its own.
+ *
+ * **06D — the columns are arrangeable.** A Status field usually has more values
+ * than anyone wants on screen at once, in an order somebody chose for a
+ * different purpose. Hiding one does not hide its issues: they fall into the
+ * lane for everything not shown, because a card that vanishes from a board is
+ * how work gets forgotten.
+ *
  * **06E — the board can disagree with GitHub**, and when it does it says so
- * rather than resolving it. Auto-refresh pauses while a card is in the air, so
- * a refresh landing mid-drag cannot silently undo the drop.
+ * rather than resolving it. A conflict is only a conflict on a card you also
+ * changed; everything else just updates, because somebody else closing an issue
+ * is news rather than a decision you have to make.
  */
 import { useMemo, useRef, useState } from 'react';
 import { Ico } from './GhIcons';
 import { avClass, chipOf, prClass } from './GhCards';
 import { GhNote } from './GhShell';
-import { absentBecause, type ProjectBoard, type ProjectField } from './project-store';
+import {
+  absentBecause, type Elsewhere, type ProjectBoard, type ProjectField,
+} from './project-store';
+import { sinceIso } from './format';
 import type { BoardIssue, ProposedDimension } from './board-types';
 
 /** The mock's five column tints, matched by what the column is called. */
@@ -49,7 +63,8 @@ export interface Move {
 }
 
 export function GhColumns({
-  issues, project, field, colourBy, dimensions, wip, onOpen, onMove, pending,
+  issues, project, field, colourBy, laneBy, hidden, dimensions, wip,
+  onOpen, onMove, pending, elsewhere, onKeepMine, onTakeTheirs,
 }: {
   issues: BoardIssue[];
   project: ProjectBoard | null;
@@ -57,6 +72,10 @@ export function GhColumns({
   field?: ProjectField;
   /** The dimension the card edge is coloured by. */
   colourBy?: string;
+  /** 06C — the dimension the lanes are, or nothing for one lane. */
+  laneBy?: string;
+  /** 06D — column values the reader has put away. */
+  hidden: string[];
   dimensions: ProposedDimension[];
   /** 06B — how many a column is comfortable with. 0 is no limit. */
   wip: number;
@@ -65,10 +84,16 @@ export function GhColumns({
   onMove: (move: Move) => void;
   /** Issues with a write in flight, so a card can say it is not settled. */
   pending: Map<number, string>;
+  /** 06E — what moved on GitHub since this session last looked. */
+  elsewhere: Elsewhere[];
+  onKeepMine: (change: Elsewhere) => void;
+  onTakeTheirs: () => void;
 }) {
   const [dragging, setDragging] = useState<BoardIssue | undefined>();
   const [over, setOver] = useState<string | undefined>();
   const drag = useRef<BoardIssue | undefined>(undefined);
+
+  const away = useMemo(() => new Set(hidden), [hidden]);
 
   const columns = useMemo(() => {
     if (!field) return [];
@@ -78,15 +103,44 @@ export function GhColumns({
     const extra = [...new Set(issues
       .map(i => i.dimensions[field.name.toLowerCase()])
       .filter((v): v is string => !!v && !names.includes(v)))];
-    return [...names, ...extra, 'No ' + field.name.toLowerCase()];
-  }, [field, issues]);
+    return [...names, ...extra, 'No ' + field.name.toLowerCase()]
+      .filter(c => !away.has(c));
+  }, [field, issues, away]);
 
-  const at = (column: string) => {
+  /*
+    06C — the lanes.
+
+    One unnamed lane when nothing is chosen, so the markup is the same either
+    way and a board without lanes is not a different component.
+  */
+  const lanes = useMemo(() => {
+    if (!laneBy) return [{ name: '', issues }];
+    const known = dimensions.find(d => d.dimension === laneBy)?.options ?? [];
+    const groups = new Map<string, BoardIssue[]>();
+    for (const issue of issues) {
+      const key = issue.dimensions[laneBy] || `No ${laneBy}`;
+      groups.set(key, [...(groups.get(key) ?? []), issue]);
+    }
+    const order = [...known, ...[...groups.keys()].filter(k => !known.includes(k))];
+    return order.filter(k => groups.has(k)).map(name => ({ name, issues: groups.get(name)! }));
+  }, [issues, laneBy, dimensions]);
+
+  const at = (rows: BoardIssue[], column: string) => {
     if (!field) return [];
     const key = field.name.toLowerCase();
-    if (column.startsWith('No ')) return issues.filter(i => !i.dimensions[key]);
-    return issues.filter(i => i.dimensions[key] === column);
+    if (column.startsWith('No ')) {
+      /* 06D — a hidden column's issues land here rather than vanishing. A
+         card that disappears off a board is how work gets forgotten. */
+      return rows.filter(i => !i.dimensions[key] || away.has(i.dimensions[key]));
+    }
+    return rows.filter(i => i.dimensions[key] === column);
   };
+
+  /** 06E — the change on this card, if there is one. */
+  const changed = useMemo(
+    () => new Map(elsewhere.map(e => [e.number, e])),
+    [elsewhere],
+  );
 
   if (!field) {
     return (
@@ -117,13 +171,48 @@ export function GhColumns({
         </div>
       )}
 
+      {/* 06E — what somebody else did while you were looking */}
+      {elsewhere.length > 0 && (
+        <div className="chiprow" style={{
+          background: 'color-mix(in srgb, var(--dk-amber) 9%, transparent)',
+        }}>
+          <span className="lead" style={{ color: 'var(--dk-amber)' }}>Changed elsewhere</span>
+          <span style={{ fontSize: 12.6, color: 'var(--dk-text)' }}>
+            <b>
+              {elsewhere.length} card{elsewhere.length === 1 ? '' : 's'} moved on GitHub since
+              you last looked.
+            </b>{' '}
+            {elsewhere.some(e => e.mine)
+              ? `${elsewhere.filter(e => e.mine).length} of them ${
+                elsewhere.filter(e => e.mine).length === 1 ? 'is one' : 'are ones'} you touched.`
+              : 'None is one you touched.'}
+          </span>
+          <span className="sp" />
+          <button type="button" className="btn go" onClick={onTakeTheirs}>
+            <Ico name="refresh" />Take theirs
+          </button>
+        </div>
+      )}
+
+      {lanes.map(lane => (
+      <div key={lane.name || 'all'}>
+      {lane.name && (
+        <div className="fh" style={{ padding: '10px 19px 0' }}>
+          {lane.name}
+          <span className="n">{lane.issues.length}</span>
+        </div>
+      )}
       <div
         className="kan"
-        style={{ gridTemplateColumns: `repeat(${Math.min(6, columns.length)}, minmax(0, 1fr))` }}
+        style={{
+          gridTemplateColumns: `repeat(${Math.min(6, columns.length)}, minmax(0, 1fr))`,
+          paddingTop: lane.name ? 8 : undefined,
+          paddingBottom: lane.name ? 10 : undefined,
+        }}
         onDragEnd={() => { drag.current = undefined; setDragging(undefined); setOver(undefined); }}
       >
         {columns.map(column => {
-          const cards = at(column);
+          const cards = at(lane.issues, column);
           const full = wip > 0 && cards.length > wip;
           return (
             <div
@@ -173,7 +262,9 @@ export function GhColumns({
                   colourBy={colourBy}
                   dimensions={dimensions}
                   pending={pending.get(issue.number)}
+                  moved={changed.get(issue.number)}
                   onOpen={onOpen}
+                  onKeepMine={onKeepMine}
                   onDragStart={() => { drag.current = issue; setDragging(issue); }}
                 />
               ))}
@@ -186,6 +277,8 @@ export function GhColumns({
           );
         })}
       </div>
+      </div>
+      ))}
     </>
   );
 }
@@ -199,12 +292,17 @@ function statusClass(name: string): string {
   return 'st-todo';
 }
 
-function Card({ issue, colourBy, dimensions, pending, onOpen, onDragStart }: {
+function Card({
+  issue, colourBy, dimensions, pending, moved, onOpen, onKeepMine, onDragStart,
+}: {
   issue: BoardIssue;
   colourBy?: string;
   dimensions: ProposedDimension[];
   pending?: string;
+  /** 06E — what moved on this card, on GitHub, since this session looked. */
+  moved?: Elsewhere;
   onOpen: (issue: BoardIssue) => void;
+  onKeepMine: (change: Elsewhere) => void;
   onDragStart: () => void;
 }) {
   const colour = colourBy ? issue.dimensions[colourBy] : undefined;
@@ -221,14 +319,47 @@ function Card({ issue, colourBy, dimensions, pending, onOpen, onDragStart }: {
       style={{
         opacity: pending ? 0.6 : issue.state === 'CLOSED' ? 0.62 : 1,
         cursor: 'grab',
-        borderColor: urgent
-          ? 'color-mix(in srgb, var(--dk-red) 42%, transparent)'
+        /* A card somebody else moved is amber whether or not it is a conflict;
+           the difference is that a conflict offers a choice. */
+        borderColor: moved
+          ? 'color-mix(in srgb, var(--dk-amber) 55%, transparent)'
+          : urgent
+            ? 'color-mix(in srgb, var(--dk-red) 42%, transparent)'
+            : undefined,
+        background: moved
+          ? 'color-mix(in srgb, var(--dk-amber) 8%, transparent)'
           : undefined,
       }}
       onDragStart={onDragStart}
       onClick={() => onOpen(issue)}
     >
       <div className="t">{issue.title}</div>
+
+      {/* 06E — said on the card, by name, because that is where it matters */}
+      {moved && (
+        <>
+          <div className="f" style={{ color: 'var(--dk-amber)' }}>
+            <Ico name="warn" />
+            {moved.by ? `${moved.by} moved this` : 'This moved'} to {moved.now}
+            {moved.at ? `, ${sinceIso(moved.at)}` : ''}
+          </div>
+          {moved.mine && (
+            <div className="f">
+              <button
+                type="button"
+                className="btn"
+                style={{ padding: '2px 7px', fontSize: 11.4 }}
+                title={`Put it back to ${moved.was}`}
+                onClick={e => { e.stopPropagation(); onKeepMine(moved); }}
+              >
+                Keep mine
+              </button>
+              <span className="sub">theirs is showing</span>
+            </div>
+          )}
+        </>
+      )}
+
       <div className="f">
         {colour && <Chip value={colour} field={colourBy!} dimensions={dimensions} />}
         <span className="sp" />
@@ -258,16 +389,26 @@ function Chip({ value, field, dimensions }: {
 }
 
 /** The bar under the columns, for the two things 06 lets you choose. */
-export function GhColumnControls({ fields, field, onField, colourBy, options, onColour, wip, onWip }: {
+export function GhColumnControls({
+  fields, field, onField, colourBy, options, onColour, laneBy, onLane,
+  hidden, onHidden, wip, onWip,
+}: {
   fields: ProjectField[];
   field?: ProjectField;
   onField: (name: string) => void;
   colourBy?: string;
   options: ProposedDimension[];
   onColour: (dimension: string) => void;
+  /** 06C. */
+  laneBy?: string;
+  onLane: (dimension: string) => void;
+  /** 06D. */
+  hidden: string[];
+  onHidden: (hidden: string[]) => void;
   wip: number;
   onWip: (n: number) => void;
 }) {
+  const [arranging, setArranging] = useState(false);
   return (
     <>
       {fields.length > 1 && (
@@ -283,6 +424,59 @@ export function GhColumnControls({ fields, field, onField, colourBy, options, on
             <option key={o.dimension} value={o.dimension}>Colour: {o.heading}</option>
           ))}
         </select>
+      )}
+      {options.length > 0 && (
+        <select className="pill" value={laneBy ?? ''} onChange={e => onLane(e.target.value)}>
+          <option value="">Lanes: none</option>
+          {options.map(o => (
+            <option key={o.dimension} value={o.dimension}>Lanes: {o.heading}</option>
+          ))}
+        </select>
+      )}
+      {/* 06D — arranging the columns */}
+      {field && (
+        <span style={{ position: 'relative' }}>
+          <button type="button" className={`pill${hidden.length ? ' on' : ''}`}
+                  onClick={() => setArranging(a => !a)}>
+            <Ico name="board" />
+            {hidden.length ? `${hidden.length} hidden` : 'Arrange'}
+          </button>
+          {arranging && (
+            <>
+              <span className="fixed inset-0" style={{ zIndex: 20 }}
+                    onClick={() => setArranging(false)} />
+              <div
+                className="opt"
+                style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 21,
+                         width: 230, gap: 2, padding: 5,
+                         boxShadow: '0 10px 28px rgba(0,0,0,.45)' }}
+              >
+                <div className="fl">Columns on this board</div>
+                {(field.options ?? []).map(o => {
+                  const on = !hidden.includes(o.name);
+                  return (
+                    <div
+                      key={o.id}
+                      className={`fct${on ? ' on' : ''}`}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => onHidden(on
+                        ? [...hidden, o.name]
+                        : hidden.filter(h => h !== o.name))}
+                    >
+                      <span className="bx">{on && <Ico name="check" />}</span>
+                      {o.name}
+                    </div>
+                  );
+                })}
+                <div className="fct" style={{ display: 'block', cursor: 'default',
+                                              color: 'var(--dk-faint)', lineHeight: 1.5 }}>
+                  Hiding a column does not hide its issues — they fall into the last one, so
+                  nothing drops off the board.
+                </div>
+              </div>
+            </>
+          )}
+        </span>
       )}
       <button
         type="button"

@@ -34,6 +34,12 @@ export interface ProjectItem {
   number: number;
   values: Record<string, string>;
   optionIds: Record<string, string>;
+  /** When each single-select last moved, and who moved it — 06E. */
+  movedAt: Record<string, string>;
+  movedBy: Record<string, string>;
+  /** Sub-issues, and the issue this one is a sub-issue of — 07C. */
+  tracks: { number: number; title: string; state?: string }[];
+  trackedIn: { number: number; title: string }[];
 }
 
 export interface ProjectBoard {
@@ -141,4 +147,137 @@ export function absentBecause(board: ProjectBoard | null): string {
       + 'have. `gh auth refresh --scopes read:project` adds it without signing you out.';
   }
   return board.absent ?? '';
+}
+
+/* ── 06E: what moved somewhere else ───────────────────────────────────────── */
+
+export interface Elsewhere {
+  number: number;
+  field: string;
+  /** What it says now. */
+  now: string;
+  /** What it said when this session last looked. */
+  was: string;
+  by?: string;
+  at?: string;
+  /**
+   * True when this session also changed that card.
+   *
+   * **A conflict is only a conflict on a card you also changed.** Everything
+   * else just updates: somebody else closing an issue is news, not a decision
+   * you have to make, and a board that asked about it would be asking about
+   * almost everything.
+   */
+  mine: boolean;
+}
+
+/**
+ * What changed between two reads.
+ *
+ * Compared against the previous read rather than against a timestamp, because
+ * "since you last looked" is the question somebody is actually asking, and it
+ * is the only version of it this side can answer honestly.
+ */
+export function changedSince(
+  before: ProjectBoard | null, after: ProjectBoard | null, mine: Set<number>,
+): Elsewhere[] {
+  if (!before?.id || !after?.id) return [];
+  const was = new Map(before.items.map(i => [i.number, i]));
+  const out: Elsewhere[] = [];
+
+  for (const item of after.items) {
+    const old = was.get(item.number);
+    if (!old) continue;
+    for (const [field, now] of Object.entries(item.values)) {
+      const then = old.values[field];
+      if (then === undefined || then === now) continue;
+      out.push({
+        number: item.number,
+        field,
+        now,
+        was: then,
+        by: item.movedBy[field],
+        at: item.movedAt[field],
+        mine: mine.has(item.number),
+      });
+    }
+  }
+  return out;
+}
+
+/* ── 07E: what the dates used to say ──────────────────────────────────────── */
+
+export interface Slip {
+  number: number;
+  field: string;
+  from: string;
+  to: string;
+  /** When dkgh saw it change. Its own observation, not GitHub's history. */
+  at: number;
+}
+
+const SLIP_KEY = 'dkgh:slip';
+/** Enough to see a pattern; not enough to become a database. */
+const SLIP_MAX = 400;
+
+/**
+ * The date changes dkgh has personally watched happen.
+ *
+ * **GitHub does not keep a history of Project field values.** The API carries
+ * the current value and when it last changed, and nothing before that — so a
+ * roadmap that claimed to show what a date "used to say" would be inventing it.
+ *
+ * What is honest is what this app has seen with its own eyes: every time a
+ * read comes back with a different date from the one before it, that is written
+ * down here, locally, with the day it was noticed. It is a partial record and
+ * the screen says so — a slip that happened before dkgh was pointed at this
+ * repository is not in it and cannot be.
+ */
+export function readSlips(repo: string): Slip[] {
+  try {
+    const raw = localStorage.getItem(`${SLIP_KEY}:${repo}`);
+    const parsed = raw ? (JSON.parse(raw) as Slip[]) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Note the date moves in a pair of reads, and return the whole record. */
+export function recordSlips(
+  repo: string, before: ProjectBoard | null, after: ProjectBoard | null, now = Date.now(),
+): Slip[] {
+  if (!before?.id || !after?.id) return readSlips(repo);
+  const dates = new Set(dateFields(after).map(f => f.name));
+  if (dates.size === 0) return readSlips(repo);
+
+  const was = new Map(before.items.map(i => [i.number, i]));
+  const fresh: Slip[] = [];
+  for (const item of after.items) {
+    const old = was.get(item.number);
+    if (!old) continue;
+    for (const field of dates) {
+      const from = old.values[field] ?? '';
+      const to = item.values[field] ?? '';
+      if (from === to) continue;
+      fresh.push({ number: item.number, field, from, to, at: now });
+    }
+  }
+  if (fresh.length === 0) return readSlips(repo);
+
+  const all = [...readSlips(repo), ...fresh].slice(-SLIP_MAX);
+  try {
+    localStorage.setItem(`${SLIP_KEY}:${repo}`, JSON.stringify(all));
+  } catch {
+    /* A full or blocked store costs the history, not the board. */
+  }
+  return all;
+}
+
+/** How much later a date got, in days. Negative means it was pulled in. */
+export function slipDays(slip: Slip): number {
+  const from = Date.parse(slip.from);
+  const to = Date.parse(slip.to);
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return 0;
+  return Math.round((to - from) / 86_400_000);
 }
