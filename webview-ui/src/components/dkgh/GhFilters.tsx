@@ -228,6 +228,8 @@ function FacetBlock({ facet, state, options, onChange }: {
             : toggleValue(state, facet.field, v.value))}
           onOnly={() => onChange(only(state, facet.field, v.value))}
           onExcept={() => onChange(except(state, facet.field, v.value))}
+          field={facet.field}
+          value={v.value}
         />
       ))}
 
@@ -248,6 +250,7 @@ function FacetBlock({ facet, state, options, onChange }: {
  */
 function FctRow({
   label, count, ticked, excluded, swatch, avatar, disabled, onToggle, onOnly, onExcept,
+  field, value,
 }: {
   label: string;
   count: number;
@@ -260,6 +263,9 @@ function FctRow({
   onToggle: (alt: boolean) => void;
   onOnly?: () => void;
   onExcept?: () => void;
+  /** Which facet this row belongs to, for the right-click menu. See GhMenu. */
+  field?: string;
+  value?: string;
 }) {
   const [hover, setHover] = useState(false);
   const cls = ['fct', ticked && !excluded ? 'on' : '', excluded ? 'excluded' : '',
@@ -268,6 +274,8 @@ function FctRow({
   return (
     <div
       className={cls}
+      data-facet={field}
+      data-value={value}
       style={{
         width: '100%',
         opacity: disabled ? 0.5 : count === 0 && !ticked && !excluded ? 0.5 : 1,

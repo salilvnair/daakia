@@ -51,8 +51,8 @@ import { GhFilters } from './GhFilters';
 import { GhChips, GhSearchScope } from './GhChips';
 import { GhWhy } from './GhWhy';
 import {
-  EMPTY as EMPTY_FILTER, describeAll, dropField, formatQuery, labelsOf,
-  matchesAll, runSearch, type FilterState, type MatchContext, type SearchHit,
+  EMPTY as EMPTY_FILTER, describeAll, dropField, except, formatQuery, labelsOf,
+  matchesAll, only, runSearch, type FilterState, type MatchContext, type SearchHit,
 } from './filter-model';
 import { GhViewBar, type ViewAction } from './GhViewBar';
 import { GhSaveView } from './GhSaveView';
@@ -71,6 +71,7 @@ import {
   type BoardSnapshot, type CapturePart, type SavedView, type StoredViews,
 } from './views-model';
 import { GhPeek } from './GhPeek';
+import { useBoardMenu } from './GhMenu';
 import { GhKeys, GhKeyStatus, PEEK_HOLD_MS } from './GhKeys';
 import { useEditFlow, type EditRequest } from './edit-flow';
 import { useShapePrefs, useMeaningPrefs, type CardField } from './board-prefs';
@@ -554,6 +555,86 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
   const searchRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
 
+  /*
+    What a key does, said once so the right-click menu can say it too.
+
+    The keyboard's rule is that an action takes the selection if there is one
+    and the cursor's row otherwise. A menu opened on a particular issue knows
+    something the keyboard does not — which row was clicked — so it passes the
+    numbers in, and this is the one place that turns a kind and a set of numbers
+    into the thing that happens. Two callers, one behaviour; a second copy of
+    this logic is how a menu ends up closing a different issue than the key.
+  */
+  const act = useCallback((
+    kind: 'assign' | 'label' | 'milestone' | 'close', numbers: number[],
+  ) => {
+    if (numbers.length === 0) return;
+    if (kind === 'close') {
+      propose({ repo, numbers, state: 'close', closeReason: 'completed' });
+      return;
+    }
+    /*
+      The bulk bar acts on the selection, so a menu opened on an unselected row
+      has to make that row the selection first or the bar it opens would have
+      nothing to act on.
+    */
+    setSelected(() => new Set(numbers));
+    setAutoOpen(kind);
+  }, [propose, repo]);
+
+  const menu = useBoardMenu({
+    repo,
+    issueAt: n => all.find(i => i.number === n),
+    selected,
+    onPeek: setPeek,
+    onOpenExternal: open,
+    onSelect: issue => toggle(issue, { ctrl: true, shift: false }),
+    onAct: act,
+
+    views: shownViews,
+    activeView,
+    defaultViewId: views.defaultId,
+    onOpenView: openView,
+    onEditView: v => setSaving({ existing: v }),
+    onDefaultView: v => persist({
+      ...views,
+      defaultId: views.defaultId === v.id ? undefined : v.id,
+    }),
+    onDeleteView: v => persist(v.preset
+      ? { ...views, views: views.views.map(x => (x.id === v.id ? { ...x, hidden: true } : x)) }
+      : {
+        ...views,
+        views: views.views.filter(x => x.id !== v.id),
+        defaultId: views.defaultId === v.id ? undefined : views.defaultId,
+      }),
+    onNewView: () => setSaving({}),
+    onManageViews: () => setManaging(true),
+
+    sectionLabel: id => SECTIONS.find(x => x.id === id)?.label ?? id,
+    onSection: setSection,
+
+    onOnly: (field, value) => setFilter(f => only(f, field, value)),
+    onExcept: (field, value) => setFilter(f => except(f, field, value)),
+    onClearField: field => setFilter(f => dropField(f, field)),
+    onClearFilters: () => setFilter(f => ({ terms: [], search: { ...f.search, text: '' } })),
+    hasFilters: filter.terms.length > 0 || !!filter.search.text.trim(),
+    query: formatQuery(filter),
+
+    columnLabel: key => catalogue(data?.dimensions ?? []).find(c => c.key === key)?.label ?? key,
+    isPinned: key => shape.pinnedColumns.includes(key),
+    onSort: (key, dir) => setMeaning({ sort: [{ key, dir }] }),
+    onPinColumn: key => setShape({
+      pinnedColumns: shape.pinnedColumns.includes(key)
+        ? shape.pinnedColumns.filter(k => k !== key)
+        : [...shape.pinnedColumns, key],
+    }),
+    onHideColumn: key => setShape({ columns: shape.columns.filter(k => k !== key) }),
+
+    onRefresh: refresh,
+    onPanel: next => setPanel(p => (p === next ? 'none' : next)),
+    onKeys: () => setShowKeys(true),
+  });
+
   useKeys({
     enabled: section === 'board' && !showKeys,
     ordered,
@@ -567,21 +648,8 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
     onSearch: () => searchRef.current?.querySelector('input')?.focus(),
     onFilters: () => setPanel(p => (p === 'filters' ? 'none' : 'filters')),
     onPanel: () => setPanel(p => (p === 'view' ? 'none' : 'view')),
-    onAct: (kind) => {
-      const numbers = targets();
-      if (numbers.length === 0) return;
-      if (kind === 'close') {
-        propose({ repo, numbers, state: 'close', closeReason: 'completed' });
-        return;
-      }
-      /*
-        Acts on the selection if there is one, otherwise on the row under the
-        cursor — which means the cursor's row has to become the selection first,
-        or the bar it opens would have nothing to act on.
-      */
-      if (selected.size === 0) setSelected(() => new Set(numbers));
-      setAutoOpen(kind);
-    },
+    /* The selection if there is one, otherwise the row under the cursor. */
+    onAct: kind => act(kind, targets()),
   });
 
   /*
@@ -657,7 +725,9 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
 
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden" ref={boardRef}
-         style={{ position: 'relative' }}>
+         style={{ position: 'relative' }}
+         onContextMenu={menu.onContextMenu}>
+      {menu.node}
 
       {/* Head — repository, count, when it was last read */}
       <div className="head">
@@ -700,6 +770,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
           <button
             key={sec.id}
             type="button"
+            data-section={sec.id}
             className={`s${section === sec.id ? ' on' : ''}`}
             disabled={sec.disabled}
             title={sec.disabled ? `${sec.label} is not built yet` : undefined}
@@ -708,7 +779,9 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
           >
             <Ico name={sec.icon} />
             {sec.label}
-            {sec.id === 'board' && !pending && <span className="cnt">{total}</span>}
+            {sec.id === 'board' && !pending && total > 0 && (
+              <span className="cnt">{total}</span>
+            )}
           </button>
         ))}
       </div>
@@ -799,13 +872,19 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
                 key={v.id}
                 type="button"
                 role="tab"
+                data-view={v.id}
                 aria-selected={on}
                 className={`vs${on ? ' on' : ''}`}
                 title={on ? 'Click again to leave this view' : v.name}
                 onClick={() => openView(on ? undefined : v.id)}
               >
                 {v.name}
-                <span className="cnt">{viewCounts.get(v.id) ?? 0}</span>
+                {/* A zero is not worth a badge. `Stale & unowned` holding an
+                    empty orange chip reads as a number you should look at; the
+                    absence of the chip is the same fact, told quietly. */}
+                {(viewCounts.get(v.id) ?? 0) > 0 && (
+                  <span className="cnt">{viewCounts.get(v.id)}</span>
+                )}
                 {viewDiff?.dirty && on && <span className="dot" title="Changed since saved" />}
               </button>
             );
@@ -837,10 +916,17 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
         <div className="dirtybar">
           <b>You have changed this view.</b> {describeDiff(viewDiff, labels)}
           <span className="sp" style={{ flex: 1 }} />
-          <button type="button" className="btn" onClick={() => openView(activeView)}>
+          {/*
+            Three buttons, three different things, and until now three
+            identical grey rectangles beside one orange one. Throwing away what
+            you changed and keeping it under a new name are opposite acts, so
+            they are not the same colour: discard is red, the new view is cyan,
+            and Update stays the accent because it is what the bar is for.
+          */}
+          <button type="button" className="btn warn" onClick={() => openView(activeView)}>
             Reset to saved
           </button>
-          <button type="button" className="btn" onClick={() => setSaving({})}>
+          <button type="button" className="btn alt" onClick={() => setSaving({})}>
             Save as new view
           </button>
           <button type="button" className="btn go" onClick={() => setSaving({ existing: active })}>
@@ -868,7 +954,8 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
           className={`pill${panel === 'filters' ? ' on' : ''}`}
           onClick={() => setPanel(p => (p === 'filters' ? 'none' : 'filters'))}
         >
-          <Ico name="filter" />Filters {filter.terms.length > 0 && <b>{filter.terms.length}</b>}
+          <Ico name="filter" />Filters
+          {filter.terms.length > 0 && <span className="cnt">{filter.terms.length}</span>}
         </button>
         {VIEWS.map(v => (
           <button

@@ -4,7 +4,7 @@ import type { Protocol } from '../../store/tabs-store';
 import { useEnvStore, GLOBAL_ENV_ID } from '../../store/env-store';
 import { getProtocolAccent } from '../../colors';
 import { MethodBadge, ConfirmDialog, ContextMenu, type ContextMenuItem, type ContextMenuSubItem } from '../shared';
-import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, GeneralAssistantIcon, FilterIcon, BookOpenIcon, Dk8sIcon, IssueOpenedIcon, StethoscopeIcon, LayoutGridIcon } from '../../icons';
+import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, GeneralAssistantIcon, FilterIcon, BookOpenIcon, Dk8sIcon, IssueOpenedIcon, StethoscopeIcon, LayoutGridIcon, PinIcon, UnpinIcon } from '../../icons';
 import { IconButtonView, StateMachineIcon, SelectInputView, type SelectOption } from '@salilvnair/dui';
 import { logUiEvent } from '../../store/ui-audit-store';
 
@@ -212,7 +212,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
     const items: ContextMenuItem[] = [];
     if (isRequest) items.push({ id: 'rename', label: 'Rename', shortcut: 'R', icon: <RenameIcon size={13} />, iconColor: 'var(--color-ctx-rename)' });
     items.push({ id: 'duplicate', label: 'Duplicate', shortcut: 'D', icon: <CopyIcon size={13} />, iconColor: 'var(--color-ctx-duplicate)' });
- if (isRequest) items.push({ id: isPinned ? 'unpin': 'pin', label: isPinned ? 'Unpin': 'Pin', shortcut: isPinned ? 'U': 'P', icon: <span className="text-[13px]">{isPinned ? '': ''}</span>, iconColor: 'var(--color-ctx-pin)'});
+ if (isRequest) items.push({ id: isPinned ? 'unpin': 'pin', label: isPinned ? 'Unpin': 'Pin', shortcut: isPinned ? 'U': 'P', icon: isPinned ? <UnpinIcon size={13} /> : <PinIcon size={13} />, iconColor: 'var(--color-ctx-pin)'});
 
     if (hasRequestTabs && uniqueProtocols.length >= 1) {
       items.push({ id: 'sep-filter', label: '', separator: true });

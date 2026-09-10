@@ -1159,6 +1159,10 @@
 }
 .dkgh .subtabs .s:active:not(:disabled) { background: var(--dk-raised); }
 .dkgh .subtabs .s:focus-visible { outline: 2.4px solid var(--dk-gh); outline-offset: -3px; }
+/* The tab you are on is raised out of the bar and lit in the accent, with its
+   count on a soft accent chip. The view strip copies this exactly — see below —
+   because the section you are in and the view you are in are the same kind of
+   fact and should not be drawn two different ways. */
 .dkgh .subtabs .s.on { background: var(--dk-hover); }
 
 /*
@@ -1174,10 +1178,9 @@
   **Two colours, doing two jobs.** The segment itself is the accent — the same
   accent hovered and selected, so the strip reads as one control rather than as
   two competing highlights, and the difference between the two states is weight
-  and fill rather than hue. The count is blue throughout: it is the number the
-  row exists for, it never changes colour under the pointer, and being a
-  different hue from everything around it is what makes it findable at a glance
-  across five segments.
+  and fill rather than hue. The count wears the accent too, and never changes
+  under the pointer — it is the number the row exists for, and it is the one
+  thing here that should hold still while everything around it reacts.
 */
 .dkgh .viewbar {
   gap: 12px;
@@ -1199,16 +1202,17 @@
   color: var(--dk-gh);
   background: color-mix(in srgb, var(--dk-gh) 14%, transparent);
 }
+/* The same on-state as a section tab, minus the underline: raised on the panel
+   grey, accent text, accent chip. */
 .dkgh .viewbar .vs.on {
   color: var(--dk-gh); font-weight: 600;
-  background: color-mix(in srgb, var(--dk-gh) 20%, transparent);
+  background: var(--dk-hover);
 }
 .dkgh .viewbar .vs .cnt {
   font-family: var(--mono); font-size: 10.8px; line-height: 1.7;
   padding: 0 7.2px; border-radius: 999px;
-  color: var(--dk-blue); background: color-mix(in srgb, var(--dk-blue) 18%, transparent);
+  color: var(--dk-gh); background: color-mix(in srgb, var(--dk-gh) 20%, transparent);
 }
-.dkgh .viewbar .vs.on .cnt { background: color-mix(in srgb, var(--dk-blue) 28%, transparent); }
 .dkgh .viewbar .vs .dot {
   width: 6px; height: 6px; border-radius: 50%; background: var(--dk-amber); flex-shrink: 0;
 }
@@ -1226,6 +1230,14 @@
   border-radius: 0 7.2px 7.2px 0;
 }
 .dkgh .viewbar .vs.add svg { width: 12px; height: 12px; }
+/*
+  `New view` is the one button in this strip that makes something, so its hover
+  commits — the solid accent the badges use, white on it — rather than the wash
+  the segments beside it get. A wash says "you are pointing at a choice"; this
+  is not a choice, it is an action.
+*/
+.dkgh .viewbar .vs.add:hover { background: var(--dk-gh-deep); color: #fff; }
+.dkgh .viewbar .vs.add:hover svg { color: #fff; }
 
 /* Housekeeping, not a view — so it is a gear with nothing drawn around it. */
 .dkgh .viewbar .vgear {
@@ -1435,3 +1447,79 @@
 }
 .dkgh ::-webkit-scrollbar-thumb:hover { background: var(--dk-muted); background-clip: content-box; }
 .dkgh ::-webkit-scrollbar-corner { background: transparent; }
+
+/*
+  A number on a toolbar pill is the same kind of number as a count on a tab, so
+  it wears the same badge. As a bare bold digit it read as part of the word —
+  `Filters 1` looked like the pill was named that.
+*/
+.dkgh .toolbar .pill .cnt {
+  font-family: var(--mono); font-size: 10.8px; line-height: 1.7;
+  padding: 0 7.2px; border-radius: 999px;
+  color: var(--dk-gh); background: color-mix(in srgb, var(--dk-gh) 20%, transparent);
+}
+/*
+  A count on the thing you are currently in is inverted rather than tinted —
+  solid accent, white on it. Everywhere else the badge is a soft accent wash,
+  which reads well on the panel; on a control that is itself lit, a second wash
+  of the same colour is a number you have to hunt for. One rule for all three
+  places that have counts: the section tabs, the view strip, the toolbar pills.
+*/
+.dkgh .toolbar .pill.on .cnt,
+.dkgh .subtabs .s.on .cnt,
+.dkgh .viewbar .vs.on .cnt { background: var(--dk-gh-deep); color: #fff; }
+
+/*
+  Hover must not undo the active state. The mock's generic pill hover is the
+  panel grey and it is declared after `.pill.on`, so hovering an open Filters
+  pill turned it from accent back to grey — the one control on the toolbar that
+  is currently doing something, going quiet under the pointer.
+*/
+.dkgh button.pill.on:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dk-gh) 22%, transparent);
+}
+
+/*
+  A button that throws work away and a button that keeps it should not look the
+  same. In the changed-view bar, `Reset to saved` discards what you changed and
+  `Save as new view` keeps it under another name — opposite acts, drawn in
+  opposite colours, with `Update` left holding the accent because it is what
+  the bar exists to offer.
+*/
+/*
+  The strip itself first. The mock washes it in amber, and amber over a near-
+  black panel comes out olive — a wide dull band across the whole tab, which is
+  a lot of screen to spend on a message that says one view has unsaved changes.
+  It keeps the amber, but as a single line down the left edge, the way an
+  editor marks a changed file, over the ordinary raised surface.
+*/
+.dkgh .dirtybar {
+  background: var(--dk-surface);
+  border-left: 2.4px solid var(--dk-amber);
+}
+
+/*
+  Discard is red, but a muted one: a button people press several times an hour
+  should not look like deleting the repository. Colour enough to be told apart
+  from its neighbour, not enough to flinch at.
+*/
+.dkgh button.btn.warn {
+  color: color-mix(in srgb, var(--dk-red) 72%, var(--dk-text));
+  border-color: var(--dk-border);
+  background: transparent;
+}
+.dkgh button.btn.warn:hover:not(:disabled) {
+  color: var(--dk-red);
+  border-color: color-mix(in srgb, var(--dk-red) 40%, transparent);
+  background: color-mix(in srgb, var(--dk-red) 14%, transparent);
+}
+.dkgh button.btn.alt {
+  color: color-mix(in srgb, var(--dk-cyan) 72%, var(--dk-text));
+  border-color: var(--dk-border);
+  background: transparent;
+}
+.dkgh button.btn.alt:hover:not(:disabled) {
+  color: var(--dk-cyan);
+  border-color: color-mix(in srgb, var(--dk-cyan) 40%, transparent);
+  background: color-mix(in srgb, var(--dk-cyan) 14%, transparent);
+}

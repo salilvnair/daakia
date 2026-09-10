@@ -316,6 +316,7 @@ function HeaderCell({ col, sort, onSort, left, pad }: {
   return (
     <th
       className={level ? 'sorted' : undefined}
+      data-col={col.key}
       onClick={e => onSort(nextSort(sort, col.key, e.shiftKey))}
       title={`Sort by ${col.label} — shift-click to add it as a tiebreak`}
       style={{

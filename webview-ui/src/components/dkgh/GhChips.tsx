@@ -71,6 +71,7 @@ export function GhChips({ state, labels, onChange, onExplain, explaining }: {
             <span
               key={`${t.negated ? '-' : ''}${t.field}`}
               className="fchip"
+              data-chip={t.field}
               style={t.negated
                 ? { borderColor: 'color-mix(in srgb, var(--dk-red) 45%, transparent)',
                     background: 'color-mix(in srgb, var(--dk-red) 12%, transparent)' }
