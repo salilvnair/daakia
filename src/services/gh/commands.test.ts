@@ -100,8 +100,20 @@ describe('the command disclosure', () => {
     }
   });
 
-  it('marks which rows are live, so the list is not a wish', () => {
+  it('says of every row whether it is live', () => {
+    /*
+      This once asserted that some row was NOT live, to catch a list that had
+      quietly become a wish. Every row is live now — the last two, the Project
+      read and `item-edit`, landed with screens 06 and 07 — so that half of it
+      would fail for the best possible reason.
+
+      What is still worth holding is the field itself: a row added without a
+      verdict on whether it runs today is exactly the drift this file exists to
+      catch, and `live` being optional would let one through.
+    */
+    for (const row of GH_COMMANDS) {
+      expect(typeof row.live, `${row.command} does not say whether it is live`).toBe('boolean');
+    }
     expect(GH_COMMANDS.some(c => c.live)).toBe(true);
-    expect(GH_COMMANDS.some(c => !c.live)).toBe(true);
   });
 });

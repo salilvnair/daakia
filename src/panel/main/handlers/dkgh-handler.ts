@@ -40,6 +40,9 @@ import { applyLabels, planLabels, type LabelEdit } from '../../../services/gh/la
 import {
   applyUpload, planUpload, type EvidenceFile,
 } from '../../../services/gh/evidence-upload';
+import {
+  applyProjectEdit, fetchProject, planProjectEdit, type ProjectEdit,
+} from '../../../services/gh/project';
 import { GH_COMMANDS, GH_SCOPES } from '../../../services/gh/commands';
 
 type PostMessage = (msg: unknown) => void;
@@ -704,6 +707,52 @@ export async function handleDkghApplyUpload(
     return;
   }
   postMessage({ type: 'dkgh:applyUpload:result', outcomes: await applyUpload(plan) });
+}
+
+
+/**
+ * The linked Project — screens 06 and 07.
+ *
+ * Asked for separately from the board rather than folded into it. A repository
+ * with no project is the ordinary case and should not pay a GraphQL call on
+ * every refresh to find that out again; the board renders on its own and gains
+ * Status, Priority and the dates when this answers.
+ */
+export async function handleDkghProject(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+  if (!repo) return;
+  postMessage({ type: 'dkgh:project:result', ...(await fetchProject(repo)) });
+}
+
+/** What a drag would run, unrun — 06A's receipt, before the drop writes. */
+export async function handleDkghPlanProject(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  postMessage({
+    type: 'dkgh:planProject:result',
+    plan: planProjectEdit(String(msg.projectId ?? ''), (msg.edits as ProjectEdit[]) ?? []),
+  });
+}
+
+/** Run it, re-planned here for the same reason every other apply re-plans. */
+export async function handleDkghApplyProject(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const projectId = String(msg.projectId ?? '');
+  const edits = (msg.edits as ProjectEdit[]) ?? [];
+  postMessage({ type: 'dkgh:applyProject:running' });
+
+  const plan = planProjectEdit(projectId, edits);
+  if (plan.refusal) {
+    postMessage({ type: 'dkgh:applyProject:result', outcomes: [], refusal: plan.refusal });
+    return;
+  }
+  postMessage({ type: 'dkgh:applyProject:result', outcomes: await applyProjectEdit(plan) });
 }
 
 /**

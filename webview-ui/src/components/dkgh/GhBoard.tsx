@@ -74,6 +74,12 @@ import { GhInsights } from './GhInsights';
 import { GhRepository } from './GhRepository';
 import { GhImport } from './GhImport';
 import { GhLabels } from './GhLabels';
+import { useToastStore } from '../../store/toast-store';
+import { GhColumns, GhColumnControls, type Move } from './GhColumns';
+import { GhRoadmap, type Reschedule, type Scale } from './GhRoadmap';
+import {
+  absentBecause, dateFields, projectDimensions, useProject, withProject, type ProjectField,
+} from './project-store';
 import { Ico, type IcoName } from './GhIcons';
 import {
   assembleBody, discardDraft, emptyDraft, type Draft,
@@ -108,8 +114,8 @@ const SECTIONS: { id: string; label: string; icon: IcoName; disabled?: boolean }
 const VIEWS: { id: string; label: string; icon: IcoName; ready: boolean }[] = [
   { id: 'cards', label: 'Cards', icon: 'cards', ready: true },
   { id: 'table', label: 'Table', icon: 'table', ready: true },
-  { id: 'columns', label: 'Columns', icon: 'board', ready: false },
-  { id: 'roadmap', label: 'Roadmap', icon: 'tl', ready: false },
+  { id: 'columns', label: 'Columns', icon: 'board', ready: true },
+  { id: 'roadmap', label: 'Roadmap', icon: 'tl', ready: true },
 ];
 
 export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, frozen = false }: {
@@ -161,6 +167,96 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
   const [viewing, setViewing] = useState<BoardIssue | undefined>();
   /** How far back screen 16's weekly chart looks. */
   const [weeks, setWeeks] = useState(12);
+  /** Re-read the Project after a drag writes to it. */
+  const [projectRead, setProjectRead] = useState(0);
+  /** 06 — which single-select the columns are, and what colours the cards. */
+  const [columnField, setColumnField] = useState('');
+  const [colourBy, setColourBy] = useState('');
+  const [wip, setWip] = useState(0);
+  /** 07 — how wide the roadmap's window is. */
+  const [scale, setScale] = useState<Scale>('month');
+  /** Issues with a Project write in flight, and what it is writing. */
+  const [writing, setWriting] = useState<Map<number, string>>(new Map());
+
+  /*
+    The linked Project.
+
+    Asked for separately from the board: a repository with no project is the
+    ordinary case and should not pay a GraphQL call on every refresh to find
+    that out again. The board renders without it and gains Status, Priority and
+    the dates when it answers — see project-store.
+  */
+  const addToast = useToastStore(t => t.addToast);
+  const project = useProject(repo, projectRead);
+
+  /** The single-selects the columns can be, and the dates a roadmap can use. */
+  const columnFields = useMemo(
+    () => (project?.fields ?? []).filter(f => f.dataType === 'SINGLE_SELECT'
+      && !['title', 'repository'].includes(f.name.toLowerCase())),
+    [project],
+  );
+  const columnOn: ProjectField | undefined =
+    columnFields.find(f => f.name === columnField)
+    ?? columnFields.find(f => /status/i.test(f.name))
+    ?? columnFields[0];
+  const dates = useMemo(() => dateFields(project), [project]);
+  const startField = dates.find(f => /start/i.test(f.name)) ?? dates[0];
+  const endField = dates.find(f => /target|due|eta|end/i.test(f.name))
+    ?? dates.find(f => f !== startField);
+
+  /*
+    06A / 07A — the card moves first and the write follows.
+
+    A board that waits for a round trip before moving anything feels broken;
+    one that moves and never checks is lying. So the value is written into the
+    board's own copy immediately, the command runs, and a failure puts it back
+    with the reason attached.
+  */
+  const writeProject = useCallback((
+    issue: BoardIssue, field: ProjectField, value: string, optionId?: string,
+  ) => {
+    const item = project?.items.find(i => i.number === issue.number);
+    if (!project?.id || !item) return;
+
+    setWriting(prev => new Map(prev).set(issue.number, `${field.name} = ${value}`));
+    const done = (evt: MessageEvent) => {
+      const msg = evt.data as Record<string, unknown>;
+      if (msg.type !== 'dkgh:applyProject:result') return;
+      window.removeEventListener('message', done);
+      setWriting(prev => {
+        const next = new Map(prev);
+        next.delete(issue.number);
+        return next;
+      });
+      const failed = ((msg.outcomes as { number: number; ok: boolean; error?: string }[]) ?? [])
+        .find(o => !o.ok);
+      if (failed) {
+        addToast({ type: 'error', message: `#${failed.number}: ${failed.error}` });
+      }
+      /* Right or wrong, the Project is re-read — the board's copy was a claim
+         and this is the answer. */
+      setProjectRead(n => n + 1);
+    };
+    window.addEventListener('message', done);
+    postMsg({
+      type: 'dkgh:applyProject',
+      projectId: project.id,
+      edits: [{
+        itemId: item.id,
+        number: issue.number,
+        field,
+        ...(optionId ? { option: { id: optionId, name: value } } : { date: value }),
+      }],
+    });
+  }, [project, addToast]);
+
+  /** The repository's own, plus whatever the Project adds. */
+  const dimensions = useMemo(() => {
+    const fromForms = data?.dimensions ?? [];
+    const known = new Set(fromForms.map(d => d.dimension));
+    return [...fromForms, ...projectDimensions(project).filter(d => !known.has(d.dimension))];
+  }, [data?.dimensions, project]);
+
   /** `open` until somebody asks for the closed ones — screen 04E's first state. */
   const [issueState, setIssueState] = useState<'open' | 'all'>('open');
   /** Which side panel is open, if any. One at a time — three at once is a board
@@ -286,15 +382,15 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
   useEffect(() => {
     onContext?.({
       search: describeAll(filter),
-      dimensions: (data?.dimensions ?? []).map(d => d.dimension),
+      dimensions: dimensions.map(d => d.dimension),
     });
-  }, [filter, data, onContext]);
+  }, [filter, dimensions, onContext]);
 
   /** Dimensions the repository declared, plus the ones GitHub always has. */
   const groupOptions = useMemo(() => [
     ...NATIVE_GROUPS,
-    ...(data?.dimensions ?? []).map(d => ({ id: d.dimension, label: cap(d.dimension) })),
-  ], [data]);
+    ...dimensions.map(d => ({ id: d.dimension, label: cap(d.dimension) })),
+  ], [dimensions]);
 
   /**
    * Who `@me` is, and when now is.
@@ -309,9 +405,9 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
   );
 
   /** The declared spelling of every form value, so chips agree with the board. */
-  const labels = useMemo(() => labelsOf(data?.dimensions ?? []), [data]);
+  const labels = useMemo(() => labelsOf(dimensions), [data]);
   /** Every dimension value's colour, by the option's index in its own dropdown. */
-  const colours = useMemo(() => colourMap(data?.dimensions ?? []), [data]);
+  const colours = useMemo(() => colourMap(dimensions), [data]);
 
   /**
    * Everything a view can freeze, as it stands right now.
@@ -332,7 +428,18 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
   const commentHits = remote?.query === filter.search.text.trim()
     ? remote.comments : undefined;
 
-  const all = data?.issues ?? [];
+  /*
+    The board's issues, with the Project's fields folded into their dimensions.
+
+    Merged here rather than beside them, because everything downstream — the
+    facets, the grouping, the colours, the chart, the export, the columns view
+    — already speaks dimension. A project field that arrived as its own
+    parallel concept would need all six taught about it.
+  */
+  const all = useMemo(
+    () => withProject(data?.issues ?? [], project),
+    [data?.issues, project],
+  );
 
   /**
    * The facets, then the search — in that order, and it matters.
@@ -376,9 +483,9 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
     laid out" rather than "everything between these two issue numbers".
   */
   const ordered = useMemo(() => {
-    const cols = arrange(catalogue(data?.dimensions ?? []), shape.columns, shape.pinnedColumns);
+    const cols = arrange(catalogue(dimensions), shape.columns, shape.pinnedColumns);
     return groups.flatMap(g => view === 'table'
-      ? sortIssues(g.issues, meaning.sort, cols, data?.dimensions ?? [])
+      ? sortIssues(g.issues, meaning.sort, cols, dimensions)
       : g.issues);
   }, [groups, view, meaning.sort, shape.columns, data]);
 
@@ -659,7 +766,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
     hasFilters: filter.terms.length > 0 || !!filter.search.text.trim(),
     query: formatQuery(filter),
 
-    columnLabel: key => catalogue(data?.dimensions ?? []).find(c => c.key === key)?.label ?? key,
+    columnLabel: key => catalogue(dimensions).find(c => c.key === key)?.label ?? key,
     isPinned: key => shape.pinnedColumns.includes(key),
     onSort: (key, dir) => setMeaning({ sort: [{ key, dir }] }),
     onPinColumn: key => setShape({
@@ -786,7 +893,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
         everything={all}
         columns={shape.columns}
         groupBy={meaning.groupBy === 'none' ? undefined : meaning.groupBy}
-        dimensions={data?.dimensions ?? []}
+        dimensions={dimensions}
         onClose={() => setSection('board')}
       />
     );
@@ -797,7 +904,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
       <GhIssue
         repo={repo}
         issue={all.find(i => i.number === viewing.number) ?? viewing}
-        dimensions={data?.dimensions ?? []}
+        dimensions={dimensions}
         closed={all.filter(i => i.state === 'CLOSED')}
         onBack={() => { setViewing(undefined); setSection('board'); }}
         onWrote={refresh}
@@ -912,7 +1019,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
       ) : section === 'insights' ? (
         <GhInsights
           issues={filtered}
-          dimensions={data?.dimensions ?? []}
+          dimensions={dimensions}
           weeks={weeks}
           onWeeks={setWeeks}
           /*
@@ -958,7 +1065,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
             assignees: draft.assignees,
             milestone: draft.milestone,
           }}
-          dimensions={data?.dimensions ?? []}
+          dimensions={dimensions}
           issues={all}
           onBack={() => setSection('new')}
           onBody={() => undefined}
@@ -1127,6 +1234,28 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
                 onClick={() => setSection('export')}>
           <Ico name="dl" />Export
         </button>
+        {view === 'columns' && (
+          <GhColumnControls
+            fields={columnFields}
+            field={columnOn}
+            onField={setColumnField}
+            colourBy={colourBy}
+            options={dimensions.filter(d => d.dimension !== columnOn?.name.toLowerCase())}
+            onColour={setColourBy}
+            wip={wip}
+            onWip={setWip}
+          />
+        )}
+        {view === 'roadmap' && (
+          <span style={{ display: 'inline-flex', gap: 3 }}>
+            {(['week', 'month', 'quarter'] as const).map(sc => (
+              <button key={sc} type="button" className={`pill${scale === sc ? ' on' : ''}`}
+                      onClick={() => setScale(sc)}>
+                {cap(sc)}
+              </button>
+            ))}
+          </span>
+        )}
         <button type="button" className="pill" onClick={() => setShowKeys(true)} title="Keys">
           <Ico name="term" />
         </button>
@@ -1224,7 +1353,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
         collapsedSide="first"
         first={panel === 'view' && view === 'table' ? (
           <GhColumnPanel
-            dimensions={data?.dimensions ?? []}
+            dimensions={dimensions}
             columns={shape.columns}
             onColumns={columns => setShape({ columns })}
             pinned={shape.pinnedColumns}
@@ -1235,7 +1364,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
         ) : panel === 'view' ? (
           <GhCardOptions
             issues={filtered}
-            dimensions={data?.dimensions ?? []}
+            dimensions={dimensions}
             groupBy={meaning.groupBy}
             onGroupBy={groupBy => setMeaning({ groupBy })}
             cardFields={shape.cardFields}
@@ -1249,7 +1378,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
             /* Counted over what the search left, so the number beside a value
                is how many you would get if you ticked it given what you typed. */
             issues={searched}
-            dimensions={data?.dimensions ?? []}
+            dimensions={dimensions}
             state={filter}
             onChange={setFilter}
             ctx={ctx}
@@ -1279,13 +1408,43 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
                   onRetry={refresh}
                 />
               </div>
+            ) : view === 'columns' ? (
+              <GhColumns
+                issues={filtered}
+                project={project}
+                field={columnOn}
+                colourBy={colourBy || dimensions.find(d => /priority/i.test(d.dimension))?.dimension}
+                dimensions={dimensions}
+                wip={wip}
+                pending={writing}
+                onOpen={open}
+                onMove={(move: Move) => {
+                  const option = columnOn?.options?.find(o => o.name === move.to);
+                  if (!columnOn || !option) return;
+                  writeProject(move.issue, columnOn, move.to, option.id);
+                }}
+              />
+            ) : view === 'roadmap' ? (
+              <GhRoadmap
+                issues={filtered}
+                project={project}
+                start={startField}
+                end={endField}
+                scale={scale}
+                colourBy={colourBy || dimensions[0]?.dimension}
+                dimensions={dimensions}
+                pending={writing}
+                onOpen={open}
+                onReschedule={(change: Reschedule) =>
+                  writeProject(change.issue, change.field, change.date)}
+              />
             ) : view === 'cards' ? (
               <GhCards
                 groups={groups}
                 showGroups={meaning.groupBy !== 'none'}
                 fields={shape.cardFields}
                 density={shape.density}
-                dimensions={data?.dimensions ?? []}
+                dimensions={dimensions}
                 selected={selected}
                 onToggle={toggle}
                 onOpen={open}
@@ -1296,7 +1455,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
               <GhIssueTable
                 groups={groups}
                 showGroups={meaning.groupBy !== 'none'}
-                dimensions={data?.dimensions ?? []}
+                dimensions={dimensions}
                 columns={shape.columns}
                 pinned={shape.pinnedColumns}
                 density={shape.density}
@@ -1312,7 +1471,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
                 pending={flow.optimistic}
                 hits={hits}
                 renderHeader={(g: Group) => (
-                  <Header group={g} dimensions={data?.dimensions ?? []} />
+                  <Header group={g} dimensions={dimensions} />
                 )}
               />
             )}
@@ -1385,7 +1544,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
            looking at something else would hand somebody a third thing. */
         state={sharing?.view?.capture.filters ?? filter}
         issues={all}
-        formFields={(data?.dimensions ?? []).map(d => d.dimension)}
+        formFields={(dimensions).map(d => d.dimension)}
         ctx={ctx}
         onClose={() => setSharing(undefined)}
         onApply={(next, andSave) => {
@@ -1400,7 +1559,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
         /* The rows already on screen, so the numbers match what was just read
            rather than being a second query that might disagree. */
         issues={filtered}
-        dimensions={data?.dimensions ?? []}
+        dimensions={dimensions}
         onClose={() => setCharting(undefined)}
       />
     </div>
