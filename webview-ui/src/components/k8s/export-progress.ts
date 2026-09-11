@@ -7,7 +7,7 @@
  * running the bar measures bytes, and a byte total is what tells the screen
  * which half it is looking at.
  */
-import type { ExportState } from '../../store/k8s-store';
+import type { ExportResult, ExportState } from '../../store/k8s-store';
 
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
 
@@ -46,4 +46,21 @@ export function exportPercent(state: ExportState | undefined): number {
 function clamp(n: number): number {
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+/**
+ * "2 files on the volume did not match your template."
+ *
+ * A sentence rather than a count, because the fix is a template and the reader
+ * has to know which files to write one for. Mirrors `describeMissed` in
+ * `services/k8s/k8s-logs.ts`, which builds the same line for the toast.
+ */
+export function describeMissed(results: ExportResult[]): string {
+  const named = results.flatMap(r => r.missed ?? []);
+  if (named.length === 0) return '';
+  const n = results.reduce((t, r) => t + (r.missedCount ?? 0), 0) || named.length;
+  const shown = named.slice(0, 4).join(', ');
+  const more = n - Math.min(named.length, 4);
+  return `${n} file${n === 1 ? '' : 's'} on the volume did not match your template`
+    + ` — ${shown}${more > 0 ? `, and ${more} more` : ''}.`;
 }

@@ -271,6 +271,17 @@ export interface ExportResult {
   pod: string; namespace: string;
   file?: string; bytes?: number; lines?: number;
   empty?: boolean; error?: string; includedPrevious?: boolean;
+  archive?: boolean;
+  /**
+   * Files on the volume the template walked past.
+   *
+   * Named rather than dropped: a `*.log` template beside `app.log.1.gz` takes
+   * the newest half of a rotation and leaves the oldest, which is the half
+   * people go to the volume for.
+   */
+  missed?: string[];
+  missedCount?: number;
+  missedBytes?: number;
 }
 
 export interface ExportState {

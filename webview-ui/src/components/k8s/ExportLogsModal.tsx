@@ -10,10 +10,11 @@
 import { useState } from 'react';
 import {
   ModalView, ButtonView, TextInputView, DateTimeInputView, SegmentedControlView,
+  CloseIcon, IconSize,
 } from '@salilvnair/dui';
 import { useK8sStore } from '../../store/k8s-store';
 import { postMsg } from '../../vscode';
-import { bytesLabel, exportPercent } from './export-progress';
+import { bytesLabel, describeMissed, exportPercent } from './export-progress';
 import { localInputValue } from './TimeWindow';
 import { softPrimary } from './button-style';
 
@@ -101,6 +102,7 @@ export function ExportLogsModal({ onClose, visibleLines }: {
   const bytesDone = bytesLabel(exportState?.bytes ?? 0);
   const bytesAll = bytesLabel(exportState?.totalBytes ?? 0);
   const pct = exportPercent(exportState);
+  const missed = describeMissed(exportState?.results ?? []);
 
   return (
     <ModalView
@@ -279,15 +281,23 @@ export function ExportLogsModal({ onClose, visibleLines }: {
                   : exportState.pod}
               </span>
               <span className="flex-1" />
-              {/* A 2GB volume is minutes of reading. Somebody who started it
-                  by mistake should not have to close the tab. */}
+              {/*
+                An icon, not the word.
+
+                The footer already has a Cancel — that one shuts the dialog,
+                this one stops the read, and two buttons saying the same word a
+                centimetre apart meaning different things is a choice nobody
+                should have to make quickly. Red on hover, the way every
+                destructive control in the app reads.
+              */}
               <button
                 type="button"
-                className="text-[11px]"
-                style={{ color: 'var(--color-error)' }}
+                title="Stop the export"
+                aria-label="Stop the export"
+                className="dk8s-stop"
                 onClick={() => postMsg({ type: 'dk8s:cancelExport' })}
               >
-                Cancel
+                <CloseIcon size={16} />
               </button>
             </div>
             <div style={{ height: 3, borderRadius: 2, background: 'var(--color-surface-hover)' }}>
@@ -302,6 +312,25 @@ export function ExportLogsModal({ onClose, visibleLines }: {
                 Reading the volume. The partial file is removed if you cancel.
               </span>
             )}
+          </div>
+        )}
+
+        {/*
+          What the template walked past.
+
+          Amber, not red: the export worked. But a file left on a volume is a
+          file somebody meant to have, and the only way to know is to be told
+          which ones and offered the change that would take them.
+        */}
+        {missed && (
+          <div className="flex flex-col gap-1 text-[11.5px]"
+               style={{ color: 'var(--color-warning, #d29922)' }}>
+            <span>{missed}</span>
+            <span style={{ color: 'var(--color-text-muted)' }}>
+              A template ending <code className="font-mono">*.log</code> does not match
+              <code className="font-mono"> *.log.gz</code>. Widen it in the PV settings to
+              take the rotated files too.
+            </span>
           </div>
         )}
 

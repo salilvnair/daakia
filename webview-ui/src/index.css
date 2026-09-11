@@ -1833,3 +1833,38 @@ input[type="number"] {
   outline: 2px solid var(--color-dk8s);
   outline-offset: -2px;
 }
+
+/*
+  Stopping a running export.
+
+  The dialog's footer already has a Cancel — that one shuts the dialog, this
+  one stops the read. Two buttons a centimetre apart saying the same word and
+  meaning different things is a choice nobody should have to make quickly, so
+  this is an icon, and it is red the moment you reach it.
+*/
+.dk8s-stop {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 7px;
+  /* A faint ground even at rest: a bare glyph on a dialog reads as a mark
+     rather than as something to press, and this is the control that stops a
+     four-minute read. */
+  background: color-mix(in srgb, var(--color-error) 8%, transparent);
+  color: color-mix(in srgb, var(--color-error) 75%, transparent);
+  cursor: pointer;
+  transition: background 120ms, transform 80ms, color 120ms;
+}
+.dk8s-stop svg { width: 16px; height: 16px; }
+.dk8s-stop:hover {
+  color: #fff;
+  background: var(--color-error);
+}
+.dk8s-stop:active {
+  background: color-mix(in srgb, var(--color-error) 80%, #000);
+  transform: scale(0.88);
+  transition: background 60ms, transform 60ms;
+}

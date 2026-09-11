@@ -131,6 +131,8 @@ export function WorkspacePage() {
         menuOpen={menuOpen}
         menuRef={menuRef}
         renaming={renaming}
+        docsOpen={docsOpen}
+        onShowDocs={() => setDocsOpen(true)}
         onToggleMenu={() => setMenuOpen(o => !o)}
         onPick={(id) => { switchTo(id); setMenuOpen(false); }}
         onCreate={() => { setNaming(true); setMenuOpen(false); }}
@@ -254,12 +256,15 @@ export function WorkspacePage() {
 // ── Header ───────────────────────────────────────────────────────────────────
 
 function WorkspaceHeader({
-  active, workspaces, menuOpen, menuRef, renaming,
+  active, workspaces, menuOpen, menuRef, renaming, docsOpen, onShowDocs,
   onToggleMenu, onPick, onCreate, onOpen, onImport, onExport,
   onRenameStart, onRenameDone, onDelete,
 }: {
   active?: Workspace;
   workspaces: Workspace[];
+  /** Whether the documentation panel is showing — see `onShowDocs`. */
+  docsOpen: boolean;
+  onShowDocs: () => void;
   menuOpen: boolean;
   menuRef: React.RefObject<HTMLDivElement | null>;
   renaming: boolean;
@@ -299,6 +304,25 @@ function WorkspaceHeader({
       )}
 
       <div className="ws-head-spacer" />
+
+      {/*
+        The way back to the documentation.
+
+        Closing it writes `workspace.docsOpen: closed`, and the control that
+        would open it again lived *inside* the panel that preference hides —
+        so the panel could be shut once and never brought back. It is a saved
+        preference, so "never" meant across restarts too.
+      */}
+      {!docsOpen && (
+        <button
+          type="button"
+          className="ws-overflow"
+          title="Show the documentation"
+          onClick={() => onShowDocs()}
+        >
+          <DocumentIcon size={13} />
+        </button>
+      )}
 
       <button
         type="button"

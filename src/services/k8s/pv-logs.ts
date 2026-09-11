@@ -449,8 +449,31 @@ export function applyPattern(files: PvFile[], pattern: string): PvFile[] {
  * volume needs no walk at all. The pattern then adds anything the template
  * missed, which is what makes a mostly-regular tree with exceptions workable.
  */
+/**
+ * What matched, and what sat beside it and did not.
+ *
+ * `filesForPod` is the same walk without the second half — every existing
+ * caller wants the files and nothing else. The export wants both, so it can
+ * say what it is leaving out rather than quietly leaving it out.
+ */
+export async function filesForPodWithMisses(
+  cfg: PvLogConfig, ref: PodRef, now = Date.now(),
+): Promise<{ files: PvFile[]; missed: PvFile[] }> {
+  const missed: PvFile[] = [];
+  const files = await collect(cfg, ref, now, missed);
+  /* A file the template missed but a `pattern` picked up is not missed. */
+  const taken = new Set(files.map(f => f.file));
+  return { files, missed: missed.filter(m => !taken.has(m.file)) };
+}
+
 export async function filesForPod(
   cfg: PvLogConfig, ref: PodRef, now = Date.now(),
+): Promise<PvFile[]> {
+  return collect(cfg, ref, now);
+}
+
+async function collect(
+  cfg: PvLogConfig, ref: PodRef, now: number, missed?: PvFile[],
 ): Promise<PvFile[]> {
   const found = new Map<string, PvFile>();
 
@@ -465,7 +488,7 @@ export async function filesForPod(
     if (!template) continue;
 
     const expanded = expandTemplate(template, ref, envFor(cfg, ref), appOf(cfg, ref));
-    for (const f of await matchTemplate(cfg, root, expanded, now)) {
+    for (const f of await matchTemplate(cfg, root, expanded, now, missed)) {
       found.set(f.file, {
         ...f, mount: m.label ?? m.path,
         namespace: ref.namespace, pod: ref.pod, app: appOf(cfg, ref),
@@ -495,6 +518,16 @@ export async function filesForPod(
 /** Walk only the directories an expanded template can reach. */
 async function matchTemplate(
   cfg: PvLogConfig, root: string, expanded: string, now: number,
+  /**
+   * Files sitting in a directory the template reached that it did not take.
+   *
+   * Collected during the same walk, because the point of naming them is that
+   * they are *right next to* the matches — a `.log.gz` beside the `.log` files
+   * a `*.log` template asked for is the oldest half of a rotation, and
+   * dropping it silently is how an export of "the whole log" stops at
+   * yesterday without saying so.
+   */
+  missed?: PvFile[],
 ): Promise<PvFile[]> {
   const segs = expanded.split(/[/\\]/).filter(Boolean);
   const out: PvFile[] = [];
@@ -524,7 +557,23 @@ async function matchTemplate(
 
     for (const e of entries) {
       if (out.length >= MAX_FILES) return;
-      if (!rx.test(e.name)) continue;
+      if (!rx.test(e.name)) {
+        /* Only in the directory the files live in: a directory name that did
+           not match is a different tree, not a file we skipped. */
+        if (last && e.isFile() && missed && missed.length < 200) {
+          const full = path.join(dir, e.name);
+          try {
+            const st = await fs.stat(full);
+            missed.push({
+              file: full,
+              rel: path.relative(root, full).replace(/\\/g, '/'),
+              bytes: st.size,
+              mtime: st.mtimeMs,
+            });
+          } catch { /* gone between readdir and stat */ }
+        }
+        continue;
+      }
       const full = path.join(dir, e.name);
       if (last && e.isFile()) {
         let st;

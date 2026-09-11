@@ -230,3 +230,64 @@ describe('a target with no container list', () => {
     expect(args).not.toContain('--all-containers=true');
   });
 });
+
+/*
+  Saying what was walked past.
+
+  A `*.log` template beside `app.log.1.gz` takes the newest half of a rotation
+  and leaves the oldest — which is the half people go to the volume for. The
+  export used to do that in silence.
+*/
+describe('describeMissed', () => {
+  it('names the files and counts the rest', async () => {
+    const { describeMissed } = await import('./k8s-logs');
+    expect(describeMissed([{
+      pod: 'p', namespace: 'n', archive: true,
+      missed: ['a/app.log.1.gz', 'a/app.log.2.gz'],
+      missedCount: 2,
+    }])).toBe('2 files on the volume did not match your template '
+      + '— a/app.log.1.gz, a/app.log.2.gz.');
+  });
+
+  it('says nothing when nothing was missed', async () => {
+    const { describeMissed } = await import('./k8s-logs');
+    expect(describeMissed([{ pod: 'p', namespace: 'n' }])).toBe('');
+  });
+
+  it('trims a long list rather than printing a volume', async () => {
+    const { describeMissed } = await import('./k8s-logs');
+    const out = describeMissed([{
+      pod: 'p', namespace: 'n',
+      missed: ['a', 'b', 'c', 'd', 'e', 'f'], missedCount: 40,
+    }]);
+    expect(out).toContain('40 files');
+    expect(out).toContain('and 36 more');
+  });
+});
+
+describe('the last progress message', () => {
+  it('names the last file, not one past it', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'pv-last-'));
+    try {
+      const files = [
+        { file: join(dir, 'a'), rel: 'a.log', bytes: 1, mtime: 1 },
+        { file: join(dir, 'b'), rel: 'b.log', bytes: 1, mtime: 2 },
+      ];
+      await writeFile(files[0].file, 'a', 'utf8');
+      await writeFile(files[1].file, 'b', 'utf8');
+      const seen: { file: string; index: number; count: number }[] = [];
+      let t = 0;
+      await streamArchive(files, join(dir, 'out.log'), {
+        now: () => (t += 1000),
+        onProgress: p => seen.push({ file: p.file, index: p.index, count: p.count }),
+      });
+      const final = seen[seen.length - 1];
+      /* It used to report `('', 2)` of 2 — "(3/2)" with no name, which reads
+         as a third file that went wrong. */
+      expect(final.index).toBeLessThan(final.count);
+      expect(final.file).toBe('b.log');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});

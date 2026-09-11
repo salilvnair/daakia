@@ -175,7 +175,10 @@ export async function streamArchive(
       await write(out, '\n');
     }
 
-    tick('', ordered.length, true);
+    /* The last file, not one past it: `('', length)` rendered as "(7/6)" with
+       no name beside it, which reads as a seventh file that went wrong. */
+    const last = ordered[ordered.length - 1];
+    tick(last?.rel ?? '', Math.max(0, ordered.length - 1), true);
     await new Promise<void>((resolve, reject) => {
       out.on('error', reject);
       out.on('finish', () => resolve());

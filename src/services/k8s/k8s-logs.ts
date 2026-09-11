@@ -10,7 +10,7 @@ import { createWriteStream } from 'fs';
 import { mkdir, readFile } from 'fs/promises';
 import { join } from 'path';
 import { run } from './kubectl';
-import { filesForPod, type PvLogConfig } from './pv-logs';
+import { filesForPodWithMisses, type PvLogConfig } from './pv-logs';
 import { ExportCancelled, streamArchive, type StreamProgress } from './pv-stream';
 
 export type LogRange =
@@ -73,6 +73,14 @@ export interface ExportResult {
   includedPrevious?: boolean;
   /** True for the archived half, which is written as its own file. */
   archive?: boolean;
+  /**
+   * Files on the volume the template walked past, by relative path.
+   *
+   * Capped at a dozen for the message; `missedCount` is the real number.
+   */
+  missed?: string[];
+  missedCount?: number;
+  missedBytes?: number;
 }
 
 /**
@@ -310,9 +318,22 @@ export async function exportPodLogs(
     if (opts.pv?.enabled) {
       const archived: ExportResult = { pod: t.pod, namespace: t.namespace };
       try {
-        const files = await filesForPod(opts.pv, {
+        const { files, missed } = await filesForPodWithMisses(opts.pv, {
           namespace: t.namespace, pod: t.pod, context: t.context, workload: t.workload,
         });
+        /*
+          Named, not dropped.
+
+          A `*.log` template sitting next to `app.log.1.gz` takes the newest
+          half of a rotation and leaves the oldest — which is the half people
+          go to the volume for. The export used to do that in silence; now the
+          result carries what it walked past, and the screen says so.
+        */
+        if (missed.length) {
+          archived.missed = missed.slice(0, 12).map(m => m.rel);
+          archived.missedCount = missed.length;
+          archived.missedBytes = missed.reduce((n, m) => n + (m.bytes || 0), 0);
+        }
         if (files.length) {
           const file = join(destDir, logFileName(t.pod, t.namespace, multiNamespace, true));
           /*
@@ -369,5 +390,25 @@ export function summariseExport(results: ExportResult[]): string {
   if (lines) parts.push(`${lines.toLocaleString()} lines`);
   if (empty.length) parts.push(`${empty.length} empty`);
   if (failed.length) parts.push(`${failed.length} failed`);
+  /* The summary is the one line somebody reads; a file left on the volume
+     belongs in it, not only in the detail nobody opens. */
+  const skipped = results.reduce((n, r) => n + (r.missedCount ?? 0), 0);
+  if (skipped) parts.push(`${skipped} not matched`);
   return parts.join(' · ');
+}
+
+/**
+ * "2 files on the volume did not match your template."
+ *
+ * Said as a sentence rather than a count, because the fix is a template and
+ * the reader has to know which files to write one for.
+ */
+export function describeMissed(results: ExportResult[]): string {
+  const all = results.flatMap(r => r.missed ?? []);
+  if (all.length === 0) return '';
+  const n = results.reduce((t, r) => t + (r.missedCount ?? 0), 0);
+  const shown = all.slice(0, 4).join(', ');
+  const more = n - Math.min(all.length, 4);
+  return `${n} file${n === 1 ? '' : 's'} on the volume did not match your template`
+    + ` — ${shown}${more > 0 ? `, and ${more} more` : ''}.`;
 }
