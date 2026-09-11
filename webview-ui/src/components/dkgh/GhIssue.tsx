@@ -35,6 +35,8 @@ import { GhCloseIssue } from './GhCloseIssue';
 import { GhMarkdown } from './GhMarkdown';
 import { useEditFlow } from './edit-flow';
 import { GhRelations, useRelations } from './GhRelations';
+import { GhCopyButton } from './GhCopyButton';
+import { GhClose } from './GhClose';
 import type { ProjectField } from './project-store';
 import type { BoardIssue, ProposedDimension } from './board-types';
 
@@ -172,9 +174,17 @@ export function GhIssue({
 
       {/* Where you are, and the two things to do from here */}
       <div className="head">
-        <button type="button" className="btn" style={{ padding: '3px 9px' }} onClick={onBack}>
-          ←
-        </button>
+        {/*
+          A close, not a back.
+
+          There is nothing to go back *through* — this page is opened from one
+          board and closing it returns to that board, which is what a close
+          means and what an arrow only implies. It stays on the left because
+          the right-hand end of this header already has a button called "Close
+          issue", and two closes side by side meaning different things is worse
+          than an unusual position.
+        */}
+        <GhClose onClick={onBack} title="Back to the board" />
         <div className="repo">
           <Ico name="repo" />
           <span className="path" style={{ color: 'var(--dk-faint)' }}>{repo}</span>
@@ -354,7 +364,19 @@ export function GhIssue({
                 <div className="ch">
                   <span className="av av-s">Y</span>
                   <b>You</b>
-                  <span style={{ marginLeft: 'auto' }}>Markdown · #43 links</span>
+                  {/*
+                    It used to read "Markdown · #43 links", which is two
+                    abbreviations and a sentence with the verb missing.
+                    "Markdown" is also redundant now: the editor has a Rich
+                    Text / Markdown switch on its own toolbar, three
+                    centimetres below.
+
+                    What is left is the one thing that box does which is not
+                    obvious — typing a number links the issue.
+                  */}
+                  <span style={{ marginLeft: 'auto' }}>
+                    Type <b>#</b> and a number to link another issue
+                  </span>
                 </div>
                 <div className="cb" style={{ padding: 0 }}>
                   {/* The same box the composer files in. On github.com the
@@ -441,17 +463,12 @@ export function GhIssue({
 
             <div style={{ padding: '10px 12px', marginTop: 'auto', display: 'flex',
                           flexDirection: 'column', gap: 6 }}>
-              <button
-                type="button"
-                className="btn"
-                onClick={() => navigator.clipboard?.writeText(asMarkdown(issue, detail))}
-              >
-                <Ico name="copy" />Copy as Markdown
-              </button>
-              <button type="button" className="btn"
-                      onClick={() => navigator.clipboard?.writeText(issue.url)}>
-                <Ico name="link" />Copy link
-              </button>
+              <GhCopyButton text={() => asMarkdown(issue, detail)}>
+                Copy as Markdown
+              </GhCopyButton>
+              <GhCopyButton icon="link" text={() => issue.url}>
+                Copy link
+              </GhCopyButton>
             </div>
           </div>
         }

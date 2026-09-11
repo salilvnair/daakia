@@ -1134,8 +1134,14 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
             17D — the unmapped count is a link to the rows behind it, which is
             the only way to find out why a heading stopped parsing.
           */
+          /*
+             `none`, not `''`. `valuesOf` reports an issue with no value for a
+             field as `['none']`, so a term of `['']` matches nothing at all —
+             this link landed on an empty board rather than on the unmapped
+             rows it names.
+          */
           onExplain={dimension => {
-            setFilter(f => only(f, dimension, ''));
+            setFilter(f => only(f, dimension, 'none'));
             setSection('board');
           }}
           onImport={() => setSection('import')}

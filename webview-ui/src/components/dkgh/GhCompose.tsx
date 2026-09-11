@@ -20,6 +20,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { SplitPanelView } from '@salilvnair/dui';
 import { Ico } from './GhIcons';
+import { GhClose } from './GhClose';
 import { GhUpload } from './GhUpload';
 import { GhGenerate, aiFailed } from './GhGenerate';
 import { GhMarkdown } from './GhMarkdown';
@@ -277,6 +278,10 @@ export function GhCompose({
                       : <div className="val">None</div>}>
                 <Picks options={(meta?.labels ?? []).map(l => l.name)} chosen={draft.labels}
                        empty="This repository has no labels."
+                       swatch={v => {
+                         const found = meta?.labels.find(l => l.name === v);
+                         return found ? `#${found.color}` : undefined;
+                       }}
                        note={form?.labels.length
                          ? `${form.labels.join(', ')} — added by the template itself`
                          : undefined}
@@ -412,26 +417,39 @@ function Msec({ row, value, open, onToggle, last, children }: {
 }
 
 /** The list a `.msec` opens — `.fct` rows, the mock's own tickable value. */
-function Picks({ options, chosen, empty, note, onPick }: {
+function Picks({ options, chosen, empty, note, swatch, onPick }: {
   options: string[];
   chosen: string[];
   empty: string;
   note?: string;
+  /**
+   * The dot beside a row, in that value's own colour.
+   *
+   * A list of nine labels with nine identical grey checkboxes is a list you
+   * read; the same list with each label's own colour beside it is one you
+   * recognise. The mock already has `.sw` for exactly this — the filter rail
+   * uses it — and the picker is the same kind of list.
+   */
+  swatch?: (value: string) => string | undefined;
   onPick: (value: string) => void;
 }) {
   return (
     <div style={{ margin: '6px -6px 0' }}>
       {options.length === 0 ? (
         <div className="val" style={{ padding: '0 12px' }}>{empty}</div>
-      ) : options.map(o => (
-        <button key={o} type="button"
-                className={`fct${chosen.includes(o) ? ' on' : ''}`}
-                style={{ width: '100%' }}
-                onClick={() => onPick(o)}>
-          <span className="bx">{chosen.includes(o) && <Ico name="check" />}</span>
-          {o}
-        </button>
-      ))}
+      ) : options.map(o => {
+        const dot = swatch?.(o);
+        return (
+          <button key={o} type="button"
+                  className={`fct${chosen.includes(o) ? ' on' : ''}`}
+                  style={{ width: '100%' }}
+                  onClick={() => onPick(o)}>
+            <span className="bx">{chosen.includes(o) && <Ico name="check" />}</span>
+            {dot && <span className="sw" style={{ background: dot }} />}
+            {o}
+          </button>
+        );
+      })}
       {note && <div className="val" style={{ padding: '5px 12px 0' }}>{note}</div>}
     </div>
   );
@@ -489,14 +507,13 @@ function Dropzone({ draft, onChange }: {
               {/* Not "uploading" — nothing is, and will not be until somebody
                   presses the button below. See GhUpload. */}
               {u.startsWith('data:') && <span className="chip c-stale">local</span>}
-              <button
-                type="button"
-                className="btn"
-                style={{ position: 'absolute', top: 3, right: 3, padding: '0 5px' }}
-                onClick={() => onChange({ evidence: draft.evidence.filter(x => x !== u) })}
-              >
-                ×
-              </button>
+              <span style={{ position: 'absolute', top: 3, right: 3 }}>
+                <GhClose
+                  size={20}
+                  title="Take this screenshot off"
+                  onClick={() => onChange({ evidence: draft.evidence.filter(x => x !== u) })}
+                />
+              </span>
             </div>
           ))}
         </div>

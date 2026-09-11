@@ -25,6 +25,29 @@ import {
 } from './charts-model';
 import type { BoardIssue, ProposedDimension } from './board-types';
 
+/**
+ * Whether clicking a bar of this chart can land on anything.
+ *
+ * `week` is a bucket rather than a value — the board has no `week` field to
+ * filter on, the way the age chart has no age field. A bar that looks
+ * pressable and does nothing is worse than one that says it is not, so the row
+ * is disabled and its title says why.
+ */
+export function filterable(groupBy: string): boolean {
+  return groupBy !== 'week';
+}
+
+/**
+ * The value the filter wants, from the label the chart drew.
+ *
+ * `barsFor` labels an empty value `No module`, which is right on a chart and
+ * wrong in a filter: `valuesOf` spells the absence of a value `none`, and a
+ * term of `['No module']` matches nothing.
+ */
+export function valueFor(groupBy: string, label: string): string {
+  return label === `No ${groupBy}` ? 'none' : label;
+}
+
 /** One pinned chart, drawn among the built-ins. */
 export function GhOwnChart({ chart, rows, options, missing, onFilter, onRemove }: {
   chart: PinnedChart;
@@ -68,8 +91,12 @@ export function GhOwnChart({ chart, rows, options, missing, onFilter, onRemove }
               type="button"
               className="barrow"
               style={{ width: '100%' }}
-              title={`Show the ${chart.groupBy} “${b.label}”`}
-              onClick={() => onFilter(chart.groupBy, b.label)}
+              title={filterable(chart.groupBy)
+                ? `Show the ${chart.groupBy} “${b.label}”`
+                : `A ${chart.groupBy} is not something the board can filter by`}
+              disabled={!filterable(chart.groupBy)}
+              onClick={() => filterable(chart.groupBy)
+                && onFilter(chart.groupBy, valueFor(chart.groupBy, b.label))}
             >
               <span className="bl">{b.label}</span>
               <span className="bt">

@@ -24,6 +24,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { postMsg } from '../../vscode';
 import { Ico } from './GhIcons';
+import { GhClose } from './GhClose';
 import { chipOf } from './GhCards';
 import { CopyWord, GhNote } from './GhShell';
 import { cap, type FormField, type IssueForm, type ProposedDimension } from './board-types';
@@ -116,9 +117,7 @@ export function GhImport({ repo, existing, onClose, onImported }: {
         </div>
         {existing.length === 0 && <span className="chip c-stale">no issue forms found</span>}
         <span className="spacer" />
-        <button type="button" className="btn" style={{ padding: '3px 9px' }} onClick={onClose}>
-          ×
-        </button>
+        <GhClose onClick={onClose} />
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>

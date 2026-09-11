@@ -151,9 +151,8 @@ export function GhCloseIssue({ repo, issue, closed, onCancel, onClose }: {
               id="dkgh-close-comment"
               value={comment}
               onChange={setComment}
-              autoFocus
               minHeight={84}
-              placeholder="What actually happened. Markdown, and #43 links."
+              placeholder="What actually happened. Type #43 to link that issue."
             />
           </div>
 

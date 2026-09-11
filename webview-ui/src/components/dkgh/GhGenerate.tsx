@@ -26,6 +26,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Ico } from './GhIcons';
+import { GhClose } from './GhClose';
 import { CopyWord, GhNote } from './GhShell';
 import { sendAiRequest, newAiRequestId } from '../../services/ai/ai-client';
 import { useAiProvidersStore } from '../../store/ai-providers-store';
@@ -175,9 +176,7 @@ export function GhGenerate({ repo, form, draft, onDraft, onClose }: {
             answered
           </span>
         )}
-        <button type="button" className="btn" style={{ padding: '2px 9px' }} onClick={onClose}>
-          ×
-        </button>
+        <GhClose onClick={onClose} size={24} />
       </div>
 
       {!configured ? (

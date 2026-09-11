@@ -213,7 +213,7 @@ export function GhInsights({
           <Bars
             rows={people}
             colour={key => colourOf(key, splitOptions)}
-            onPick={label => onFilter('assignee', label === 'unassigned' ? '' : label)}
+            onPick={label => onFilter('assignee', label === 'unassigned' ? 'none' : label)}
           />
         </div>
 

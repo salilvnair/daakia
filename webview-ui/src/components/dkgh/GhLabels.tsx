@@ -21,8 +21,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { postMsg } from '../../vscode';
 import { Ico } from './GhIcons';
+import { GhClose } from './GhClose';
 import { CopyWord, GhNote } from './GhShell';
 import { GhImportLabels } from './GhImportLabels';
+import { randomColour } from './label-colour';
 import type { BoardIssue } from './board-types';
 import type { RepoMeta } from './types';
 
@@ -178,9 +180,7 @@ export function GhLabels({ repo, meta, issues, onClose, onRefresh }: {
         <button type="button" className="btn" onClick={onRefresh} title="Read them again">
           <Ico name="refresh" />
         </button>
-        <button type="button" className="btn" style={{ padding: '3px 9px' }} onClick={onClose}>
-          ×
-        </button>
+        <GhClose onClick={onClose} />
       </div>
 
       <div className="toolbar">
@@ -196,7 +196,12 @@ export function GhLabels({ repo, meta, issues, onClose, onRefresh }: {
           className="pill"
           onClick={() => {
             const key = `new:${Date.now()}`;
-            setEdits(prev => ({ ...prev, [key]: { name: '', color: '#ededed' } }));
+            setEdits(prev => ({
+              ...prev,
+              /* Not the same grey every time: nine new labels all `#ededed` is
+                 nine labels somebody has to colour by hand afterwards. */
+              [key]: { name: '', color: randomColour(live.map(x => `#${x.color}`)) },
+            }));
             setEditing(key);
           }}
         >
@@ -268,12 +273,46 @@ export function GhLabels({ repo, meta, issues, onClose, onRefresh }: {
                             onChange={e => change(key, { name: e.target.value }, l)}
                             onKeyDown={e => { if (e.key === 'Enter') setEditing(undefined); }}
                           />
+                          {/*
+                            The field wears the colour it holds.
+
+                            A hex is six characters nobody reads as a colour,
+                            and the swatch is at the other end of the row. Ink
+                            rather than fill, matching the chip beside it — a
+                            dark label filled solid would swallow its own text
+                            on the dark panel.
+                          */}
                           <input
                             className="inp mono"
-                            style={{ width: 92 }}
+                            style={{
+                              width: 100,
+                              color: colour,
+                              borderColor: `color-mix(in srgb, ${colour} 55%, transparent)`,
+                            }}
                             value={colour}
                             onChange={e => change(key, { color: e.target.value }, l)}
                           />
+                          {/*
+                            A colour worth having, one press away. Typing hex
+                            until something looks right is the part of making a
+                            label that nobody enjoys — and a random hue that
+                            keeps clear of the ones already used is more useful
+                            than a random hex, which is one time in eight
+                            invisible on this panel.
+                          */}
+                          <button
+                            type="button"
+                            className="iconbtn"
+                            title="A different colour"
+                            aria-label="Pick a different colour"
+                            onClick={() => change(
+                              key,
+                              { color: randomColour(live.map(x => `#${x.color}`)) },
+                              l,
+                            )}
+                          >
+                            <Ico name="refresh" />
+                          </button>
                         </span>
                       ) : (
                         <>
@@ -307,19 +346,35 @@ export function GhLabels({ repo, meta, issues, onClose, onRefresh }: {
                     </td>
                     <td><State state={state} /></td>
                     <td className="dt">
-                      <span style={{ display: 'inline-flex', gap: 8 }}>
-                        <button type="button" className="textlink"
-                                onClick={() => setEditing(editing === key ? undefined : key)}>
-                          {editing === key ? 'done' : 'edit'}
+                      {/*
+                        Icons, not words.
+
+                        Nine rows of "edit  delete" is the same two words
+                        eighteen times down the right-hand edge, which reads as
+                        a column of text rather than as controls. The titles
+                        carry the words for anyone who needs them, and delete
+                        keeps its red.
+                      */}
+                      <span style={{ display: 'inline-flex', gap: 4 }}>
+                        <button
+                          type="button"
+                          className={`iconbtn${editing === key ? ' on' : ''}`}
+                          title={editing === key ? 'Done' : 'Edit this label'}
+                          aria-label={editing === key ? 'Done' : 'Edit this label'}
+                          onClick={() => setEditing(editing === key ? undefined : key)}
+                        >
+                          <Ico name={editing === key ? 'check' : 'pen'} />
                         </button>
                         {l && (
                           <button
                             type="button"
-                            className="textlink"
-                            style={{ color: 'var(--dk-red)' }}
+                            className={`iconbtn${edit?.deleted ? ' on' : ' danger'}`}
+                            title={edit?.deleted ? 'Keep this label after all' : 'Delete it'}
+                            aria-label={edit?.deleted
+                              ? 'Keep this label after all' : 'Delete it'}
                             onClick={() => change(key, { deleted: !edit?.deleted }, l)}
                           >
-                            {edit?.deleted ? 'keep' : 'delete'}
+                            <Ico name={edit?.deleted ? 'refresh' : 'trash'} />
                           </button>
                         )}
                       </span>

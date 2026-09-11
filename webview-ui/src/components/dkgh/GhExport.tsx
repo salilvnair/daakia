@@ -20,6 +20,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { postMsg } from '../../vscode';
 import { Ico, type IcoName } from './GhIcons';
+import { GhClose } from './GhClose';
 import {
   FORMATS, cells, exportColumns, filename, report, sheets, toCsv, toMarkdown, workbook,
   type Format, type Scope,
@@ -191,9 +192,7 @@ export function GhExport({
         </div>
         <span className="chip c-gh">from view: {view}</span>
         <span className="spacer" />
-        <button type="button" className="btn" style={{ padding: '3px 9px' }} onClick={onClose}>
-          ×
-        </button>
+        <GhClose onClick={onClose} />
       </div>
 
       <div className="split" style={{ flex: 1, minHeight: 0, display: 'flex' }}>
