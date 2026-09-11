@@ -206,3 +206,27 @@ describe('streamArchive', () => {
     expect((await stat(dest)).size).toBeGreaterThan(constants.MAX_STRING_LENGTH);
   }, 180_000);
 });
+
+/*
+  The guard that came out of running this against a real cluster.
+
+  `containers` arrives off the wire, and a target that reached the exporter
+  without it threw a TypeError that surfaced beside a pod name as "Cannot read
+  properties of undefined (reading 'length')" — which reads as the cluster's
+  fault rather than a malformed message. The archived half completed; only the
+  live half failed, and it failed unintelligibly.
+*/
+describe('a target with no container list', () => {
+  it('is kubectl’s own default, not a crash', async () => {
+    const { buildLogArgs } = await import('./k8s-logs');
+    const args = buildLogArgs(
+      { pod: 'p', namespace: 'n', context: 'c' } as never,
+      { range: { kind: 'all' }, keepTimestamps: true, slice: { kind: 'all' } } as never,
+      false,
+      true,
+    );
+    expect(args).toContain('logs');
+    expect(args).not.toContain('-c');
+    expect(args).not.toContain('--all-containers=true');
+  });
+});

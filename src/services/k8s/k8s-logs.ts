@@ -82,7 +82,7 @@ export interface ExportResult {
  * the end of a range cannot be pushed down to the server. It is filtered here
  * instead, which is why a bounded range forces --timestamps on.
  */
-function logArgs(
+export function buildLogArgs(
   t: ExportTarget,
   opts: ExportOptions,
   previous: boolean,
@@ -92,8 +92,18 @@ function logArgs(
     '--context', t.context, '-n', t.namespace, 'logs', t.pod,
   ];
 
-  if (t.containers.length > 1) args.push('--all-containers=true', '--prefix');
-  else if (t.containers.length === 1) args.push('-c', t.containers[0]);
+  /*
+    A target that arrived without its container list is not a crash.
+
+    `containers` comes off the wire, and reading `.length` from an absent one
+    threw a TypeError that reached the screen as "Cannot read properties of
+    undefined (reading 'length')" — against a pod, in a list of results, where
+    it reads as the cluster's fault. No containers named means kubectl's own
+    default, which is the right answer for a single-container pod anyway.
+  */
+  const containers = t.containers ?? [];
+  if (containers.length > 1) args.push('--all-containers=true', '--prefix');
+  else if (containers.length === 1) args.push('-c', containers[0]);
 
   if (previous) args.push('--previous');
   if (needTimestamps) args.push('--timestamps');
@@ -157,7 +167,7 @@ async function fetchLog(
   // them in the file; they are stripped afterwards in that case.
   const needTimestamps = opts.keepTimestamps || bounded;
 
-  const res = await run(logArgs(t, opts, previous, needTimestamps), {
+  const res = await run(buildLogArgs(t, opts, previous, needTimestamps), {
     timeoutMs: 120_000,
     maxBuffer: 256 * 1024 * 1024,
   });
