@@ -32,7 +32,7 @@ import { GhProse } from './GhProse';
 import { sinceIso as since } from './format';
 import { GhEditConfirm } from './GhEditConfirm';
 import { GhCloseIssue } from './GhCloseIssue';
-import { GhMarkdown } from './GhMarkdown';
+import { GhMarkdown, useMarkdownMode } from './GhMarkdown';
 import { useEditFlow } from './edit-flow';
 import { GhRelations, useRelations } from './GhRelations';
 import { GhCopyButton } from './GhCopyButton';
@@ -123,6 +123,8 @@ export function GhIssue({
   const [muted, setMuted] = useState<Set<TimelineKind>>(new Set());
   /** 14B — what is in the box, until it is proposed. */
   const [draft, setDraft] = useState('');
+  /** Rich Text or Markdown, held here so the switch can sit in the header. */
+  const md = useMarkdownMode();
   /** 14E — open while the close is being explained. */
   const [closing, setClosing] = useState(false);
   /** How many times a write has landed, to re-read this page's own two calls. */
@@ -379,6 +381,10 @@ export function GhIssue({
                   <span style={{ marginLeft: 'auto' }}>
                     Type <b>#</b> to link another issue
                   </span>
+                  {/* The switch lives here, not in the toolbar: in Markdown
+                      view the toolbar has no buttons, and one control alone on
+                      an empty strip reads as a mistake. */}
+                  {md.toggle}
                 </div>
                 <div className="cb" style={{ padding: 0 }}>
                   {/* The same box the composer files in. On github.com the
@@ -390,6 +396,8 @@ export function GhIssue({
                     minHeight={84}
                     placeholder="Leave a comment…"
                     issues={all}
+                    mode={md.mode}
+                    onModeChange={md.setMode}
                   />
                 </div>
                 {/*
@@ -410,8 +418,12 @@ export function GhIssue({
                       Discard
                     </button>
                   )}
+                  {/* Purple, because that is the colour a closed issue is on
+                      github.com — green there means merged, which this is not.
+                      Solid, like the Comment beside it: an outline against a
+                      fill reads as one real button and one suggestion. */}
                   {issue.state === 'OPEN' ? (
-                    <button type="button" className="btn ok" onClick={() => setClosing(true)}>
+                    <button type="button" className="btn shut" onClick={() => setClosing(true)}>
                       <Ico name="closed" />
                       {draft.trim() ? 'Close with comment' : 'Close issue'}
                     </button>

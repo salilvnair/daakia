@@ -877,19 +877,29 @@
 .dkgh .fh .n { margin-left: auto; font-family: var(--mono); font-weight: 500; }
 
 /*
+  ── A note on the numbers below, and above ──
+
+  Everything in this file is scaled by `build.py`, the same ×1.2 the mock's own
+  rules get. So the values written here are the *unscaled* ones — 10px here is
+  12px in the output — and writing a pre-scaled number produces a rule 20%
+  larger than intended. The picker, the mention list and the sheet were all
+  built that way once; this is the note that stops it happening again.
+*/
+
+/*
   ── An icon inside a chart card ──
 
   The mock gives `.chartc svg` `width: 100%`, because the only `<svg>` it ever
   draws in one is the line chart, which should fill the card. 16D puts a real
-  control in the card's heading — unpin — and its 12px glyph inherited that
+  control in the card's heading — unpin — and its 10px glyph inherited that
   rule and came out the size of the chart.
 
   Scoped to a button rather than undoing the mock's rule: the line chart still
   fills its card, and anything pressable keeps the size the rest of the tab
   uses for the same glyph.
 */
-.dkgh .chartc button svg { width: 12px; height: 12px; }
-.dkgh .chartc .barrow svg { width: 12px; height: 12px; }
+.dkgh .chartc button svg { width: 10px; height: 10px; }
+.dkgh .chartc .barrow svg { width: 10px; height: 10px; }
 
 /*
   ── A row of icon controls ──
@@ -903,8 +913,8 @@
   is not a `.vrow`.
 */
 .dkgh .iconbtn {
-  display: inline-grid; place-items: center; width: 26.4px; height: 26.4px;
-  border-radius: 6px; border: none; background: transparent; color: var(--dk-faint);
+  display: inline-grid; place-items: center; width: 22px; height: 22px;
+  border-radius: 5px; border: none; background: transparent; color: var(--dk-faint);
   cursor: pointer; transition: color 110ms ease, background 110ms ease, transform 80ms ease;
 }
 .dkgh .iconbtn:hover:not(:disabled) { color: var(--dk-text); background: var(--dk-hover); }
@@ -924,12 +934,12 @@
   screen feel like the same gesture rather than two designs.
 */
 .dkgh .ghx {
-  display: inline-grid; place-items: center; border-radius: 6px;
+  display: inline-grid; place-items: center; border-radius: 5px;
   border: none; background: transparent; color: var(--dk-faint);
   cursor: pointer; flex-shrink: 0;
   transition: background 120ms, transform 80ms, color 120ms;
 }
-.dkgh .ghx svg { width: 12px; height: 12px; }
+.dkgh .ghx svg { width: 10px; height: 10px; }
 .dkgh .ghx:hover {
   color: var(--dk-red); background: color-mix(in srgb, var(--dk-red) 12%, transparent);
 }
@@ -953,7 +963,7 @@
   A hairline gap is enough: each row keeps its own rounded edge, and an
   unselected list looks exactly as it did.
 */
-.dkgh .fct { margin-bottom: 2.4px; border-radius: 6px; }
+.dkgh .fct { margin-bottom: 2px; border-radius: 5px; }
 .dkgh .fct:last-child { margin-bottom: 0; }
 
 /*
@@ -969,14 +979,14 @@
 */
 .dkgh .dkgh-mde .dui_mde__surface,
 .dkgh .dkgh-mde .dui_mde__source {
-  min-height: var(--dkgh-mde-min, 120px);
-  font-size: 13.2px;
+  min-height: var(--dkgh-mde-min, 100px);
+  font-size: 11px;
 }
 
 /* The mock's own frame around the box, so it sits in the panel like the
    fields above it rather than floating in it. */
 .dkgh .dkgh-mde .dui_mde {
-  border-radius: 9.6px;
+  border-radius: 8px;
   border: 1px solid var(--dk-border);
   background: var(--dk-surface);
   overflow: hidden;
@@ -1014,20 +1024,20 @@
 /*
   The switch itself, at dkgh's scale.
 
-  dui draws it at 9.5px for a toolbar of 11px icons. dkgh's toolbar is
-  everything times 1.2, and a 9.5px control in it reads as a mistake — so the
+  dui draws it at 7.92px for a toolbar of 9.17px icons. dkgh's toolbar is
+  everything times 1.2, and a 7.92px control in it reads as a mistake — so the
   metrics are scaled the way every other number in this file is, and the height
   is fixed so the switch and anything beside it line up.
 */
 .dkgh .dkgh-mde .dui_mde__modes {
-  height: 24px;
+  height: 20px;
   align-items: stretch;
-  border-radius: 6px;
-  font-size: 11.4px;
+  border-radius: 5px;
+  font-size: 9.5px;
 }
 .dkgh .dkgh-mde .dui_mde__modes button {
   display: inline-flex; align-items: center;
-  padding: 0 10.8px;
+  padding: 0 9px;
   transition: color 120ms, background 120ms;
 }
 
@@ -1044,62 +1054,103 @@
   not clip it — the rail's own `overflow` is set for that.
 */
 .dkgh .ghpick {
-  position: absolute; z-index: 30; top: 100%; right: 0; left: -10px;
-  min-width: 268px; max-width: 340px;
+  position: absolute; z-index: 30; top: 100%; right: 0; left: -8.33px;
+  min-width: 223.33px; max-width: 283.33px;
   background: var(--dk-raised);
   border: 1px solid var(--dk-border);
-  border-radius: 9.6px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
+  border-radius: 8px;
+  box-shadow: 0 10px 26.67px rgba(0, 0, 0, .45);
   overflow: hidden;
   animation: dkgh-drop 120ms ease;
 }
 @keyframes dkgh-drop {
-  from { opacity: 0; transform: translateY(-4px); }
+  from { opacity: 0; transform: translateY(-3.33px); }
   to { opacity: 1; transform: none; }
 }
+/* One gutter down the whole panel: heading, filter and rows all start on the
+   same line, which is the difference between a popover and a pile. */
+.dkgh .ghpick { --pick-gutter: 10px; }
 .dkgh .ghpick-h {
-  padding: 9.6px 12px; font-size: 12.6px; font-weight: 600; color: var(--dk-text);
+  padding: 8px var(--pick-gutter); font-size: 10.5px; font-weight: 600;
+  color: var(--dk-text);
   border-bottom: 1px solid var(--dk-border);
 }
 .dkgh .ghpick-f {
-  display: flex; align-items: center; gap: 7.2px;
-  padding: 8.4px 12px; border-bottom: 1px solid var(--dk-border);
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px var(--pick-gutter); border-bottom: 1px solid var(--dk-border);
 }
-.dkgh .ghpick-f svg { width: 13.2px; height: 13.2px; color: var(--dk-faint); }
+.dkgh .ghpick-f svg { width: 11px; height: 11px; color: var(--dk-faint); }
 .dkgh .ghpick-f input {
   flex: 1; min-width: 0; background: var(--dk-panel);
-  border: 1px solid var(--dk-border); border-radius: 6px;
-  padding: 4.8px 8.4px; font-family: inherit; font-size: 12.6px; color: var(--dk-text);
+  border: 1px solid var(--dk-border); border-radius: 5px;
+  padding: 4px 7px; font-family: inherit; font-size: 10.5px; color: var(--dk-text);
   outline: none; transition: border-color 110ms ease, box-shadow 110ms ease;
 }
 .dkgh .ghpick-f input:focus {
-  border-color: var(--dk-gh);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dk-gh) 16%, transparent);
+  border-color: color-mix(in srgb, var(--dk-gh) 65%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dk-gh) 12%, transparent);
 }
-.dkgh .ghpick-l { max-height: 300px; overflow-y: auto; padding: 4.8px 0; }
-.dkgh .ghpick-e { padding: 10.8px 12px; font-size: 12px; color: var(--dk-faint); }
-.dkgh .ghpick-s { height: 1px; background: var(--dk-border); margin: 4.8px 0; }
+/*
+  The list scrolls, and its bar keeps to itself.
+
+  dkgh's own scrollbar is 10.8px with a 2.4px inset — right for a facet rail
+  you scan, far too much furniture inside a 280px popover, where it sat on top
+  of the label names. Thin, quiet, and it darkens under the pointer like every
+  other one.
+
+  `scrollbar-gutter: stable` so the rows do not shuffle sideways the moment the
+  filter narrows the list to something that fits.
+*/
+.dkgh .ghpick-l {
+  max-height: 250px; overflow-y: auto; padding: 4px 0;
+  /* `scrollbar-gutter` reserves the *UA's* width unless `scrollbar-width`
+     says otherwise — without this it held 10px open for a 7px bar. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--dk-border) transparent;
+  scrollbar-gutter: stable;
+}
+.dkgh .ghpick-l::-webkit-scrollbar { width: 6px; }
+.dkgh .ghpick-l::-webkit-scrollbar-thumb {
+  background: var(--dk-border); border: none; border-radius: 999px;
+}
+.dkgh .ghpick-l::-webkit-scrollbar-thumb:hover { background: var(--dk-muted); }
+.dkgh .ghpick-e {
+  padding: 9px var(--pick-gutter); font-size: 10px; color: var(--dk-faint);
+}
+.dkgh .ghpick-s { height: 1px; background: var(--dk-border); margin: 4px 0; }
 .dkgh .ghpick-r {
-  display: flex; align-items: flex-start; gap: 8.4px; width: 100%;
-  padding: 6px 12px; background: transparent; border: none; cursor: pointer;
-  text-align: left; color: var(--dk-text); font-size: 12.6px;
+  display: flex; align-items: flex-start; gap: 7px; width: 100%;
+  padding: 5px var(--pick-gutter); background: transparent; border: none; cursor: pointer;
+  text-align: left; color: var(--dk-text); font-size: 10.5px;
   transition: background 110ms ease;
 }
 .dkgh .ghpick-r:hover { background: var(--dk-hover); }
 .dkgh .ghpick-r.on { background: color-mix(in srgb, var(--dk-gh) 10%, transparent); }
-.dkgh .ghpick-r .bx { margin-top: 1.2px; }
-/* `.sw` takes its size from the mock's `.fct .sw`, which does not match in
-   here — without this the dot is a zero-width nothing. */
+.dkgh .ghpick-r .bx { margin-top: 1px; }
+/*
+  `.bx` and `.sw` take their shape from `.fct .bx` and `.fct .sw`, and neither
+  selector matches in here. Without these the checkbox is a bare tick floating
+  where a box should be, and the colour dot is a zero-width nothing.
+*/
+.dkgh .ghpick-r .bx {
+  width: 11px; height: 11px; border-radius: 3px; border: 1px solid var(--dk-border);
+  flex-shrink: 0; display: grid; place-items: center; margin-top: 2px;
+}
+.dkgh .ghpick-r .bx svg { width: 8px; height: 8px; }
+/* Ticked, it fills — the same accent the facet rows use for the same state. */
+.dkgh .ghpick-r.on .bx {
+  background: var(--dk-gh-deep); border-color: var(--dk-gh-deep); color: #fff;
+}
 .dkgh .ghpick-r .sw {
-  width: 9.6px; height: 9.6px; border-radius: 50%; flex-shrink: 0; margin-top: 4.2px;
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 3.5px;
 }
 .dkgh .ghpick-r .av { margin-top: 0; }
-.dkgh .ghpick-t { display: flex; flex-direction: column; gap: 1.2px; min-width: 0; }
+.dkgh .ghpick-t { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .dkgh .ghpick-t b { font-weight: 600; color: var(--dk-text); }
-.dkgh .ghpick-t i { font-style: normal; font-size: 11.4px; color: var(--dk-muted); }
+.dkgh .ghpick-t i { font-style: normal; font-size: 9.5px; color: var(--dk-muted); }
 .dkgh .ghpick-b {
-  padding: 8.4px 12px; border-top: 1px solid var(--dk-border);
-  font-size: 12px; text-align: center;
+  padding: 7px var(--pick-gutter); border-top: 1px solid var(--dk-border);
+  font-size: 10px; text-align: center;
 }
 
 /*
@@ -1118,7 +1169,7 @@
 
   "Why am I seeing these?" has a short answer — a count, a sentence, and one
   line per filter — and it is an answer about the rows, so it belongs under
-  them. As a 268px rail it was three lines at the top of a full-height column
+  them. As a 223.33px rail it was three lines at the top of a full-height column
   with six hundred pixels of nothing beneath.
 
   It takes the height it needs and no more, stopping a little under half the
@@ -1128,14 +1179,14 @@
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 25;
   max-height: 46%;
   overflow-y: auto;
-  padding: 12px 0 14px;
+  padding: 10px 0 11.67px;
   background: var(--dk-surface);
   border-top: 1px solid var(--dk-border);
-  box-shadow: 0 -14px 34px rgba(0, 0, 0, .38);
+  box-shadow: 0 -11.67px 28.33px rgba(0, 0, 0, .38);
   animation: dkgh-rise 140ms ease;
 }
 @keyframes dkgh-rise {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(8.33px); }
   to { opacity: 1; transform: none; }
 }
 
@@ -1155,7 +1206,7 @@
 .dkgh .sheetw { overflow-x: auto; scrollbar-width: none; }
 .dkgh .sheetw::-webkit-scrollbar { display: none; }
 .dkgh .sheetw .sheet { min-width: max-content; }
-.dkgh .sheet .sr { grid-template-columns: var(--sheet-cols, 31.2px 1.6fr 1fr .8fr .8fr .8fr .8fr); }
+.dkgh .sheet .sr { grid-template-columns: var(--sheet-cols, 26px 1.6fr 1fr .8fr .8fr .8fr .8fr); }
 
 /*
   ── Moving a column ──
@@ -1165,16 +1216,16 @@
   under the pointer: a rail of eighteen rows with two arrows on each is a rail
   of thirty-six controls.
 */
-.dkgh .colmove { display: inline-flex; gap: 1.2px; margin-left: auto; opacity: 0; }
+.dkgh .colmove { display: inline-flex; gap: 1px; margin-left: auto; opacity: 0; }
 .dkgh .fct:hover .colmove { opacity: 1; }
 .dkgh .colmove button {
-  display: grid; place-items: center; width: 18px; height: 18px;
-  border-radius: 4.8px; border: none; background: transparent; color: var(--dk-faint);
+  display: grid; place-items: center; width: 15px; height: 15px;
+  border-radius: 4px; border: none; background: transparent; color: var(--dk-faint);
   cursor: pointer; transition: color 110ms ease, background 110ms ease;
 }
 .dkgh .colmove button:hover:not(:disabled) { color: var(--dk-text); background: var(--dk-hover); }
 .dkgh .colmove button:disabled { opacity: .25; cursor: default; }
-.dkgh .colmove svg { width: 10px; height: 10px; }
+.dkgh .colmove svg { width: 8.33px; height: 8.33px; }
 
 /*
   ── The `#` list ──
@@ -1184,26 +1235,113 @@
   corner you have to look for.
 */
 .dkgh .ghmention {
-  position: absolute; z-index: 40; min-width: 264px; max-width: 420px;
+  position: absolute; z-index: 40; min-width: 220px; max-width: 350px;
   background: var(--dk-raised);
   border: 1px solid var(--dk-border);
-  border-radius: 8.4px;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, .45);
-  overflow: hidden auto; max-height: 240px;
+  border-radius: 7px;
+  box-shadow: 0 10px 23.33px rgba(0, 0, 0, .45);
+  overflow: hidden auto; max-height: 200px;
   animation: dkgh-drop 110ms ease;
 }
 .dkgh .ghmention-r {
-  display: flex; align-items: baseline; gap: 8.4px; width: 100%;
-  padding: 6px 10.8px; background: transparent; border: none; cursor: pointer;
-  text-align: left; font-size: 12.6px; color: var(--dk-text);
+  display: flex; align-items: baseline; gap: 7px; width: 100%;
+  padding: 5px 9px; background: transparent; border: none; cursor: pointer;
+  text-align: left; font-size: 10.5px; color: var(--dk-text);
   transition: background 110ms ease;
 }
 .dkgh .ghmention-r:hover,
 .dkgh .ghmention-r.on { background: color-mix(in srgb, var(--dk-gh) 14%, transparent); }
 .dkgh .ghmention-n {
-  font-family: var(--mono); font-size: 11.4px; color: var(--dk-faint); flex-shrink: 0;
+  font-family: var(--mono); font-size: 9.5px; color: var(--dk-faint); flex-shrink: 0;
 }
 .dkgh .ghmention-r.on .ghmention-n { color: var(--dk-gh); }
 .dkgh .ghmention-t {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;
 }
+
+/*
+  ── Closing an issue, in GitHub's own colour ──
+
+  github.com closes an issue in purple: the state a closed issue is *in* is
+  purple everywhere on the site — the badge, the icon, the timeline dot — and
+  green there means merged, which this is not.
+
+  Solid, like the Comment beside it, because the two are the pair somebody
+  chooses between and an outline against a fill reads as one real button and
+  one suggestion.
+*/
+.dkgh { --dk-purple: #8957e5; }
+.dkgh .btn.shut,
+.dkgh button.btn.shut {
+  background: var(--dk-purple);
+  border-color: var(--dk-purple);
+  color: #fff;
+  font-weight: 600;
+}
+.dkgh button.btn.shut:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dk-purple) 86%, #000);
+  border-color: color-mix(in srgb, var(--dk-purple) 86%, #000);
+}
+.dkgh button.btn.shut svg { color: #fff; }
+
+/*
+  An empty toolbar is not a toolbar.
+
+  In Markdown view the editor draws no format buttons — the source *is* the
+  document — and with the mode switch moved to the card header there is
+  nothing left but the spacer. That rendered as a thin blank strip with a
+  border under it, which reads as a row that failed to load.
+
+  `:has()` rather than a flag from the component: the condition is "this
+  toolbar has nothing in it", and that is a fact about the markup rather than
+  something the caller should have to know.
+*/
+.dkgh .dkgh-mde .dui_mde__toolbar:not(:has(> *:not(.dui_mde__spacer))) {
+  display: none;
+}
+
+/*
+  ── The mode switch, out of the toolbar ──
+
+  It sits in the card's own header now. Same metrics as the one dui draws, so
+  moving it did not change how it looks — only where it is.
+*/
+.dkgh .dkgh-modes {
+  display: inline-flex; align-items: stretch; height: 20px;
+  border: 1px solid var(--dk-border); border-radius: 5px; overflow: hidden;
+  font-size: 9.5px; flex-shrink: 0;
+}
+.dkgh .dkgh-modes button {
+  display: inline-flex; align-items: center; padding: 0 9px;
+  border: none; background: none; cursor: pointer; color: var(--dk-muted);
+  transition: color 120ms, background 120ms;
+}
+.dkgh .dkgh-modes button:hover:not(.on) { color: var(--dk-text); }
+.dkgh .dkgh-modes button.on {
+  font-weight: 600; color: var(--dk-gh);
+  background: color-mix(in srgb, var(--dk-gh) 16%, transparent);
+}
+
+/*
+  ── Dragging a column into place ──
+
+  Up and down arrows move one row one step, which is four presses to move a
+  column four places and no sense of where it is going. A row you pick up and
+  put down is the whole gesture at once — the same one the terminal themes use.
+
+  The handle only shows on a chosen row: an unticked column has no place in the
+  order to move within.
+*/
+.dkgh .colgrip {
+  display: inline-grid; place-items: center; width: 14px; margin-right: -2px;
+  color: var(--dk-faint); cursor: grab; opacity: 0;
+  transition: opacity 110ms ease, color 110ms ease;
+}
+.dkgh .fct:hover .colgrip { opacity: 1; }
+.dkgh .colgrip:active { cursor: grabbing; }
+.dkgh .colgrip svg { width: 10px; height: 10px; }
+.dkgh .fct.lifting { opacity: .45; }
+.dkgh .fct.dropzone {
+  box-shadow: inset 0 2px 0 -1px var(--dk-gh);
+}
+.dkgh .fct.dropzone.below { box-shadow: inset 0 -2px 0 -1px var(--dk-gh); }

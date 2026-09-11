@@ -23,7 +23,7 @@ import { Ico } from './GhIcons';
 import { GhClose } from './GhClose';
 import { GhUpload } from './GhUpload';
 import { GhGenerate, aiFailed } from './GhGenerate';
-import { GhMarkdown } from './GhMarkdown';
+import { GhMarkdown, useMarkdownMode } from './GhMarkdown';
 import {
   discardDraft, draftNote, hasContent, loadDraft, proposeTemplate, saveDraft,
   type Draft, type FormField, type IssueForm,
@@ -78,6 +78,8 @@ export function GhCompose({
   const [saved, setSaved] = useState(false);
   /** Screen 11 — open while the AI composer is being used. */
   const [generating, setGenerating] = useState(false);
+  /** Rich Text or Markdown, held here so the switch sits beside the label. */
+  const md = useMarkdownMode();
 
   /*
     A draft left behind is offered, never silently reopened. Somebody who came
@@ -145,13 +147,21 @@ export function GhCompose({
             placeholder="One line, as you would say it out loud"
           />
 
-          <div className="lbl-s">What went wrong</div>
+          <div className="lbl-s" style={{ display: 'flex', alignItems: 'center' }}>
+            What went wrong
+            <span style={{ flex: 1 }} />
+            {/* Beside the label, not in the toolbar — in Markdown view the
+                toolbar has nothing else in it. */}
+            {md.toggle}
+          </div>
           <div>
             <GhMarkdown
               value={draft.description}
               onChange={description => patch({ description })}
               placeholder="Describe it in a sentence. You can write the whole thing here."
               issues={issues}
+              mode={md.mode}
+              onModeChange={md.setMode}
             />
           </div>
 

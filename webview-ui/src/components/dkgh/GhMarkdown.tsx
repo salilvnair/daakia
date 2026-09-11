@@ -25,15 +25,46 @@
  * `autoFocus` is gone with the textarea. The editor owns its own surface and
  * does not take the prop, and stealing focus into it from out here would fight
  * whatever it does on mount.
+ *
+ * ── Where the Rich Text / Markdown switch lives ──
+ *
+ * Not in the toolbar. In Markdown view the editor draws no format buttons —
+ * there is nothing to format, the source is the document — so the toolbar
+ * became an empty strip with one control floating at the far right of it.
+ *
+ * `useMarkdownMode` hands the switch back as a node, so the caller puts it in
+ * the card's own header beside "You". The toolbar then disappears entirely in
+ * Markdown view, which is what it should do when it has nothing in it.
  */
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { MarkdownEditorView } from '@salilvnair/dui';
 import { GhMention, completed, readCaret } from './GhMention';
 import { ACCENT } from './types';
 import type { BoardIssue } from './board-types';
 
+/** The switch, and the state behind it. Held by the caller so it can place it. */
+export function useMarkdownMode(initial: 'rich' | 'markdown' = 'rich') {
+  const [mode, setMode] = useState<'rich' | 'markdown'>(initial);
+  const toggle = (
+    <span className="dui_mde__modes dkgh-modes">
+      {(['rich', 'markdown'] as const).map(m => (
+        <button
+          key={m}
+          type="button"
+          className={mode === m ? 'on' : ''}
+          onClick={() => setMode(m)}
+        >
+          {m === 'rich' ? 'Rich Text' : 'Markdown'}
+        </button>
+      ))}
+    </span>
+  );
+  return { mode, setMode, toggle };
+}
+
 export function GhMarkdown({
   value, onChange, placeholder, minHeight = 120, onPaste, right, id, issues,
+  mode, onModeChange,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -46,6 +77,9 @@ export function GhMarkdown({
   id?: string;
   /** The board, so `#` offers the issues instead of asking for a number. */
   issues?: BoardIssue[];
+  /** Driven from outside, so the switch can sit in the card's header. */
+  mode?: 'rich' | 'markdown';
+  onModeChange?: (m: 'rich' | 'markdown') => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
 
@@ -65,6 +99,10 @@ export function GhMarkdown({
            tab's colour rather than the app's default. */
         accentColor={ACCENT}
         toolbarRight={right}
+        mode={mode}
+        onModeChange={onModeChange}
+        /* The caller draws it, in the header. See `useMarkdownMode`. */
+        showModeToggle={false}
       />
 
       {/*

@@ -101,15 +101,30 @@ export function GhExport({
     prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
   ));
 
-  /** One place earlier or later, which is one column left or right in the file. */
-  const move = (key: string, by: -1 | 1) => setChosen(prev => {
-    const at = prev.indexOf(key);
-    const to = at + by;
-    if (at < 0 || to < 0 || to >= prev.length) return prev;
-    const next = [...prev];
-    [next[at], next[to]] = [next[to], next[at]];
-    return next;
-  });
+  /*
+    Picked up and put down, rather than nudged a step at a time.
+
+    Arrows meant four presses to move a column four places, with no sense of
+    where it was going. The grip is the gesture the terminal themes use, and
+    the line that appears shows where it will land before you let go.
+  */
+  const [lifting, setLifting] = useState<string | undefined>();
+  const [dropAt, setDropAt] = useState<string | undefined>();
+  const [below, setBelow] = useState(false);
+
+  const drop = (onto: string) => {
+    const from = lifting;
+    setLifting(undefined);
+    setDropAt(undefined);
+    if (!from || from === onto) return;
+    setChosen(prev => {
+      const rest = prev.filter(k => k !== from);
+      const at = rest.indexOf(onto);
+      if (at < 0) return prev;
+      rest.splice(below ? at + 1 : at, 0, from);
+      return rest;
+    });
+  };
 
   /* The ticked ones in their own order, then everything else in the
      catalogue's. */
@@ -278,40 +293,53 @@ export function GhExport({
               respect.
             */}
             <div className="cols" style={{ padding: '0 5px', display: 'block' }}>
-              {ordered.map(c => (
-                <div
-                  key={c.key}
-                  className={`fct${chosen.includes(c.key) ? ' on' : ''}`}
-                  style={{ padding: '3px 9px', cursor: 'pointer' }}
-                  title={c.note}
-                  onClick={() => toggle(c.key)}
-                >
-                  <span className="bx">{chosen.includes(c.key) && <Ico name="check" />}</span>
-                  {c.label}
-                  {chosen.includes(c.key) && (
-                    <span className="colmove" onClick={e => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        title="Earlier in the file"
-                        aria-label={`Move ${c.label} earlier`}
-                        disabled={chosen.indexOf(c.key) === 0}
-                        onClick={() => move(c.key, -1)}
+              {ordered.map(c => {
+                const on = chosen.includes(c.key);
+                const over = dropAt === c.key;
+                return (
+                  <div
+                    key={c.key}
+                    className={`fct${on ? ' on' : ''}`
+                      + `${lifting === c.key ? ' lifting' : ''}`
+                      + `${over ? ' dropzone' : ''}${over && below ? ' below' : ''}`}
+                    style={{ padding: '3px 9px', cursor: 'pointer' }}
+                    title={c.note}
+                    onClick={() => toggle(c.key)}
+                    /* Only a chosen column has a place in the order to move
+                       within, so only a chosen one is a drop target. */
+                    onDragOver={on ? e => {
+                      if (!lifting) return;
+                      e.preventDefault();
+                      const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                      setDropAt(c.key);
+                      setBelow(e.clientY > box.top + box.height / 2);
+                    } : undefined}
+                    onDragLeave={() => { if (dropAt === c.key) setDropAt(undefined); }}
+                    onDrop={on ? e => { e.preventDefault(); drop(c.key); } : undefined}
+                  >
+                    {on && (
+                      <span
+                        className="colgrip"
+                        draggable
+                        title="Drag to reorder"
+                        aria-label={`Reorder ${c.label}`}
+                        onClick={e => e.stopPropagation()}
+                        onDragStart={e => {
+                          setLifting(c.key);
+                          e.dataTransfer.effectAllowed = 'move';
+                          /* Firefox refuses to start a drag without it. */
+                          e.dataTransfer.setData('text/plain', c.key);
+                        }}
+                        onDragEnd={() => { setLifting(undefined); setDropAt(undefined); }}
                       >
-                        <Ico name="chev" style={{ transform: 'rotate(180deg)' }} />
-                      </button>
-                      <button
-                        type="button"
-                        title="Later in the file"
-                        aria-label={`Move ${c.label} later`}
-                        disabled={chosen.indexOf(c.key) === chosen.length - 1}
-                        onClick={() => move(c.key, 1)}
-                      >
-                        <Ico name="chev" />
-                      </button>
-                    </span>
-                  )}
-                </div>
-              ))}
+                        <Ico name="drag" />
+                      </span>
+                    )}
+                    <span className="bx">{on && <Ico name="check" />}</span>
+                    {c.label}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
