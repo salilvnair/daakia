@@ -23,6 +23,7 @@ import { useWorkspaceStore, type Workspace } from '../../store/workspace-store';
 import { MarkdownEditorView } from '@salilvnair/dui';
 import { sendAiRequest } from '../../services/ai/ai-client';
 import { isAiFeatureOn } from '../../store/ai-features-store';
+import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { postMsg } from '../../vscode';
 import {
   DocumentIcon, CloseIcon, SparkleIcon, PlusIcon, SpinnerIcon,
@@ -242,11 +243,13 @@ function askModel(ctx: Parameters<typeof runGenerate>[0], facts: DocsContext) {
     }
   };
 
+  const resolve = useAiPromptTemplatesStore.getState().resolve;
   const id = sendAiRequest({
     stage: 'workspace.docs.generate',
     screen: 'Workspace · Overview',
     feature: 'workspaceDocGenerator',
-    userPrompt: promptFor(facts),
+    systemPrompts: [resolve('workspace.docs.generate.system')],
+    userPrompt: resolve('workspace.docs.generate', varsFor(facts)),
   });
 
   const onReply = (event: MessageEvent) => {
@@ -259,16 +262,21 @@ function askModel(ctx: Parameters<typeof runGenerate>[0], facts: DocsContext) {
   window.addEventListener('message', onReply);
 }
 
-function promptFor(f: DocsContext): string {
+/**
+ * The facts, as the template's variables.
+ *
+ * The prompt itself lives in the library — `workspace.docs.generate` and its
+ * `.system` half have been registered the whole time, and this component was
+ * quietly ignoring both: it built its own user prompt here and sent no system
+ * prompt at all. That is why the audit showed "System Prompt - empty", and why
+ * editing the template in settings changed nothing.
+ */
+function varsFor(f: DocsContext): Record<string, string> {
   const list = (xs?: string[]) => (xs && xs.length ? xs.join(', ') : '(none yet)');
-  return [
-    `Write the README for an API workspace called "${f.workspace ?? 'this workspace'}", in Markdown.`,
-    'Cover what the project is, how to set it up, and the workflows that matter.',
-    'Be concrete and brief. Do not invent endpoints, credentials or behaviour that is not implied below;',
-    'where something is unknown, say so rather than filling it in.',
-    '',
-    `Collections and folders: ${list(f.collections)}`,
-    `Hosts these requests call: ${list(f.hosts)}`,
-    `Environment variables that must be set (names only, values deliberately withheld): ${list(f.variableNames)}`,
-  ].join('\n');
+  return {
+    workspace: f.workspace ?? 'this workspace',
+    collections: list(f.collections),
+    hosts: list(f.hosts),
+    variableNames: list(f.variableNames),
+  };
 }

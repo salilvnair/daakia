@@ -114,7 +114,9 @@ import {
   handleDkghImport, handleDkghPlanTemplates, handleDkghApplyTemplates,
   handleDkghPlanLabels, handleDkghApplyLabels,
   handleDkghPlanUpload, handleDkghApplyUpload,
-  handleDkghProject, handleDkghPlanProject, handleDkghApplyProject,
+  handleDkghProject, handleDkghPlanProject,
+  handleDkghPlanProjectItem,
+  handleDkghApplyProjectItem, handleDkghApplyProject,
   handleDkghTerminal, handleDkghRelations,
   handleDkghHarvest, handleDkghHarvestCancel,
   handleDkghSchedules, handleDkghSaveSchedule, handleDkghDeleteSchedule,
@@ -288,6 +290,12 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dkgh:planProject':
       await handleDkghPlanProject(msg, post);
+      break;
+    case 'dkgh:planProjectItem':
+      await handleDkghPlanProjectItem(msg, post);
+      break;
+    case 'dkgh:applyProjectItem':
+      await handleDkghApplyProjectItem(msg, post);
       break;
     case 'dkgh:applyProject':
       await handleDkghApplyProject(msg, post);

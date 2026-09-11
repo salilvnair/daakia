@@ -18,10 +18,10 @@
  * and one close call, shown before they run.
  */
 import { useMemo, useState } from 'react';
-import { ModalView } from '@salilvnair/dui';
+import { ModalView, SegmentedControlView } from '@salilvnair/dui';
 import { Ico } from './GhIcons';
 import { Dk, GhNote } from './GhShell';
-import { GhMarkdown, useMarkdownMode } from './GhMarkdown';
+import { GhMarkdown } from './GhMarkdown';
 import { ACCENT } from './types';
 import type { BoardIssue } from './board-types';
 import type { EditRequest } from './edit-flow';
@@ -42,7 +42,6 @@ export function GhCloseIssue({ repo, issue, closed, draft, onCancel, onClose }: 
   const [reason, setReason] = useState<'completed' | 'not planned'>('completed');
   const [comment, setComment] = useState(draft ?? '');
   const [labels, setLabels] = useState<string[]>([]);
-  const md = useMarkdownMode();
 
   /*
     The words this repository has actually closed things with.
@@ -112,19 +111,28 @@ export function GhCloseIssue({ repo, issue, closed, draft, onCancel, onClose }: 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
           <div className="fieldrow">
             <span className="fl">Reason — GitHub&rsquo;s own</span>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {(['completed', 'not planned'] as const).map(r => (
-                <button
-                  key={r}
-                  type="button"
-                  className={reason === r ? 'btn go' : 'btn'}
-                  style={{ flex: 1, justifyContent: 'center' }}
-                  onClick={() => setReason(r)}
-                >
-                  {r === 'completed' ? 'Completed' : 'Not planned'}
-                </button>
-              ))}
-            </div>
+            {/*
+              Two of something, exclusive, one of them always true — which is a
+              segmented control, and was drawn as two buttons stretched the
+              width of the dialog: a solid orange bar beside a word with no box
+              round it at all, so the unchosen half did not read as a choice.
+
+              Sized to its own labels rather than to the dialog, because what
+              the reader is picking between is two words, not two halves of a
+              form. `ACCENT` so the indicator is dkgh's colour, like the rest
+              of the tab.
+            */}
+            <SegmentedControlView
+              options={[
+                { value: 'completed', label: 'Completed', icon: <Ico name="closed" /> },
+                { value: 'not planned', label: 'Not planned', icon: <Ico name="x" /> },
+              ]}
+              value={reason}
+              onChange={v => setReason(v as 'completed' | 'not planned')}
+              accentColor={ACCENT}
+              variant="rounded"
+              style={{ alignSelf: 'flex-start' }}
+            />
           </div>
 
           {used.length > 0 && (
@@ -152,10 +160,8 @@ export function GhCloseIssue({ repo, issue, closed, draft, onCancel, onClose }: 
           )}
 
           <div className="fieldrow">
-            <span className="fl" style={{ display: 'flex', alignItems: 'center' }}>
+            <span className="fl">
               <label htmlFor="dkgh-close-comment">Comment</label>
-              <span style={{ flex: 1 }} />
-              {md.toggle}
             </span>
             <GhMarkdown
               id="dkgh-close-comment"
@@ -163,8 +169,6 @@ export function GhCloseIssue({ repo, issue, closed, draft, onCancel, onClose }: 
               onChange={setComment}
               minHeight={84}
               placeholder="What actually happened. Type #43 to link that issue."
-              mode={md.mode}
-              onModeChange={md.setMode}
             />
           </div>
 

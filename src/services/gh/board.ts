@@ -428,11 +428,30 @@ export interface IssueDetail {
   body: string;
   evidence: string[];
   /** Newest last, as GitHub orders them. The peek shows the final one. */
-  comments: { author?: string; body: string; createdAt?: string }[];
+  comments: {
+    author?: string;
+    body: string;
+    createdAt?: string;
+    /** The comment's own permalink, `…/issues/2#issuecomment-123`. */
+    url?: string;
+    /** Whether the signed-in user wrote it — what gates an Edit or a Delete. */
+    mine?: boolean;
+  }[];
   error?: string;
 }
 
-interface RawComment { author?: { login?: string }; body?: string; createdAt?: string }
+/*
+  `url` and `viewerDidAuthor` come back in the same `--json comments` payload
+  gh already returns; nothing new is asked of it, so the disclosure row in
+  `commands.ts` is unchanged.
+*/
+interface RawComment {
+  author?: { login?: string };
+  body?: string;
+  createdAt?: string;
+  url?: string;
+  viewerDidAuthor?: boolean;
+}
 
 export async function fetchIssueDetail(repo: string, number: number): Promise<IssueDetail> {
   const empty = { repo, number, body: '', evidence: [], comments: [] };
@@ -459,6 +478,8 @@ export async function fetchIssueDetail(repo: string, number: number): Promise<Is
       author: c.author?.login,
       body: c.body ?? '',
       createdAt: c.createdAt,
+      url: c.url,
+      mine: c.viewerDidAuthor,
     })),
   };
 }

@@ -18,6 +18,7 @@ import { ServerDetail } from './ServerDetail';
 import { MockLogPanel } from './MockLogPanel';
 import type { MockServer, MockRoute, MockServerProtocol } from './mock-types';
 import { createDefaultRoute, createDefaultServer, createOAuthSampleServer, createCrudSampleServer } from './mock-types';
+import { portProblem, portToSend, useFixedPortEnabled } from './fixed-port';
 import { hostVariablesOf, appendQuickMocks, createQuickMockServer, quickMockServerName, quickMockStubNoun, resolveMockProtocol, type QuickMockRequest } from './quick-mock';
 
 export { type MockServer, type MockRoute } from './mock-types';
@@ -35,6 +36,9 @@ export function MockServerPanel() {
   const [editingRoute, setEditingRouteLocal] = useState<string | null>(storedEditingRoute || null);
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [newServerName, setNewServerName] = useState('');
+  /** The port box on the create dialog, only drawn when the setting is on. */
+  const [newServerPort, setNewServerPort] = useState('');
+  const fixedPort = useFixedPortEnabled();
   const [newServerProtocol, setNewServerProtocol] = useState<MockServerProtocol>('rest');
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string; running: boolean; port: number | null } | null>(null);
   const [deleteAllConfirm, setDeleteAllConfirm] = useState(false);
@@ -133,6 +137,9 @@ export function MockServerPanel() {
         }
         case 'mockServer:error': {
           setServers(prev => prev.map(s => s.id === msg.id ? { ...s, running: false } : s));
+          /* The reason is already said: `handleStartMockServer` posts a
+             `toast` alongside this, and `use-extension-messages` raises it.
+             A second one here would be the same sentence twice. */
           break;
         }
         // Sidebar "Mock Request" / "Mock" (collection) — build stub(s) from real request(s)
@@ -243,6 +250,9 @@ export function MockServerPanel() {
           stateMachine: s.stateMachine,
           connectedWorkflowId: s.connectedWorkflowId,
           connectedWorkflows: s.connectedWorkflows,
+          /* Saved with the rest of the config. Without this the port survives
+             until the next write of the file and then quietly is not there. */
+          requestedPort: s.requestedPort,
         })),
       });
     }, 500);
@@ -251,14 +261,20 @@ export function MockServerPanel() {
   const addServer = useCallback(() => {
     const name = newServerName.trim() || 'Untitled Mock Server';
     const server = createDefaultServer(name, newServerProtocol);
-    logUiEvent('mock.create', { name, protocol: newServerProtocol });
+    /* Only when the setting is on, and only when what is in the box is
+       actually a port — see `portToSend`. Anything else means "find me one",
+       which is what this has always done. */
+    const asked = portToSend(newServerPort, fixedPort);
+    if (asked !== undefined) server.requestedPort = asked;
+    logUiEvent('mock.create', { name, protocol: newServerProtocol, fixedPort: asked ?? null });
     setServers(prev => [...prev, server]);
     setActiveServerId(server.id);
     setShowNewDialog(false);
     setNewServerName('');
+    setNewServerPort('');
     setNewServerProtocol('rest');
     setTimeout(persistConfigs, 10);
-  }, [newServerName, newServerProtocol, persistConfigs]);
+  }, [newServerName, newServerPort, newServerProtocol, fixedPort, persistConfigs]);
 
   const addOAuthSample = useCallback(() => {
     const server = createOAuthSampleServer();
@@ -346,6 +362,11 @@ export function MockServerPanel() {
           stateMachine: server.stateMachine,
           connectedWorkflowId: server.connectedWorkflowId,
           connectedWorkflows: server.connectedWorkflows,
+          // Same trap as the note above, and it caught this too: the port the
+          // user typed is on the server object and this payload is built field
+          // by field, so leaving it out meant the box accepted a port, saved
+          // it, showed it back — and the server started on 8000 anyway.
+          requestedPort: server.requestedPort,
         },
       });
     }
@@ -566,7 +587,7 @@ export function MockServerPanel() {
             </ButtonView>
           }
         >
-          <div className="px-4 py-0">
+          <div className="px-4 py-0 flex flex-col gap-2">
             <TextInputView
               value={newServerName}
               onChange={(e) => setNewServerName(e.target.value)}
@@ -577,6 +598,26 @@ export function MockServerPanel() {
               accentColor="var(--color-mock-server)"
               style={{ width: '100%' }}
             />
+            {/* Only when the setting is on — see `fixed-port.ts`. */}
+            {fixedPort && (
+              <div className="flex flex-col gap-1">
+                <TextInputView
+                  value={newServerPort}
+                  onChange={(e) => setNewServerPort(e.target.value)}
+                  placeholder="Port — leave empty to have one found"
+                  size="lg"
+                  onKeyDown={(e) => { if (e.key === 'Enter') addServer(); }}
+                  accentColor="var(--color-mock-server)"
+                  error={!!portProblem(newServerPort)}
+                  style={{ width: '100%' }}
+                />
+                {portProblem(newServerPort) && (
+                  <span className="text-[11px] text-[var(--color-error)]">
+                    {portProblem(newServerPort)}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </ModalView>
       )}

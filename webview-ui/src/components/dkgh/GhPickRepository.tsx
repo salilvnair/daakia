@@ -39,6 +39,7 @@ import { GhEmpty, GhLede, GhNote, GhCommand } from './GhShell';
 import { Ico } from './GhIcons';
 import { GhForkChoice } from './GhForkChoice';
 import { since, formsLabel } from './format';
+import { MIN_QUERY, inlineSlice, useRepoSearch } from './repo-search';
 import {
   ACCENT, activeAccount, hasScope,
   type GhEnv, type RepoSummary, type ForkChoice,
@@ -72,6 +73,14 @@ export function GhPickRepository({ env, typed, onTyped, onSearch, onPick, onOpen
   const account = activeAccount(env);
   const missingProject = !hasScope(account, 'read:project');
   const exact = VALID.test(typed.trim());
+  /*
+    The search, in place — see `useRepoSearch`. `searchable` is what swaps
+    Pinned and Recent for the matches: with a term shorter than that, those two
+    lists are still the useful thing on the screen.
+  */
+  const search = useRepoSearch(typed);
+  const searchable = typed.trim().length >= MIN_QUERY && !exact;
+  const { shown: shownHits, more: moreHits } = inlineSlice(search.results);
   /* The guess is one gh call away, so its slot holds the card's outline rather
      than a spinner — the real card lands where the outline stood, and the two
      options below it never move. */
@@ -153,10 +162,11 @@ export function GhPickRepository({ env, typed, onTyped, onSearch, onPick, onOpen
             <Ico name="search" style={{ color: 'var(--dk-faint)' }} />
             <input
               value={typed}
-              onChange={e => {
-                onTyped(e.target.value);
-                if (e.target.value.trim().length >= 2) onSearch();
-              }}
+              /* Typing no longer navigates. It used to call `onSearch()` on
+                 the second character, which swapped this whole screen for
+                 another one — unmounting the box being typed in and moving
+                 focus to a new one, mid-word. The results appear below now. */
+              onChange={e => onTyped(e.target.value)}
               /* Enter takes an exact owner/name straight through — typing a
                  repository you already know and waiting for a search is a step
                  nobody wants. */
@@ -177,8 +187,63 @@ export function GhPickRepository({ env, typed, onTyped, onSearch, onPick, onOpen
           </div>
         </div>
 
+        {/*
+          What the term found, here rather than on a screen of its own.
+
+          Only while there is a term: with the box empty this is Pinned and
+          Recent, which is what somebody arriving at the screen wants. A
+          handful of rows, and a way through to the full screen — which still
+          has the owner facets, the archived toggle and the command
+          disclosure, and is now reached deliberately instead of by typing.
+        */}
+        {searchable && (
+          <div className="facet" style={{ marginTop: 12, textAlign: 'left' }}>
+            <div className="fh" style={{ padding: '4px 0 6px' }}>
+              Matches
+              <span className="n" style={{ textTransform: 'none', letterSpacing: 0 }}>
+                {search.searching
+                  ? 'searching…'
+                  : search.results === null
+                    ? 'waiting for you to stop typing'
+                    : `${search.matched || (search.results?.length ?? 0)} found`}
+              </span>
+            </div>
+
+            {search.error ? (
+              <div className="sub" style={{ padding: '4px 0' }}>{search.error}</div>
+            ) : shownHits.length > 0 ? (
+              <>
+                <div className="opt" style={{ gap: 0, padding: 0 }}>
+                  {shownHits.map(r => (
+                    <RepoRow key={r.nameWithOwner} repo={r}
+                             pinned={pinned.some(p => p.nameWithOwner === r.nameWithOwner)}
+                             onPick={onPick} onPin={pin} />
+                  ))}
+                </div>
+                {/* The way to the full screen, said in numbers rather than as
+                    a bare "See all" — the count is what decides whether it is
+                    worth the trip. */}
+                <button type="button" className="btn" style={{ marginTop: 7 }}
+                        onClick={onSearch}>
+                  <Ico name="search" />
+                  {moreHits > 0
+                    ? `See all ${(search.results?.length ?? 0)} — ${moreHits} more, with filters`
+                    : 'Open the full search, with filters'}
+                </button>
+              </>
+            ) : search.results !== null && !search.searching ? (
+              <div className="sub" style={{ padding: '4px 0' }}>
+                Nothing matched “{typed.trim()}”. This looks at every repository{' '}
+                <code>gh repo list</code> can see — your own and every org you are in.
+              </div>
+            ) : (
+              <div className="sub" style={{ padding: '4px 0' }}>Looking…</div>
+            )}
+          </div>
+        )}
+
         {/* 03D — pinned first, because pinning is a deliberate act */}
-        {pinned.length > 0 && (
+        {!searchable && pinned.length > 0 && (
           <RepoSection
             title="Pinned"
             aside="available in every workspace"
@@ -189,7 +254,7 @@ export function GhPickRepository({ env, typed, onTyped, onSearch, onPick, onOpen
           />
         )}
 
-        {recent.length > 0 && (
+        {!searchable && recent.length > 0 && (
           <RepoSection
             title="Recent"
             aside="this workspace only"

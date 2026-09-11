@@ -38,7 +38,15 @@
  * than no design.
  */
 
-.dkgh {
+/*
+  `.ghsheet` is here for one reason: a `SheetView` portals to `document.body`,
+  so a panel of dkgh's content has no `.dkgh` ancestor to read the palette
+  from. It cannot simply *be* `.dkgh` — that carries `flex: 1` and the sheet
+  fills the window — so it takes the variables and leaves the layout. The
+  content inside it is wrapped in `Dk` as usual.
+*/
+.dkgh,
+.ghsheet {
   /* The mock's palette, verbatim. */
   --dk-panel: #1e1e1e;
   --dk-surface: #252526;
@@ -83,7 +91,9 @@
   which the app already deepens for a light ground.
 */
 [data-theme="light"] .dkgh,
-.vscode-light .dkgh {
+[data-theme="light"] .ghsheet,
+.vscode-light .dkgh,
+.vscode-light .ghsheet {
   --dk-panel: #ffffff;
   --dk-surface: #f6f6f6;
   --dk-raised: #ececec;
@@ -109,7 +119,19 @@
 */
 .dkgh svg { width: 12px; height: 12px; flex-shrink: 0; }
 
-/* A button in the mock is a span; here it is a real button. */
+/*
+  A button in the mock is a span; here it is a real button.
+
+  Do not put a `:not()` on this. It was tried twice — first to keep the reset
+  out of dui's components, then narrowed to just the editor — and both times it
+  broke the whole tab, because `:not()` takes the specificity of its argument:
+  `.dkgh button:not(.dui_mde *)` is (0,2,1), which outranks `.dkgh .btn` at
+  (0,2,0) and every other class the mock styles its buttons with. Every button
+  in dkgh lost its padding at once.
+
+  Where dui's own rule needs to win over this one, raise dui's rule instead —
+  see `.dui_mde__ask button` in additions.css.
+*/
 .dkgh button {
   font: inherit;
   color: inherit;

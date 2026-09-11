@@ -23,6 +23,7 @@
 import { useEffect, useState } from 'react';
 import { postMsg } from '../../vscode';
 import { Ico } from './GhIcons';
+import { GhAvatar } from './GhAvatar';
 import { avClass, chipOf } from './GhCards';
 import { sinceIso as since } from './format';
 import type { BoardIssue } from './board-types';
@@ -188,9 +189,7 @@ function SubRow({ issue, onOpen }: { issue: Related; onOpen: (n: number) => void
       <span className="cx">#{issue.number}</span>
       <span className="sp" />
       {issue.assignee && (
-        <span className={avClass(issue.assignee)}>
-          {issue.assignee.slice(0, 1).toUpperCase()}
-        </span>
+        <GhAvatar who={issue.assignee} className={avClass(issue.assignee)} />
       )}
     </button>
   );

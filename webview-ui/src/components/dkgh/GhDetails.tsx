@@ -37,6 +37,8 @@
  * the site. See `GhPicker`.
  */
 import { avClass, chipOf, prClass } from './GhCards';
+import { Ico } from './GhIcons';
+import { GhAvatar } from './GhAvatar';
 import { GhPicker, type Choice } from './GhPicker';
 import type { EditFlow } from './edit-flow';
 import type { ProjectBoard, ProjectField } from './project-store';
@@ -77,7 +79,9 @@ export function GhDetails({
         value={issue.assignees.length
           ? issue.assignees.map(a => (
             <span key={a} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <span className={avClass(a)}>{a[0].toUpperCase()}</span>{a}
+              {/* Their picture when there is one, the coloured letter until
+                  there is — see `GhAvatar`. */}
+              <GhAvatar who={a} className={avClass(a)} />{a}
             </span>
           ))
           : undefined}
@@ -120,6 +124,44 @@ export function GhDetails({
           );
         }}
       />
+
+      {/*
+        Which Project this issue is in.
+
+        github.com names it — "Projects: Test Project" — and dkgh drew its
+        fields without ever saying whose they were. On a repository with one
+        Project that is merely odd; on an account with several it means the
+        Status you are looking at belongs to a board you cannot identify.
+
+        A row you read rather than a picker: adding an issue to a Project or
+        taking it out is a different write from setting a field on it, and
+        `gh project item-add` is not a call dkgh makes.
+      */}
+      {project?.title && (
+        <div className="msec">
+          <div className="mh">Projects</div>
+          <div className="val set">
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Ico name="board" />
+              {project.number ? (
+                <a
+                  href={`https://github.com/${project.repo.split('/')[0]}/projects/${project.number}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="textlink"
+                >
+                  {project.title}
+                </a>
+              ) : project.title}
+            </span>
+            {!item && (
+              <span className="sub" style={{ display: 'block', marginTop: 2 }}>
+                This issue is not on it.
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/*
         The Project's own fields.

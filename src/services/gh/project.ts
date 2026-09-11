@@ -261,6 +261,38 @@ export interface ProjectPlan {
  * the values; using them is what makes the write address the thing that was
  * actually dragged.
  */
+/**
+ * Taking a card off the board, or out of the Project.
+ *
+ * Two different things and the difference matters. **Archive** hides the item
+ * from the board's views and keeps it on the Project, which is what you want
+ * for something finished. **Remove** takes it off the Project entirely. Neither
+ * closes or deletes the issue — the issue is a thing in the repository, and the
+ * item is only its card.
+ *
+ * Both need the `project` scope. `read:project`, which is what dkgh asks for on
+ * connect, answers these with a 403 — so the menu offering them says so before
+ * they are pressed. See `GhIssueMenu`.
+ */
+export function planProjectItem(
+  projectId: string, itemId: string, number: number, what: 'archive' | 'remove',
+): ProjectPlan {
+  const argv = what === 'archive'
+    ? ['project', 'item-archive', '--id', itemId, '--project-id', projectId]
+    : ['project', 'item-delete', '--id', itemId, '--project-id', projectId];
+  return {
+    projectId,
+    steps: [{
+      number,
+      does: what === 'archive'
+        ? `Archives #${number}'s card — off the board, still on the Project, still an issue`
+        : `Removes #${number} from the Project — still an issue in the repository`,
+      argv,
+      display: `gh ${argv.join(' ')}`,
+    }],
+  };
+}
+
 export function planProjectEdit(projectId: string, edits: ProjectEdit[]): ProjectPlan {
   const steps: ProjectPlan['steps'] = [];
 

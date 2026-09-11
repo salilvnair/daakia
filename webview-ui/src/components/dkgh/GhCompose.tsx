@@ -20,10 +20,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { SplitPanelView } from '@salilvnair/dui';
 import { Ico } from './GhIcons';
+import { GhAvatar } from './GhAvatar';
 import { GhClose } from './GhClose';
+import { GhPicker } from './GhPicker';
+import { avClass } from './GhCards';
 import { GhUpload } from './GhUpload';
 import { GhGenerate, aiFailed } from './GhGenerate';
-import { GhMarkdown, useMarkdownMode } from './GhMarkdown';
+import { GhMarkdown } from './GhMarkdown';
 import {
   discardDraft, draftNote, hasContent, loadDraft, proposeTemplate, saveDraft,
   type Draft, type FormField, type IssueForm,
@@ -78,8 +81,6 @@ export function GhCompose({
   const [saved, setSaved] = useState(false);
   /** Screen 11 — open while the AI composer is being used. */
   const [generating, setGenerating] = useState(false);
-  /** Rich Text or Markdown, held here so the switch sits beside the label. */
-  const md = useMarkdownMode();
 
   /*
     A draft left behind is offered, never silently reopened. Somebody who came
@@ -147,23 +148,13 @@ export function GhCompose({
             placeholder="One line, as you would say it out loud"
           />
 
-          <div className="lbl-s" style={{ display: 'flex', alignItems: 'center' }}>
-            What went wrong
-            <span style={{ flex: 1 }} />
-            {/* Beside the label, not in the toolbar — in Markdown view the
-                toolbar has nothing else in it. */}
-            {md.toggle}
-          </div>
-          <div>
-            <GhMarkdown
-              value={draft.description}
-              onChange={description => patch({ description })}
-              placeholder="Describe it in a sentence. You can write the whole thing here."
-              issues={issues}
-              mode={md.mode}
-              onModeChange={md.setMode}
-            />
-          </div>
+          <div className="lbl-s">What went wrong</div>
+          <GhMarkdown
+            value={draft.description}
+            onChange={description => patch({ description })}
+            placeholder="Describe it in a sentence. You can write the whole thing here."
+            issues={issues}
+          />
 
           <Dropzone draft={draft} onChange={patch} />
 
@@ -231,6 +222,16 @@ export function GhCompose({
       <div className="right">
         <div className="paneh"><Ico name="tag" />Metadata</div>
 
+        {/*
+          The same pickers the issue page's rail uses — see `GhDetails`.
+
+          These were nine accordions: a chevron that pushed the eight rows
+          below it down and unrolled a column of bare checkboxes into the rail.
+          Filing an issue and editing one are the same act against the same
+          fields, and they were two different interactions, neither of them
+          github.com's. `GhPicker` is the one the site has: a pen on the
+          heading, a panel with a filter box, a click elsewhere to dismiss.
+        */}
         {SIDEBAR.map((row, at) => {
           const field = fieldFor(row.match);
           const last = at === SIDEBAR.length - 1;
@@ -239,87 +240,99 @@ export function GhCompose({
 
           if (row.key === 'assignees') {
             return (
-              <Msec key={row.key} row={row} last={last} open={isOpen} onToggle={toggle}
-                    value={draft.assignees.length
-                      ? <div className="val set">{draft.assignees.join(', ')}</div>
-                      : <div className="val">
-                          No one{me && <>
-                            {' — '}
-                            {/*
-                              The commonest assignment there is, and it was a
-                              blue word that did nothing. It is a button now, and
-                              it opens the section as well as filling it, so the
-                              change is visible where the change happened rather
-                              than only in this line.
-                            */}
-                            <button
-                              type="button"
-                              className="textlink"
-                              onClick={e => {
-                                e.stopPropagation();
-                                patch({ assignees: [...draft.assignees, me] });
-                                setOpen('assignees');
-                              }}
-                            >
-                              assign yourself
-                            </button>
-                          </>}
-                        </div>}>
-                <Picks options={meta?.assignees ?? []} chosen={draft.assignees}
-                       empty="Nobody on this repository can be assigned from here."
-                       onPick={v => patch({
-                         assignees: draft.assignees.includes(v)
-                           ? draft.assignees.filter(a => a !== v)
-                           : [...draft.assignees, v],
-                       })} />
-              </Msec>
+              <GhPicker
+                key={row.key}
+                label="Assignees"
+                title="Select assignees"
+                filterLabel="Filter assignees"
+                empty="Nobody on this repository can be assigned from here."
+                choices={(meta?.assignees ?? []).map(a => ({ value: a, avatar: avClass(a) }))}
+                chosen={draft.assignees}
+                isSet={draft.assignees.length > 0}
+                value={draft.assignees.length
+                  ? draft.assignees.map(a => (
+                    <span key={a} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <GhAvatar who={a} className={avClass(a)} />{a}
+                    </span>
+                  ))
+                  : me && (
+                    <>
+                      {/*
+                        The commonest assignment there is, kept on the row
+                        rather than buried in the panel: it was a blue word
+                        that did nothing, and it is a button now.
+                      */}
+                      No one{' — '}
+                      <button
+                        type="button"
+                        className="textlink"
+                        onClick={() => patch({ assignees: [...draft.assignees, me] })}
+                      >
+                        assign yourself
+                      </button>
+                    </>
+                  )}
+                onPick={v => patch({
+                  assignees: draft.assignees.includes(v)
+                    ? draft.assignees.filter(a => a !== v)
+                    : [...draft.assignees, v],
+                })}
+              />
             );
           }
 
           if (row.key === 'labels') {
             const all = [...new Set([...(form?.labels ?? []), ...draft.labels])];
             return (
-              <Msec key={row.key} row={row} last={last} open={isOpen} onToggle={toggle}
-                    value={all.length
-                      ? <div className="val set">
-                          {all.map(l => (
-                            <span key={l} className="lbldot">
-                              <b style={{ background: hexOf(l, meta) }} />{l}
-                            </span>
-                          ))}
-                        </div>
-                      : <div className="val">None</div>}>
-                <Picks options={(meta?.labels ?? []).map(l => l.name)} chosen={draft.labels}
-                       empty="This repository has no labels."
-                       swatch={v => {
-                         const found = meta?.labels.find(l => l.name === v);
-                         return found ? `#${found.color}` : undefined;
-                       }}
-                       note={form?.labels.length
-                         ? `${form.labels.join(', ')} — added by the template itself`
-                         : undefined}
-                       onPick={v => patch({
-                         labels: draft.labels.includes(v)
-                           ? draft.labels.filter(l => l !== v)
-                           : [...draft.labels, v],
-                       })} />
-              </Msec>
+              <GhPicker
+                key={row.key}
+                label="Labels"
+                title="Apply labels to this issue"
+                filterLabel="Filter labels"
+                empty="This repository has no labels."
+                choices={(meta?.labels ?? []).map(l => ({
+                  value: l.name, note: l.description, swatch: `#${l.color}`,
+                }))}
+                chosen={draft.labels}
+                isSet={all.length > 0}
+                value={all.length
+                  ? all.map(l => (
+                    <span key={l} className="lbldot">
+                      <b style={{ background: hexOf(l, meta) }} />{l}
+                    </span>
+                  ))
+                  : undefined}
+                /* The template's own labels are already on the issue and are
+                   not the writer's to remove, so they are said once here
+                   rather than drawn as ticks nobody can untick. */
+                footer={form?.labels.length
+                  ? <span>{form.labels.join(', ')} — added by the template itself</span>
+                  : undefined}
+                onPick={v => patch({
+                  labels: draft.labels.includes(v)
+                    ? draft.labels.filter(l => l !== v)
+                    : [...draft.labels, v],
+                })}
+              />
             );
           }
 
           if (row.key === 'milestone') {
             return (
-              <Msec key={row.key} row={row} last={last} open={isOpen} onToggle={toggle}
-                    value={draft.milestone
-                      ? <div className="val set">{draft.milestone}</div>
-                      : <div className="val">No milestone</div>}>
-                <Picks options={(meta?.milestones ?? []).map(m => m.title)}
-                       chosen={draft.milestone ? [draft.milestone] : []}
-                       empty="This repository has no open milestones."
-                       onPick={v => patch({
-                         milestone: draft.milestone === v ? undefined : v,
-                       })} />
-              </Msec>
+              <GhPicker
+                key={row.key}
+                label="Milestone"
+                title="Set milestone"
+                filterLabel="Filter milestones"
+                empty="This repository has no open milestones."
+                single
+                choices={(meta?.milestones ?? []).map(m => ({
+                  value: m.title, note: m.dueOn ? `due ${m.dueOn.slice(0, 10)}` : undefined,
+                }))}
+                chosen={draft.milestone ? [draft.milestone] : []}
+                value={draft.milestone || undefined}
+                onPick={v => patch({ milestone: draft.milestone === v ? undefined : v })}
+              />
             );
           }
 
@@ -364,6 +377,33 @@ export function GhCompose({
 
           const value = draft.answers[field.label] ?? '';
           const amber = !value && field.required;
+
+          if (field.options.length > 0) {
+            return (
+              <GhPicker
+                key={row.key}
+                label={row.label}
+                title={`Set ${row.label}`}
+                filterLabel={`Filter ${row.label.toLowerCase()}`}
+                empty="The template declared no values for this one."
+                single
+                choices={field.options.map(o => ({ value: o }))}
+                chosen={value ? [value] : []}
+                isSet={!!value}
+                value={value || (
+                  <span style={amber ? { color: 'var(--dk-amber)' } : undefined}>
+                    {amber ? 'Required by the template' : 'Not set'}
+                  </span>
+                )}
+                onPick={v => patch({
+                  answers: { ...draft.answers, [field.label]: value === v ? '' : v },
+                })}
+              />
+            );
+          }
+
+          /* A free-text template field. There is nothing to pick from, so the
+             row opens the box itself rather than a panel holding one textarea. */
           return (
             <Msec
               key={row.key}
@@ -379,22 +419,14 @@ export function GhCompose({
                   </div>
                 )}
             >
-              {field.options.length > 0 ? (
-                <Picks options={field.options} chosen={value ? [value] : []}
-                       empty="The template declared no values for this one."
-                       onPick={v => patch({
-                         answers: { ...draft.answers, [field.label]: value === v ? '' : v },
-                       })} />
-              ) : (
-                <textarea
-                  className="mdbody"
-                  style={{ minHeight: 52, borderRadius: 7, marginTop: 6 }}
-                  value={value}
-                  onChange={e => patch({
-                    answers: { ...draft.answers, [field.label]: e.target.value },
-                  })}
-                />
-              )}
+              <textarea
+                className="mdbody"
+                style={{ minHeight: 52, borderRadius: 7, marginTop: 6 }}
+                value={value}
+                onChange={e => patch({
+                  answers: { ...draft.answers, [field.label]: e.target.value },
+                })}
+              />
             </Msec>
           );
         })}

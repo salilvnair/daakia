@@ -14,6 +14,7 @@
  * exists to save you.
  */
 import { Ico } from './GhIcons';
+import { GhAvatar } from './GhAvatar';
 import { GhEvidence } from './GhEvidence';
 import {
   QUIET_DAYS, rankOf, type BoardIssue, type Group, type ProposedDimension,
@@ -260,7 +261,7 @@ function Card({
 
       <div className="foot">
         {on('assignee') && (who
-          ? <span className={avClass(who)} title={who}>{who[0].toUpperCase()}</span>
+          ? <GhAvatar who={who} className={avClass(who)} />
           : <span style={{ color: 'var(--dk-amber)' }}>unassigned</span>)}
         {on('priority') && priority && (
           <span className={prClass(priority, ranked?.options)}><b />{priority}</span>

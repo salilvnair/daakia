@@ -46,6 +46,7 @@ import { ModalView, SkeletonView } from '@salilvnair/dui';
 import { GhProse } from './GhProse';
 import { postMsg } from '../../vscode';
 import { Ico } from './GhIcons';
+import { GhAvatar } from './GhAvatar';
 import { Dk } from './GhShell';
 import { GhEvidence } from './GhEvidence';
 import { avClass } from './GhCards';
@@ -198,9 +199,7 @@ export function GhPeek({ repo, issue, onOpen, onClose }: {
             <Label top>Last comment</Label>
             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
               {last.author && (
-                <span className={avClass(last.author)} style={{ flexShrink: 0, marginTop: 2 }}>
-                  {last.author[0].toUpperCase()}
-                </span>
+                <GhAvatar who={last.author} className={avClass(last.author)} />
               )}
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ color: 'var(--dk-muted)', marginBottom: 2 }}>

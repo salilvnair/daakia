@@ -42,6 +42,56 @@ export interface EditRequest {
    * everybody watching twice, in the wrong order.
    */
   comment?: string;
+  /**
+   * Rewrite one comment that already exists.
+   *
+   * `id` is the REST comment id — the number in `#issuecomment-3456`, which is
+   * the only place gh hands it to us; `--json comments` returns the GraphQL
+   * node id, which this endpoint does not take. See `commentId`.
+   *
+   * The new body goes through stdin as JSON for the same reason a new
+   * comment's does: it is multi-line prose somebody wrote, and an argv is the
+   * wrong place for that on any platform.
+   */
+  editComment?: { id: number; body: string };
+  /**
+   * Rewrite the issue's own description.
+   *
+   * Not a comment: the opening post is a field on the issue, so it is
+   * `gh issue edit --body-file -` rather than an api call against a comment
+   * id. Through stdin, like every other body here.
+   */
+  body?: string;
+  /**
+   * Rename the issue.
+   *
+   * Its own call for the same reason the description is: `gh issue edit` takes
+   * one `--title` happily enough, but a rename and four label changes failing
+   * together as one command is a rename nobody can tell happened.
+   */
+  title?: string;
+  /**
+   * Remove one comment that already exists.
+   *
+   * There is no undo on GitHub and there is none here. What stands between
+   * this and an accident is the same thing that stands in front of every other
+   * write in dkgh: the exact command, on screen, before it runs.
+   */
+  deleteComment?: { id: number };
+}
+
+/**
+ * The REST id inside a comment's permalink.
+ *
+ * `https://github.com/o/r/issues/2#issuecomment-3456` → `3456`. Undefined for
+ * anything that is not one, so a malformed url cannot become a `PATCH` against
+ * `NaN`.
+ */
+export function commentId(url: string | undefined): number | undefined {
+  const m = /#issuecomment-(\d+)\s*$/.exec(url ?? '');
+  if (!m) return undefined;
+  const n = Number(m[1]);
+  return Number.isSafeInteger(n) && n > 0 ? n : undefined;
 }
 
 export interface PlannedCommand {
@@ -73,6 +123,32 @@ export interface EditPlan {
 /** `gh issue edit 41 --add-label bug` etc, built once and shown before it runs. */
 export function planEdit(req: EditRequest): EditPlan {
   const commands: PlannedCommand[] = [];
+  /* A comment belongs to one issue, so these are planned once rather than once
+     per number — a bulk request carrying a comment id would otherwise emit the
+     same PATCH several times. */
+  const on = req.numbers[0] ?? 0;
+
+  if (req.editComment) {
+    const argv = [
+      'api', '--method', 'PATCH',
+      `repos/${req.repo}/issues/comments/${req.editComment.id}`,
+      '--input', '-',
+    ];
+    commands.push({
+      number: on,
+      argv,
+      display: `gh ${argv.join(' ')}`,
+      stdin: JSON.stringify({ body: req.editComment.body }),
+    });
+  }
+
+  if (req.deleteComment) {
+    const argv = [
+      'api', '--method', 'DELETE',
+      `repos/${req.repo}/issues/comments/${req.deleteComment.id}`,
+    ];
+    commands.push({ number: on, argv, display: `gh ${argv.join(' ')}` });
+  }
 
   for (const number of req.numbers) {
     /*
@@ -100,6 +176,26 @@ export function planEdit(req: EditRequest): EditPlan {
     }
 
     const argv = ['issue', 'edit', String(number), '--repo', req.repo];
+    /*
+      Its own call, and first, because it takes stdin. `gh issue edit` reads
+      one `--body-file -` per invocation, and folding the description into the
+      same argv as four label changes would mean a single failure lost both.
+    */
+    if (req.title !== undefined) {
+      const titleArgv = ['issue', 'edit', String(number), '--repo', req.repo,
+                         '--title', req.title];
+      commands.push({ number, argv: titleArgv, display: `gh ${titleArgv.join(' ')}` });
+    }
+
+    if (req.body !== undefined) {
+      const bodyArgv = ['issue', 'edit', String(number), '--repo', req.repo, '--body-file', '-'];
+      commands.push({
+        number,
+        argv: bodyArgv,
+        display: `gh ${bodyArgv.join(' ')}`,
+        stdin: req.body,
+      });
+    }
     for (const l of req.addLabels ?? []) argv.push('--add-label', l);
     for (const l of req.removeLabels ?? []) argv.push('--remove-label', l);
     for (const a of req.addAssignees ?? []) argv.push('--add-assignee', a);
@@ -131,6 +227,13 @@ export function planEdit(req: EditRequest): EditPlan {
 function describe(req: EditRequest): string {
   const n = req.numbers.length;
   const subject = n === 1 ? `issue #${req.numbers[0]}` : `${n} issues`;
+  /* Said first and said plainly. There is no undo on either of these, and a
+     heading that buried them in a list of label changes would be the one
+     place a reader skims. */
+  if (req.deleteComment) return `Delete a comment on ${subject} — this cannot be undone`;
+  if (req.editComment) return `Rewrite a comment on ${subject}`;
+  if (req.body !== undefined) return `Rewrite the description of ${subject}`;
+  if (req.title !== undefined) return `Rename ${subject}`;
   if (req.state === 'close') {
     return `Close ${subject}${req.closeReason ? ` as ${req.closeReason}` : ''}`
       + (req.comment?.trim() ? ', with a comment' : '');

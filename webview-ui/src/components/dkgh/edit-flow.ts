@@ -36,6 +36,41 @@ export interface EditRequest {
    */
   comment?: string;
   removeLabels?: string[];
+  /**
+   * Rewrite one comment that already exists, by its REST id.
+   *
+   * Mirrors `services/gh/write.ts`. The types are not shared across the
+   * webview boundary, so a field added there has to be added here too or the
+   * message is dropped silently on the way over.
+   */
+  editComment?: { id: number; body: string };
+  /** Remove one comment that already exists. No undo, on GitHub or here. */
+  deleteComment?: { id: number };
+  /**
+   * Rewrite the issue's own description.
+   *
+   * Not a comment: the opening post is a field on the issue, so the host plans
+   * it as `gh issue edit --body-file -`. `''` clears it, which is a real
+   * request — so only `undefined` means "leave it alone".
+   */
+  body?: string;
+  /** Rename the issue — `gh issue edit --title`. Its own call. */
+  title?: string;
+}
+
+/**
+ * The REST id inside a comment's permalink.
+ *
+ * `https://github.com/o/r/issues/2#issuecomment-3456` -> `3456`. The host has
+ * the same function for the same reason the request type is duplicated; this
+ * one decides whether the menu offers Edit and Delete at all, so a comment
+ * whose url we cannot read simply does not offer them.
+ */
+export function commentId(url: string | undefined): number | undefined {
+  const m = /#issuecomment-(\d+)\s*$/.exec(url ?? '');
+  if (!m) return undefined;
+  const n = Number(m[1]);
+  return Number.isSafeInteger(n) && n > 0 ? n : undefined;
 }
 
 export interface PlannedCommand { number: number; display: string }

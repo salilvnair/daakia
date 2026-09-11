@@ -45,7 +45,7 @@ import {
   applyUpload, planUpload, type EvidenceFile,
 } from '../../../services/gh/evidence-upload';
 import {
-  applyProjectEdit, fetchProject, planProjectEdit, type ProjectEdit,
+  applyProjectEdit, fetchProject, planProjectEdit, planProjectItem, type ProjectEdit,
 } from '../../../services/gh/project';
 import { buildReport, render as renderPdf, type Report } from '../../../services/gh/pdf';
 import { GH_COMMANDS, GH_SCOPES } from '../../../services/gh/commands';
@@ -1082,6 +1082,43 @@ export async function handleDkghPlanProject(
       type: 'dkgh:planProject:result',
       plan: planProjectEdit(String(msg.projectId ?? ''), (msg.edits as ProjectEdit[]) ?? []),
     });
+  });
+}
+
+/**
+ * Archive or remove one card, shown before it runs.
+ *
+ * The same two-step every other write here takes, through the same plan type —
+ * so the confirm bar that renders a drag's command renders these unchanged.
+ */
+export async function handleDkghPlanProjectItem(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  await answering(postMessage, 'dkgh:planProject:result', msg, async () => {
+    postMessage({
+      type: 'dkgh:planProject:result',
+      plan: planProjectItem(
+        String(msg.projectId ?? ''), String(msg.itemId ?? ''),
+        Number(msg.number ?? 0), msg.what === 'remove' ? 'remove' : 'archive',
+      ),
+    });
+  });
+}
+
+export async function handleDkghApplyProjectItem(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  await answering(postMessage, 'dkgh:applyProject:result', msg, async () => {
+    postMessage({ type: 'dkgh:applyProject:running' });
+    /* Re-planned from the request rather than trusting an argv over the wire,
+       like every other apply in this file. */
+    const plan = planProjectItem(
+      String(msg.projectId ?? ''), String(msg.itemId ?? ''),
+      Number(msg.number ?? 0), msg.what === 'remove' ? 'remove' : 'archive',
+    );
+    postMessage({ type: 'dkgh:applyProject:result', outcomes: await applyProjectEdit(plan) });
   });
 }
 

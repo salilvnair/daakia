@@ -9,6 +9,7 @@ import { wireWorkspaceMessages } from '../store/workspace-store';
 import { applyChainExtractions } from '../services/request/chaining';
 import { logUiEvent } from '../store/ui-audit-store';
 import { nameForStage, screenForStage } from '../store/ai-audit-events';
+import { showAiFailure, showSilentFailure } from './ai-failure-toast';
 import { useTabsStore } from '../store/tabs-store';
 import { useToastStore } from '../store/toast-store';
 import { useEnvStore } from '../store/env-store';
@@ -119,13 +120,41 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
           nothing shows in the footprint".
         */
         case 'ai:error': {
+          const feature = msg.stage ? nameForStage(msg.stage) : 'Unnamed AI call';
           logUiEvent('ai.failed', {
             stage: msg.stage ?? 'DAAKIA_AI',
-            feature: msg.stage ? nameForStage(msg.stage) : 'Unnamed AI call',
+            feature,
             screen: msg.screen ?? (msg.stage ? screenForStage(msg.stage) : 'Daakia AI'),
             code: msg.code,
             message: typeof msg.message === 'string' ? msg.message.slice(0, 200) : undefined,
           });
+          /*
+            And on screen, always.
+
+            Thirty-seven components handle `ai:error` for their own UI, and
+            whether a failure is visible depends on which one asked: the
+            workspace documentation generator showed nothing at all, so
+            pressing "Generate with AI" against a provider that is not signed
+            in looked exactly like pressing it and it working. The audit had
+            the reason the whole time.
+
+            Raised here rather than in each of the thirty-seven, because the
+            one that forgets is the one that matters. A component that shows
+            its own inline error still does — this is the floor, not the
+            ceiling.
+          */
+          showAiFailure(feature, msg.message, msg.code);
+          break;
+        }
+        /*
+          The other four that failed quietly — two of them reaching no
+          listener at all. See `SILENT_ERROR_TYPES`.
+        */
+        case 'dk8s:aiError':
+        case 'dk8s:artifactError':
+        case 'soap:wsdlImportError':
+        case 'ai:conversationSaveError': {
+          showSilentFailure(msg.type as string, msg as Record<string, unknown>);
           break;
         }
         case 'responseData': {

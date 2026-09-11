@@ -145,7 +145,9 @@ import {
   handleDkghImport, handleDkghPlanTemplates, handleDkghApplyTemplates,
   handleDkghPlanLabels, handleDkghApplyLabels,
   handleDkghPlanUpload, handleDkghApplyUpload,
-  handleDkghProject, handleDkghPlanProject, handleDkghApplyProject,
+  handleDkghProject, handleDkghPlanProject,
+  handleDkghPlanProjectItem,
+  handleDkghApplyProjectItem, handleDkghApplyProject,
   handleDkghTerminal, handleDkghRelations,
   handleDkghHarvest, handleDkghHarvestCancel,
   handleDkghSchedules, handleDkghSaveSchedule, handleDkghDeleteSchedule,
@@ -453,6 +455,12 @@ export class MainPanel {
         break;
       case 'dkgh:planProject':
         handleDkghPlanProject(msg, this._post);
+        break;
+      case 'dkgh:planProjectItem':
+        handleDkghPlanProjectItem(msg, this._post);
+        break;
+      case 'dkgh:applyProjectItem':
+        handleDkghApplyProjectItem(msg, this._post);
         break;
       case 'dkgh:applyProject':
         handleDkghApplyProject(msg, this._post);

@@ -18,19 +18,17 @@
  * to do — but so would letting somebody spend ten minutes composing an issue
  * they cannot file.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { TableSkeletonView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { Ico } from './GhIcons';
 import { GhActions, GhButton, GhEmpty, GhLede, GhPrimary } from './GhShell';
 import { sinceIso } from './format';
+import { MIN_QUERY, useRepoSearch } from './repo-search';
 import { activeAccount, type GhEnv, type RepoSummary } from './types';
 
 /** `owner/name`, and nothing that would make gh reinterpret it as a URL or path. */
 const VALID = /^[^/\s]+\/[^/\s]+$/;
-
-/** Below this the search is not run: one letter matches everything. */
-const MIN_QUERY = 2;
 
 export function GhRepoSearch({ env, query, onQueryChange, onPick, onBack }: {
   env: GhEnv;
@@ -40,70 +38,16 @@ export function GhRepoSearch({ env, query, onQueryChange, onPick, onBack }: {
   onPick: (repo: string) => void;
   onBack: () => void;
 }) {
-  const [results, setResults] = useState<RepoSummary[] | null>(null);
-  const [error, setError] = useState('');
-  const [searching, setSearching] = useState(false);
-  const [commands, setCommands] = useState<string[]>([]);
-  const [matched, setMatched] = useState(0);
   const [archived, setArchived] = useState(false);
   /** `''` is every owner. Otherwise the one whose rows are shown. */
   const [owner, setOwner] = useState('');
+  /* The listener, the debounce and the owner facets are shared with the
+     picker, which shows the same results in place — see `useRepoSearch`. */
+  const { results, searching, error, matched, commands, owners } = useRepoSearch(query, archived);
 
   const account = activeAccount(env);
   const me = account?.login ?? '';
   const exact = VALID.test(query.trim());
-
-  useEffect(() => {
-    const handler = (evt: MessageEvent) => {
-      const msg = evt.data as Record<string, unknown>;
-      if (msg.type === 'dkgh:searchRepos:loading') { setSearching(true); return; }
-      if (msg.type !== 'dkgh:searchRepos:result') return;
-      setSearching(false);
-      setResults((msg.repos as RepoSummary[]) ?? []);
-      setError((msg.error as string) ?? '');
-      setCommands((msg.commands as string[]) ?? []);
-      setMatched((msg.matched as number) ?? 0);
-    };
-    window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
-  }, []);
-
-  /*
-    Search on a pause, not on a keystroke.
-
-    Each search is a repository listing plus a pair of counts per row, so firing
-    one per character would spend a hundred API calls to answer a word somebody
-    has not finished typing.
-  */
-  const timer = useRef<number | undefined>(undefined);
-  useEffect(() => {
-    const q = query.trim();
-    if (timer.current) window.clearTimeout(timer.current);
-    if (q.length < MIN_QUERY) { setResults(null); setError(''); return; }
-    timer.current = window.setTimeout(
-      () => postMsg({ type: 'dkgh:searchRepos', query: q, includeArchived: archived }),
-      400,
-    );
-    return () => { if (timer.current) window.clearTimeout(timer.current); };
-  }, [query, archived]);
-
-  /*
-    The org facets are the owners actually in the results, not a directory of
-    every organisation the account belongs to.
-
-    Reading the membership list is another call, and it would offer facets that
-    filter to nothing — an org you belong to with no repository matching the
-    term is a chip that empties the table. The owners present are exactly the
-    ones that can narrow it.
-  */
-  const owners = useMemo(() => {
-    const seen = new Map<string, number>();
-    for (const r of results ?? []) {
-      const o = r.nameWithOwner.split('/')[0];
-      seen.set(o, (seen.get(o) ?? 0) + 1);
-    }
-    return [...seen.entries()].sort((a, b) => b[1] - a[1]);
-  }, [results]);
 
   const shown = useMemo(
     () => (results ?? []).filter(r => !owner || r.nameWithOwner.startsWith(`${owner}/`)),

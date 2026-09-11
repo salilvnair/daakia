@@ -383,3 +383,30 @@ describe('the search box', () => {
       .toBeUndefined();
   });
 });
+
+/*
+  The two halves of a term, kept apart.
+
+  `label` flattened them, so the panel drew every term as one run of grey text
+  and three rows looked the same. The field is a label; the value is a chip.
+*/
+describe('costOf carries the field and the value separately', () => {
+  const board = [issue(1), issue(2)];
+
+  it('splits "state Open" into its two halves', () => {
+    const [c] = costOf(board, { ...EMPTY, terms: [{ field: 'state', values: ['open'] }] });
+    expect(c.key).toBe('state');
+    expect(c.value).toBe('Open');
+  });
+
+  it('still agrees with the flattened label', () => {
+    const [c] = costOf(board, { ...EMPTY, terms: [{ field: 'state', values: ['open'] }] });
+    expect(`${c.key} ${c.value}`.trim()).toBe(c.label);
+  });
+
+  it('handles a field whose key already carries the preposition', () => {
+    const [c] = costOf(board, { ...EMPTY, terms: [{ field: 'quiet', values: ['14'] }] });
+    expect(c.key).toBe('quiet for');
+    expect(c.value).toBe('14 days');
+  });
+});

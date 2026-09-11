@@ -19,8 +19,10 @@
  * click that started inside the panel and ended outside it — a drag across the
  * filter box that overshoots — is not somebody dismissing the panel.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Ico } from './GhIcons';
+import { dropPortal, dropStyle, useDropPanel } from './drop-panel';
+import { GhAvatar } from './GhAvatar';
 
 export interface Choice {
   value: string;
@@ -33,7 +35,7 @@ export interface Choice {
 }
 
 export function GhPicker({
-  title, filterLabel, choices, chosen, empty, single, onPick, label, value, footer,
+  title, filterLabel, choices, chosen, empty, single, onPick, label, value, isSet, footer,
 }: {
   /** "Apply labels to this issue" — the panel's own heading. */
   title: string;
@@ -48,25 +50,32 @@ export function GhPicker({
   label: string;
   /** What the section shows when the panel is shut. */
   value: React.ReactNode;
+  /**
+   * Whether that value is a real one.
+   *
+   * Normally a node means something is set and nothing means nothing is. The
+   * composer breaks that: with no assignee the row still draws a line — "No
+   * one — assign yourself" — and it must read as the placeholder it is, not
+   * as a filled field.
+   */
+  isSet?: boolean;
   footer?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState('');
   const box = useRef<HTMLDivElement>(null);
+  /*
+    Portalled and fixed — see `useDropPanel`.
 
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: PointerEvent) => {
-      if (!box.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
-    window.addEventListener('pointerdown', away);
-    window.addEventListener('keydown', esc);
-    return () => {
-      window.removeEventListener('pointerdown', away);
-      window.removeEventListener('keydown', esc);
-    };
-  }, [open]);
+    It was `position: absolute` inside the section, which is inside a 268px
+    rail with `overflow-y: auto`. A 340px panel in there was clipped at the
+    rail's edge *and* pushed a horizontal scrollbar across the bottom of the
+    pane. No z-index fixes either of those: overflow clips a descendant
+    whatever its stacking order, and content wider than its container is what
+    makes the scrollbar.
+  */
+  const close = useCallback(() => setOpen(false), []);
+  const { panel, at } = useDropPanel(open, close, box);
 
   /* Cleared on open, not on close: reopening a picker you were half-way
      through filtering and finding your own text still in it is the behaviour
@@ -103,12 +112,12 @@ export function GhPicker({
         </button>
       </div>
 
-      <div className={`val${value ? ' set' : ''}`}>
+      <div className={`val${(isSet ?? !!value) ? ' set' : ''}`}>
         {value ?? `No ${label.toLowerCase()}`}
       </div>
 
-      {open && (
-        <div className="ghpick">
+      {open && dropPortal(box.current, (
+        <div ref={panel} className="ghpick" style={dropStyle(at)}>
           <div className="ghpick-h">{title}</div>
           <div className="ghpick-f">
             <Ico name="search" />
@@ -138,7 +147,7 @@ export function GhPicker({
                   >
                     <span className="bx">{on && <Ico name="check" />}</span>
                     {c.avatar
-                      ? <span className={c.avatar}>{c.value[0]?.toUpperCase()}</span>
+                      ? <GhAvatar who={c.value} className={c.avatar} />
                       : c.swatch && <span className="sw" style={{ background: c.swatch }} />}
                     <span className="ghpick-t">
                       <b>{c.value}</b>
@@ -151,7 +160,7 @@ export function GhPicker({
           </div>
           {footer && <div className="ghpick-b">{footer}</div>}
         </div>
-      )}
+      ))}
     </div>
   );
 }

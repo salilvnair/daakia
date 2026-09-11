@@ -22,6 +22,7 @@
  */
 import { useMemo, useState } from 'react';
 import { Ico } from './GhIcons';
+import { GhAvatar } from './GhAvatar';
 import { avClass } from './GhCards';
 import { colourOf } from './field-colour';
 import {
@@ -289,7 +290,7 @@ function FctRow({
       <span className="bx">{(ticked || excluded) && <Ico name="check" />}</span>
       {swatch && <span className="sw" style={{ background: swatch }} />}
       {avatar && label !== 'Nobody' && (
-        <span className={avClass(label)}>{label[0].toUpperCase()}</span>
+        <GhAvatar who={label} className={avClass(label)} />
       )}
       {label}
       {hover && !disabled && onOnly && onExcept ? (

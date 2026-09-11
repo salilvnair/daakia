@@ -22,7 +22,7 @@
  * never quietly claims to be complete.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { SplitPanelView } from '@salilvnair/dui';
+import { ButtonView, SplitPanelView, TextInputView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { openExternal } from './open-external';
 import { Ico, type IcoName } from './GhIcons';
@@ -32,21 +32,35 @@ import { GhProse } from './GhProse';
 import { sinceIso as since } from './format';
 import { GhEditConfirm } from './GhEditConfirm';
 import { GhCloseIssue } from './GhCloseIssue';
-import { GhMarkdown, useMarkdownMode } from './GhMarkdown';
+import { GhMarkdown } from './GhMarkdown';
+import { GhCommentMenu } from './GhCommentMenu';
+import { GhIssueMenu, type ProjectPlace } from './GhIssueMenu';
+import { commentId } from './edit-flow';
+import { strandKey, threadOf } from './thread';
+import { GhAvatar } from './GhAvatar';
 import { useEditFlow } from './edit-flow';
 import { GhRelations, useRelations } from './GhRelations';
 import { GhCopyButton } from './GhCopyButton';
 import { GhClose } from './GhClose';
 import { GhDetails } from './GhDetails';
 import type { ProjectBoard, ProjectField } from './project-store';
-import type { RepoMeta } from './types';
+import { ACCENT, type RepoMeta } from './types';
 import type { BoardIssue, ProposedDimension } from './board-types';
 
 interface Detail {
   number: number;
   body: string;
   evidence: string[];
-  comments: { author?: string; body: string; createdAt?: string }[];
+  /* `url` and `mine` come from the same `--json comments` payload the host
+     already reads — see `fetchIssueDetail`. They are what the `…` menu needs
+     to decide whether Edit and Delete are this reader's to offer. */
+  comments: {
+    author?: string;
+    body: string;
+    createdAt?: string;
+    url?: string;
+    mine?: boolean;
+  }[];
   error?: string;
 }
 
@@ -93,7 +107,8 @@ const STATE_CLASS: Record<string, string> = {
 
 export function GhIssue({
   repo, issue, dimensions, closed, all, end, meta, project, writingProject,
-  onWriteProject, onOpen, onBack, onWrote,
+  onWriteProject, onOpen, onBack, onReference, onWrote, me, canWriteProject,
+  onProjectItem,
 }: {
   repo: string;
   issue: BoardIssue;
@@ -114,6 +129,20 @@ export function GhIssue({
   /** Follow a relationship to the issue on the other end of it. */
   onOpen: (n: number) => void;
   onBack: () => void;
+  /** Open the composer on a new issue seeded from a comment — the `…` menu. */
+  onReference: (seed: string) => void;
+  /** Whoever is signed in, so the description's Edit is offered to its author. */
+  me?: string;
+  /**
+   * Whether the token carries `project`, not just `read:project`.
+   *
+   * The `…` draws Archive and Remove either way — a menu that differs silently
+   * between two people looking at the same issue is worse than one with two
+   * rows greyed and the reason under them. See `GhIssueMenu`.
+   */
+  canWriteProject?: boolean;
+  /** Archive or remove this issue's card from the Project it is on. */
+  onProjectItem?: (what: 'archive' | 'remove', itemId: string) => void;
   /** After a write lands, so the board and this page re-read. */
   onWrote: () => void;
 }) {
@@ -123,10 +152,27 @@ export function GhIssue({
   const [muted, setMuted] = useState<Set<TimelineKind>>(new Set());
   /** 14B — what is in the box, until it is proposed. */
   const [draft, setDraft] = useState('');
-  /** Rich Text or Markdown, held here so the switch can sit in the header. */
-  const md = useMarkdownMode();
   /** 14E — open while the close is being explained. */
   const [closing, setClosing] = useState(false);
+  /**
+   * The comment being rewritten, and what it currently says.
+   *
+   * Held here rather than in the row so that opening a second editor closes
+   * the first: two comments half-rewritten, only one of which you remember, is
+   * the way to lose the other.
+   */
+  const [editing, setEditing] = useState<{ id: number; body: string } | undefined>();
+  /**
+   * The description being rewritten.
+   *
+   * Separate from `editing` because it is a different write — `gh issue edit
+   * --body-file -` against the issue, not a `PATCH` against a comment id — and
+   * folding the two into one piece of state would mean a `0` id standing for
+   * "the description" everywhere it is read.
+   */
+  const [editingBody, setEditingBody] = useState<string | undefined>();
+  /** The title being rewritten. `undefined` is "not renaming". */
+  const [renaming, setRenaming] = useState<string | undefined>();
   /** How many times a write has landed, to re-read this page's own two calls. */
   const [wrote, setWrote] = useState(0);
   /** 14D — what this issue is attached to. A third call, and the cheapest. */
@@ -150,6 +196,13 @@ export function GhIssue({
   const flow = useEditFlow(repo, () => {
     setDraft('');
     setClosing(false);
+    /* Only once the write has actually landed. Closing the editor at the
+       moment the plan was proposed would throw the rewrite away if the reader
+       then read the command and said no — which is the one thing the confirm
+       screen exists to let them do. */
+    setEditing(undefined);
+    setEditingBody(undefined);
+    setRenaming(undefined);
     setWrote(n => n + 1);
     onWrote();
   });
@@ -171,6 +224,17 @@ export function GhIssue({
        this page should be showing, and re-reading is the only way it can. */
   }, [repo, issue.number, wrote]);
 
+  /* Where this issue sits inside its Project, if it is on one — what the
+     three project entries in the `…` are addressed by. */
+  const place: ProjectPlace | undefined = project?.title && project.number
+    ? {
+      owner: repo.split('/')[0],
+      number: project.number,
+      title: project.title,
+      itemId: project.items.find(i => i.number === issue.number)?.id,
+    }
+    : undefined;
+
   const status = (issue.dimensions.status ?? '').toLowerCase();
   const shots = detail?.evidence ?? issue.evidence;
 
@@ -183,10 +247,21 @@ export function GhIssue({
   */
   const body = useMemo(() => stripImages(detail?.body ?? ''), [detail?.body]);
 
-  const events = (timeline?.events ?? []).filter(e => !muted.has(e.kind));
   const kinds = useMemo(
     () => [...new Set((timeline?.events ?? []).map(e => e.kind))],
     [timeline],
+  );
+  /*
+    The comments and the events, in one order — see `weave`. The mute filter
+    is applied before weaving rather than after, so hiding every label event
+    does not leave a gap where they were.
+  */
+  const thread = useMemo(
+    () => threadOf(
+      detail?.comments ?? [],
+      (timeline?.events ?? []).filter(e => !muted.has(e.kind)),
+    ),
+    [detail, timeline, muted],
   );
 
   return (
@@ -227,15 +302,89 @@ export function GhIssue({
         first={
           <div className="left" style={{ overflowY: 'auto' }}>
             <div style={{ padding: '12px 14px 0' }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--dk-text)' }}>
-                  {issue.title}
-                </span>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 15.6,
-                               color: 'var(--dk-faint)' }}>
-                  #{issue.number}
-                </span>
-              </div>
+              {/*
+                The title, and the pencil beside it.
+
+                Renaming happens in place, the way github.com does it: the
+                heading becomes the field, with Cancel and Save under it. A
+                dialog for one line of text is a dialog nobody opens, which is
+                how an issue ends up called "test" for three months.
+              */}
+              {renaming === undefined ? (
+                <div className="ghtitle">
+                  <span className="ghtitle-t">{issue.title}</span>
+                  <span className="ghtitle-n">#{issue.number}</span>
+                  <button
+                    type="button"
+                    className="iconbtn"
+                    title="Rename this issue"
+                    aria-label="Rename this issue"
+                    onClick={() => setRenaming(issue.title)}
+                  >
+                    <Ico name="pen" />
+                  </button>
+                  <span className="sp" style={{ flex: 1 }} />
+                  <GhIssueMenu
+                    url={issue.url}
+                    canWriteProject={!!canWriteProject}
+                    place={place}
+                    onArchive={id => onProjectItem?.('archive', id)}
+                    onRemove={id => onProjectItem?.('remove', id)}
+                  />
+                </div>
+              ) : (
+                /*
+                  dui's own field and buttons, all at `size="lg"`.
+
+                  Not the mock's `.btn` beside a hand-padded `<input>`: those
+                  are two different ideas of how tall a control is, and they
+                  came out two different heights every time the padding was
+                  adjusted. `TextInputView` and `ButtonView` both take their
+                  height from the same size token and set it inline, so the row
+                  is uniform by construction — which is what the REST tab's URL
+                  bar and its Send button already do.
+                */
+                <div className="ghtitle-edit">
+                  <TextInputView
+                    autoFocus
+                    size="lg"
+                    value={renaming}
+                    onChange={e => setRenaming(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Escape') setRenaming(undefined);
+                      if (e.key === 'Enter' && renaming.trim() && renaming !== issue.title) {
+                        flow.propose({ repo, numbers: [issue.number], title: renaming.trim() });
+                      }
+                    }}
+                    accentColor={ACCENT}
+                    aria-label="Issue title"
+                    style={{ flex: 1, minWidth: 0, fontWeight: 600 }}
+                  />
+                  <ButtonView
+                    size="lg"
+                    variant="secondary"
+                    className="flex-shrink-0"
+                    iconLeft={<Ico name="x" />}
+                    onClick={() => setRenaming(undefined)}
+                  >
+                    Cancel
+                  </ButtonView>
+                  <ButtonView
+                    size="lg"
+                    variant="primary"
+                    className="flex-shrink-0"
+                    accentColor={ACCENT}
+                    iconLeft={<Ico name="check" />}
+                    /* A rename to the same words is not a write. */
+                    disabled={!renaming.trim() || renaming.trim() === issue.title}
+                    onClick={() => flow.propose({
+                      repo, numbers: [issue.number], title: renaming.trim(),
+                    })}
+                  >
+                    Save
+                  </ButtonView>
+                </div>
+              )}
               <div className="chips" style={{ marginTop: 7 }}>
                 {Object.entries(issue.dimensions)
                   .filter(([k, v]) => k !== 'status' && v)
@@ -249,8 +398,63 @@ export function GhIssue({
             <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column',
                           gap: 10 }}>
               {/* The body, as its author wrote it */}
-              <Comment who={issue.author} when={issue.createdAt} verb="opened this">
-                {detail
+              <Comment who={issue.author} when={issue.createdAt}
+                       verb={editingBody !== undefined ? 'is editing this' : 'opened this'}
+                       menu={
+                         /* The shorter menu github.com draws on the opening
+                            post: no "Reference in a new issue" — that would
+                            reference the issue you are reading — and no
+                            Delete, because the description cannot be removed
+                            without removing the issue. */
+                         <GhCommentMenu
+                           body
+                           comment={{
+                             author: issue.author,
+                             body,
+                             createdAt: issue.createdAt,
+                             url: issue.url,
+                             mine: !!me && issue.author === me,
+                           }}
+                           issueUrl={issue.url}
+                           editing={editingBody !== undefined}
+                           onQuote={quoted => {
+                             setDraft(d => (d ? `${d.trimEnd()}
+
+${quoted}` : quoted));
+                             document.getElementById('dkgh-reply')
+                               ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                           }}
+                           onReference={onReference}
+                           onEdit={() => setEditingBody(body)}
+                         />
+                       }>
+                {editingBody !== undefined ? (
+                  <GhMarkdown
+                    value={editingBody}
+                    onChange={setEditingBody}
+                    minHeight={120}
+                    issues={all}
+                    placeholder="What this issue is about."
+                    footer={
+                      <>
+                        <button type="button" className="btn"
+                                onClick={() => setEditingBody(undefined)}>
+                          <Ico name="x" />Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="btn go"
+                          disabled={editingBody === body}
+                          onClick={() => flow.propose({
+                            repo, numbers: [issue.number], body: editingBody,
+                          })}
+                        >
+                          <Ico name="check" />Update description
+                        </button>
+                      </>
+                    }
+                  />
+                ) : detail
                   ? (body.trim()
                     ? <GhProse content={body} gallery={false} />
                     : <span style={{ color: 'var(--dk-faint)' }}>No description.</span>)
@@ -281,80 +485,191 @@ export function GhIssue({
                 </div>
               )}
 
-              {/* 14A — what happened, and what you can stop looking at */}
-              {timeline && timeline.events.length > 0 && (
-                <div>
-                  <div className="fl" style={{ marginBottom: 6, display: 'flex',
-                                               alignItems: 'center', gap: 6 }}>
-                    What happened
-                    <span className="sp" style={{ flex: 1 }} />
-                    {kinds.map(k => (
-                      <button
-                        key={k}
-                        type="button"
-                        className={`pill${muted.has(k) ? '' : ' on'}`}
-                        style={{ padding: '1px 8px' }}
-                        title={muted.has(k) ? 'Show these again' : 'Hide these'}
-                        onClick={() => setMuted(prev => {
-                          const next = new Set(prev);
-                          if (next.has(k)) next.delete(k);
-                          else next.add(k);
-                          return next;
-                        })}
-                      >
-                        {k}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="tline">
-                    {events.map((e, at) => (
-                      <div className="tev" key={`${e.kind}-${e.at}-${at}`}>
-                        <span className="dotc"><Ico name={EVENT_ICON[e.kind]} /></span>
-                        <span className="txt">
-                          <b>{e.actor ?? 'somebody'}</b> {e.text}
-                          {e.value && (
-                            <>
-                              {' '}
-                              {e.colour
-                                ? <span className="lbldot">
-                                    <b style={{ background: `#${e.colour}` }} />{e.value}
-                                  </span>
-                                : <b>{e.value}</b>}
-                            </>
-                          )}
-                          {e.at && <i> · {since(e.at)}</i>}
-                        </span>
-                      </div>
-                    ))}
-                    {events.length === 0 && (
-                      <div className="sub" style={{ padding: '4px 0' }}>
-                        Everything here is hidden. Turn one back on above.
-                      </div>
-                    )}
-                  </div>
-                  {timeline.skipped > 0 && (
-                    <div className="sub" style={{ marginTop: 6 }}>
-                      {timeline.skipped} more event{timeline.skipped === 1 ? '' : 's'} GitHub sent
-                      that dkgh does not know how to word — said here rather than left out
-                      quietly. They are all on github.com.
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* 14D — sub-issues, blockers, and where this was referenced from */}
               <GhRelations rel={relations} issues={all} end={end} onOpen={onOpen} />
 
-              {/* The discussion */}
-              {(detail?.comments ?? []).map((c, at) => (
-                <Comment key={`${c.author}-${c.createdAt}-${at}`}
-                         who={c.author} when={c.createdAt} verb="commented">
-                  {/* A comment's screenshots are blocked by the webview's own
-                      content policy, so they come through the host — see
-                      GhProse. */}
-                  <GhProse content={c.body} />
-                </Comment>
-              ))}
+              {/*
+                14A — the thread, in the order it happened.
+
+                One stream, the way github.com has it: the events and the
+                comments are the same conversation, and dkgh used to draw them
+                as two lists — every comment, then a "What happened" block —
+                so a label added before a comment appeared after it. See
+                `weave`.
+
+                The chips are the part the site does not have. They stay, and
+                they are worth more here than they were over a block of their
+                own: this is how you read the writing without the project
+                churn around it.
+              */}
+              {kinds.length > 0 && (
+                <div className="fl" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span className="sp" style={{ flex: 1 }} />
+                  {/*
+                    All of them, in one press.
+
+                    Turning six kinds off to read the writing, and six back on
+                    afterwards, is twelve clicks for a thing that is one
+                    decision. It shows the state it is in rather than the state
+                    it will produce — lit when everything is on, like the chips
+                    beside it — and pressing it means "the other way".
+                  */}
+                  <button
+                    type="button"
+                    className={`pill${muted.size === 0 ? ' on' : ''}`}
+                    style={{ padding: '1px 8px' }}
+                    title={muted.size === 0 ? 'Hide all of these' : 'Show all of these'}
+                    onClick={() => setMuted(prev => (prev.size === 0 ? new Set(kinds) : new Set()))}
+                  >
+                    all
+                  </button>
+                  {kinds.map(k => (
+                    <button
+                      key={k}
+                      type="button"
+                      className={`pill${muted.has(k) ? '' : ' on'}`}
+                      style={{ padding: '1px 8px' }}
+                      title={muted.has(k) ? 'Show these again' : 'Hide these'}
+                      onClick={() => setMuted(prev => {
+                        const next = new Set(prev);
+                        if (next.has(k)) next.delete(k);
+                        else next.add(k);
+                        return next;
+                      })}
+                    >
+                      {k}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="tline">
+                {thread.map(s => {
+                  if (s.kind === 'event') {
+                    const first = s.events[0];
+                    const last = s.events[s.events.length - 1];
+                    return (
+                      <div className="tev" key={strandKey(s)}>
+                        <span className="dotc"><Ico name={EVENT_ICON[first.kind]} /></span>
+                        <span className="txt">
+                          <GhAvatar who={first.actor} className="av av-t" />
+                          <b>{first.actor ?? 'somebody'}</b>{' '}
+                          {/*
+                            One row, however many events are in it — "added
+                            enhancement and removed enhancement", the way
+                            github.com writes it. The actor is said once at the
+                            front and the time once at the end; everything
+                            between is the verbs, joined. See `condense`.
+                          */}
+                          {s.events.map((e, i) => (
+                            <span key={i} className="evp">
+                              {i > 0 && <span className="evj">
+                                {i === s.events.length - 1 ? ' and ' : ', '}
+                              </span>}
+                              {e.text}
+                              {e.value && (
+                                <>
+                                  {' '}
+                                  {e.colour
+                                    ? <span className="lbldot">
+                                        <b style={{ background: `#${e.colour}` }} />{e.value}
+                                      </span>
+                                    : <b>{e.value}</b>}
+                                </>
+                              )}
+                            </span>
+                          ))}
+                          {last.at && <i> · {since(last.at)}</i>}
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  const c = s.comment;
+                  const id = commentId(c.url);
+                  const open = id !== undefined && editing?.id === id;
+                  return (
+                    <Comment key={strandKey(s)}
+                             who={c.author} when={c.createdAt}
+                             verb={open ? 'is being edited' : 'commented'}
+                             menu={
+                               /* github.com's own `…`. Copy link, Copy Markdown,
+                                  Quote reply, Reference in a new issue, and — on
+                                  your own comments only — Edit and Delete. */
+                               <GhCommentMenu
+                                 comment={c}
+                                 issueUrl={issue.url}
+                                 editing={open}
+                                 onQuote={quoted => {
+                                   setDraft(d => (d ? `${d.trimEnd()}\n\n${quoted}` : quoted));
+                                   document.getElementById('dkgh-reply')
+                                     ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                                 }}
+                                 onReference={onReference}
+                                 /* In place, the way the site does it — the
+                                    comment becomes the box, rather than the box
+                                    opening somewhere else with a copy of the
+                                    text in it. */
+                                 onEdit={n => setEditing({ id: n, body: c.body })}
+                                 onDelete={n => flow.propose({
+                                   repo, numbers: [issue.number], deleteComment: { id: n },
+                                 })}
+                               />
+                             }>
+                      {open ? (
+                        <GhMarkdown
+                          value={editing.body}
+                          onChange={body => setEditing({ id: editing.id, body })}
+                          minHeight={96}
+                          issues={all}
+                          footer={
+                            <>
+                              <button type="button" className="btn"
+                                      onClick={() => setEditing(undefined)}>
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                className="btn go"
+                                /* An edit that changes nothing is not a write. */
+                                disabled={!editing.body.trim() || editing.body === c.body}
+                                onClick={() => flow.propose({
+                                  repo,
+                                  numbers: [issue.number],
+                                  editComment: { id: editing.id, body: editing.body },
+                                })}
+                              >
+                                <Ico name="check" />Update comment
+                              </button>
+                            </>
+                          }
+                        />
+                      ) : (
+                        /* A comment's screenshots are blocked by the webview's
+                           own content policy, so they come through the host —
+                           see GhProse. */
+                        <GhProse content={c.body} />
+                      )}
+                    </Comment>
+                  );
+                })}
+
+                {thread.length === 0 && timeline && (
+                  <div className="sub" style={{ padding: '4px 0' }}>
+                    {kinds.length > 0
+                      ? 'Everything here is hidden. Turn one back on above.'
+                      : 'Nothing has happened here yet.'}
+                  </div>
+                )}
+              </div>
+
+              {timeline && timeline.skipped > 0 && (
+                <div className="sub">
+                  {timeline.skipped} more event{timeline.skipped === 1 ? '' : 's'} GitHub sent
+                  that dkgh does not know how to word — said here rather than left out
+                  quietly. They are all on github.com.
+                </div>
+              )}
 
               {/*
                 14B — writing a comment without leaving.
@@ -363,97 +678,78 @@ export function GhIssue({
                 sending on Enter: a comment is a write, everybody watching gets
                 a notification, and there is no unsend. The strip below shows
                 the exact call.
+
+                One box, not a card wrapped around one. The "You" header strip
+                is gone — the reader is the only person who can type here, and
+                a row carrying their own name was height spent saying so.
               */}
-              <div className="cmt">
-                <div className="ch">
-                  <span className="av av-s">Y</span>
-                  <b>You</b>
-                  {/*
-                    It used to read "Markdown · #43 links", which is two
-                    abbreviations and a sentence with the verb missing.
-                    "Markdown" is also redundant now: the editor has a Rich
-                    Text / Markdown switch on its own toolbar, three
-                    centimetres below.
-
-                    What is left is the one thing that box does which is not
-                    obvious — typing a number links the issue.
-                  */}
-                  <span style={{ marginLeft: 'auto' }}>
-                    Type <b>#</b> to link another issue
-                  </span>
-                  {/* The switch lives here, not in the toolbar: in Markdown
-                      view the toolbar has no buttons, and one control alone on
-                      an empty strip reads as a mistake. */}
-                  {md.toggle}
-                </div>
-                <div className="cb" style={{ padding: 0 }}>
-                  {/* The same box the composer files in. On github.com the
-                      reply box is the filing box, and two different ones here
-                      is how somebody learns that one of them cannot do bold. */}
-                  <GhMarkdown
-                    value={draft}
-                    onChange={setDraft}
-                    minHeight={84}
-                    placeholder="Leave a comment…"
-                    issues={all}
-                    mode={md.mode}
-                    onModeChange={md.setMode}
-                  />
-                </div>
-                {/*
-                  github.com's own footer: closing the issue lives with the
-                  comment, because the two are one thought. The button says
-                  which it will do — "Close with comment" when there is
-                  something in the box, "Close issue" when there is not — so
-                  nobody has to wonder whether their half-written sentence is
-                  about to be thrown away.
-
-                  Right-aligned and clear of the editor's border, with the
-                  primary rightmost the way every other footer here reads.
-                */}
-                <div className="actions" style={{ margin: 0, padding: '12px 12px 12px',
-                                                  justifyContent: 'flex-end' }}>
-                  {draft.trim() && (
-                    <button type="button" className="btn" onClick={() => setDraft('')}>
-                      Discard
-                    </button>
-                  )}
-                  {/* Purple, because that is the colour a closed issue is on
-                      github.com — green there means merged, which this is not.
-                      Solid, like the Comment beside it: an outline against a
-                      fill reads as one real button and one suggestion. */}
-                  {issue.state === 'OPEN' ? (
-                    <button type="button" className="btn shut" onClick={() => setClosing(true)}>
-                      <Ico name="closed" />
-                      {draft.trim() ? 'Close with comment' : 'Close issue'}
-                    </button>
-                  ) : (
+              <GhMarkdown
+                /* Quote reply scrolls here, so the quoted text is visible the
+                   moment it lands rather than somewhere below the fold. */
+                id="dkgh-reply"
+                value={draft}
+                onChange={setDraft}
+                minHeight={84}
+                placeholder="Leave a comment…"
+                issues={all}
+                right={<span className="sub">Type <b>#</b> to link another issue</span>}
+                footer={
+                  /*
+                    github.com's own footer: closing the issue lives with the
+                    comment, because the two are one thought. The button says
+                    which it will do — "Close with comment" when there is
+                    something in the box, "Close issue" when there is not — so
+                    nobody has to wonder whether their half-written sentence is
+                    about to be thrown away.
+                  */
+                  <>
+                    {draft.trim() && (
+                      /* An icon, like the two beside it. Without one its
+                         content box was a line of text where theirs was a
+                         12px glyph, so it sat visibly shorter in a row of
+                         three buttons that are meant to read as a set. */
+                      <button type="button" className="btn" onClick={() => setDraft('')}>
+                        <Ico name="trash" />Discard
+                      </button>
+                    )}
+                    {/* Purple, because that is the colour a closed issue is on
+                        github.com — green there means merged, which this is
+                        not. Solid, like the Comment beside it: an outline
+                        against a fill reads as one real button and one
+                        suggestion. */}
+                    {issue.state === 'OPEN' ? (
+                      <button type="button" className="btn shut" onClick={() => setClosing(true)}>
+                        <Ico name="closed" />
+                        {draft.trim() ? 'Close with comment' : 'Close issue'}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => flow.propose({
+                          repo,
+                          numbers: [issue.number],
+                          state: 'reopen',
+                          ...(draft.trim() ? { comment: draft } : {}),
+                        })}
+                      >
+                        <Ico name="issue" />
+                        {draft.trim() ? 'Reopen with comment' : 'Reopen'}
+                      </button>
+                    )}
                     <button
                       type="button"
-                      className="btn"
+                      className="btn go"
+                      disabled={!draft.trim()}
                       onClick={() => flow.propose({
-                        repo,
-                        numbers: [issue.number],
-                        state: 'reopen',
-                        ...(draft.trim() ? { comment: draft } : {}),
+                        repo, numbers: [issue.number], comment: draft,
                       })}
                     >
-                      <Ico name="issue" />
-                      {draft.trim() ? 'Reopen with comment' : 'Reopen'}
+                      <Ico name="cmt" />Comment
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    className="btn go"
-                    disabled={!draft.trim()}
-                    onClick={() => flow.propose({
-                      repo, numbers: [issue.number], comment: draft,
-                    })}
-                  >
-                    <Ico name="cmt" />Comment
-                  </button>
-                </div>
-              </div>
+                  </>
+                }
+              />
 
               {detail?.error && (
                 <div className="note" style={{ margin: 0 }}>
@@ -552,18 +848,25 @@ export function GhIssue({
 }
 
 /** One block of prose with its author above it. */
-function Comment({ who, when, verb, children }: {
+function Comment({ who, when, verb, menu, children }: {
   who?: string;
   when?: string;
   verb: string;
+  /** The `…`, drawn at the right-hand end of the header. */
+  menu?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div className="cmt">
       <div className="ch">
-        <span className={avClass(who ?? '?')}>{(who ?? '?')[0].toUpperCase()}</span>
+        {/* Their actual picture when there is one, the letter until there is —
+            see `GhAvatar`. `avClass` still picks the colour, so a bot or a
+            signed-out session keeps the circle it always had. */}
+        <GhAvatar who={who} className={avClass(who ?? '?')} />
         <b>{who ?? 'somebody'}</b> {verb}
-        {when && <span style={{ marginLeft: 'auto' }}>{since(when)}</span>}
+        <span style={{ marginLeft: 'auto' }} />
+        {when && <span>{since(when)}</span>}
+        {menu}
       </div>
       <div className="cb">{children}</div>
     </div>

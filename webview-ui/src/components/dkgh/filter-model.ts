@@ -612,6 +612,17 @@ export interface TermCost {
   term: Term;
   label: string;
   /**
+   * The two halves of `label`, kept apart.
+   *
+   * `describeTerm` already separates the field from what it is set to, and
+   * flattening them into one string threw that away — so the panel drew
+   * "state Open" and "assignee Nobody" as three identical runs of grey text
+   * with a number at the end. The field is a label and the value is a chip,
+   * which is how every other value in this tab is drawn.
+   */
+  key: string;
+  value: string;
+  /**
    * How many of the excluded issues this term alone is responsible for.
    *
    * Counted against everything *else* being applied, so a term that removes
@@ -633,7 +644,13 @@ export function costOf(
     const withoutIt = issues.filter(i => matchesAll(i, others, ctx));
     const withIt = withoutIt.filter(i => matchesTerm(i, term, ctx));
     const d = describeTerm(term, labels);
-    return { term, label: `${d.key} ${d.value}`.trim(), removes: withoutIt.length - withIt.length };
+    return {
+      term,
+      label: `${d.key} ${d.value}`.trim(),
+      key: d.key,
+      value: d.value,
+      removes: withoutIt.length - withIt.length,
+    };
   });
 }
 

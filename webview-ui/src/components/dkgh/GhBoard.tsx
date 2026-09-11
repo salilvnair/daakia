@@ -74,6 +74,8 @@ import { GhCopyMap } from './GhCopyMap';
 import { loadFieldMap, merged, saveFieldMap, type MapField } from './field-map';
 import { GhExport } from './GhExport';
 import { GhInsights } from './GhInsights';
+import { GhTeam } from './GhTeam';
+import { GhAvatar } from './GhAvatar';
 import { GhRepository } from './GhRepository';
 import { GhImport } from './GhImport';
 import { openExternal } from './open-external';
@@ -105,11 +107,15 @@ import {
   type BoardData, type BoardIssue, type Group,
 } from './board-types';
 import { since, until, atClock } from './format';
-import { ACCENT, activeAccount, type GhEnv, type RepoMeta } from './types';
+import { ACCENT, activeAccount, hasScope, type GhEnv, type RepoMeta } from './types';
 
 /** The four sections of the tab, in the order a lead uses them. */
 const SECTIONS: { id: string; label: string; icon: IcoName; disabled?: boolean }[] = [
   { id: 'board', label: 'Board', icon: 'board' },
+  /* Between the board and filing: "who has what" is the question asked
+     immediately after "what is the state of this", and before anybody writes
+     anything new. */
+  { id: 'team', label: 'Team', icon: 'person' },
   { id: 'new', label: 'New issue', icon: 'plus' },
   { id: 'insights', label: 'Insights', icon: 'chart' },
   { id: 'repository', label: 'Repository', icon: 'repo' },
@@ -281,6 +287,32 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
         ...(optionId ? { option: { id: optionId, name: value } } : { date: value }),
       }],
     });
+  }, [project, addToast]);
+
+  /*
+    Archive or remove one card — the `…` on the issue's title.
+
+    The same road as a drag: the host plans it, the confirm bar shows the exact
+    `gh project item-archive` / `item-delete`, and only then does it run. The
+    scope is not checked here — `GhIssueMenu` draws the two entries greyed with
+    the grant command when the token cannot do it, which is earlier and more
+    useful than a 403 after the fact.
+  */
+  const projectItem = useCallback((
+    what: 'archive' | 'remove', itemId: string, number: number,
+  ) => {
+    if (!project?.id) return;
+    const done = (evt: MessageEvent) => {
+      const msg = evt.data as Record<string, unknown>;
+      if (msg.type !== 'dkgh:applyProject:result') return;
+      window.removeEventListener('message', done);
+      const failed = ((msg.outcomes as { number: number; ok: boolean; error?: string }[]) ?? [])
+        .find(o => !o.ok);
+      if (failed) addToast({ type: 'error', message: `#${failed.number}: ${failed.error}` });
+      setProjectRead(n => n + 1);
+    };
+    window.addEventListener('message', done);
+    postMsg({ type: 'dkgh:applyProjectItem', projectId: project.id, itemId, number, what });
   }, [project, addToast]);
 
   /** The repository's own, plus whatever the Project adds. */
@@ -1001,8 +1033,20 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
           const row = all.find(i => i.number === viewing.number);
           if (row) writeProject(row, field, value, optionId);
         }}
+        me={ctx.me}
+        /* `project` covers `read:project`, so this is the one to ask for —
+           see `hasScope`. */
+        canWriteProject={hasScope(activeAccount(env ?? null), 'project')}
+        onProjectItem={(what, itemId) => projectItem(what, itemId, viewing.number)}
         onOpen={n => setViewing(all.find(i => i.number === n) ?? viewing)}
         onBack={() => { setViewing(undefined); setSection('board'); }}
+        /* "Reference in a new issue" — the composer, seeded with the quote and
+           the link back. The board owns the draft, so this is where it lands. */
+        onReference={seed => {
+          setDraft({ ...emptyDraft(repo), description: seed });
+          setViewing(undefined);
+          setSection('new');
+        }}
         onWrote={refresh}
       />
     );
@@ -1076,9 +1120,9 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
         {account && onOpenAccount && (
           <button type="button" className="btn" onClick={onOpenAccount}
                   title="Scopes, hosts, accounts, and every command dkgh runs">
-            <span className={`av av-${account.login[0].toLowerCase()}`}>
-              {account.login[0].toUpperCase()}
-            </span>
+            {/* The identity chip carries your own face too — see `GhAvatar`. */}
+            <GhAvatar who={account.login}
+                      className={`av av-${account.login[0].toLowerCase()}`} />
             {account.login}
           </button>
         )}
@@ -1156,6 +1200,32 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
           }}
           onImport={() => setSection('import')}
           onLabels={() => setSection('labels')}
+        />
+      ) : section === 'team' ? (
+        /*
+          Who is carrying what — see `GhTeam`. It reads `filtered` rather than
+          `all` on purpose: the filters above are the ones already on screen,
+          and a team view that ignored them would answer a different question
+          from the board beside it.
+        */
+        <GhTeam
+          repo={repo}
+          issues={filtered}
+          dimensions={dimensions}
+          meta={meta}
+          project={project}
+          me={ctx.me}
+          end={endField}
+          writingProject={undefined}
+          onWriteProject={(field, value, optionId) => {
+            const row = all.find(i => i.number === viewing?.number);
+            if (row) writeProject(row, field, value, optionId);
+          }}
+          onWrote={refresh}
+          onReference={seed => {
+            setDraft({ ...emptyDraft(repo), description: seed });
+            setSection('new');
+          }}
         />
       ) : section === 'insights' ? (
         <GhInsights
@@ -1378,10 +1448,19 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
             Save as view
           </button>
         )}
-        <button type="button" className="pill"
+        {/*
+          Amber and solid, the way dk8s draws its own export.
+
+          This is the only control in the row that writes a file, and as
+          another outlined pill it read as one more filter. Same token dk8s
+          uses — `--color-warning` — rather than a second amber of dkgh's own,
+          because "the button that writes files" should look the same in both
+          tabs.
+        */}
+        <button type="button" className="pill exp"
                 title="Export writes exactly these columns, in this order"
                 onClick={() => setSection('export')}>
-          <Ico name="dl" />Export
+          <Ico name="export" />Export
         </button>
         {view === 'columns' && (
           <GhColumnControls
@@ -1660,10 +1739,27 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
 
       {/* Footer — the mock's `.footbar` */}
       <div className="footbar">
-        <span>
-          {pending ? 'reading the repository'
-            : `${filtered.length}${filtered.length !== total ? ` of ${total}` : ''} shown`}
-        </span>
+        {/*
+          The way back into 08E.
+
+          It was only reachable from the Explain button in the chip row, and
+          that row draws nothing at all when no filter is set — so closing the
+          sheet on an unfiltered board closed it for good, with no control
+          anywhere that would open it again. The count is the thing the sheet
+          is about, so the count is the button.
+        */}
+        {pending ? (
+          <span>reading the repository</span>
+        ) : (
+          <button
+            type="button"
+            className={`whycount${why ? ' on' : ''}`}
+            title="Why is an issue here — and where did that one go"
+            onClick={() => setWhy(w => !w)}
+          >
+            {`${filtered.length}${filtered.length !== total ? ` of ${total}` : ''} shown`}
+          </button>
+        )}
         <span style={{ opacity: 0.5 }}>·</span>
         <GhKeyStatus selected={[...selected]} cursor={cursor} />
         <span className="sp" />

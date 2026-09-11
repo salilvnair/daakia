@@ -35,7 +35,9 @@
  * is news rather than a decision you have to make.
  */
 import { useMemo, useRef, useState } from 'react';
+import { LAND_MS, useCardDrag } from './card-drag';
 import { Ico } from './GhIcons';
+import { GhAvatar } from './GhAvatar';
 import { avClass, chipOf, prClass } from './GhCards';
 import { GhNote } from './GhShell';
 import {
@@ -89,9 +91,18 @@ export function GhColumns({
   onKeepMine: (change: Elsewhere) => void;
   onTakeTheirs: () => void;
 }) {
-  const [dragging, setDragging] = useState<BoardIssue | undefined>();
-  const [over, setOver] = useState<string | undefined>();
-  const drag = useRef<BoardIssue | undefined>(undefined);
+  /*
+    Pointer-driven, not HTML5 drag-and-drop — which never started, because
+    `dragstart` set nothing on the `dataTransfer`, and which would not have
+    looked right if it had. See `useCardDrag`.
+  */
+  const { drag, start, dragged } = useCardDrag((issue, column) => {
+    const from = issue.dimensions[field!.name.toLowerCase()] ?? '';
+    if (from === column || column.startsWith('No ')) return;
+    onMove({ issue, from, to: column });
+  });
+  const dragging = drag?.issue;
+  const over = drag?.landing ? undefined : drag?.over;
 
   const away = useMemo(() => new Set(hidden), [hidden]);
 
@@ -194,6 +205,42 @@ export function GhColumns({
         </div>
       )}
 
+      {/*
+        The card under the cursor.
+
+        A real copy of the card, drawn in a fixed layer over everything, moved
+        by `transform` alone — which is the one property a compositor can
+        animate without laying the page out again, and the difference between
+        this and a card that stutters behind the pointer.
+
+        `pointer-events: none`, so the thing being dragged never answers
+        `elementFromPoint` and the column underneath it does.
+      */}
+      {drag && (
+        <div
+          className="kghost"
+          style={{
+            width: drag.w,
+            transform: `translate3d(${drag.x}px, ${drag.y}px, 0)`,
+            transition: drag.landing
+              ? `transform ${LAND_MS}ms cubic-bezier(.2,.8,.3,1), opacity ${LAND_MS}ms ease`
+              : undefined,
+            opacity: drag.landing ? 0.35 : 1,
+          }}
+        >
+          <Card
+            ghost
+            issue={drag.issue}
+            colourBy={colourBy}
+            dimensions={dimensions}
+            pending={pending.get(drag.issue.number)}
+            moved={changed.get(drag.issue.number)}
+            onOpen={() => {}}
+            onKeepMine={() => {}}
+          />
+        </div>
+      )}
+
       {lanes.map(lane => (
       <div key={lane.name || 'all'}>
       {lane.name && (
@@ -209,7 +256,6 @@ export function GhColumns({
           paddingTop: lane.name ? 8 : undefined,
           paddingBottom: lane.name ? 10 : undefined,
         }}
-        onDragEnd={() => { drag.current = undefined; setDragging(undefined); setOver(undefined); }}
       >
         {columns.map(column => {
           const cards = at(lane.issues, column);
@@ -217,20 +263,11 @@ export function GhColumns({
           return (
             <div
               key={column}
+              /* `data-col` is how the drag finds this without a listener on
+                 it: the pointer code asks the document what is under the
+                 cursor and walks up to the nearest one of these. */
+              data-col={column}
               className={`kcol ${tintFor(column)}${over === column ? ' over' : ''}`}
-              onDragOver={e => { e.preventDefault(); setOver(column); }}
-              onDragLeave={() => setOver(o => (o === column ? undefined : o))}
-              onDrop={e => {
-                e.preventDefault();
-                const issue = drag.current;
-                drag.current = undefined;
-                setDragging(undefined);
-                setOver(undefined);
-                if (!issue) return;
-                const from = issue.dimensions[field.name.toLowerCase()] ?? '';
-                if (from === column || column.startsWith('No ')) return;
-                onMove({ issue, from, to: column });
-              }}
             >
               <div className="kh">
                 <span className={`st ${statusClass(column)}`}><b />{column}</span>
@@ -265,7 +302,9 @@ export function GhColumns({
                   moved={changed.get(issue.number)}
                   onOpen={onOpen}
                   onKeepMine={onKeepMine}
-                  onDragStart={() => { drag.current = issue; setDragging(issue); }}
+                  lifted={dragging?.number === issue.number && !drag?.landing}
+                  onDragStart={e => start(issue, e)}
+                  dragged={dragged}
                 />
               ))}
 
@@ -294,6 +333,7 @@ function statusClass(name: string): string {
 
 function Card({
   issue, colourBy, dimensions, pending, moved, onOpen, onKeepMine, onDragStart,
+  lifted, dragged, ghost,
 }: {
   issue: BoardIssue;
   colourBy?: string;
@@ -303,7 +343,13 @@ function Card({
   moved?: Elsewhere;
   onOpen: (issue: BoardIssue) => void;
   onKeepMine: (change: Elsewhere) => void;
-  onDragStart: () => void;
+  onDragStart?: (e: React.PointerEvent<HTMLElement>) => void;
+  /** This card is the one being dragged, so what sits here is its outline. */
+  lifted?: boolean;
+  /** Set by the drag once it has actually begun. See `useCardDrag`. */
+  dragged?: React.MutableRefObject<boolean>;
+  /** The copy under the cursor: no click, no press, just the card. */
+  ghost?: boolean;
 }) {
   const colour = colourBy ? issue.dimensions[colourBy] : undefined;
   const options = dimensions.find(d => d.dimension === colourBy)?.options;
@@ -312,10 +358,13 @@ function Card({
 
   return (
     <div
-      className="kcard"
-      draggable
-      data-issue={issue.number}
-      title={pending ? `Writing ${pending}…` : issue.title}
+      /* No `ghost` class: something else in the app already owns that name and
+         sets `position: absolute` on it, which shrink-wrapped the dragged card
+         to its text. The ghost's styles hang off `.kghost .kcard` instead, and
+         the `ghost` prop is what this component needs it for. */
+      className={`kcard${lifted ? ' lifted' : ''}`}
+      data-issue={ghost ? undefined : issue.number}
+      title={ghost ? undefined : pending ? `Writing ${pending}…` : issue.title}
       style={{
         opacity: pending ? 0.6 : issue.state === 'CLOSED' ? 0.62 : 1,
         cursor: 'grab',
@@ -330,8 +379,10 @@ function Card({
           ? 'color-mix(in srgb, var(--dk-amber) 8%, transparent)'
           : undefined,
       }}
-      onDragStart={onDragStart}
-      onClick={() => onOpen(issue)}
+      /* The press does both jobs: a click opens the issue, a press that
+         travels moves it. `useCardDrag` decides which happened. */
+      onPointerDown={onDragStart}
+      onClick={() => { if (!dragged?.current) onOpen(issue); }}
     >
       <div className="t">{issue.title}</div>
 
@@ -368,7 +419,7 @@ function Card({
           <span className="chip c-stale">{issue.quietDays}d</span>
         )}
         {who
-          ? <span className={avClass(who)} title={who}>{who[0].toUpperCase()}</span>
+          ? <GhAvatar who={who} className={avClass(who)} />
           : <span style={{ color: 'var(--dk-amber)', fontSize: 11.4 }}>unassigned</span>}
       </div>
     </div>

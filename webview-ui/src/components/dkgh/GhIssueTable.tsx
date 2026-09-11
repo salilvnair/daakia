@@ -34,6 +34,7 @@
  */
 import { forwardRef, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Ico } from './GhIcons';
+import { GhAvatar } from './GhAvatar';
 import { avClass, chipOf, prClass } from './GhCards';
 import { DENSITY_PAD, type Density, type SortLevel } from './board-prefs';
 import {
@@ -497,7 +498,7 @@ function Cell({
             onPick={v => onEdit(issue, 'assignee', v)}
           >
             {who
-              ? <span className="who"><span className={avClass(who)}>{who[0].toUpperCase()}</span>{who}</span>
+              ? <span className="who"><GhAvatar who={who} className={avClass(who)} />{who}</span>
               : <span className="who" style={{ color: 'var(--dk-amber)' }}>unassigned</span>}
           </Editable>
         </td>

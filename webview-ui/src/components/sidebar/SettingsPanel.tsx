@@ -45,6 +45,7 @@ import { AuditLogTab } from '../settings/devtools/AuditLogTab';
 import { DbExplorerTab } from '../settings/devtools/DbExplorerTab';
 import { DebugSnapshotTab } from '../settings/devtools/DebugSnapshotTab';
 import { AuditConfigTab } from '../settings/devtools/AuditConfigTab';
+import { setFixedPortEnabled, useFixedPortEnabled } from '../mock/fixed-port';
 
 type SettingsSection = 'general' | 'theme' | 'keymap' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-cluster' | 'dk8s-terminal' | 'dkgh';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
@@ -532,6 +533,7 @@ function SettingToggle({ title, description, value, onChange }: { title: string;
 // ────────── Mock Server Settings ──────────
 
 function MockServerSettings() {
+  const fixedPort = useFixedPortEnabled();
   const [portMin, setPortMin] = useState(8000);
   const [portMax, setPortMax] = useState(9000);
   const mockIconGlow = useMockStore(s => s.mockIconGlow);
@@ -579,6 +581,7 @@ function MockServerSettings() {
             <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Port Range</p>
             <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-3">
               Mock servers will be assigned ports within this range. The extension auto-finds a free port.
+              {fixedPort && ' A server you have given a port of its own uses that instead, wherever it falls.'}
             </p>
             <div className="flex items-center gap-2">
               <TextInputView
@@ -609,6 +612,22 @@ function MockServerSettings() {
               {saved && <span className="text-[11px] text-[var(--color-success)]">Saved!</span>}
             </div>
           </div>
+
+          {/*
+            Choosing the port yourself.
+
+            Off by default and staying that way: the auto-found port is right
+            for almost everybody and never collides. This is for the case where
+            something else already decides the port — a client with a hard-coded
+            base URL, a compose file that maps 8080 — and for that case nothing
+            else will do.
+          */}
+          <SettingToggle
+            title="Let me choose the port"
+            description="Adds a port box when you create a mock server and when you open one. Leave it off and a free port is found for you."
+            value={fixedPort}
+            onChange={setFixedPortEnabled}
+          />
 
           {/* Mock Server Icon Glow */}
           <SettingToggle

@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseIssueBody, fieldValue, readDimensions } from './issue-body';
 import {
-  parseIssueForm, parseIssueForms, proposeDimensions, headingMap,
+  aliasOf, parseIssueForm, parseIssueForms, proposeDimensions, headingMap,
   type IssueForm,
 } from './issue-forms';
 
@@ -289,6 +289,46 @@ describe('proposing board dimensions', () => {
     expect(proposeDimensions([text])).toEqual([]);
   });
 
+  /*
+    ── The bug that made every bug report say "No module" ──
+
+    This repository declares `Module` as a dropdown in one template and
+    `Module/Screen` as an input in another. Only the dropdown can propose the
+    dimension; `headingMap` then emitted that one heading, so a bug report —
+    whose body says "Module/Screen" — read as having no module at all, on a
+    board grouped by module, with the value sitting in the issue.
+  */
+  const DROPDOWN_MODULE =
+    'name: E\nbody:\n  - type: dropdown\n    attributes:\n      label: Module\n      options: [Checkout, Orders]\n';
+  const INPUT_MODULE_SCREEN =
+    'name: B\nbody:\n  - type: input\n    attributes:\n      label: Module/Screen\n';
+
+  it('reads a second template’s differently-named field into the same dimension', () => {
+    const drop = parseIssueForm('enhancement.yml', DROPDOWN_MODULE) as IssueForm;
+    const text = parseIssueForm('bug.yml', INPUT_MODULE_SCREEN) as IssueForm;
+    const p = proposeDimensions([drop, text])[0];
+    expect(p.headings).toContain('Module');
+    expect(p.headings).toContain('Module/Screen');
+    expect(headingMap([p])['Module/Screen']).toBe('module');
+  });
+
+  it('still does not take a free-text field’s value as an option', () => {
+    const drop = parseIssueForm('e.yml', DROPDOWN_MODULE) as IssueForm;
+    const text = parseIssueForm('b.yml', INPUT_MODULE_SCREEN) as IssueForm;
+    expect(proposeDimensions([drop, text])[0].options).toEqual(['Checkout', 'Orders']);
+  });
+
+  it('shows the dropdown’s own label as the heading', () => {
+    const drop = parseIssueForm('e.yml', DROPDOWN_MODULE) as IssueForm;
+    const text = parseIssueForm('b.yml', INPUT_MODULE_SCREEN) as IssueForm;
+    expect(proposeDimensions([drop, text])[0].heading).toBe('Module');
+  });
+
+  it('a free-text field alone still proposes nothing', () => {
+    const text = parseIssueForm('b.yml', INPUT_MODULE_SCREEN) as IssueForm;
+    expect(proposeDimensions([text])).toEqual([]);
+  });
+
   it('unions the values when two forms declare the same dimension', () => {
     const a = parseIssueForm('a.yml', 'name: A\nbody:\n  - type: dropdown\n    attributes:\n      label: Module\n      options: [Checkout, Orders]\n') as IssueForm;
     const b = parseIssueForm('b.yml', 'name: B\nbody:\n  - type: dropdown\n    attributes:\n      label: Module\n      options: [Orders, Admin]\n') as IssueForm;
@@ -315,5 +355,29 @@ describe('the two halves meeting', () => {
     const { forms } = parseIssueForms([{ file: 'bug_report.yml', text: BUG_FORM }]);
     const map = headingMap(proposeDimensions(forms));
     expect(readDimensions(SUBMITTED, map)).toEqual({ module: 'Checkout', environment: 'PROD' });
+  });
+});
+
+describe('aliasOf', () => {
+  it('reads the whole label when that is the name', () => {
+    expect(aliasOf('Module')).toBe('module');
+    expect(aliasOf('  environment ')).toBe('environment');
+  });
+
+  it('reads the first half of a label naming two things', () => {
+    expect(aliasOf('Module/Screen')).toBe('module');
+  });
+
+  it('reads the second half when that is the one that names a dimension', () => {
+    expect(aliasOf('Screen/Module')).toBe('module');
+  });
+
+  it('says nothing about a field that is not a dimension', () => {
+    expect(aliasOf('Steps to Reproduce')).toBeUndefined();
+    expect(aliasOf('Summary')).toBeUndefined();
+  });
+
+  it('does not match a word merely containing one', () => {
+    expect(aliasOf('Modulation')).toBeUndefined();
   });
 });

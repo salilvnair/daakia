@@ -20,7 +20,7 @@ import { useEffect, useState } from 'react';
 import { postMsg } from '../../vscode';
 import { Ico } from './GhIcons';
 
-interface Answer { dataUri?: string; error?: string }
+export interface Answer { dataUri?: string; error?: string }
 
 /** URL → what came back, or the promise of it. Shared by every card. */
 const answers = new Map<string, Answer>();
@@ -43,6 +43,17 @@ function listen() {
     waiting.delete(url);
     waiters?.forEach(fn => fn(answer));
   });
+}
+
+/**
+ * Ask the host for one image, and be told when it is here.
+ *
+ * Exported because avatars take exactly this road — same queue, same cache,
+ * same size cap. Returns the unsubscribe, for a component that goes away
+ * before the bytes arrive.
+ */
+export function requestEvidence(url: string, done: (a: Answer) => void): () => void {
+  return request(url, done);
 }
 
 function request(url: string, done: (a: Answer) => void): () => void {

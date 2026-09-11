@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const run = vi.fn();
 vi.mock('./gh', () => ({ run: (...a: unknown[]) => run(...a) }));
 
-const { applyProjectEdit, fetchProject, planProjectEdit } = await import('./project');
+const { applyProjectEdit, fetchProject, planProjectEdit, planProjectItem } = await import('./project');
 
 beforeEach(() => run.mockReset());
 
@@ -208,5 +208,39 @@ describe('applyProjectEdit', () => {
       { number: 2, ok: true, error: undefined },
     ]);
     expect(run).toHaveBeenCalledTimes(2);
+  });
+});
+
+/*
+  Archive and remove, which are two different things that both keep the issue.
+*/
+describe('planProjectItem', () => {
+  it('archives by item id, against the project it is on', () => {
+    const plan = planProjectItem('PVT_1', 'ITEM_9', 42, 'archive');
+    expect(plan.steps[0].argv).toEqual([
+      'project', 'item-archive', '--id', 'ITEM_9', '--project-id', 'PVT_1',
+    ]);
+  });
+
+  it('removes with item-delete, which is gh’s name for it', () => {
+    const plan = planProjectItem('PVT_1', 'ITEM_9', 42, 'remove');
+    expect(plan.steps[0].argv).toEqual([
+      'project', 'item-delete', '--id', 'ITEM_9', '--project-id', 'PVT_1',
+    ]);
+  });
+
+  it('says the issue survives, on both — the confirm screen is where that lands', () => {
+    expect(planProjectItem('P', 'I', 1, 'archive').steps[0].does)
+      .toContain('still an issue');
+    expect(planProjectItem('P', 'I', 1, 'remove').steps[0].does)
+      .toContain('still an issue');
+  });
+
+  it('is one step — this is never a bulk action', () => {
+    expect(planProjectItem('P', 'I', 1, 'remove').steps).toHaveLength(1);
+  });
+
+  it('refuses nothing: the scope check is the caller’s, not the plan’s', () => {
+    expect(planProjectItem('P', 'I', 1, 'archive').refusal).toBeUndefined();
   });
 });

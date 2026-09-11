@@ -109,13 +109,23 @@ export const GH_COMMANDS: GhCommandRow[] = [
   { command: 'gh issue create --repo <r> --title ... --body-file -',
     when: 'the Create button on the composer', kind: 'write',
     confirmedBy: 'the review step', live: true },
-  { command: 'gh issue edit', when: 'a cell edit, or a bulk action', kind: 'write',
+  { command: 'gh issue edit', when: 'a cell edit, a bulk action, or rewriting an issue’s '
+        + 'own description — the description goes in through stdin as --body-file -',
+    kind: 'write',
     confirmedBy: 'the confirm bar', live: true },
   { command: 'gh issue close / reopen', when: 'closing an issue, or a bulk action',
     kind: 'write', confirmedBy: 'the confirm bar', live: true },
   { command: 'gh issue comment <n> --repo <r> --body-file -',
     when: 'writing a comment, and alongside a close — the body goes in through stdin, '
         + 'never as an argument',
+    kind: 'write', confirmedBy: 'the confirm bar', live: true },
+  { command: 'gh api --method PATCH repos/{o}/{r}/issues/comments/{id} --input -',
+    when: 'rewriting one of your own comments from the comment menu — the new body goes '
+        + 'in through stdin as JSON, never as an argument',
+    kind: 'write', confirmedBy: 'the confirm bar', live: true },
+  { command: 'gh api --method DELETE repos/{o}/{r}/issues/comments/{id}',
+    when: 'deleting one of your own comments from the comment menu — offered only on '
+        + 'comments you wrote, and there is no undo on GitHub or here',
     kind: 'write', confirmedBy: 'the confirm bar', live: true },
   { command: 'gh api --method PUT /repos/{o}/{r}/contents/.dkgh/evidence/{name}',
     when: 'uploading a pasted screenshot — a commit on the dkgh-evidence branch, never on '
@@ -124,6 +134,14 @@ export const GH_COMMANDS: GhCommandRow[] = [
   { command: 'gh api --method POST /repos/{o}/{r}/git/refs',
     when: 'the first screenshot on a repository, to make the evidence branch',
     kind: 'write', confirmedBy: 'the upload preview', live: true },
+  { command: 'gh project item-archive --id ... --project-id ...',
+    when: 'archiving a card from the issue menu — takes it off the board and leaves both '
+        + 'the Project item and the issue itself alone',
+    kind: 'write', confirmedBy: 'the confirm bar', live: true },
+  { command: 'gh project item-delete --id ... --project-id ...',
+    when: 'removing a card from the Project from the issue menu — the issue stays in the '
+        + 'repository',
+    kind: 'write', confirmedBy: 'the confirm bar', live: true },
   { command: 'gh project item-edit --id ... --field-id ... --single-select-option-id ...',
     when: 'a drag on the columns board, a date on the roadmap',
     kind: 'write', confirmedBy: 'the drag receipt', live: true },

@@ -9,6 +9,7 @@ import { TabView, TextInputView, MultilineInputView, ButtonView, IconButtonView 
 import type { TabItem } from '@salilvnair/dui';
 import type { MockServer, MockRoute } from './mock-types';
 import { openTryTab } from './mock-try-handler';
+import { portProblem, portToSend, useFixedPortEnabled } from './fixed-port';
 import { RestRoutesConfig, GraphQLConfig, WebSocketConfig, SSEConfig, SocketIOConfig, MQTTConfig, GrpcConfig, SoapConfig, AiMockConfig, McpMockConfig } from './configs';
 import { postMsg } from '../../vscode';
 import { logUiEvent } from '../../store/ui-audit-store';
@@ -85,6 +86,28 @@ interface ServerDetailProps {
 }
 
 export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAddRoute, onAddGeneratedRoutes, onUpdateRoute, onDeleteRoute, editingRoute, onEditRoute, logs = [] }: ServerDetailProps) {
+  const fixedPort = useFixedPortEnabled();
+  /*
+    The box's own text, committed on blur rather than on every keystroke.
+
+    `requestedPort` is a number or nothing, and a half-typed "80" is neither —
+    writing through on every character would mean clearing the box to retype it
+    silently dropped the server's port along the way.
+  */
+  const [portText, setPortText] = useState(
+    server.requestedPort === undefined ? '' : String(server.requestedPort),
+  );
+  useEffect(() => {
+    setPortText(server.requestedPort === undefined ? '' : String(server.requestedPort));
+  }, [server.id, server.requestedPort]);
+  useEffect(() => {
+    const asked = portToSend(portText, fixedPort);
+    if (asked !== server.requestedPort) onUpdate({ requestedPort: asked });
+    /* `onUpdate` is not in the list on purpose: the panel rebuilds it on every
+       render, and depending on it would write the port back on every render
+       too. What this reacts to is the text changing. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [portText, fixedPort]);
   const [urlCopied, setUrlCopied] = useState(false);
   const [wsdlCopied, setWsdlCopied] = useState(false);
   const [serverTab, setServerTab] = useState<ServerTab>('routes');
@@ -141,6 +164,30 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
           className="min-w-0 flex-1 font-semibold"
           accentColor="var(--color-accent)"
         />
+        {/*
+          The port, when the setting is on — see `fixed-port.ts`.
+
+          Beside Start rather than buried in a tab, because it is the thing you
+          change immediately before pressing it. Disabled while the server is
+          running: the port is decided at bind time and a box that accepted
+          edits which did nothing until the next restart would be a box that
+          lies.
+        */}
+        {fixedPort && (
+          <TextInputView
+            value={portText}
+            onChange={(e) => setPortText(e.target.value)}
+            placeholder="Port"
+            size="lg"
+            disabled={server.running}
+            error={!!portProblem(portText)}
+            title={server.running
+              ? `Listening on ${server.port}. Stop it to change the port.`
+              : portProblem(portText) || 'Leave it empty to have a free port found'}
+            accentColor="var(--color-mock-server)"
+            style={{ width: 96 }}
+          />
+        )}
         <ButtonView
           variant={server.running ? 'danger' : 'primary'}
           size="lg"

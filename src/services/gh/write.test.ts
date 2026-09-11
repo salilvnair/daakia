@@ -7,7 +7,7 @@
  * object — so what is asserted here is the argv itself, not a description of it.
  */
 import { describe, it, expect } from 'vitest';
-import { planCreate, planEdit } from './write';
+import { commentId, planCreate, planEdit } from './write';
 
 const R = 'acme/orders-service';
 
@@ -173,5 +173,102 @@ describe('a comment', () => {
   it('is one comment per issue on a bulk close', () => {
     const plan = planEdit({ repo: 'a/b', numbers: [1, 2], comment: 'hi', state: 'close' });
     expect(plan.commands.filter(c => c.argv[1] === 'comment')).toHaveLength(2);
+  });
+});
+
+/*
+  Editing and deleting a comment that already exists.
+
+  Both are `gh api` against a REST comment id, and the id is only ever readable
+  out of the permalink — so the parse is where this can go wrong quietly, and
+  it is tested first.
+*/
+describe('commentId', () => {
+  it('reads the id out of a permalink', () => {
+    expect(commentId('https://github.com/o/r/issues/2#issuecomment-3456')).toBe(3456);
+  });
+
+  it('refuses a url with no comment anchor, rather than returning NaN', () => {
+    expect(commentId('https://github.com/o/r/issues/2')).toBeUndefined();
+  });
+
+  it('refuses nothing at all', () => {
+    expect(commentId(undefined)).toBeUndefined();
+    expect(commentId('')).toBeUndefined();
+  });
+
+  it('does not accept an anchor that merely contains one', () => {
+    expect(commentId('https://x/#issuecomment-12-and-then-some')).toBeUndefined();
+  });
+
+  it('refuses zero — there is no comment 0, and PATCHing it is a 404 at best', () => {
+    expect(commentId('https://x/#issuecomment-0')).toBeUndefined();
+  });
+});
+
+describe('planEdit, on one existing comment', () => {
+  it('PATCHes it, with the body on stdin rather than in the argv', () => {
+    const plan = planEdit({
+      repo: R, numbers: [2], editComment: { id: 3456, body: 'line one\nline two' },
+    });
+    expect(plan.commands).toHaveLength(1);
+    expect(plan.commands[0].argv).toEqual([
+      'api', '--method', 'PATCH', `repos/${R}/issues/comments/3456`, '--input', '-',
+    ]);
+    expect(plan.commands[0].stdin).toBe(JSON.stringify({ body: 'line one\nline two' }));
+    expect(plan.commands[0].display).not.toContain('line one');
+  });
+
+  it('DELETEs it, with nothing on stdin', () => {
+    const plan = planEdit({ repo: R, numbers: [2], deleteComment: { id: 99 } });
+    expect(plan.commands).toHaveLength(1);
+    expect(plan.commands[0].argv).toEqual([
+      'api', '--method', 'DELETE', `repos/${R}/issues/comments/99`,
+    ]);
+    expect(plan.commands[0].stdin).toBeUndefined();
+  });
+
+  it('says a delete cannot be undone, in the heading, first', () => {
+    const plan = planEdit({ repo: R, numbers: [2], deleteComment: { id: 99 } });
+    expect(plan.summary).toContain('cannot be undone');
+  });
+
+  it('plans one call, not one per issue — a comment belongs to one issue', () => {
+    const plan = planEdit({ repo: R, numbers: [2, 3, 4], deleteComment: { id: 99 } });
+    expect(plan.commands.filter(c => c.argv.includes('DELETE'))).toHaveLength(1);
+  });
+
+  it('is not empty, so the confirm screen does not refuse it', () => {
+    expect(planEdit({ repo: R, numbers: [2], deleteComment: { id: 9 } }).empty)
+      .toBeFalsy();
+  });
+});
+
+describe('planEdit, on the issue’s own description', () => {
+  it('is its own call, with the body on stdin', () => {
+    const plan = planEdit({ repo: R, numbers: [2], body: 'a new description' });
+    expect(plan.commands).toHaveLength(1);
+    expect(plan.commands[0].argv).toEqual([
+      'issue', 'edit', '2', '--repo', R, '--body-file', '-',
+    ]);
+    expect(plan.commands[0].stdin).toBe('a new description');
+  });
+
+  it('does not fold into an argv that is also changing labels', () => {
+    const plan = planEdit({ repo: R, numbers: [2], body: 'new', addLabels: ['bug'] });
+    expect(plan.commands).toHaveLength(2);
+    expect(plan.commands.find(c => c.argv.includes('--body-file'))?.argv)
+      .not.toContain('--add-label');
+  });
+
+  it('clears the description when asked to, which an empty string is', () => {
+    const plan = planEdit({ repo: R, numbers: [2], body: '' });
+    expect(plan.commands).toHaveLength(1);
+    expect(plan.commands[0].stdin).toBe('');
+  });
+
+  it('says which it is, in the heading', () => {
+    expect(planEdit({ repo: R, numbers: [2], body: 'x' }).summary)
+      .toContain('description');
   });
 });
