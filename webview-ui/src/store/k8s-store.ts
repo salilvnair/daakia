@@ -275,6 +275,7 @@ export interface ExportResult {
 
 export interface ExportState {
   phase: 'running' | 'done' | 'error' | 'cancelled';
+  /** Pods finished, and how many there are. */
   done: number;
   total: number;
   pod?: string;
@@ -282,6 +283,19 @@ export interface ExportState {
   summary?: string;
   results?: ExportResult[];
   error?: string;
+  /**
+   * Bytes, while an archived volume is being written.
+   *
+   * A pod count says nothing when one pod's volume is the whole export — it
+   * reads "0 of 1" for as long as it takes, which is the same picture as a
+   * hang. These are set only while the archived half is running.
+   */
+  bytes?: number;
+  totalBytes?: number;
+  /** The archived file being read, and where it is in the set. */
+  file?: string;
+  fileIndex?: number;
+  fileCount?: number;
 }
 
 /** How many usage samples to keep. At 15s each, ~10 minutes of trend. */
@@ -1225,6 +1239,17 @@ export const useK8sStore = create<K8sState>((set, get) => ({
                                    total: msg.total as number, destDir: msg.destDir as string } }));
         break;
 
+      case 'dk8s:exportBytes':
+        set(s => ({ exportState: { ...(s.exportState ?? { done: 0, total: 0 }),
+                                   phase: 'running',
+                                   pod: msg.pod as string,
+                                   bytes: msg.bytes as number,
+                                   totalBytes: msg.totalBytes as number,
+                                   file: msg.file as string,
+                                   fileIndex: msg.index as number,
+                                   fileCount: msg.count as number } }));
+        break;
+
       case 'dk8s:exportProgress':
         set(s => ({ exportState: { ...(s.exportState ?? { phase: 'running', total: 0 }),
                                    phase: 'running',
@@ -1252,6 +1277,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       case 'dk8s:exportCancelled':
         set({ exportState: undefined });
         break;
+
 
       case 'dk8s:exportError':
         set(s => ({ exportState: { ...(s.exportState ?? { done: 0, total: 0 }),

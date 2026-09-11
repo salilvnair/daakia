@@ -25,6 +25,7 @@ import {
   exportPodLogs, exportVisibleLines, summariseExport,
   type ExportTarget, type ExportOptions,
 } from '../../../services/k8s/k8s-logs';
+import { ExportCancelled } from '../../../services/k8s/pv-stream';
 import * as vscode from 'vscode';
 import * as os from 'os';
 import { join, basename } from 'path';
@@ -568,13 +569,38 @@ export async function handleDk8sExportLogs(
     return;
   }
 
+  /*
+    One export at a time, with a handle on it.
+
+    A second one started over the top of the first would write the same files
+    from two places, and there would be no way to say which of them Cancel
+    meant.
+  */
+  exportCancel?.();
+  const token = { cancelled: false };
+  exportCancel = () => { token.cancelled = true; };
+
   try {
     // The archive travels with the options, same as the match export: a whole
     // log that stops at what kubectl still holds is not the whole log.
     const results = await exportPodLogs(
-      targets, { ...options, pv: pvConfig() }, destDir, (done, total, pod) => {
+      targets,
+      { ...options, pv: pvConfig(), cancelled: () => token.cancelled },
+      destDir,
+      (done, total, pod) => {
         postMessage({ type: 'dk8s:exportProgress', done, total, pod });
-      });
+      },
+      /*
+        Bytes, for the archived half — the one that takes minutes. The pod
+        count is the wrong unit when a single volume *is* the export.
+      */
+      p => postMessage({
+        type: 'dk8s:exportBytes',
+        pod: p.pod, file: p.file,
+        bytes: p.bytes, totalBytes: p.totalBytes,
+        index: p.index, count: p.count,
+      }),
+    );
     postMessage({
       type: 'dk8s:exportDone',
       destDir,
@@ -582,8 +608,29 @@ export async function handleDk8sExportLogs(
       summary: summariseExport(results),
     });
   } catch (err) {
-    postMessage({ type: 'dk8s:exportError', error: (err as Error).message });
+    if (err instanceof ExportCancelled) {
+      postMessage({ type: 'dk8s:exportCancelled' });
+    } else {
+      postMessage({ type: 'dk8s:exportError', error: (err as Error).message });
+    }
+  } finally {
+    exportCancel = undefined;
   }
+}
+
+/** Set while an export is running, so Cancel has something to pull. */
+let exportCancel: (() => void) | undefined;
+
+/**
+ * Stop an export that is under way.
+ *
+ * The partial file is removed rather than left behind — see `pv-stream`. A
+ * half-written log is worse than none: it is named like a log, it opens like
+ * one, and the half that is missing is the end.
+ */
+export function handleDk8sCancelExport(postMessage: PostMessage): void {
+  if (!exportCancel) { postMessage({ type: 'dk8s:exportCancelled' }); return; }
+  exportCancel();
 }
 
 /**

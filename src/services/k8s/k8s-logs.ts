@@ -11,6 +11,7 @@ import { mkdir, readFile } from 'fs/promises';
 import { join } from 'path';
 import { run } from './kubectl';
 import { filesForPod, type PvLogConfig } from './pv-logs';
+import { ExportCancelled, streamArchive, type StreamProgress } from './pv-stream';
 
 export type LogRange =
   | { kind: 'all' }
@@ -34,6 +35,8 @@ export interface ExportOptions {
    * live part of it" is the same half-answer the match export used to give.
    */
   pv?: PvLogConfig;
+  /** Checked between pods and between chunks. See `pv-stream`. */
+  cancelled?: () => boolean;
   /**
    * Also fetch the previous container's logs.
    *
@@ -222,6 +225,14 @@ export async function exportPodLogs(
   opts: ExportOptions,
   destDir: string,
   onProgress?: (done: number, total: number, pod: string) => void,
+  /**
+   * Bytes, for the archived half.
+   *
+   * A pod count is the wrong unit when one pod's volume is the whole export:
+   * "0 of 1" for four minutes is the same picture as a hang. The live half
+   * stays a pod count, because kubectl hands it over in one piece.
+   */
+  onBytes?: (p: StreamProgress & { pod: string }) => void,
 ): Promise<ExportResult[]> {
   await mkdir(destDir, { recursive: true });
 
@@ -232,6 +243,7 @@ export async function exportPodLogs(
   let done = 0;
 
   for (const t of targets) {
+    if (opts.cancelled?.()) throw new ExportCancelled();
     onProgress?.(done, targets.length, t.pod);
     const result: ExportResult = { pod: t.pod, namespace: t.namespace };
 
@@ -293,26 +305,26 @@ export async function exportPodLogs(
         });
         if (files.length) {
           const file = join(destDir, logFileName(t.pod, t.namespace, multiNamespace, true));
-          const oldest = [...files].sort((a, b) => a.mtime - b.mtime);
-          let lineCount = 0;
-          let byteCount = 0;
-          const parts: string[] = [];
-          for (const f of oldest) {
-            const text = await readArchivedFile(f.file);
-            parts.push(`===== ${f.rel} =====`);
-            parts.push(text);
-            lineCount += text.split('\n').filter(Boolean).length + 1;
-            byteCount += Buffer.byteLength(text, 'utf8');
-          }
-          const body = parts.join('\n');
-          await writeFileStream(file, body ? body + '\n' : '');
+          /*
+            Streamed, and now actually streamed.
+
+            This used to read every file into a string, collect them in an
+            array and `join` the lot — under a comment claiming it did not.
+            On the files this exists for it could not work: V8 refuses a
+            string past 512MB, so a 1-2GB volume read for minutes and then
+            threw `RangeError: Invalid string length`.
+          */
+          const out = await streamArchive(files, file, {
+            cancelled: opts.cancelled,
+            onProgress: p => onBytes?.({ ...p, pod: t.pod }),
+          });
           archived.file = file;
-          archived.lines = lineCount;
-          archived.bytes = byteCount;
+          archived.bytes = out.bytes;
           archived.archive = true;
           results.push(archived);
         }
       } catch (err) {
+        if (err instanceof ExportCancelled) throw err;
         // One unreadable volume must not lose the live half already written.
         archived.error = (err as Error).message;
         archived.archive = true;
@@ -325,24 +337,6 @@ export async function exportPodLogs(
   }
 
   return results;
-}
-
-/** Reads one archived file, decompressing it when it is compressed. */
-async function readArchivedFile(path: string): Promise<string> {
-  if (!/\.gz$/i.test(path)) return readFile(path, 'utf8');
-  // Same reason the search decompresses: most of an archive is compressed,
-  // and reading those bytes as text produces a file of replacement characters.
-  const { createGunzip } = await import('zlib');
-  const { createReadStream } = await import('fs');
-  return new Promise((resolve, reject) => {
-    const chunks: string[] = [];
-    createReadStream(path)
-      .pipe(createGunzip())
-      .setEncoding('utf8')
-      .on('data', (c: string) => chunks.push(c))
-      .on('end', () => resolve(chunks.join('')))
-      .on('error', reject);
-  });
 }
 
 function writeFileStream(path: string, content: string): Promise<void> {

@@ -94,7 +94,7 @@ import { noteProtocolSend, auditProtocolResponse } from '../../services/protocol
 import { noteSessionConnect, auditSessionMessage, flushOpenSessions } from '../../services/session-audit';
 import {
   handleDk8sProbe, handleDk8sUseContext, handleDk8sNamespaces,
-  handleDk8sSetNamespace, handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSetLogLineNumbers, handleDk8sSearchLogs, handleDk8sCancelSearch,
+  handleDk8sSetNamespace, handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSetLogLineNumbers, handleDk8sSearchLogs, handleDk8sCancelSearch, handleDk8sCancelExport,
   handleDk8sProbePv, handleDk8sSavePv, handleDk8sOpenLogFile, handleDk8sProbeAccess,
   handleDk8sGetFormats, handleDk8sSaveFormat, handleDk8sDeleteFormat,
   handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat,
@@ -634,6 +634,9 @@ export class MainPanel {
         break;
       case 'dk8s:searchLogs':
         handleDk8sSearchLogs(msg, this._post);
+        break;
+      case 'dk8s:cancelExport':
+        handleDk8sCancelExport(this._post);
         break;
       case 'dk8s:cancelSearch':
         handleDk8sCancelSearch(this._post);

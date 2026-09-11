@@ -12,6 +12,8 @@ import {
   ModalView, ButtonView, TextInputView, DateTimeInputView, SegmentedControlView,
 } from '@salilvnair/dui';
 import { useK8sStore } from '../../store/k8s-store';
+import { postMsg } from '../../vscode';
+import { bytesLabel, exportPercent } from './export-progress';
 import { localInputValue } from './TimeWindow';
 import { softPrimary } from './button-style';
 
@@ -94,6 +96,11 @@ export function ExportLogsModal({ onClose, visibleLines }: {
   };
 
   const busy = exportState?.phase === 'running';
+  /* The archived half is running when it has told us a byte total. */
+  const archiving = (exportState?.totalBytes ?? 0) > 0;
+  const bytesDone = bytesLabel(exportState?.bytes ?? 0);
+  const bytesAll = bytesLabel(exportState?.totalBytes ?? 0);
+  const pct = exportPercent(exportState);
 
   return (
     <ModalView
@@ -248,17 +255,53 @@ export function ExportLogsModal({ onClose, visibleLines }: {
         </div>
 
         {exportState?.phase === 'running' && (
+          /*
+            Two units, because there are two halves.
+
+            kubectl hands a live log over in one piece, so that half can only
+            be counted in pods. An archived volume is read a chunk at a time
+            and is the half that takes minutes, so while it is running the bar
+            measures bytes — "0 of 1 pods" for four minutes is the same
+            picture as a hang.
+          */
           <div className="flex flex-col gap-1">
-            <span className="text-[11.5px]" style={{ color: ACCENT }}>
-              {exportState.done} / {exportState.total} · {exportState.pod}
-            </span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-[11.5px]" style={{ color: ACCENT }}>
+                {archiving
+                  ? `${bytesDone} of ${bytesAll}`
+                  : `${exportState.done} / ${exportState.total}`}
+              </span>
+              <span className="text-[11px] font-mono"
+                    style={{ color: 'var(--color-text-muted)' }}>
+                {archiving
+                  ? `${exportState.file} · ${(exportState.fileIndex ?? 0) + 1} of `
+                    + `${exportState.fileCount}`
+                  : exportState.pod}
+              </span>
+              <span className="flex-1" />
+              {/* A 2GB volume is minutes of reading. Somebody who started it
+                  by mistake should not have to close the tab. */}
+              <button
+                type="button"
+                className="text-[11px]"
+                style={{ color: 'var(--color-error)' }}
+                onClick={() => postMsg({ type: 'dk8s:cancelExport' })}
+              >
+                Cancel
+              </button>
+            </div>
             <div style={{ height: 3, borderRadius: 2, background: 'var(--color-surface-hover)' }}>
               <div style={{
                 height: '100%', borderRadius: 2, background: ACCENT,
-                width: `${Math.round((exportState.done / Math.max(1, exportState.total)) * 100)}%`,
+                width: `${pct}%`,
                 transition: 'width .2s ease',
               }} />
             </div>
+            {archiving && (
+              <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+                Reading the volume. The partial file is removed if you cancel.
+              </span>
+            )}
           </div>
         )}
 
