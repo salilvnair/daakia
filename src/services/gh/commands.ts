@@ -53,7 +53,8 @@ export const GH_COMMANDS: GhCommandRow[] = [
     kind: 'read', live: true },
   { command: 'gh repo list [owner] --json ...', when: 'searching for a repository',
     kind: 'read', live: true },
-  { command: 'gh search repos <q> --json ...', when: 'searching, for public repositories',
+  { command: 'gh api user/orgs', when: 'before a repository search, to know which '
+        + 'organisations to list — cached for five minutes',
     kind: 'read', live: true },
   { command: 'gh issue list --repo <r> --json ...', when: 'every board refresh',
     kind: 'read', live: true },

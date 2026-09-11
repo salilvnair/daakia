@@ -56,17 +56,6 @@ const REPO_FIELDS = [
   'parent', 'pushedAt', 'hasIssuesEnabled',
 ].join(',');
 
-/**
- * The same list, minus the ones `gh search repos` does not return.
- *
- * Asking search for a field it has never had is not a degraded answer, it is
- * an error and an empty result — so the two commands get the fields each can
- * actually produce rather than one list that works for only one of them.
- */
-const SEARCH_FIELDS = [
-  'fullName', 'description', 'isPrivate', 'isArchived', 'isFork', 'pushedAt',
-].join(',');
-
 interface RawRepo {
   nameWithOwner?: string;
   description?: string;
@@ -177,14 +166,87 @@ export async function guessFromWorkspace(cwd?: string): Promise<RepoGuess> {
 }
 
 /**
- * Search every repository this account can reach.
+ * The organisations this account belongs to.
  *
- * Two commands, because they answer different questions. `gh repo list <owner>`
- * enumerates an org or a user including its private repositories; `gh search
- * repos` searches across all of GitHub but only sees public ones. A query that
- * names an owner gets the first, everything else gets both — otherwise typing
- * "orders" would miss the private `acme/orders-web` that is the whole reason
- * somebody is searching rather than typing the name.
+ * Cached for the session: org membership does not change while somebody is
+ * typing into a search box, and re-asking on every keystroke would spend a
+ * call per character to get the same four names back.
+ *
+ * A failure is an empty list rather than an error. Not being able to read your
+ * orgs should narrow the search, not break it — the account's own repositories
+ * are still there, and they are what most searches are looking for.
+ */
+let orgCache: { at: number; orgs: string[] } | undefined;
+const ORG_TTL_MS = 5 * 60_000;
+
+export function clearOrgCache(): void {
+  orgCache = undefined;
+}
+
+/**
+ * One owner's repositories, remembered for a minute.
+ *
+ * A search runs one of these per organisation, and this account is in
+ * sixteen — so every keystroke was seventeen `gh` calls returning the same
+ * lists. Caching them turns a search into a filter over what is already here,
+ * which is the difference between a list that redraws as you type and one that
+ * flickers.
+ */
+const listCache = new Map<string, { at: number; rows: RawRepo[] }>();
+const LIST_TTL_MS = 60_000;
+
+export function clearRepoListCache(): void {
+  listCache.clear();
+}
+
+async function listOwner(owner: string, now: number): Promise<RawRepo[]> {
+  const key = owner || '@me';
+  const hit = listCache.get(key);
+  if (hit && now - hit.at < LIST_TTL_MS) return hit.rows;
+
+  const argv = owner
+    ? ['repo', 'list', owner, '--limit', '200', '--json', REPO_FIELDS]
+    : ['repo', 'list', '--limit', '200', '--json', REPO_FIELDS];
+  const r = await run(argv, { timeoutMs: 45_000 });
+  if (!r.ok) throw new Error((r.stderr || r.failure || '').trim() || 'gh could not list repositories.');
+  let rows: RawRepo[];
+  try {
+    rows = JSON.parse(r.stdout) as RawRepo[];
+  } catch {
+    rows = [];
+  }
+  listCache.set(key, { at: now, rows });
+  return rows;
+}
+
+export async function myOrgs(now = Date.now()): Promise<string[]> {
+  if (orgCache && now - orgCache.at < ORG_TTL_MS) return orgCache.orgs;
+  const r = await run(['api', 'user/orgs', '--jq', '.[].login'], { timeoutMs: 20_000 });
+  const orgs = r.ok
+    ? r.stdout.split(/\r?\n/).map(x => x.trim()).filter(Boolean)
+    : [];
+  orgCache = { at: now, orgs };
+  return orgs;
+}
+
+/**
+ * Search the repositories this account is actually part of.
+ *
+ * **Yours and your organisations', and nothing else.** This used to also run
+ * `gh search repos`, which searches the whole of GitHub — so typing "ze"
+ * returned `apache/zeppelin`, `zed-industries/zed` and
+ * `zephyrproject-rtos/zephyr`, none of which the reader has anything to do
+ * with, and they crowded out the account's own `Sorting-Visualizer` because
+ * the sort is by how recently something was pushed and a famous repository is
+ * always being pushed to.
+ *
+ * The box above the results has always said "anything `gh repo list` can see,
+ * including private and organisation repos". Now that is what it does.
+ *
+ * `gh repo list` alone is the *user's* repositories — org membership does not
+ * come with it — so the orgs are enumerated and listed too. A query naming an
+ * owner skips all of that and lists just that owner, which is the one case
+ * where somebody is deliberately looking outside their own account.
  */
 export async function searchRepos(
   query: string,
@@ -194,34 +256,43 @@ export async function searchRepos(
   if (!q) return { repos: [], commands: [], matched: 0 };
   const limit = opts.limit ?? 20;
 
-  const args: string[][] = [];
+  const now = Date.now();
   const slash = q.indexOf('/');
-  if (slash > 0) {
-    /* `acme/ord` — list the owner and filter by the rest, which is the only way
-       to see that owner's private repositories. */
-    args.push(['repo', 'list', q.slice(0, slash), '--limit', '100', '--json', REPO_FIELDS]);
-  } else {
-    args.push(['repo', 'list', '--limit', '100', '--json', REPO_FIELDS]);
-    args.push(['search', 'repos', q, '--limit', String(limit), '--json', SEARCH_FIELDS]);
-  }
+  /*
+    Which owners to look through — the account itself, and every organisation
+    it belongs to. `gh repo list` with no owner is the user's own repositories
+    only, so without the orgs a member of `acme` could not find `acme/orders`
+    by typing "orders".
+
+    An owner-qualified query skips all of it and lists that owner alone, which
+    is the one case where somebody is deliberately looking outside their
+    account.
+  */
+  const owners = slash > 0 ? [q.slice(0, slash)] : ['', ...await myOrgs(now)];
 
   const term = (slash > 0 ? q.slice(slash + 1) : q).toLowerCase();
   const seen = new Set<string>();
   const out: RepoSummary[] = [];
   let firstError = '';
 
-  for (const a of args) {
-    const r = await run(a, { timeoutMs: 45_000 });
-    if (!r.ok) {
-      if (!firstError) firstError = (r.stderr || r.failure || '').trim();
-      continue;
-    }
-    let rows: RawRepo[];
+  /*
+    In parallel, and cached.
+
+    Sixteen organisations meant sixteen round trips in series on every
+    keystroke — several seconds of list arriving in pieces, which is what the
+    flicker was. They run together now, and the second search inside a minute
+    runs none of them.
+  */
+  const lists = await Promise.all(owners.map(async o => {
     try {
-      rows = JSON.parse(r.stdout) as RawRepo[];
-    } catch {
-      continue;
+      return await listOwner(o, now);
+    } catch (err) {
+      if (!firstError) firstError = (err as Error).message;
+      return [] as RawRepo[];
     }
+  }));
+
+  for (const rows of lists) {
     for (const row of rows) {
       const s = toSummary(row);
       if (!s) continue;
@@ -248,7 +319,9 @@ export async function searchRepos(
   /* What actually ran, for the line under the results. A search that shows its
      own command is a search somebody can repeat in a terminal when the answer
      surprises them. */
-  const commands = args.map(a => `gh ${a.join(' ')}`);
+  const commands = owners.map(o => (o
+    ? `gh repo list ${o} --limit 200 --json ${REPO_FIELDS}`
+    : `gh repo list --limit 200 --json ${REPO_FIELDS}`));
 
   if (counted.length === 0 && firstError) {
     return { repos: [], error: firstError, commands, matched: 0 };
