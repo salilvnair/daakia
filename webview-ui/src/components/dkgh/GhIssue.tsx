@@ -37,7 +37,9 @@ import { useEditFlow } from './edit-flow';
 import { GhRelations, useRelations } from './GhRelations';
 import { GhCopyButton } from './GhCopyButton';
 import { GhClose } from './GhClose';
-import type { ProjectField } from './project-store';
+import { GhDetails } from './GhDetails';
+import type { ProjectBoard, ProjectField } from './project-store';
+import type { RepoMeta } from './types';
 import type { BoardIssue, ProposedDimension } from './board-types';
 
 interface Detail {
@@ -90,7 +92,8 @@ const STATE_CLASS: Record<string, string> = {
 };
 
 export function GhIssue({
-  repo, issue, dimensions, closed, all, end, onOpen, onBack, onWrote,
+  repo, issue, dimensions, closed, all, end, meta, project, writingProject,
+  onWriteProject, onOpen, onBack, onWrote,
 }: {
   repo: string;
   issue: BoardIssue;
@@ -101,6 +104,13 @@ export function GhIssue({
   all: BoardIssue[];
   /** The Project's target-date field — where a blocker's ETA lives. */
   end?: ProjectField;
+  /** The repository's labels, assignable people and milestones — the pickers. */
+  meta?: RepoMeta;
+  /** The linked Project, whose single-selects are the rest of the rail. */
+  project?: ProjectBoard | null;
+  /** Which Project field is being written right now, if any. */
+  writingProject?: string;
+  onWriteProject?: (field: ProjectField, value: string, optionId?: string) => void;
   /** Follow a relationship to the issue on the other end of it. */
   onOpen: (n: number) => void;
   onBack: () => void;
@@ -119,6 +129,14 @@ export function GhIssue({
   const [wrote, setWrote] = useState(0);
   /** 14D — what this issue is attached to. A third call, and the cheapest. */
   const relations = useRelations(repo, issue.number, wrote);
+
+  /* The field names the rail above already draws with a picker. */
+  const projectOwns = useMemo(
+    () => new Set((project?.fields ?? [])
+      .filter(f => f.dataType === 'SINGLE_SELECT')
+      .map(f => f.name.toLowerCase())),
+    [project],
+  );
 
   /*
     This page's own write flow.
@@ -421,33 +439,40 @@ export function GhIssue({
           <div className="right" style={{ overflowY: 'auto' }}>
             <div className="paneh"><Ico name="tag" />Details</div>
 
-            <Msec label="Assignees">
-              {issue.assignees.length
-                ? issue.assignees.map(a => (
-                    <span key={a} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                      <span className={avClass(a)}>{a[0].toUpperCase()}</span>{a}
-                    </span>
-                  ))
-                : undefined}
-            </Msec>
+            {/*
+              Assignees, labels, the Project's fields and the milestone — each
+              behind a gear, the way github.com does it. Everything below this
+              is a fact about the issue rather than a field on it, and stays a
+              row you read.
+            */}
+            <GhDetails
+              repo={repo}
+              issue={issue}
+              meta={meta}
+              project={project}
+              dimensions={dimensions}
+              flow={flow}
+              writing={writingProject}
+              onWriteProject={onWriteProject}
+            />
 
-            <Msec label="Labels">
-              {issue.labels.length
-                ? issue.labels.map(l => (
-                    <span key={l.name} className="lbldot">
-                      <b style={{ background: `#${l.color}` }} />{l.name}
-                    </span>
-                  ))
-                : undefined}
-            </Msec>
+            {/*
+              Read out of the body, not set from here: a dimension lives in the
+              issue's markdown under its own heading, and editing it is editing
+              the body.
 
-            {Object.entries(issue.dimensions).filter(([, v]) => v).map(([field, value]) => (
-              <Msec key={field} label={cap(field)}>
-                <Dim field={field} value={value} dimensions={dimensions} />
-              </Msec>
-            ))}
-
-            <Msec label="Milestone">{issue.milestone || undefined}</Msec>
+              The Project's fields are filtered out because `withProject` merges
+              them into `dimensions` for the board's sake — without this, Status
+              appeared twice on this page, once with a gear and once without,
+              which reads as two different Statuses.
+            */}
+            {Object.entries(issue.dimensions)
+              .filter(([field, v]) => v && !projectOwns.has(field.toLowerCase()))
+              .map(([field, value]) => (
+                <Msec key={field} label={cap(field)}>
+                  <Dim field={field} value={value} dimensions={dimensions} />
+                </Msec>
+              ))}
 
             <Msec label="Age · quiet">
               {`${issue.ageDays} day${issue.ageDays === 1 ? '' : 's'} old · `

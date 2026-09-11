@@ -94,3 +94,31 @@ describe('fetchTimeline', () => {
     expect(t.error).toMatch(/not JSON/);
   });
 });
+
+describe('Projects v2', () => {
+  /*
+    The events every repository actually produces now, and the reason the
+    issue page used to end on "2 more events GitHub sent that dkgh does not
+    know how to word". REST sends these with no payload — no project, no
+    column, no value — so they are worded without the detail rather than
+    counted as unknown.
+  */
+  it.each([
+    ['added_to_project_v2', 'added this to a project'],
+    ['removed_from_project_v2', 'removed this from a project'],
+    ['project_v2_item_status_changed', 'moved this in a project'],
+    ['project_v2_item_reordered', 'reordered this in a project'],
+  ])('words %s', async (event, text) => {
+    answers([{ event, actor: { login: 'salilvnair' }, created_at: '2026-09-08T23:10:52Z' }]);
+    const t = await fetchTimeline('acme/app', 1);
+    expect(t.events).toHaveLength(1);
+    expect(t.events[0]).toMatchObject({ kind: 'project', actor: 'salilvnair', text });
+    expect(t.skipped).toBe(0);
+  });
+
+  it('claims no value, because REST sends none', async () => {
+    answers([{ event: 'project_v2_item_status_changed', created_at: '2026-09-08T23:10:52Z' }]);
+    const t = await fetchTimeline('acme/app', 1);
+    expect(t.events[0].value).toBeUndefined();
+  });
+});

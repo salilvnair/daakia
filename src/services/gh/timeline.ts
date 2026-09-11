@@ -105,6 +105,31 @@ function word(raw: RawEvent): TimelineEvent | undefined {
     case 'removed_from_project':
       return { ...base, kind: 'project', text: 'removed this from the project' };
 
+    /*
+      Projects v2, which is the one every repository actually uses now.
+
+      These are different events from the classic ones above, and they arrive
+      with **no payload at all** — REST sends the type, the actor and the time,
+      and nothing else. No project, no column, no value. GitHub's own issue page
+      fills those in from GraphQL.
+
+      So they are worded without the detail rather than left out. "moved this in
+      a project" is less than github.com says and is true; counting them as
+      events dkgh cannot word was worse, because two lines of real history
+      turned into a sentence apologising for itself.
+
+      Naming the project would mean a second call per issue to say something the
+      right-hand rail is already showing.
+    */
+    case 'added_to_project_v2':
+      return { ...base, kind: 'project', text: 'added this to a project' };
+    case 'removed_from_project_v2':
+      return { ...base, kind: 'project', text: 'removed this from a project' };
+    case 'project_v2_item_status_changed':
+      return { ...base, kind: 'project', text: 'moved this in a project' };
+    case 'project_v2_item_reordered':
+      return { ...base, kind: 'project', text: 'reordered this in a project' };
+
     case 'renamed':
       return { ...base, kind: 'rename', text: 'renamed this to', value: raw.rename?.to };
 

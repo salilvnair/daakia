@@ -991,6 +991,16 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
         closed={all.filter(i => i.state === 'CLOSED')}
         all={all}
         end={endField}
+        /* The pickers, and the Project write path — the same one the columns
+           board's drag uses, so a Status set here and a Status dragged there
+           are one call. */
+        meta={meta}
+        project={project}
+        writingProject={writing.get(viewing.number)?.split(' = ')[0]}
+        onWriteProject={(field, value, optionId) => {
+          const row = all.find(i => i.number === viewing.number);
+          if (row) writeProject(row, field, value, optionId);
+        }}
         onOpen={n => setViewing(all.find(i => i.number === n) ?? viewing)}
         onBack={() => { setViewing(undefined); setSection('board'); }}
         onWrote={refresh}

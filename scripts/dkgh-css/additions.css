@@ -1030,3 +1030,85 @@
   padding: 0 10.8px;
   transition: color 120ms, background 120ms;
 }
+
+/*
+  ── The metadata picker, as github.com draws it ──
+
+  A panel under the gear: a heading, a filter box, a list of checkbox rows with
+  a description under each name, and a divider between what is on the issue and
+  what is not.
+
+  It is `position: absolute` inside its section rather than a portal, because a
+  portal would need its own copy of the palette (see `Dk`) and would have to
+  re-derive a position that CSS already knows. The trade is that the rail must
+  not clip it — the rail's own `overflow` is set for that.
+*/
+.dkgh .ghpick {
+  position: absolute; z-index: 30; top: 100%; right: 0; left: -10px;
+  min-width: 268px; max-width: 340px;
+  background: var(--dk-raised);
+  border: 1px solid var(--dk-border);
+  border-radius: 9.6px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
+  overflow: hidden;
+  animation: dkgh-drop 120ms ease;
+}
+@keyframes dkgh-drop {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+.dkgh .ghpick-h {
+  padding: 9.6px 12px; font-size: 12.6px; font-weight: 600; color: var(--dk-text);
+  border-bottom: 1px solid var(--dk-border);
+}
+.dkgh .ghpick-f {
+  display: flex; align-items: center; gap: 7.2px;
+  padding: 8.4px 12px; border-bottom: 1px solid var(--dk-border);
+}
+.dkgh .ghpick-f svg { width: 13.2px; height: 13.2px; color: var(--dk-faint); }
+.dkgh .ghpick-f input {
+  flex: 1; min-width: 0; background: var(--dk-panel);
+  border: 1px solid var(--dk-border); border-radius: 6px;
+  padding: 4.8px 8.4px; font-family: inherit; font-size: 12.6px; color: var(--dk-text);
+  outline: none; transition: border-color 110ms ease, box-shadow 110ms ease;
+}
+.dkgh .ghpick-f input:focus {
+  border-color: var(--dk-gh);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dk-gh) 16%, transparent);
+}
+.dkgh .ghpick-l { max-height: 300px; overflow-y: auto; padding: 4.8px 0; }
+.dkgh .ghpick-e { padding: 10.8px 12px; font-size: 12px; color: var(--dk-faint); }
+.dkgh .ghpick-s { height: 1px; background: var(--dk-border); margin: 4.8px 0; }
+.dkgh .ghpick-r {
+  display: flex; align-items: flex-start; gap: 8.4px; width: 100%;
+  padding: 6px 12px; background: transparent; border: none; cursor: pointer;
+  text-align: left; color: var(--dk-text); font-size: 12.6px;
+  transition: background 110ms ease;
+}
+.dkgh .ghpick-r:hover { background: var(--dk-hover); }
+.dkgh .ghpick-r.on { background: color-mix(in srgb, var(--dk-gh) 10%, transparent); }
+.dkgh .ghpick-r .bx { margin-top: 1.2px; }
+/* `.sw` takes its size from the mock's `.fct .sw`, which does not match in
+   here — without this the dot is a zero-width nothing. */
+.dkgh .ghpick-r .sw {
+  width: 9.6px; height: 9.6px; border-radius: 50%; flex-shrink: 0; margin-top: 4.2px;
+}
+.dkgh .ghpick-r .av { margin-top: 0; }
+.dkgh .ghpick-t { display: flex; flex-direction: column; gap: 1.2px; min-width: 0; }
+.dkgh .ghpick-t b { font-weight: 600; color: var(--dk-text); }
+.dkgh .ghpick-t i { font-style: normal; font-size: 11.4px; color: var(--dk-muted); }
+.dkgh .ghpick-b {
+  padding: 8.4px 12px; border-top: 1px solid var(--dk-border);
+  font-size: 12px; text-align: center;
+}
+
+/*
+  The rail has to let the panel out.
+
+  `.meta` scrolls its own contents, and a scrolling box clips anything
+  absolutely positioned inside it. Vertical scrolling is what the rail needs
+  and horizontal overflow is what the panel needs, and `overflow-x: visible`
+  with `overflow-y: auto` is not a combination CSS honours — so the rail keeps
+  its scroll and the panel is kept inside its width instead.
+*/
+.dkgh .meta { overflow-x: clip; }
