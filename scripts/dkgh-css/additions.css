@@ -1112,3 +1112,98 @@
   its scroll and the panel is kept inside its width instead.
 */
 .dkgh .meta { overflow-x: clip; }
+
+/*
+  ── 08E, as a sheet ──
+
+  "Why am I seeing these?" has a short answer — a count, a sentence, and one
+  line per filter — and it is an answer about the rows, so it belongs under
+  them. As a 268px rail it was three lines at the top of a full-height column
+  with six hundred pixels of nothing beneath.
+
+  It takes the height it needs and no more, stopping a little under half the
+  board so what it is explaining stays on screen behind it.
+*/
+.dkgh .whysheet {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 25;
+  max-height: 46%;
+  overflow-y: auto;
+  padding: 12px 0 14px;
+  background: var(--dk-surface);
+  border-top: 1px solid var(--dk-border);
+  box-shadow: 0 -14px 34px rgba(0, 0, 0, .38);
+  animation: dkgh-rise 140ms ease;
+}
+@keyframes dkgh-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+/*
+  ── The export preview, at its real width ──
+
+  The mock's `.sheet` fixes seven tracks, because the figure it was drawn for
+  has six columns. A real export has as many as you tick, and cutting the
+  preview at six with a line saying so is a preview that does not show what is
+  going to be written.
+
+  So the row's tracks come from a variable the screen sets, and the whole sheet
+  scrolls sideways inside its box. The bar is hidden: under a five-row table it
+  is more furniture than the table, and a wheel or a trackpad reaches it
+  anyway.
+*/
+.dkgh .sheetw { overflow-x: auto; scrollbar-width: none; }
+.dkgh .sheetw::-webkit-scrollbar { display: none; }
+.dkgh .sheetw .sheet { min-width: max-content; }
+.dkgh .sheet .sr { grid-template-columns: var(--sheet-cols, 31.2px 1.6fr 1fr .8fr .8fr .8fr .8fr); }
+
+/*
+  ── Moving a column ──
+
+  The order the list is in is the order the file is written in, so the ticked
+  ones are shown in that order with a way to change it. The arrows only appear
+  under the pointer: a rail of eighteen rows with two arrows on each is a rail
+  of thirty-six controls.
+*/
+.dkgh .colmove { display: inline-flex; gap: 1.2px; margin-left: auto; opacity: 0; }
+.dkgh .fct:hover .colmove { opacity: 1; }
+.dkgh .colmove button {
+  display: grid; place-items: center; width: 18px; height: 18px;
+  border-radius: 4.8px; border: none; background: transparent; color: var(--dk-faint);
+  cursor: pointer; transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .colmove button:hover:not(:disabled) { color: var(--dk-text); background: var(--dk-hover); }
+.dkgh .colmove button:disabled { opacity: .25; cursor: default; }
+.dkgh .colmove svg { width: 10px; height: 10px; }
+
+/*
+  ── The `#` list ──
+
+  github.com's shape: a number, a title, and the state when it is closed.
+  Positioned at the caret, so it appears where you are typing rather than in a
+  corner you have to look for.
+*/
+.dkgh .ghmention {
+  position: absolute; z-index: 40; min-width: 264px; max-width: 420px;
+  background: var(--dk-raised);
+  border: 1px solid var(--dk-border);
+  border-radius: 8.4px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .45);
+  overflow: hidden auto; max-height: 240px;
+  animation: dkgh-drop 110ms ease;
+}
+.dkgh .ghmention-r {
+  display: flex; align-items: baseline; gap: 8.4px; width: 100%;
+  padding: 6px 10.8px; background: transparent; border: none; cursor: pointer;
+  text-align: left; font-size: 12.6px; color: var(--dk-text);
+  transition: background 110ms ease;
+}
+.dkgh .ghmention-r:hover,
+.dkgh .ghmention-r.on { background: color-mix(in srgb, var(--dk-gh) 14%, transparent); }
+.dkgh .ghmention-n {
+  font-family: var(--mono); font-size: 11.4px; color: var(--dk-faint); flex-shrink: 0;
+}
+.dkgh .ghmention-r.on .ghmention-n { color: var(--dk-gh); }
+.dkgh .ghmention-t {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;
+}

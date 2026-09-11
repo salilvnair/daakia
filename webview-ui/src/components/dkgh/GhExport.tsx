@@ -64,6 +64,7 @@ export function GhExport({
   });
   const [format, setFormat] = useState<Format>('xlsx');
   const [perGroup, setPerGroup] = useState(true);
+  const [frozen, setFrozen] = useState(true);
   const [saving, setSaving] = useState(false);
   const [said, setSaid] = useState('');
   /*
@@ -100,6 +101,26 @@ export function GhExport({
     prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
   ));
 
+  /** One place earlier or later, which is one column left or right in the file. */
+  const move = (key: string, by: -1 | 1) => setChosen(prev => {
+    const at = prev.indexOf(key);
+    const to = at + by;
+    if (at < 0 || to < 0 || to >= prev.length) return prev;
+    const next = [...prev];
+    [next[at], next[to]] = [next[to], next[at]];
+    return next;
+  });
+
+  /* The ticked ones in their own order, then everything else in the
+     catalogue's. */
+  const ordered = useMemo(() => {
+    const byKey = new Map(all.map(c => [c.key, c]));
+    return [
+      ...chosen.map(k => byKey.get(k)).filter(Boolean) as typeof all,
+      ...all.filter(c => !chosen.includes(c.key)),
+    ];
+  }, [all, chosen]);
+
   const text = () => (format === 'csv' ? toCsv(source, picked) : toMarkdown(source, picked));
 
   const save = () => {
@@ -121,7 +142,7 @@ export function GhExport({
         type: 'dkgh:export',
         filename: name,
         sheets: workbook(source, picked, format === 'xlsx' && perGroup ? groupBy : undefined,
-                         dimensions),
+                         dimensions, frozen),
       });
     } else {
       postMsg({ type: 'dkgh:export', filename: name, text: text() });
@@ -139,7 +160,10 @@ export function GhExport({
 
   /* Six columns is what the mock's sheet draws, and it is enough to see that
      the file is the view. The rest is counted rather than squeezed in. */
-  const preview = picked.slice(0, 6);
+  /* Every column the file will have. It scrolls sideways rather than being
+     cut at six with a sentence apologising for it — the point of a preview is
+     to show what is going to be written. */
+  const preview = picked;
   const previewRows = (book[0]?.rows ?? []).slice(0, 5);
   const schedule = schedules.find(s => s.repo === repo && s.view === view);
 
@@ -243,8 +267,18 @@ export function GhExport({
 
           <div className="facet">
             <div className="fh">Columns<span className="n">{chosen.length} of {all.length}</span></div>
+            {/*
+              Ticked first, in the order the file will be written in, and
+              movable. The list *is* the column order — reading it top to
+              bottom is reading the spreadsheet left to right, which is the
+              only arrangement that needs no explaining.
+
+              The rest keep the catalogue's own order underneath, because a
+              list of things you have not chosen has no order of yours to
+              respect.
+            */}
             <div className="cols" style={{ padding: '0 5px', display: 'block' }}>
-              {all.map(c => (
+              {ordered.map(c => (
                 <div
                   key={c.key}
                   className={`fct${chosen.includes(c.key) ? ' on' : ''}`}
@@ -254,6 +288,28 @@ export function GhExport({
                 >
                   <span className="bx">{chosen.includes(c.key) && <Ico name="check" />}</span>
                   {c.label}
+                  {chosen.includes(c.key) && (
+                    <span className="colmove" onClick={e => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        title="Earlier in the file"
+                        aria-label={`Move ${c.label} earlier`}
+                        disabled={chosen.indexOf(c.key) === 0}
+                        onClick={() => move(c.key, -1)}
+                      >
+                        <Ico name="chev" style={{ transform: 'rotate(180deg)' }} />
+                      </button>
+                      <button
+                        type="button"
+                        title="Later in the file"
+                        aria-label={`Move ${c.label} later`}
+                        disabled={chosen.indexOf(c.key) === chosen.length - 1}
+                        onClick={() => move(c.key, 1)}
+                      >
+                        <Ico name="chev" />
+                      </button>
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
@@ -306,9 +362,15 @@ export function GhExport({
                   <span className="bx">{perGroup && groupBy && <Ico name="check" />}</span>
                   One sheet per {groupBy ?? 'group'}
                 </div>
-                <div className="fct on" style={{ padding: '3px 9px', cursor: 'default' }}
-                     title="A frozen header and the filter row, always — a report is read by scrolling">
-                  <span className="bx"><Ico name="check" /></span>
+                {/* It used to be drawn ticked and refuse to untick, with the
+                    reason in a tooltip nobody opens. Somebody feeding the file
+                    to a script wants neither the pane nor the filter, so it is
+                    a real choice now. */}
+                <div className={`fct${frozen ? ' on' : ''}`}
+                     style={{ padding: '3px 9px', cursor: 'pointer' }}
+                     title="A frozen header and a filter on every column — how a report is read"
+                     onClick={() => setFrozen(v => !v)}>
+                  <span className="bx">{frozen && <Ico name="check" />}</span>
                   Frozen header and filters
                 </div>
               </div>
@@ -318,32 +380,31 @@ export function GhExport({
               <div className="fl" style={{ marginBottom: 7 }}>
                 Preview — {format === 'xlsx' ? `sheet “${book[0]?.name ?? 'Issues'}”` : 'first rows'}
               </div>
-              <div className="sheet">
-                <div className="sr hd">
-                  <span className="gut" />
-                  {preview.map(c => <span key={c.key}>{c.label}</span>)}
-                  {Array.from({ length: Math.max(0, 6 - preview.length) })
-                    .map((_, i) => <span key={`pad-${i}`} />)}
-                </div>
-                {previewRows.map((r, at) => {
-                  const row = cells(r, preview);
-                  return (
+              {/* Scrolls, with no visible bar — the wheel and a trackpad both
+                  reach it, and a scrollbar under a five-row table is more
+                  furniture than the table. */}
+              <div className="sheetw">
+                <div
+                  className="sheet"
+                  /* The track list lives on the rows, which are the grids —
+                     `.sr` reads it from here so one number drives them all. */
+                  style={{
+                    ['--sheet-cols' as string]:
+                      `34px repeat(${preview.length}, minmax(104px, 1fr))`,
+                  }}
+                >
+                  <div className="sr hd">
+                    <span className="gut" />
+                    {preview.map(c => <span key={c.key}>{c.label}</span>)}
+                  </div>
+                  {previewRows.map((r, at) => (
                     <div className="sr" key={r.number}>
                       <span className="gut">{at + 1}</span>
-                      {row.map((v, i) => <span key={preview[i].key}>{v}</span>)}
-                      {Array.from({ length: Math.max(0, 6 - row.length) })
-                        .map((_, i) => <span key={`pad-${i}`} />)}
+                      {cells(r, preview).map((v, i) => <span key={preview[i].key}>{v}</span>)}
                     </div>
-                  );
-                })}
-              </div>
-              {picked.length > preview.length && (
-                <div className="sub" style={{ marginTop: 6 }}>
-                  {picked.length - preview.length} more column
-                  {picked.length - preview.length === 1 ? '' : 's'} are in the file — the preview
-                  shows six so the rows stay readable.
+                  ))}
                 </div>
-              )}
+              </div>
               {source.length === 0 && (
                 <div className="sub" style={{ marginTop: 6, color: 'var(--dk-amber)' }}>
                   Nothing is selected to write. The file would have a header and no rows.

@@ -132,3 +132,28 @@ describe('the workbook', () => {
     expect(workbookParts([])).toHaveLength(6);
   });
 });
+
+describe('the frozen header, as a choice', () => {
+  const sheet = {
+    name: 'Issues',
+    columns: [{ label: 'Number', type: 'number' as const }],
+    rows: [{ cells: [1] }],
+  };
+
+  it('freezes and filters by default — that is how a report is read', () => {
+    const xml = sheetXml(sheet);
+    expect(xml).toContain('state="frozen"');
+    expect(xml).toContain('<autoFilter');
+  });
+
+  it('does neither when the sheet says not to', () => {
+    const xml = sheetXml({ ...sheet, frozen: false });
+    expect(xml).not.toContain('state="frozen"');
+    expect(xml).not.toContain('<autoFilter');
+  });
+
+  it('still writes a well-formed sheetView with nothing in it', () => {
+    expect(sheetXml({ ...sheet, frozen: false }))
+      .toContain('<sheetViews><sheetView workbookViewId="0"></sheetView></sheetViews>');
+  });
+});

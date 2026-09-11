@@ -1195,6 +1195,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
           meta={meta}
           me={ctx.me}
           draft={draft}
+          issues={all}
           onDraft={setDraft}
           onReview={() => setSection('review')}
         />

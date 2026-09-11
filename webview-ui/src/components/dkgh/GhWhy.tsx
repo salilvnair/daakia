@@ -18,6 +18,7 @@
  */
 import { useState } from 'react';
 import { Ico } from './GhIcons';
+import { GhClose } from './GhClose';
 import { costOf, dropField, explain, type FilterState, type MatchContext } from './filter-model';
 import type { BoardIssue } from './board-types';
 
@@ -40,22 +41,24 @@ export function GhWhy({ all, shown, state, onChange, ctx, onClose }: {
   const costs = costOf(all, state, ctx);
   const worst = costs.reduce((a, b) => (b.removes > a.removes ? b : a), costs[0]);
 
-  return (
-    <div className="pane flex-shrink-0"
-         style={{
-           width: 268,
-           borderLeft: '1px solid var(--dk-border)',
-           padding: '10px 0 14px',
-           background: 'var(--dk-panel)',
-           overflowY: 'auto',
-         }}>
+  /*
+    A sheet across the foot of the board, not a column down its side.
 
-      <div className="fh">
+    As a rail it was a 268px column of mostly nothing: on a board with two
+    issues and one filter there are three short lines to say, and they sat at
+    the top of a full-height panel with six hundred pixels of empty under them.
+    The answer is short and it is about the rows, so it belongs under the rows
+    — and it is only ever open for as long as it takes to read.
+
+    It rises rather than appears, and it takes only the height it needs, up to
+    a little under half the board.
+  */
+  return (
+    <div className="whysheet">
+      <div className="fh" style={{ padding: '0 14px 8px' }}>
         <b style={{ color: 'var(--dk-text)' }}>{shown.length} of {all.length}</b> shown
         <span className="sp" style={{ flex: 1 }} />
-        <button type="button" className="btn" style={{ padding: '2px 8px' }} onClick={onClose}>
-          Close
-        </button>
+        <GhClose onClick={onClose} title="Done reading" />
       </div>
 
       {excluded.length === 0 ? (

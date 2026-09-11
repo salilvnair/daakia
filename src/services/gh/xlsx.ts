@@ -48,6 +48,13 @@ export interface Sheet {
   name: string;
   columns: SheetColumn[];
   rows: SheetRow[];
+  /**
+   * A frozen header row and a filter on every column.
+   *
+   * On unless it is explicitly off, so a caller that does not care gets the
+   * readable file. Off is for a sheet something else is going to parse.
+   */
+  frozen?: boolean;
 }
 
 export interface Part { name: string; content: string }
@@ -135,8 +142,16 @@ function inline(ref: string, value: string, style: number): string {
     + `<is><t xml:space="preserve">${xmlText(value)}</t></is></c>`;
 }
 
-/** One worksheet: frozen header, autofilter, column widths, then the rows. */
+/**
+ * One worksheet: column widths, a header row, then the rows.
+ *
+ * The frozen pane and the autofilter are on by default — a report is read by
+ * scrolling, and row two hundred is unreadable without them — but they are a
+ * choice rather than a fact. Somebody feeding the file to a script wants
+ * neither, and the export screen offers the tick because this honours it.
+ */
 export function sheetXml(sheet: Sheet): string {
+  const frozen = sheet.frozen !== false;
   const last = colName(Math.max(0, sheet.columns.length - 1));
   const cols = sheet.columns
     .map((c, at) => `<col min="${at + 1}" max="${at + 1}" width="${c.width ?? 16}" customWidth="1"/>`)
@@ -162,11 +177,13 @@ export function sheetXml(sheet: Sheet): string {
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
     + '<sheetViews><sheetView workbookViewId="0">'
-    + '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>'
+    + (frozen
+      ? '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>'
+      : '')
     + '</sheetView></sheetViews>'
     + `<cols>${cols}</cols>`
     + `<sheetData>${header}${body}</sheetData>`
-    + `<autoFilter ref="A1:${last}${sheet.rows.length + 1}"/>`
+    + (frozen ? `<autoFilter ref="A1:${last}${sheet.rows.length + 1}"/>` : '')
     + '</worksheet>';
 }
 

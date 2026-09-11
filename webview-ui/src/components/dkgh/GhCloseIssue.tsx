@@ -29,16 +29,18 @@ import type { EditRequest } from './edit-flow';
 /** How many quick reasons are worth offering before it is a list, not a row. */
 const MOST = 6;
 
-export function GhCloseIssue({ repo, issue, closed, onCancel, onClose }: {
+export function GhCloseIssue({ repo, issue, closed, draft, onCancel, onClose }: {
   repo: string;
   issue: BoardIssue;
   /** The closed issues the board has read, for the reasons below. */
   closed: BoardIssue[];
+  /** What was already typed in the reply box, when this was opened from it. */
+  draft?: string;
   onCancel: () => void;
   onClose: (request: EditRequest) => void;
 }) {
   const [reason, setReason] = useState<'completed' | 'not planned'>('completed');
-  const [comment, setComment] = useState('');
+  const [comment, setComment] = useState(draft ?? '');
   const [labels, setLabels] = useState<string[]>([]);
 
   /*
@@ -67,7 +69,10 @@ export function GhCloseIssue({ repo, issue, closed, onCancel, onClose }: {
     <ModalView
       open
       onClose={onCancel}
-      size="md"
+      /* `lg`, so the editor's toolbar and its Rich Text / Markdown switch sit
+         on one line. At `md` the switch wrapped underneath, which made the
+         toolbar look like two toolbars. */
+      size="lg"
       headerGradient
       headerColor={ACCENT}
       headerIcon={<Ico name="closed" />}

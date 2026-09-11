@@ -192,17 +192,6 @@ export function GhIssue({
 
       {/* Where you are, and the two things to do from here */}
       <div className="head">
-        {/*
-          A close, not a back.
-
-          There is nothing to go back *through* — this page is opened from one
-          board and closing it returns to that board, which is what a close
-          means and what an arrow only implies. It stays on the left because
-          the right-hand end of this header already has a button called "Close
-          issue", and two closes side by side meaning different things is worse
-          than an unusual position.
-        */}
-        <GhClose onClick={onBack} title="Back to the board" />
         <div className="repo">
           <Ico name="repo" />
           <span className="path" style={{ color: 'var(--dk-faint)' }}>{repo}</span>
@@ -213,22 +202,17 @@ export function GhIssue({
             ? <span className={`st ${STATE_CLASS[status] ?? 'st-todo'}`}><b />{cap(status)}</span>
             : <span className="st st-todo"><b />Open</span>}
         <span className="spacer" />
-        <button type="button" className="btn" onClick={() => openExternal(issue.url)}>
-          <Ico name="link" />Open on github.com
-        </button>
-        {issue.state === 'OPEN' ? (
-          <button type="button" className="btn ok" onClick={() => setClosing(true)}>
-            <Ico name="closed" />Close issue
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="btn"
-            onClick={() => flow.propose({ repo, numbers: [issue.number], state: 'reopen' })}
-          >
-            <Ico name="issue" />Reopen
-          </button>
-        )}
+        {/*
+          A close, and nothing else.
+
+          Closing the issue and closing the page used to sit side by side up
+          here meaning different things, which is why the page's own close was
+          an arrow on the far left instead. Both moved: the × is where every
+          other close in the tab is, and closing the *issue* went down to the
+          comment box — which is where github.com puts it, and where the
+          comment it belongs with is already being written.
+        */}
+        <GhClose onClick={onBack} title="Back to the board" />
       </div>
 
       <SplitPanelView
@@ -393,7 +377,7 @@ export function GhIssue({
                     obvious — typing a number links the issue.
                   */}
                   <span style={{ marginLeft: 'auto' }}>
-                    Type <b>#</b> and a number to link another issue
+                    Type <b>#</b> to link another issue
                   </span>
                 </div>
                 <div className="cb" style={{ padding: 0 }}>
@@ -405,25 +389,58 @@ export function GhIssue({
                     onChange={setDraft}
                     minHeight={84}
                     placeholder="Leave a comment…"
+                    issues={all}
                   />
                 </div>
-                {draft.trim() && (
-                  <div className="actions" style={{ margin: 0, padding: '0 12px 10px',
-                                                    justifyContent: 'flex-start' }}>
-                    <button
-                      type="button"
-                      className="btn go"
-                      onClick={() => flow.propose({
-                        repo, numbers: [issue.number], comment: draft,
-                      })}
-                    >
-                      <Ico name="cmt" />Comment
-                    </button>
+                {/*
+                  github.com's own footer: closing the issue lives with the
+                  comment, because the two are one thought. The button says
+                  which it will do — "Close with comment" when there is
+                  something in the box, "Close issue" when there is not — so
+                  nobody has to wonder whether their half-written sentence is
+                  about to be thrown away.
+
+                  Right-aligned and clear of the editor's border, with the
+                  primary rightmost the way every other footer here reads.
+                */}
+                <div className="actions" style={{ margin: 0, padding: '12px 12px 12px',
+                                                  justifyContent: 'flex-end' }}>
+                  {draft.trim() && (
                     <button type="button" className="btn" onClick={() => setDraft('')}>
                       Discard
                     </button>
-                  </div>
-                )}
+                  )}
+                  {issue.state === 'OPEN' ? (
+                    <button type="button" className="btn ok" onClick={() => setClosing(true)}>
+                      <Ico name="closed" />
+                      {draft.trim() ? 'Close with comment' : 'Close issue'}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => flow.propose({
+                        repo,
+                        numbers: [issue.number],
+                        state: 'reopen',
+                        ...(draft.trim() ? { comment: draft } : {}),
+                      })}
+                    >
+                      <Ico name="issue" />
+                      {draft.trim() ? 'Reopen with comment' : 'Reopen'}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="btn go"
+                    disabled={!draft.trim()}
+                    onClick={() => flow.propose({
+                      repo, numbers: [issue.number], comment: draft,
+                    })}
+                  >
+                    <Ico name="cmt" />Comment
+                  </button>
+                </div>
               </div>
 
               {detail?.error && (
@@ -488,6 +505,9 @@ export function GhIssue({
 
             <div style={{ padding: '10px 12px', marginTop: 'auto', display: 'flex',
                           flexDirection: 'column', gap: 6 }}>
+              <button type="button" className="btn" onClick={() => openExternal(issue.url)}>
+                <Ico name="link" />Open on github.com
+              </button>
               <GhCopyButton text={() => asMarkdown(issue, detail)}>
                 Copy as Markdown
               </GhCopyButton>
@@ -508,7 +528,11 @@ export function GhIssue({
           issue={issue}
           closed={closed}
           onCancel={() => setClosing(false)}
-          onClose={request => { setClosing(false); flow.propose(request); }}
+          /* Whatever is in the reply box is the comment this close carries —
+             the button said "Close with comment", and losing it here would
+             make that a lie. */
+          draft={draft}
+          onClose={request => { setClosing(false); setDraft(''); flow.propose(request); }}
         />
       )}
     </div>

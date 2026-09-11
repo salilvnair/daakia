@@ -26,11 +26,14 @@
  * does not take the prop, and stealing focus into it from out here would fight
  * whatever it does on mount.
  */
+import { useRef } from 'react';
 import { MarkdownEditorView } from '@salilvnair/dui';
+import { GhMention, completed, readCaret } from './GhMention';
 import { ACCENT } from './types';
+import type { BoardIssue } from './board-types';
 
 export function GhMarkdown({
-  value, onChange, placeholder, minHeight = 120, onPaste, right, id,
+  value, onChange, placeholder, minHeight = 120, onPaste, right, id, issues,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -41,13 +44,18 @@ export function GhMarkdown({
   /** Anything the bar should carry on its right — a word count, a hint. */
   right?: React.ReactNode;
   id?: string;
+  /** The board, so `#` offers the issues instead of asking for a number. */
+  issues?: BoardIssue[];
 }) {
+  const host = useRef<HTMLDivElement>(null);
+
   return (
     <div
       id={id}
+      ref={host}
       className="dkgh-mde"
       onPaste={onPaste}
-      style={{ '--dkgh-mde-min': `${minHeight}px` } as React.CSSProperties}
+      style={{ '--dkgh-mde-min': `${minHeight}px`, position: 'relative' } as React.CSSProperties}
     >
       <MarkdownEditorView
         value={value}
@@ -58,6 +66,39 @@ export function GhMarkdown({
         accentColor={ACCENT}
         toolbarRight={right}
       />
+
+      {/*
+        `#` offers the issues rather than asking for a number nobody knows.
+        The board is already in memory, so it costs no call.
+      */}
+      {issues && issues.length > 0 && (
+        <GhMention
+          host={host}
+          issues={issues}
+          onPick={(hit, node) => {
+            const { text, caret } = readCaret(node);
+            const next = completed(text, caret, hit);
+            if (node instanceof HTMLTextAreaElement) {
+              /* Through the native setter, so React's onChange fires and the
+                 editor's own state is the one that moved. */
+              const set = Object.getOwnPropertyDescriptor(
+                HTMLTextAreaElement.prototype, 'value',
+              )?.set;
+              set?.call(node, next.text);
+              node.dispatchEvent(new Event('input', { bubbles: true }));
+              node.setSelectionRange(next.caret, next.caret);
+            } else {
+              /* `insertText` keeps the contenteditable's undo stack, which
+                 replacing `textContent` would throw away. */
+              const query = text.slice(0, caret).split('#').pop() ?? '';
+              const sel = window.getSelection();
+              for (let i = 0; i <= query.length; i++) sel?.modify('extend', 'backward', 'character');
+              document.execCommand('insertText', false, `#${hit.number} `);
+            }
+            node.focus();
+          }}
+        />
+      )}
     </div>
   );
 }

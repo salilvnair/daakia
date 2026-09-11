@@ -239,10 +239,12 @@ export function workbook(
   columns: ExportColumn[],
   by: string | undefined,
   dimensions: ProposedDimension[],
+  frozen = true,
 ): { name: string; columns: { label: string; type: string; width: number }[];
-     rows: { cells: (string | number)[] }[] }[] {
+     rows: { cells: (string | number)[] }[]; frozen: boolean }[] {
   return sheets(rows, by, dimensions).map(s => ({
     name: s.name,
+    frozen,
     columns: columns.map(c => ({
       label: c.label,
       type: c.type,

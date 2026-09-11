@@ -58,12 +58,14 @@ const SIDEBAR: {
 ];
 
 export function GhCompose({
-  repo, forms, noTemplates, meta, me, draft, onDraft, onReview,
+  repo, forms, noTemplates, meta, me, draft, issues, onDraft, onReview,
 }: {
   repo: string;
   forms: IssueForm[];
   noTemplates: boolean;
   meta?: RepoMeta;
+  /** The board, so `#` in the body offers the issues it already holds. */
+  issues?: BoardIssue[];
   /** Whoever is signed in, so `assign yourself` has somebody to assign. */
   me?: string;
   /** Held by the tab, so leaving for the board and coming back keeps it. */
@@ -149,6 +151,7 @@ export function GhCompose({
               value={draft.description}
               onChange={description => patch({ description })}
               placeholder="Describe it in a sentence. You can write the whole thing here."
+              issues={issues}
             />
           </div>
 
