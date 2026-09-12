@@ -24,6 +24,8 @@ const { ai } = require('./ai');
 const { dk8s } = require('./dk8s');
 /* The issue board — see dkgh.js. */
 const { dkgh } = require('./dkgh');
+/* Collections, environments, history, mocks, devtools — see app.js. */
+const { app } = require('./app');
 
 // ── Monaco ──────────────────────────────────────────────────────────────────
 
@@ -337,28 +339,7 @@ const recipes = {
 
   // ── Mock server, end to end ───────────────────────────────────────────────
 
-  mockServerRun: {
-    async run(page, o = {}) {
-      const name = o.name || 'Orders API (demo)';
-      await openRail(page, 'Mock Server', 900);
-      await soft('start a new mock server', () => css(page, 'button[title="New mock server"]').first().click({ timeout: 4000 }));
-      await page.waitForTimeout(500);
-      const nameBox = field(page, 'Mock server name');
-      if (await nameBox.count()) {
-        await typeInto(page, 'the server name', nameBox, name, o.typeDelay || 40);
-        await act('create it', () => btn(page, 'Create').first().click({ timeout: 8000 }));
-        await page.waitForTimeout(900);
-      }
-      await act('start the server', () => btn(page, 'Start', false).first().click({ timeout: 8000 }));
-      /* The proof it really started: the button becomes Stop, and the app says
-         which port it took. */
-      await expect(page, 'a running server', btn(page, 'Stop', false), { timeout: 15000 });
-      await page.waitForTimeout(o.settleMs ?? 2200);
-    },
-    async verify(page) {
-      await expect(page, 'the Stop button of a running server', btn(page, 'Stop', false), { timeout: 6000 });
-    },
-  },
+  ...app,
 
   // ── dk8s ──────────────────────────────────────────────────────────────────
 
@@ -368,76 +349,6 @@ const recipes = {
 
   ...dkgh,
 
-  // ── The rest of the app ───────────────────────────────────────────────────
-
-  collections: {
-    async run(page, o = {}) {
-      await openRail(page, 'REST');
-      await openRail(page, 'Collections', 1400);
-      await expect(page, 'the collections tree', text(page, 'Collections', false), { timeout: 10000 });
-      /* Opening a folder shows what a collection actually holds, which is a
-         better thirty frames than a naming dialog. Creating one meant driving a
-         Save that lives in a different panel — three fragile steps for a less
-         interesting shot. */
-      await soft('expand a folder', () => css(page, 'button[title="Expand this folder and everything in it"]').first().click({ timeout: 4000 }));
-      await page.waitForTimeout(o.settleMs ?? 2000);
-    },
-    async verify(page) {
-      await expect(page, 'the collections panel', text(page, 'Collections', false), { timeout: 8000 });
-    },
-  },
-
-  historyShow: {
-    async run(page, o = {}) {
-      await sendRest(page, o.url || 'https://jsonplaceholder.typicode.com/todos/1');
-      await openRail(page, 'History', 1200);
-      await page.waitForTimeout(o.settleMs ?? 1400);
-    },
-    async verify(page) {
-      await expect(page, 'a history entry', text(page, 'todos', false), { timeout: 8000 });
-    },
-  },
-
-  environments: {
-    async run(page, o = {}) {
-      await openRail(page, 'REST');
-      await openRail(page, 'Environments', 1400);
-      await expect(page, 'the environments list', text(page, 'Environments', false), { timeout: 10000 });
-      await page.waitForTimeout(o.settleMs ?? 1800);
-    },
-    async verify(page) {
-      await expect(page, 'the environments panel', text(page, 'Environments', false), { timeout: 8000 });
-    },
-  },
-
-  devTools: {
-    async run(page, o = {}) {
-      await sendRest(page, o.url || 'https://jsonplaceholder.typicode.com/users/1');
-      await openRail(page, 'DevTools (Console / Timeline)', 900);
-      await soft('open the Network tab', () => btn(page, 'Network').first().click({ timeout: 4000 }));
-      await page.waitForTimeout(o.settleMs ?? 1800);
-    },
-    async verify(page) {
-      await expect(page, 'the DevTools panel', text(page, 'Network', false), { timeout: 8000 });
-    },
-  },
-
-  // ── Settings ──────────────────────────────────────────────────────────────
-
-  settings: {
-    async run(page, o = {}) {
-      const section = o.section;
-      await openRail(page, 'Settings', 1100);
-      if (section) {
-        await act(`open ${section}`, () => text(page, section).last().click({ timeout: 8000 }));
-        await page.waitForTimeout(1100);
-      }
-      await page.waitForTimeout(o.settleMs ?? 1200);
-    },
-    async verify(page, o = {}) {
-      if (o.expect) await expect(page, o.expect, text(page, o.expect, false), { timeout: 8000 });
-    },
-  },
 };
 
 module.exports = { recipes, typeCode, sendRest };
