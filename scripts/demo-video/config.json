@@ -159,6 +159,22 @@
       "warmupMs": 2500
     },
     {
+      "id": "dkgh_sections",
+      "label": "DkGH — Insights & Repo",
+      "recipe": "dkghSections",
+      "effect": "static",
+      "trimStartSec": 1.2,
+      "warmupMs": 2500
+    },
+    {
+      "id": "settings_dkgh",
+      "label": "Settings — GitHub CLI",
+      "recipe": "dkghSettings",
+      "effect": "static",
+      "trimStartSec": 1.2,
+      "warmupMs": 1800
+    },
+    {
       "id": "devtools",
       "label": "DevTools",
       "recipe": "devTools",

@@ -1429,6 +1429,10 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
           <button
             key={v.id}
             type="button"
+            /* Its id, the way the section buttons above carry theirs — the
+               labels here ("Table", "Columns") also appear in the filter and
+               group menus, so text is not a way to ask for one. */
+            data-view={v.id}
             className={`pill${view === v.id ? ' on' : ''}`}
             disabled={!v.ready}
             title={v.ready ? undefined : `${v.label} is not built yet`}

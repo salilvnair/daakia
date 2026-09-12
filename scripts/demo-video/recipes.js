@@ -22,6 +22,8 @@ const { protocols } = require('./protocols');
 const { ai } = require('./ai');
 /* The cluster console — see dk8s.js. */
 const { dk8s } = require('./dk8s');
+/* The issue board — see dkgh.js. */
+const { dkgh } = require('./dkgh');
 
 // ── Monaco ──────────────────────────────────────────────────────────────────
 
@@ -364,37 +366,7 @@ const recipes = {
 
   // ── dkgh ──────────────────────────────────────────────────────────────────
 
-  dkghBoard: {
-    async run(page, o = {}) {
-      await openRail(page, 'DkGH — Daakia GitHub', 2200);
-      await expect(page, 'the issue board', css(page, 'input[placeholder="Search issues"]'), { timeout: 20000 });
-      await act('switch to the Table view', () => btn(page, 'Table').first().click({ timeout: 8000 }));
-      await page.waitForTimeout(900);
-      await act('switch to Columns', () => btn(page, 'Columns').first().click({ timeout: 8000 }));
-      await page.waitForTimeout(o.settleMs ?? 2000);
-    },
-    async verify(page) {
-      await expect(page, 'the board', css(page, 'input[placeholder="Search issues"]'), { timeout: 6000 });
-    },
-  },
-
-  dkghTeam: {
-    async run(page, o = {}) {
-      await openRail(page, 'DkGH — Daakia GitHub', 2200);
-      await expect(page, 'the issue board', css(page, 'input[placeholder="Search issues"]'), { timeout: 20000 });
-      await act('open the Team view', () => btn(page, 'Team').first().click({ timeout: 8000 }));
-      await expect(page, 'the assignee rail', css(page, '.ghteam-row'), { timeout: 10000 });
-      await page.waitForTimeout(900);
-      /* The sheet is the thing worth filming — it slides in over the board
-         rather than navigating away from it. */
-      await act('open an issue', () => css(page, '.dkgh tbody tr').first().click({ timeout: 8000 }));
-      await expect(page, 'the issue sheet', css(page, '.dui_sheet__panel'), { timeout: 10000 });
-      await page.waitForTimeout(o.settleMs ?? 2600);
-    },
-    async verify(page) {
-      await expect(page, 'the open sheet', css(page, '.dui_sheet__panel'), { timeout: 6000 });
-    },
-  },
+  ...dkgh,
 
   // ── The rest of the app ───────────────────────────────────────────────────
 
