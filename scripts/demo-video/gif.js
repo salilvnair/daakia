@@ -53,7 +53,7 @@ const mb = (f) => (fs.statSync(f).size / 1024 / 1024).toFixed(1);
  */
 const HIGHLIGHTS = [
   /* The title card, so a loop that plays with no context says what it is. */
-  ['intro', 3.0],
+  ['intro', 5.2],
   ['rest', 5.5],
   ['graphql', 4.5],
   ['websocket', 4.5],
@@ -86,7 +86,7 @@ if (highlights || pick.length) {
   const picked = pick.map((id) => [id, seconds]);
   const wantsIntro = !argv.includes('--no-intro') && !pick.includes('intro');
   const chosen = pick.length
-    ? (wantsIntro ? [['intro', 3.0], ...picked] : picked)
+    ? (wantsIntro ? [['intro', 5.2], ...picked] : picked)
     : HIGHLIGHTS;
   const parts = [];
   const listFile = path.join(OUT_DIR, '_highlights.txt');
@@ -102,17 +102,22 @@ if (highlights || pick.length) {
        app settling, and the interesting part is what happens next. */
     const cut = path.join(OUT_DIR, `_hl_${id}.mp4`);
     /*
-      The title card is taken from its END, everything else from 2s in.
+      The title card is taken from the first keystroke; everything else from
+      2s in, which is where the app has stopped settling.
 
-      A GIF's first frame is what GitHub shows before the image loads and what
-      a paused loop sits on, so the card has to be finished by then — and the
-      card spends its first three seconds typing. Reading backwards from the
-      end also means the intro's animation timings can change without this
-      needing to know them. Every other clip skips two seconds for the
-      opposite reason: that is the app settling.
+      This used to read the intro backwards from its end, so that the first
+      frame — what GitHub shows before the image loads, and what a paused loop
+      sits on — was the finished card. It did give a tidy still, and it threw
+      away the entire point of the intro: the GIF showed the card already
+      written and never a letter being typed.
+
+      Starting at the first keystroke instead means frame one is a single "D"
+      rather than a finished card. That is the trade, and it is the right way
+      round: a still that is obviously mid-typing says more about the thing
+      than a static logo does.
     */
     const args = id === 'intro'
-      ? ['-sseof', `-${secs}`, '-i', clip]
+      ? ['-ss', '0.42', '-i', clip, '-t', String(secs)]
       : ['-ss', '2', '-i', clip, '-t', String(secs)];
     ffmpeg([...args, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', cut]);
     tmp.push(cut);
