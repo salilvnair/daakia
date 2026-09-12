@@ -360,8 +360,11 @@
     "local-server:dev": "node local-server/build.js --serve",
     "demo-video:record": "node scripts/demo-video/record.js",
     "demo-video:compose": "node scripts/demo-video/compose.js",
+    "demo-video:refine": "node scripts/demo-video/refine.js",
+    "demo-video:gif": "node scripts/demo-video/gif.js",
+    "demo-video:gif:short": "node scripts/demo-video/gif.js --highlights",
     "demo-video": "npm run demo-video:record && npm run demo-video:compose",
-    "showcase": "npm run demo-video:record && node scripts/demo-video/compose.js --gif"
+    "showcase": "npm run demo-video && npm run demo-video:gif:short"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.14.4",
