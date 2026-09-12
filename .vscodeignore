@@ -26,3 +26,15 @@ local-server
 # The README loads its GIFs from raw.githubusercontent, so they are a
 # repository asset rather than something the extension needs to carry.
 media
+
+# Test fixtures — 1.5 MB of .jfr recordings, thread dumps and the sources that
+# produced them. Only src/**/*.test.ts reads them, and the tests do not run
+# from the packaged extension. The one "test/fixtures" string left in the
+# bundle is a comment inside a vendored @grpc/proto-loader header, not a path
+# anything opens.
+test
+
+# Development-time files with no runtime role.
+AGENTS.md
+vitest.config.ts
+.scratch
