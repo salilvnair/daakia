@@ -142,6 +142,21 @@ const dkgh = {
     async run(page, o = {}) {
       await openRail(page, 'Settings', 1200);
       await page.waitForTimeout(900);
+
+      /*
+        Expand the group first.
+
+        The settings nav collapses a group down to its name and a count, and
+        DKGH has one child — so "GitHub CLI" is not in the document at all
+        until the group is opened. DK8S happened to be expanded already, which
+        is why the dk8s settings segment worked and this one timed out looking
+        for a label that was never there.
+      */
+      await soft('expand the DkGH group', async () => {
+        await text(page, 'DKGH', false).first().click({ timeout: 5000 });
+        await page.waitForTimeout(900);
+      });
+
       await act('open GitHub CLI', () => text(page, 'GitHub CLI').last().click({ timeout: 8000 }));
       await page.waitForTimeout(o.settleMs ?? 4000);
     },
