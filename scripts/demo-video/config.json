@@ -86,7 +86,16 @@
       "label": "Daakia AI",
       "recipe": "aiChat",
       "effect": "static",
-      "trimStartSec": 1.2
+      "trimStartSec": 1.2,
+      "warmupMs": 2000
+    },
+    {
+      "id": "settings_ai",
+      "label": "Settings — AI",
+      "recipe": "aiSettings",
+      "effect": "static",
+      "trimStartSec": 1.2,
+      "warmupMs": 1800
     },
     {
       "id": "collections",
@@ -175,26 +184,6 @@
       "trimStartSec": 1.2,
       "options": {
         "section": "Cluster"
-      }
-    },
-    {
-      "id": "settings_provider",
-      "label": "Settings — LLM Provider",
-      "recipe": "settings",
-      "effect": "static",
-      "trimStartSec": 1.2,
-      "options": {
-        "section": "LLM Provider"
-      }
-    },
-    {
-      "id": "settings_prompt",
-      "label": "Settings — Prompt Library",
-      "recipe": "settings",
-      "effect": "static",
-      "trimStartSec": 1.2,
-      "options": {
-        "section": "Prompt Library"
       }
     }
   ]

@@ -192,7 +192,16 @@ const protocols = {
   },
 
   /**
-   * MCP: a server command, and the four things a server offers once it answers.
+   * MCP: the catalog of servers, and one of them added to the config.
+   *
+   * The first version typed a command and pressed Connect, which runs `npx` —
+   * a minute on a cold cache, a failure with no network — and then showed
+   * Tools, Resources and Prompts against a server that was never up: three
+   * empty tabs and "No servers configured" for the length of the segment.
+   *
+   * The Catalog is twenty servers the app already knows about, and adding one
+   * is a local edit to the MCP config. So the segment shows the thing that
+   * works offline and finishes with a server actually in the list.
    */
   mcpServer: {
     async run(page, o = {}) {
@@ -204,34 +213,55 @@ const protocols = {
       await typeInto(page, 'the MCP command', urlBar(page),
         o.command || 'npx @modelcontextprotocol/server-filesystem /workspace', o.typeDelay || 30);
       await page.keyboard.press('Escape');
-      await page.waitForTimeout(600);
+      await page.waitForTimeout(700);
+
+      await act('open the Catalog', () => reqSub(page, 'catalog').click({ timeout: 8000 }));
+      await page.waitForTimeout(2400);
+
+      await soft('search the catalog', async () => {
+        await css(page, 'input[placeholder="Search MCP servers..."]').first().click({ timeout: 4000 });
+        await page.keyboard.type(o.search || 'file', { delay: 90 });
+        await page.waitForTimeout(1800);
+      });
 
       /*
-        Try to bring a server up, but do not hang the take on it.
+        Clicked in the page: "Add" is one of twenty identical links, and the
+        one that matters is the one in the row naming the server.
 
-        `npx` has to fetch the package the first time, which can take a minute
-        on a cold cache or fail outright with no network — neither of which is
-        worth losing the segment over. If it connects, Tools and Resources fill
-        in; if it does not, the Catalog below carries the segment on its own.
+        Walking up from each "Add" looking for the name climbs out of the row
+        and into the list, whose text contains every name — so the first row's
+        link matched whatever was asked for. The segment searched for "git" and
+        then added `filesystem`. Starting from the *name* and coming back down
+        to the nearest ancestor holding exactly one "Add" is the row itself.
       */
-      await soft('connect to the server', async () => {
-        await btn(page, 'Connect').first().click({ timeout: 5000 });
-        await page.waitForTimeout(6000);
-      });
+      const added = await act(`add the ${o.server || 'filesystem'} server`, () => page.evaluate((name) => {
+        const label = [...document.querySelectorAll('*')]
+          .find((e) => e.children.length === 0 && e.textContent?.trim() === name);
+        if (!label) return false;
+        for (let row = label.parentElement; row; row = row.parentElement) {
+          const adds = [...row.querySelectorAll('*')]
+            .filter((e) => e.children.length === 0 && e.textContent?.trim() === 'Add');
+          if (adds.length === 1) { adds[0].click(); return true; }
+          if (adds.length > 1) return false;
+        }
+        return false;
+      }, o.server || 'filesystem'));
+      await page.waitForTimeout(1800);
+      if (!added) throw new Error('no "Add" link in a catalog row — has the catalog layout changed?');
 
-      /* The Catalog is the one tab that has something to show either way — it
-         is the list of servers the app knows about, not the ones running. */
-      await soft('the Catalog', async () => {
-        await reqSub(page, 'catalog').click({ timeout: 4000 });
-        await page.waitForTimeout(2600);
-      });
+      await act('open the Servers tab', () => reqSub(page, 'servers').click({ timeout: 6000 }));
+      await page.waitForTimeout(2000);
 
-      await walk(page, 'request', [['tools', 'Tools'], ['resources', 'Resources'], ['prompts', 'Prompts'], ['args', 'Args'], ['env', 'Env'], ['config', 'Config'], ['servers', 'Servers']], reqSub, 1200);
+      await walk(page, 'request', [['tools', 'Tools'], ['resources', 'Resources'], ['prompts', 'Prompts'], ['config', 'Config'], ['servers', 'Servers']], reqSub, 1300);
 
       await soft('open Collections', () => openPanel(page, 'Collections'));
       await page.waitForTimeout(o.settleMs ?? 1500);
     },
     async verify(page) {
+      /* A server in the list — the one thing the segment claims. "0 SERVERS"
+         is what the previous version showed for its whole length. */
+      const empty = await css(page, ':text("No servers configured")').count();
+      if (empty) throw new Error('the Servers tab is still empty — the catalog Add did not take');
       await expect(page, 'the MCP panel', text(page, 'STDIO', false), { timeout: 8000 });
     },
   },

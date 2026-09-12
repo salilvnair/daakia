@@ -18,6 +18,8 @@ const {
 } = require('./drive');
 /* The five protocol recipes live next door — see protocols.js for why. */
 const { protocols } = require('./protocols');
+/* The assistant and its settings — see ai.js, and ai-mock.js for the provider. */
+const { ai } = require('./ai');
 
 // ── Monaco ──────────────────────────────────────────────────────────────────
 
@@ -327,19 +329,7 @@ const recipes = {
 
   ...protocols,
 
-  aiChat: {
-    async run(page, o = {}) {
-      await openRail(page, 'Daakia AI', 900);
-      const box = field(page, 'Ask anything about APIs, REST, GraphQL, mocks, cURL, tests…');
-      await expect(page, 'the AI chat box', box);
-      await typeInto(page, 'the AI chat box', box,
-        o.message || 'Generate a mock server from this collection', o.typeDelay || 38);
-      await page.waitForTimeout(o.settleMs ?? 1500);
-    },
-    async verify(page) {
-      await expect(page, 'the AI panel', field(page, 'Ask anything about APIs, REST, GraphQL, mocks, cURL, tests…'));
-    },
-  },
+  ...ai,
 
   // ── Mock server, end to end ───────────────────────────────────────────────
 
