@@ -16,15 +16,17 @@ import {
 import { setGraphQLSchema, setActiveGraphQLTab } from '../../services/graphql-completion';
 import { formatGraphQLQuery } from '../../services/graphql-formatter';
 import { GraphQLSubscription } from './GraphQLSubscription';
+import { ProtocolSettingsTab } from '../shared/settings/ProtocolSettingsTab';
+import { countOverrides } from '../shared/settings/execution-settings';
 import { GraphQLQueryTabs, initMultiQuery } from './GraphQLQueryTabs';
 import { AiHeaderSuggest, type AiHeaderSuggestHandle } from '../ai/AiHeaderSuggest';
 import { AiRequestFuzzerModal } from '../ai/AiRequestFuzzerModal';
 import { AiGqlQueryBuilderDrawer, type AiGqlQueryBuilderDrawerHandle } from '../ai/AiGqlQueryBuilderDrawer';
 import { AiGqlSchemaExplainerModal } from '../ai/AiGqlSchemaExplainerModal';
-import { logUiEvent } from '../../store/ui-audit-store';
+import { logUiEvent, isAuditEventEnabled } from '../../store/ui-audit-store';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 
-type EditorTab = 'query' | 'variables' | 'headers' | 'authorization' | 'scripts' | 'subscription';
+type EditorTab = 'query' | 'variables' | 'headers' | 'authorization' | 'scripts' | 'subscription' | 'settings';
 
 const ACCENT = 'var(--color-protocol-graphql)';
 
@@ -70,10 +72,15 @@ export function GraphQLEditor() {
     const endpoint = activeTab.url.trim();
     if (!endpoint) return;
 
-    logUiEvent('graphql.send', { url: endpoint });
+    // Audited by the extension host once the response arrives, where the
+    // headers, status and timing exist. Logging on click as well produced
+    // two rows per request, the click-time one nearly empty.
     updateTab(activeTab.id, { loading: true });
     postMsg({
       type: 'executeGraphQL',
+      // The per-event audit toggle lives in the webview; the host writes the
+      // record, so the decision travels with the request.
+      auditEnabled: isAuditEventEnabled('graphql.send'),
       tabId: activeTab.id,
       endpoint,
       query: activeTab.bodyRaw,
@@ -117,6 +124,14 @@ export function GraphQLEditor() {
       dotColor: ACCENT,
     },
     { id: 'subscription', label: 'Subscription' },
+    // Per-request execution overrides. GraphQL and SOAP go out over HTTP
+    // through the same proxy and TLS decisions as REST, so they get the same
+    // tab rather than a second, quieter set of rules.
+    {
+      id: 'settings', label: 'Settings',
+      badge: countOverrides(activeTab.settings) || undefined,
+      badgeColor: ACCENT,
+    },
   ];
 
   return (
@@ -260,7 +275,8 @@ export function GraphQLEditor() {
         )}
 
         {activeSubTab === 'headers' && (
-          <div className="h-full flex flex-col overflow-hidden">
+          <div className="h-full flex flex-col overflow-hidden"
+               data-menu="kv" data-table="headers" data-label="the headers">
             {/* Headers — ditto same as REST HeadersTab: KVT with toolbarExtra sparkle + headless AiHeaderSuggest */}
             <KeyValueTableView
               rows={activeTab.headers}
@@ -338,6 +354,8 @@ export function GraphQLEditor() {
         {activeSubTab === 'subscription' && (
           <GraphQLSubscription />
         )}
+
+        {activeSubTab === 'settings' && <ProtocolSettingsTab tab={activeTab} accent={ACCENT} />}
       </div>
 
       {/* Modals */}

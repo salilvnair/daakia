@@ -9,6 +9,7 @@ import { useSidebarDataStore } from '../../store/sidebar-data-store';
 import { MdViewer } from '../shared/display/MdViewer';
 import { ModalView, AIButtonView, ButtonView, SelectInputView, MultilineInputView } from '@salilvnair/dui';
 import { useAiCollectionCacheStore } from '../../store/ai-collection-cache-store';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface Props {
   onClose: () => void;
@@ -32,13 +33,13 @@ Check for:
 Format response as markdown:
 ## Compliance Score: X/10
 
-### ✅ Passing (N checks)
+### Passing (N checks)
 - ...
 
-### ⚠️ Warnings (N issues)
+### Warnings (N issues)
 - ...
 
-### ❌ Violations (N issues)
+### Violations (N issues)
 - **Issue**: description
   **Fix**: how to fix it
 
@@ -102,9 +103,10 @@ export function AiComplianceCheckerModal({ onClose }: Props) {
     const pid = `ai-compliance-${Date.now()}`;
     reqIdRef.current = pid;
 
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'collection.compliance',
+      screen: 'Collections',
       systemPrompts: [SYSTEM_PROMPT],
       userPrompt: `Audit these API endpoints for REST compliance:\n\n${input}`,
       conversation: [], tools: [],

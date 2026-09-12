@@ -32,7 +32,7 @@ export function handleAiMessages(msg: any): boolean {
         }
         case 'ai:complete': {
           const { tabId, message: aiMsg, tokens, duration } = msg;
-          console.group('%c✅ AI Request Complete', 'color:#22c55e;font-weight:bold;font-size:12px');
+ console.group('%c AI Request Complete', 'color:#22c55e;font-weight:bold;font-size:12px');
           console.log('%cDuration:', 'font-weight:bold', `${duration}ms`);
           console.log('%cTokens:', 'font-weight:bold', tokens);
           console.log('%cTool Calls:', 'font-weight:bold', aiMsg.toolCalls?.length || 0);
@@ -44,7 +44,7 @@ export function handleAiMessages(msg: any): boolean {
           const successReqName = successTab ? `AI ${successTab.aiProvider || ''}/${successTab.aiModel || ''}` : 'AI Request';
           useDevToolsStore.getState().addLog({
             level: 'info',
-            args: [`✅ AI Complete (${duration}ms)`, { tokens, toolCalls: aiMsg.toolCalls?.length || 0, contentPreview: (aiMsg.content || '').slice(0, 300) }],
+ args: [`AI Complete (${duration}ms)`, { tokens, toolCalls: aiMsg.toolCalls?.length || 0, contentPreview: (aiMsg.content || '').slice(0, 300) }],
             timestamp: Date.now(),
             requestName: successReqName,
           });
@@ -87,11 +87,11 @@ export function handleAiMessages(msg: any): boolean {
           const { tabId, message: errMsg, code, diagnostics } = msg;
 
           // ──── Full DevTools Console Diagnostics ────
-          console.group('%c🚨 AI Request Failed', 'color:#ef4444;font-weight:bold;font-size:14px');
+ console.group('%c AI Request Failed', 'color:#ef4444;font-weight:bold;font-size:14px');
           console.error(`Status: ${code || 'UNKNOWN'} — ${errMsg}`);
           if (diagnostics) {
             if (diagnostics.request) {
-              console.group('%c📤 Request', 'color:#3b82f6;font-weight:bold');
+ console.group('%c Request', 'color:#3b82f6;font-weight:bold');
               console.log('%cURL:', 'font-weight:bold', diagnostics.request.url);
               console.log('%cMethod:', 'font-weight:bold', diagnostics.request.method);
               console.log('%cHeaders:', 'font-weight:bold', diagnostics.request.headers);
@@ -99,14 +99,14 @@ export function handleAiMessages(msg: any): boolean {
               console.groupEnd();
             }
             if (diagnostics.response) {
-              console.group('%c📥 Response', 'color:#f59e0b;font-weight:bold');
+ console.group('%c Response', 'color:#f59e0b;font-weight:bold');
               console.log('%cStatus:', 'font-weight:bold', diagnostics.response.statusCode, diagnostics.response.statusMessage);
               console.log('%cHeaders:', 'font-weight:bold', diagnostics.response.headers);
               console.log('%cBody:', 'font-weight:bold', diagnostics.response.body);
               console.groupEnd();
             }
             if (diagnostics.error) {
-              console.group('%c💥 Error Details', 'color:#dc2626;font-weight:bold');
+ console.group('%c Error Details', 'color:#dc2626;font-weight:bold');
               console.log('%cName:', 'font-weight:bold', diagnostics.error.name);
               console.log('%cMessage:', 'font-weight:bold', diagnostics.error.message);
               console.log('%cCode:', 'font-weight:bold', diagnostics.error.code);
@@ -114,7 +114,7 @@ export function handleAiMessages(msg: any): boolean {
               console.groupEnd();
             }
             if (diagnostics.meta) {
-              console.group('%c📊 Meta', 'color:#8b5cf6;font-weight:bold');
+ console.group('%c Meta', 'color:#8b5cf6;font-weight:bold');
               console.table(diagnostics.meta);
               console.groupEnd();
             }
@@ -128,7 +128,7 @@ export function handleAiMessages(msg: any): boolean {
           const aiReqName = aiTab ? `AI ${aiTab.aiProvider || 'unknown'}/${aiTab.aiModel || 'unknown'}` : 'AI Request';
           useDevToolsStore.getState().addLog({
             level: 'error',
-            args: [`🚨 AI Error [${code || '?'}]: ${errMsg}`, diagnostics || {}],
+ args: [`AI Error [${code || '?'}]: ${errMsg}`, diagnostics || {}],
             timestamp: Date.now(),
             requestName: aiReqName,
           });
@@ -152,7 +152,7 @@ export function handleAiMessages(msg: any): boolean {
           const tab = useTabsStore.getState().tabs.find(t => t.id === tabId);
           if (tab?.type === 'daakia-ai') {
             const errorDetail = code ? `[${code}] ${errMsg}` : errMsg;
-            useAiConversationStore.getState().addErrorMessage(`❌ Error: ${errorDetail}`);
+ useAiConversationStore.getState().addErrorMessage(`Error: ${errorDetail}`);
             useTabsStore.getState().updateTab(tabId, { aiStreaming: false, loading: false });
           } else if (tab) {
             const conv = [...(tab.aiConversation || [])];
@@ -160,7 +160,7 @@ export function handleAiMessages(msg: any): boolean {
             conv.push({
               id: crypto.randomUUID(),
               role: 'assistant',
-              content: `❌ Error: ${errorDetail}`,
+ content: `Error: ${errorDetail}`,
               timestamp: Date.now(),
             });
             useTabsStore.getState().updateTab(tabId, {
@@ -200,7 +200,7 @@ export function handleAiMessages(msg: any): boolean {
         case 'ai:toolExecuting': {
           // Backend is executing an MCP tool — just log for now
           const { tabId: teTabId, toolName, toolCallId } = msg;
-          console.log('%c🔧 AI Tool Executing', 'color:#f59e0b;font-weight:bold', { tabId: teTabId, toolName, toolCallId });
+ console.log('%c AI Tool Executing', 'color:#f59e0b;font-weight:bold', { tabId: teTabId, toolName, toolCallId });
           break;
         }
         case 'ai:conversations': {
@@ -234,7 +234,7 @@ export function handleAiMessages(msg: any): boolean {
         case 'ai:debug': {
           const { phase, data, tabId: debugTabId } = msg;
           if (phase === 'request') {
-            console.group('%c📡 AI Request Sent', 'color:#3b82f6;font-weight:bold;font-size:12px');
+ console.group('%c AI Request Sent', 'color:#3b82f6;font-weight:bold;font-size:12px');
             console.log('%cProvider:', 'font-weight:bold', data.provider);
             console.log('%cModel:', 'font-weight:bold', data.model);
             console.log('%cBase URL:', 'font-weight:bold', data.baseUrl);
@@ -251,7 +251,7 @@ export function handleAiMessages(msg: any): boolean {
             // Push to internal DevTools Console
             useDevToolsStore.getState().addLog({
               level: 'info',
-              args: [`📡 AI Request → ${data.provider}/${data.model}`, { url: data.baseUrl, endpoint: data.chatEndpoint, messages: data.messageCount, tools: data.toolCount, systemPrompts: data.systemPrompts, userPrompt: data.userPrompt, settings: data.settings }],
+ args: [`AI Request → ${data.provider}/${data.model}`, { url: data.baseUrl, endpoint: data.chatEndpoint, messages: data.messageCount, tools: data.toolCount, systemPrompts: data.systemPrompts, userPrompt: data.userPrompt, settings: data.settings }],
               timestamp: Date.now(),
               requestName: `AI ${data.provider}/${data.model}`,
             });

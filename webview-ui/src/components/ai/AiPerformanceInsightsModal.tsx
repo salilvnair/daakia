@@ -10,6 +10,7 @@ import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
 import { ModalView, AIButtonView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface RequestResult {
   id: string;
@@ -114,11 +115,11 @@ export function AiPerformanceInsightsModal({ collectionName, results, onClose }:
       metrics,
     });
 
-    postMsg({
-      type: 'ai:send',
+    sendAiRequest({
       tabId: pid,
       provider: '', model: '', baseUrl: '',
       stage: 'rest.performance.insights',
+      screen: 'REST · Response',
       systemPrompts: [systemPrompt],
       userPrompt,
       conversation: [],

@@ -39,10 +39,28 @@ async function showSaveDialog(opts?: { defaultUri?: { fsPath: string } }) {
   return { fsPath };
 }
 
-async function showOpenDialog(_opts?: unknown) {
+async function showOpenDialog(opts?: { canSelectFolders?: boolean }) {
+  // Folder picks auto-approve to a temp directory so flows that end in "choose
+  // where to save" can actually be exercised in the browser harness. File
+  // picks still cancel — there is nothing sensible to invent for those.
+  if (opts?.canSelectFolders) {
+    const dir = path.join(os.tmpdir(), 'daakia-local-server-out');
+    fs.mkdirSync(dir, { recursive: true });
+    console.log(`[vscode-shim] showOpenDialog auto-approved folder -> ${dir}`);
+    return [{ fsPath: dir }];
+  }
   console.log('[vscode-shim] showOpenDialog has no real UI here — returning undefined (cancelled)');
   return undefined;
 }
+
+/**
+ * Whether a native file picker can actually open.
+ *
+ * False here. A caller that cannot tell "the user cancelled" from "there was no
+ * dialog" has to treat both as silence, and silence is what makes Import look
+ * broken in the browser harness rather than unavailable.
+ */
+const filePickerAvailable = false;
 
 async function showInputBox(_opts?: unknown) {
   console.log('[vscode-shim] showInputBox has no real UI here — returning undefined (cancelled)');
@@ -73,9 +91,67 @@ const Uri = {
 
 // ─── env ──────────────────────────────────────────────────────────────────────
 const env = {
+  /*
+    A link out.
+
+    The extension host hands this to the OS; out here there is no VS Code, so
+    ask the platform directly — otherwise "Open on github.com" behaves
+    differently in dev than it does shipped, which is the sort of difference a
+    user finds first.
+  */
+  async openExternal(uri: { toString(): string }): Promise<boolean> {
+    const { execFile } = await import('child_process');
+    const url = uri.toString();
+    try {
+      if (process.platform === 'win32') {
+        execFile('cmd', ['/c', 'start', '', url], () => undefined);
+      } else if (process.platform === 'darwin') {
+        execFile('open', [url], () => undefined);
+      } else {
+        execFile('xdg-open', [url], () => undefined);
+      }
+      return true;
+    } catch {
+      console.log(`[vscode-shim] could not open ${url}`);
+      return false;
+    }
+  },
   clipboard: {
     async writeText(text: string) {
       console.log(`[vscode-shim] clipboard.writeText (no real clipboard here): ${text.slice(0, 80)}${text.length > 80 ? '...' : ''}`);
+    },
+    /*
+      The OS clipboard, for the dev build.
+
+      In a real extension host `vscode.env.clipboard.readText()` does this. Out
+      here there is no VS Code, so ask the platform directly — otherwise every
+      clipboard-backed feature behaves differently in dev than it does shipped,
+      which is the sort of difference that gets found by a user.
+    */
+    async readText(): Promise<string> {
+      const { execFile } = await import('child_process');
+      const { promisify } = await import('util');
+      const run = promisify(execFile);
+      try {
+        if (process.platform === 'win32') {
+          const { stdout } = await run('powershell.exe',
+            ['-NoProfile', '-NonInteractive', '-Command', 'Get-Clipboard -Raw'],
+            { maxBuffer: 8 * 1024 * 1024 });
+          /* Get-Clipboard -Raw appends a trailing newline of its own. Written
+             as escape sequences rather than literal characters: a real CR or
+             LF inside a regex literal is an unterminated regex, which is what
+             had been breaking `npm run local-server:build`. */
+          return stdout.replace(/\r?\n$/, '');
+        }
+        if (process.platform === 'darwin') {
+          const { stdout } = await run('pbpaste', [], { maxBuffer: 8 * 1024 * 1024 });
+          return stdout;
+        }
+        const { stdout } = await run('xclip', ['-selection', 'clipboard', '-o'], { maxBuffer: 8 * 1024 * 1024 });
+        return stdout;
+      } catch {
+        return '';
+      }
     },
   },
 };
@@ -138,9 +214,23 @@ class CancellationTokenSource {
 }
 
 // ─── ExtensionContext-adjacent (unused today, present for future handlers) ────
+/*
+  There is no VS Code here, so there is no terminal to open.
+
+  Throwing is the right answer rather than a silent no-op: the caller reports
+  the failure to the screen, which is how the dev build stays honest about
+  being a dev build.
+*/
+function createTerminal(_opts?: unknown): never {
+  throw new Error('There is no VS Code terminal in the browser build \u2014 '
+    + 'run the command in your own shell.');
+}
+
 export const window = {
+  createTerminal,
   showSaveDialog,
   showOpenDialog,
+  filePickerAvailable,
   showInputBox,
   showWarningMessage,
   showErrorMessage,

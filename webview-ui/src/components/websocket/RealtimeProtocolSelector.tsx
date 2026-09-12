@@ -6,16 +6,22 @@ export type RealtimeProtocol = 'websocket' | 'sse' | 'socketio' | 'mqtt';
 interface ProtocolOption {
   id: RealtimeProtocol;
   label: string;
-  available: boolean;
   icon: React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>;
   color: string;
 }
 
+/*
+  All four ship. The list used to carry an `available` flag with a "soon"
+  badge and a disabled tab behind it; every entry has been `true` since MQTT
+  landed, so what the flag actually rendered was nothing, and what it left
+  behind was a disabled state nobody could reach and a reader wondering which
+  of these four is real.
+*/
 const PROTOCOLS: ProtocolOption[] = [
-  { id: 'websocket', label: 'WebSocket', available: true, icon: WebSocketIcon, color: 'var(--color-protocol-websocket)' },
-  { id: 'sse', label: 'SSE', available: true, icon: SSEIcon, color: 'var(--color-protocol-sse)' },
-  { id: 'socketio', label: 'Socket.IO', available: true, icon: SocketIOIcon, color: 'var(--color-protocol-socketio)' },
-  { id: 'mqtt', label: 'MQTT', available: true, icon: MQTTIcon, color: 'var(--color-protocol-mqtt)' },
+  { id: 'websocket', label: 'WebSocket', icon: WebSocketIcon, color: 'var(--color-protocol-websocket)' },
+  { id: 'sse', label: 'SSE', icon: SSEIcon, color: 'var(--color-protocol-sse)' },
+  { id: 'socketio', label: 'Socket.IO', icon: SocketIOIcon, color: 'var(--color-protocol-socketio)' },
+  { id: 'mqtt', label: 'MQTT', icon: MQTTIcon, color: 'var(--color-protocol-mqtt)' },
 ];
 
 /**
@@ -50,21 +56,17 @@ export function RealtimeProtocolSelector() {
           <button
             key={p.id}
             type="button"
-            onClick={() => p.available && handleSelect(p.id)}
-            disabled={!p.available}
+            onClick={() => handleSelect(p.id)}
             className={`flex items-center gap-1.5 px-3 py-2 text-[11px] font-medium transition-colors cursor-pointer border-b-2 flex-shrink-0 whitespace-nowrap ${
               isActive
                 ? 'border-current'
                 : 'border-transparent hover:text-[var(--color-text-primary)]'
-            } ${!p.available ? 'opacity-40 cursor-not-allowed' : ''}`}
+            }`}
             style={{ color: isActive ? p.color : 'var(--color-text-muted)' }}
-            title={p.available ? p.label : `${p.label} (coming soon)`}
+            title={p.label}
           >
             <Icon size={12} style={{ color: isActive ? p.color : 'var(--color-text-muted)' }} />
             {p.label}
-            {!p.available && (
-              <span className="ml-0.5 text-[9px] opacity-60">soon</span>
-            )}
           </button>
         );
       })}

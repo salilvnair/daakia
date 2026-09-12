@@ -152,7 +152,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(\`\\n🚀 Daakia Mock Server "${config.name}" running on http://localhost:\${PORT}\`);
+  console.log(\`\\nDaakia Mock Server "${config.name}" running on http://localhost:\${PORT}\`);
   console.log(\`   Routes: \${routes.filter(r => r.enabled).length} active\\n\`);
   routes.filter(r => r.enabled).forEach(r => {
     console.log(\`   \${r.method.padEnd(7)} \${r.path} → \${r.statusCode}\`);

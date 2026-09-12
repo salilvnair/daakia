@@ -14,7 +14,8 @@ import { createPortal } from 'react-dom';
 import { useAiProvidersStore } from '../../store/ai-providers-store';
 import { useTabsStore, type ResponseData } from '../../store/tabs-store';
 import { SparkleIcon, RefreshIcon } from '../../icons';
-import { postMsg } from '../../vscode';
+import { useAiPromptTemplatesStore } from '../../store/prompt-template';
+import { sendAiRequest } from '../../services/ai/ai-client';
 import { MdViewer } from '../shared';
 import type { DuiSize } from '@salilvnair/dui';
 import { useButtonBase, ModalView } from '@salilvnair/dui';
@@ -40,38 +41,18 @@ function makeFingerprint(
 
 // ─── Build context-aware AI prompts ──────────────────────────────────────────
 
-function buildErrorDiagnosisPrompt(
-  method: string,
-  url: string,
-  status: number,
-  statusText: string,
-  responseBody: string,
-  requestBody?: string,
-): string {
-  const bodyPreview = responseBody.slice(0, 600);
-  const reqBodyPreview = requestBody ? `\nRequest body: ${requestBody.slice(0, 300)}` : '';
-  return `/explain HTTP ${status} ${statusText} error for ${method} ${url}${reqBodyPreview}\nResponse: ${bodyPreview}\n\nExplain why this error occurred and provide specific steps to fix it.`;
-}
-
-function buildResponseExplainerPrompt(
-  method: string,
-  url: string,
-  status: number,
-  contentType: string,
-  responseBody: string,
-): string {
-  const bodyPreview = responseBody.slice(0, 800);
-  return `/explain HTTP ${status} response from ${method} ${url} (${contentType})\n\n${bodyPreview}\n\nExplain this response in plain English — what data is returned, what each field means, and any notable patterns.`;
-}
-
-function buildFollowUpRequestsPrompt(
-  method: string,
-  url: string,
-  responseBody: string,
-): string {
-  const bodyPreview = responseBody.slice(0, 800);
-  return `/request Analyze this ${method} ${url} response and suggest 3-5 useful follow-up API requests:\n\n${bodyPreview}\n\nFor each, show the HTTP method, endpoint, and what it's useful for.`;
-}
+/**
+ * The three modes, as prompt-library keys.
+ *
+ * These prompts were built inline here — a second copy of what the library
+ * already held, so editing "Ask AI Why" in Settings changed nothing. The
+ * library is the one the user can see and edit, so it is the one that runs.
+ */
+const MODE_STAGE = {
+  'error-diagnosis': 'askAiWhy',
+  explain: 'explainWithAi',
+  'follow-up': 'followupWithAi',
+} as const;
 
 export type AssistMode = 'error-diagnosis' | 'explain' | 'follow-up';
 
@@ -156,16 +137,19 @@ export function AiAssistPopover({
   const provider = activeTab?.aiProvider || defaultProviderId || providers.find(p => p.enabled)?.id || 'openai';
   const model = activeTab?.aiModel || defaultModelId || providers.find(p => p.id === provider)?.models.find(m => m.enabled)?.id || '';
 
+  const resolve = useAiPromptTemplatesStore(s => s.resolve);
+  const stage = MODE_STAGE[mode];
+
   // Build prompt once
   const prompt = useRef('');
   if (!prompt.current) {
-    if (mode === 'error-diagnosis') {
-      prompt.current = buildErrorDiagnosisPrompt(requestMethod, requestUrl, response.status, response.statusText, response.body, requestBody);
-    } else if (mode === 'explain') {
-      prompt.current = buildResponseExplainerPrompt(requestMethod, requestUrl, response.status, response.contentType, response.body);
-    } else {
-      prompt.current = buildFollowUpRequestsPrompt(requestMethod, requestUrl, response.body);
-    }
+    prompt.current = resolve(stage, {
+      method: requestMethod,
+      url: requestUrl,
+      status: String(response.status),
+      statusText: response.statusText,
+      body: response.body.slice(0, 800),
+    });
   }
 
   // Fingerprint — changes only when the actual response changes
@@ -188,7 +172,6 @@ export function AiAssistPopover({
       ? 'Explaining response…'
       : 'Suggesting follow-up requests…';
 
-  const modeIcon = mode === 'error-diagnosis' ? '🚨' : mode === 'explain' ? '🔍' : '🔄';
   const modeTitle = mode === 'error-diagnosis' ? 'AI Error Diagnosis' : mode === 'explain' ? 'Response Explainer' : 'Follow-up Requests';
 
   // ── AI request effect ──────────────────────────────────────────────────────
@@ -231,29 +214,16 @@ export function AiAssistPopover({
 
     window.addEventListener('message', handler);
 
-    postMsg({
-      type: 'ai:send',
+    sendAiRequest({
       tabId: popoverId,
+      stage,
+      screen: 'REST · Response',
       provider,
       model,
-      baseUrl: '',
-      systemPrompts: [],
+      systemPrompts: [resolve(`${stage}.system`)],
       userPrompt: prompt.current,
-      conversation: [],
-      tools: [],
-      settings: {
-        temperature: 0.4,
-        maxTokens: 1024,
-        stream: true,
-        topP: 1,
-        stopSequences: [],
-        responseFormat: 'text',
-        frequencyPenalty: 0,
-        presencePenalty: 0,
-        seed: null,
-      },
-      mcpServerConfigs: [],
-      envId: activeTab?.envId,
+      settings: { temperature: 0.4, maxTokens: 1024 },
+      context: { envId: activeTab?.envId },
     });
 
     return () => window.removeEventListener('message', handler);
@@ -351,7 +321,7 @@ export function AiAssistPopover({
           mode="inline"
           open
           onClose={onClose}
-          title={`${modeIcon} ${modeTitle}`}
+          title={modeTitle}
           headerColor={ACCENT}
           headerIcon={
             <div style={{
@@ -373,7 +343,7 @@ export function AiAssistPopover({
               </p>
             )}
             {error && (
-              <p style={{ fontSize: 11, color: 'var(--color-error)', margin: 0 }}>⚠️ {error}</p>
+              <p style={{ fontSize: 11, color: 'var(--color-error)', margin: 0 }}> {error}</p>
             )}
             {text && (
               <div style={{ fontSize: 11 }}>

@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: asyncio-load
+  namespace: dk8s-test
+  labels: { app: asyncio-load, dk8s-purpose: profiler-testbed }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: asyncio-load } }
+  template:
+    metadata:
+      labels: { app: asyncio-load }
+    spec:
+      containers:
+        - name: app
+          image: python:3.11-slim
+          command: ["python", "-u", "/src/AsyncioLoad.py"]
+          # py-spy attaches with ptrace, which Kubernetes drops by default —
+          # the exact capability dk8s probes for before offering the button.
+          securityContext:
+            capabilities: { add: ["SYS_PTRACE"] }
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits:   { cpu: "1000m", memory: "384Mi" }
+          volumeMounts:
+            - { name: src, mountPath: /src }
+      volumes:
+        - name: src
+          configMap: { name: asyncio-load-src }

@@ -41,12 +41,12 @@ export function parseDaakiaActions(text: string): DaakiaAction[] {
 
 function actionLabel(a: DaakiaAction): string {
   switch (a.action) {
-    case 'set_url':     return '🔗 Set URL';
-    case 'set_method':  return '⚡ Set Method';
-    case 'add_header':  return '📋 Add Header';
-    case 'set_body':    return '📝 Set Body';
-    case 'set_env_var': return '🔧 Set Env Var';
-    case 'set_auth':    return '🔐 Set Auth';
+ case 'set_url': return 'Set URL';
+    case 'set_method':  return 'Set Method';
+ case 'add_header': return 'Add Header';
+ case 'set_body': return 'Set Body';
+ case 'set_env_var': return 'Set Env Var';
+ case 'set_auth': return 'Set Auth';
   }
 }
 

@@ -84,14 +84,64 @@ function snakeCase(raw: string, fallback: string): string {
   return s || fallback;
 }
 
+/**
+ * The part of a request URL a mock route should answer on.
+ *
+ * A mock replaces the host: you point `{{backend}}` at the mock's own address
+ * and the paths underneath stay the same. So the host — however it is written
+ * — is exactly what has to come off, and everything after it has to survive
+ * untouched.
+ *
+ * It used to go through `new URL(url, 'http://placeholder')`, which does the
+ * opposite of both. With no scheme, `{{backend}}/actuator/health` is not a
+ * host and a path — it is one relative path whose first segment happens to
+ * contain braces, so mocking a collection produced routes like
+ * `/%7B%7Bbackend%7D%7D/actuator/health`: the variable kept as a literal
+ * segment, percent-encoded, matching nothing anyone would ever request. The
+ * same encoding hit variables in the middle of a path, so `/users/{{id}}`
+ * became `/users/%7B%7Bid%7D%7D` even when the host was written out in full.
+ *
+ * Hence string surgery rather than a URL parse: a template is not a URL, and
+ * the parser's job here is to know which prefix is the host, not to normalise
+ * the rest.
+ */
 function pathFromUrl(url: string | undefined): string {
-  let path = url || '/';
-  try {
-    const u = new URL(path, 'http://placeholder');
-    path = u.pathname + u.search;
-  } catch { /* not a full URL — keep the raw string as the path */ }
+  let path = (url || '/').trim();
+
+  // `scheme://host[:port]` — the written-out form.
+  path = path.replace(/^[a-zA-Z][\w+.-]*:\/\/[^/?#]*/, '');
+
+  // A leading `{{var}}` is the host. Only the leading one: a variable further
+  // along is part of the path and belongs to the route.
+  path = path.replace(/^\{\{[^}]*\}\}/, '');
+
+  // `localhost:8080/api` — a host and port with no scheme at all. Anchored on
+  // the port, so a path that merely contains a colon is left alone.
+  path = path.replace(/^[a-zA-Z0-9.-]+:\d+(?=[/?#]|$)/, '');
+
+  // A fragment never reaches the server, so it cannot be part of a route.
+  path = path.split('#')[0]!;
+
   if (!path.startsWith('/')) path = '/' + path;
+  // Joining a host that ended in `/` to a path that began with one.
+  path = path.replace(/\/{2,}/g, '/');
   return path;
+}
+
+/**
+ * The variables a URL's host was written as, if any.
+ *
+ * Reported so the mock can say which variable to repoint — the route paths
+ * alone do not tell you that `{{backend}}` is now meant to be the mock's
+ * address, and that is the one step between a mock existing and it answering.
+ */
+export function hostVariablesOf(urls: (string | undefined)[]): string[] {
+  const names = new Set<string>();
+  for (const url of urls) {
+    const m = (url || '').trim().match(/^\{\{([^}]+)\}\}/);
+    if (m) names.add(m[1]!.trim());
+  }
+  return [...names];
 }
 
 // ─── Per-protocol stub builders ──────────────────────────────────────────────
@@ -245,6 +295,40 @@ export function quickMockStubNoun(protocol: MockServerProtocol, count: number): 
 }
 
 /**
+ * One route per method and path.
+ *
+ * A collection holds many requests against the same endpoint — the same POST
+ * with three different bodies, a GET saved twice under different folders — and
+ * each became its own route, so mocking a collection of 52 requests produced
+ * 52 routes with the same path repeated down the list. Only the first could
+ * ever match; the rest were noise that made the real ones hard to find.
+ *
+ * Stripping the host makes this sharper rather than milder: `{{emailServer}}/health`
+ * and `{{validationService}}/health` are different endpoints today and the same
+ * `/health` once a single mock stands in for both. That is inherent to
+ * pointing several variables at one mock, and it is a merge worth reporting
+ * rather than performing quietly — see the count returned here.
+ *
+ * Existing routes win. Re-running Mock on a collection should leave the
+ * responses already edited alone: a route that has been given a body is worth
+ * more than the empty one that would replace it.
+ */
+export function dedupeRoutes(
+  existing: MockRoute[], incoming: MockRoute[],
+): { routes: MockRoute[]; added: number; merged: number } {
+  const seen = new Set(existing.map(r => `${r.method} ${r.path}`));
+  const kept: MockRoute[] = [];
+  let merged = 0;
+  for (const route of incoming) {
+    const key = `${route.method} ${route.path}`;
+    if (seen.has(key)) { merged++; continue; }
+    seen.add(key);
+    kept.push(route);
+  }
+  return { routes: [...existing, ...kept], added: kept.length, merged };
+}
+
+/**
  * Append one stub per request to `server`, in whatever shape that server's protocol uses.
  * Returns a new server — the caller swaps it into its list.
  */
@@ -269,6 +353,6 @@ export function appendQuickMocks(server: MockServer, reqs: QuickMockRequest[]): 
     case 'ai':
       return { ...server, aiScenarios: [...(server.aiScenarios || []), ...reqs.map(toAiScenario)] };
     default:
-      return { ...server, routes: [...server.routes, ...reqs.map(toRoute)] };
+      return { ...server, routes: dedupeRoutes(server.routes, reqs.map(toRoute)).routes };
   }
 }

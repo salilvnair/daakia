@@ -11,6 +11,8 @@ import { postMsg } from '../../vscode';
 import { useToastStore } from '../../store/toast-store';
 import { ModalView, AIButtonView, MultilineInputView, ButtonView } from '@salilvnair/dui';
 import { normalizeCollectionProtocol } from '../../services/collections';
+import { sendAiRequest } from '../../services/ai/ai-client';
+import { importRequestsAsCollection } from '../../services/collections/import-to-collection';
 
 interface Props {
   onClose: () => void;
@@ -93,9 +95,10 @@ export function AiRequestFromLogsModal({ onClose, contextProtocol }: Props) {
     const pid = `ai-logs-${Date.now()}`;
     reqIdRef.current = pid;
 
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'import.logs',
+      screen: 'Import',
       systemPrompts: [SYSTEM_PROMPT],
       userPrompt: `Extract API requests from these server logs:\n\n${logs.slice(0, 8000)}`,
       conversation: [], tools: [],
@@ -104,13 +107,25 @@ export function AiRequestFromLogsModal({ onClose, contextProtocol }: Props) {
     });
   };
 
-  const importAsCollection = () => {
-    if (!result) return;
+  /*
+    This created the collection and stopped — then reported "N requests
+    imported" over an empty one. The extracted requests are saved into it now,
+    and the count comes back from what was actually written.
+  */
+  const importAsCollection = async () => {
+    if (!result || result.length === 0) return;
     try {
-      const collId = `logs-import-${Date.now()}`;
-      postMsg({ type: 'createCollection', id: collId, name: 'Imported from Logs', protocol: normalizeCollectionProtocol(contextProtocol) });
+      const protocol = normalizeCollectionProtocol(contextProtocol);
+      const saved = await importRequestsAsCollection({
+        name: 'Imported from Logs',
+        protocol,
+        requests: result as Record<string, unknown>[],
+      });
       setImported(true);
-      addToast({ type: 'success', message: `${result.length} requests imported as collection!` });
+      addToast({
+        type: 'success',
+        message: `Imported ${saved} request${saved === 1 ? '' : 's'} into "Imported from Logs".`,
+      });
       setTimeout(onClose, 1500);
     } catch {
       setError('Failed to import.');

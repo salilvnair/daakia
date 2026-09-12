@@ -61,13 +61,23 @@ export function AppSidebar({ activeSection, onSectionChange, onOpenChange, sideb
     }
   }, [hasAnyBreakpoints, debugActive, activeSection, onSectionChange]);
 
-  // Protocol-aware sidebar — use store protocol (follows left rail switch)
-  const isMockServer = activeTab?.type === 'mock-server';
-  const isStateMachine = activeTab?.type === 'state-machine';
-  const isDaakiaAi = activeTab?.type === 'daakia-ai';
-  const isWiki = activeTab?.type === 'wiki';
-  // Never show protocol icons when settings, mock-server, state-machine, daakia-ai, or wiki tab is active
-  const showProtocolIcons = !settingsActive && !isMockServer && !isStateMachine && !isDaakiaAi && !isWiki;
+  /*
+    Protocol-aware sidebar — use store protocol (follows left rail switch).
+
+    Only a request tab has protocols, so only a request tab gets the protocol
+    rail and the collections tree beside it. Everything else — settings,
+    mock-server, dk8s, dkgh, state-machine, daakia-ai, wiki, workspace — owns
+    the whole surface, and a REST collections tree next to a Kubernetes pod
+    list is just noise.
+
+    This was a list of `activeTab?.type === …` comparisons, one per standalone
+    kind, and the last two kinds added to the app were never added to it: dkgh
+    and workspace both shipped showing a collections panel they have no use
+    for. Asking what a tab *is* rather than listing what it is not means the
+    next one is right without anybody remembering this line.
+  */
+  const isStandaloneTab = !!activeTab && activeTab.type !== 'request';
+  const showProtocolIcons = !settingsActive && !isStandaloneTab;
   const showRestSidebar = showProtocolIcons && activeProtocol === 'rest';
   const showGraphqlSidebar = showProtocolIcons && activeProtocol === 'graphql';
   const showWebsocketSidebar = showProtocolIcons && activeProtocol === 'websocket';
@@ -91,6 +101,11 @@ export function AppSidebar({ activeSection, onSectionChange, onOpenChange, sideb
     <div className="flex h-full">
       {/* Expandable panel — width animates to 0 when collapsed, CSS-controlled */}
       <div
+        /* Which panel is showing, or nothing when it is collapsed. The width
+           animates to 0 rather than unmounting, so "is it open" is not a
+           question the DOM answers on its own. */
+        data-testid="side-panel"
+        data-section={showPanel && sidebarOpen ? activeSection : ''}
         className="bg-[var(--color-surface)] flex flex-col overflow-hidden"
         style={{
           width: showPanel && sidebarOpen ? sidebarWidth : 0,

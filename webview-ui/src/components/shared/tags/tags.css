@@ -1,0 +1,48 @@
+/*
+  Tags.
+
+  The chips themselves are dui's ChipView — colour, height and padding come from
+  its tokens, so a tag looks like every other chip in the app. Only the layout
+  around them lives here.
+
+  A chip's colour comes from its text, so the same tag is the same colour on
+  every screen it appears on: the point of a chip is that you learn to recognise
+  it, which a colour that changed with list position would defeat.
+*/
+
+.dk-tags { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+
+/* ── The editor ─────────────────────────────────────────────────────────── */
+
+/* Label, then a full-width input on its own row, then the chips wrapping
+   underneath. Chips inside the box looked fine with two and fell apart with
+   eight — the box grew a line at a time and pushed the settings below it down
+   the page as you typed. */
+.dk-tag-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 280px;
+}
+
+.dk-tag-input {
+  width: 100%;
+  padding: 7px 11px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--color-text-primary);
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-surface-border);
+  outline: none;
+}
+.dk-tag-input:focus { border-color: var(--color-accent); }
+.dk-tag-input::placeholder { color: var(--color-text-muted); }
+
+.dk-tag-problem {
+  margin: 0;
+  font-size: 11px;
+  color: var(--color-error);
+}
+
+.dk-tag-list { display: flex; flex-wrap: wrap; gap: 6px; }

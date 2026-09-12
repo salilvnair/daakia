@@ -81,14 +81,33 @@ async function main() {
     logLevel: 'silent',
   });
 
+  // ── Heap parse worker (forked child process) ──────────────────────────────
+  // Parsing a multi-GB dump needs its own heap ceiling and must not be able to
+  // take the extension host down with it, so it runs as a separate process.
+  // Like the MCP server, it uses no VS Code APIs.
+  const heapCtx = await esbuild.context({
+    entryPoints: ['src/services/heap/heap-worker.ts'],
+    bundle: true,
+    format: 'cjs',
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: false,
+    platform: 'node',
+    outfile: 'dist/heap-worker.js',
+    logLevel: 'silent',
+  });
+
   if (watch) {
     await ctx.watch();
     await mcpCtx.watch();
+    await heapCtx.watch();
   } else {
     await ctx.rebuild();
     await ctx.dispose();
     await mcpCtx.rebuild();
     await mcpCtx.dispose();
+    await heapCtx.rebuild();
+    await heapCtx.dispose();
   }
 }
 

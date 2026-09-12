@@ -1,0 +1,442 @@
+/**
+ * The workspace tab.
+ *
+ * What is in this workspace, what you can do next, and the collections
+ * themselves — plus the documentation panel down the right, which is the only
+ * thing on the screen that tells a newcomer what the project actually is.
+ *
+ * The counts come from the host rather than being derived from the sidebar: the
+ * host is the side that knows what the database contains, and a number computed
+ * from a half-loaded view is wrong in a way nobody would think to question.
+ */
+import { useEffect, useRef, useState } from 'react';
+import { ImportModal } from './ImportModal';
+import { useWorkspaceStore, type Workspace } from '../../store/workspace-store';
+import { useTabsStore } from '../../store/tabs-store';
+import { SplitPanelView, AlertDialogView } from '@salilvnair/dui';
+import { NewItemModal } from '../shared/modals/NewItemModal';
+import { useUiStateStore } from '../../store/ui-state-store';
+import { postMsg } from '../../vscode';
+import {
+  LayoutGridIcon, ChevronDownIcon, CheckIcon, PlusIcon, FolderIcon, FolderOpenIcon,
+  DownloadIcon, GlobeIcon, SettingsIcon, PencilIcon, TrashIcon, CloseIcon,
+  UploadIcon, DocumentIcon, CollectionsFolderIcon, ClockIcon,
+  FolderImportIcon, FolderExportIcon,
+} from '../../icons';
+import { WorkspaceDocs } from './WorkspaceDocs';
+import {
+  WorkspaceCollections, WorkspaceEnvironments, WorkspaceHistory,
+} from './ProtocolSections';
+import './workspace.css';
+
+type SubTab = 'overview' | 'collections' | 'environments' | 'history';
+
+/* The count beside a tab is the same number the Overview shows, from the same
+   place — the host — and it counts every protocol. Reading it off the sidebar
+   cache instead would have counted whichever protocol happened to be loaded. */
+const SUBTABS: {
+  id: SubTab;
+  label: string;
+  icon: React.ReactNode;
+  /** The colour the sidebar already uses for this thing. Collections are purple
+      everywhere else in the app; painting them the workspace teal here would
+      make one list two colours depending on which panel you opened it from. */
+  accent: string;
+  count: (s: { collections: number; environments: number; requests: number; history: number }) => number;
+}[] = [
+  { id: 'overview', label: 'Overview', icon: <LayoutGridIcon size={12} />,
+    accent: 'var(--color-workspace)', count: () => 0 },
+  { id: 'collections', label: 'Collections', icon: <CollectionsFolderIcon size={12} />,
+    accent: 'var(--color-sidebar-collections)', count: s => s.collections },
+  { id: 'environments', label: 'Environments', icon: <GlobeIcon size={12} />,
+    accent: 'var(--color-sidebar-environments)', count: s => s.environments },
+  { id: 'history', label: 'History', icon: <ClockIcon size={12} />,
+    accent: 'var(--color-sidebar-history)', count: s => s.history },
+];
+
+/**
+ * A name, cut to something a header can hold.
+ *
+ * Truncated at the source rather than by CSS: the same name is drawn in the
+ * header, in the switcher, in the sentence under Quick Actions and down the
+ * rail, and each of those would need its own overflow rule. One function, and
+ * the full name stays in the tooltip.
+ */
+const MAX_NAME = 20;
+/** The rail is a whole window tall, so it can carry a few more characters. */
+const MAX_RAIL_NAME = 25;
+
+function cut(name: string | undefined, max: number): string {
+  if (!name) return '';
+  return name.length > max ? name.slice(0, max) + '…' : name;
+}
+
+export const shortWorkspaceName = (name: string | undefined) => cut(name, MAX_NAME);
+export const railWorkspaceName = (name: string | undefined) => cut(name, MAX_RAIL_NAME);
+
+export function WorkspacePage() {
+  const { workspaces, activeId, stats, load, switchTo, create, rename, remove, error } =
+    useWorkspaceStore();
+  const active = workspaces.find(w => w.id === activeId);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  /* Everything the workspace tab remembers.
+
+     This component unmounts on a tab switch, so React state alone reopened
+     whatever you had collapsed, sent you back to Overview and forgot the docs
+     width. useUiStateStore debounces its prefs to the host and rehydrates them
+     on launch — the same mechanism the request/response split uses — so these
+     survive a switch and a restart. */
+  const setPref = useUiStateStore(s => s.setPref);
+  const storedSub = useUiStateStore(s => s.prefs['workspace.subtab']) as SubTab | undefined;
+  const docsClosed = useUiStateStore(s => s.prefs['workspace.docsOpen']) === 'closed';
+  const storedSplit = useUiStateStore(s => s.prefs['workspace.docsSplit']);
+
+  const sub = storedSub ?? 'overview';
+  const setSub = (next: SubTab) => setPref('workspace.subtab', next);
+  const docsOpen = !docsClosed;
+  const setDocsOpen = (v: boolean) => setPref('workspace.docsOpen', v ? 'open' : 'closed');
+
+  const [importing, setImporting] = useState(false);
+  const [createColl, setCreateColl] = useState(0);
+  const [createEnv, setCreateEnv] = useState(0);
+  const [naming, setNaming] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [docsSplit, setDocsSplit] = useState(() => Number(storedSplit) || 68);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { load(); }, [load]);
+
+  /* A menu that stays open after you have clicked past it is a menu you have to
+     dismiss twice. */
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
+
+  return (
+    <div className="ws-root">
+      <WorkspaceHeader
+        active={active}
+        workspaces={workspaces}
+        menuOpen={menuOpen}
+        menuRef={menuRef}
+        renaming={renaming}
+        docsOpen={docsOpen}
+        onShowDocs={() => setDocsOpen(true)}
+        onToggleMenu={() => setMenuOpen(o => !o)}
+        onPick={(id) => { switchTo(id); setMenuOpen(false); }}
+        onCreate={() => { setNaming(true); setMenuOpen(false); }}
+        onOpen={() => { postMsg({ type: 'openWorkspace' }); setMenuOpen(false); }}
+        onImport={() => { postMsg({ type: 'importWorkspace' }); setMenuOpen(false); }}
+        onExport={() => { postMsg({ type: 'exportWorkspace' }); setMenuOpen(false); }}
+        onRenameStart={() => { setRenaming(true); setMenuOpen(false); }}
+        onRenameDone={(name) => { if (active && name.trim()) rename(active.id, name); setRenaming(false); }}
+        onDelete={() => { setConfirmingDelete(true); setMenuOpen(false); }}
+      />
+
+      {/* One tab per thing a workspace owns, plus the overview. No Git tab:
+          Git Sync has its own settings page, and a second place to set the same
+          remote is two screens that can disagree about it. */}
+      <nav className="ws-subtabs">
+        {SUBTABS.map(t => (
+          <button
+            key={t.id}
+            type="button"
+            className={`ws-subtab${sub === t.id ? ' ws-subtab--on' : ''}`}
+            style={{ '--ws-subtab-accent': t.accent } as React.CSSProperties}
+            onClick={() => setSub(t.id)}
+          >
+            {t.icon}
+            {t.label}
+            {t.count(stats) > 0 && <span className="ws-subtab-n">{t.count(stats)}</span>}
+          </button>
+        ))}
+      </nav>
+
+      {error && <div className="ws-error">{error}</div>}
+
+      {/* Not the sidebar's panels: those show one protocol, because that is the
+          protocol you are working in. This screen asks what is in the workspace
+          at all, so a workspace with GraphQL and SOAP collections was showing
+          as a workspace with only REST ones. */}
+      {sub === 'collections' ? (
+        <div className="ws-panel"><WorkspaceCollections createSignal={createColl} /></div>
+      ) : sub === 'environments' ? (
+        <div className="ws-panel"><WorkspaceEnvironments createSignal={createEnv} /></div>
+      ) : sub === 'history' ? (
+        <div className="ws-panel"><WorkspaceHistory /></div>
+      ) : (
+      <SplitPanelView
+        direction="horizontal"
+        split={docsSplit}
+        defaultSplit={68}
+        minFirstPct={35}
+        minSecondPct={18}
+        accentColor="var(--color-workspace)"
+        onResize={setDocsSplit}
+        onResizeEnd={next => setPref('workspace.docsSplit', String(next))}
+        collapsed={!docsOpen}
+        style={{ flex: 1, minHeight: 0 }}
+        first={
+        <div className="ws-main">
+          <div className="ws-stats">
+            <Stat n={stats.collections} label="collections" tone="coll" />
+            <Stat n={stats.environments} label="environments" tone="env" />
+            <Stat n={stats.requests} label="requests" tone="req" />
+          </div>
+
+          <div className="ws-caps">Quick actions</div>
+          {/* Each goes through a message the app already answers. Written the
+              other way round once — from what the buttons ought to do — and
+              every one of them was a silent no-op. */}
+          <div className="ws-actions">
+            {/* The same two glyphs and the same two colours the environments
+                menu already uses for import and export — blue in, amber out.
+                A third pair of colours for the same two verbs is one more thing
+                to learn for nothing. */}
+            <Action tone="imp" icon={<FolderImportIcon size={12} />} label="Import"
+              onClick={() => setImporting(true)} />
+            <Action tone="exp" icon={<FolderExportIcon size={12} />} label="Export"
+              onClick={() => postMsg({ type: 'exportWorkspace' })} />
+            {/* Both of these open the panel's own dialog rather than a second
+                create flow of their own — one flow, so they cannot disagree
+                about what a collection or an environment needs. */}
+            <Action tone="new" icon={<PlusIcon size={12} />} label="New collection"
+              onClick={() => { setSub('collections'); setCreateColl(n => n + 1); }} />
+            <Action tone="env" icon={<GlobeIcon size={12} />} label="New environment"
+              onClick={() => { setSub('environments'); setCreateEnv(n => n + 1); }} />
+          </div>
+
+          <div className="ws-caps">This workspace</div>
+          <WorkspaceFacts active={active} stats={stats} />
+        </div>
+        }
+        second={<WorkspaceDocs workspace={active} onOpenChange={setDocsOpen} />}
+      />
+      )}
+
+      {importing && <ImportModal onClose={() => setImporting(false)} />}
+
+      {/* The app's own dialogs, not the browser's. A VS Code webview has no
+          `allow-modals` in its sandbox, so window.prompt returns null and
+          window.confirm returns false — silently, which is why Create
+          Workspace looked broken while doing exactly what it was told. */}
+      <NewItemModal
+        open={naming}
+        title="New Workspace"
+        placeholder="Workspace name"
+        accentColor="var(--color-workspace)"
+        onSave={name => { create(name); setNaming(false); }}
+        onCancel={() => setNaming(false)}
+      />
+
+      <AlertDialogView
+        open={confirmingDelete}
+        title={`Delete "${active?.name ?? 'this workspace'}"?`}
+        message="Its collections, environments and history go with it. This cannot be undone."
+        confirmLabel="Delete"
+        danger
+        onConfirm={() => { if (active) remove(active.id); setConfirmingDelete(false); }}
+        onCancel={() => setConfirmingDelete(false)}
+      />
+    </div>
+  );
+}
+
+// ── Header ───────────────────────────────────────────────────────────────────
+
+function WorkspaceHeader({
+  active, workspaces, menuOpen, menuRef, renaming, docsOpen, onShowDocs,
+  onToggleMenu, onPick, onCreate, onOpen, onImport, onExport,
+  onRenameStart, onRenameDone, onDelete,
+}: {
+  active?: Workspace;
+  workspaces: Workspace[];
+  /** Whether the documentation panel is showing — see `onShowDocs`. */
+  docsOpen: boolean;
+  onShowDocs: () => void;
+  menuOpen: boolean;
+  menuRef: React.RefObject<HTMLDivElement | null>;
+  renaming: boolean;
+  onToggleMenu: () => void;
+  onPick: (id: string) => void;
+  onCreate: () => void;
+  onOpen: () => void;
+  onImport: () => void;
+  onExport: () => void;
+  onRenameStart: () => void;
+  onRenameDone: (name: string) => void;
+  onDelete: () => void;
+}) {
+  const [overflow, setOverflow] = useState(false);
+
+  return (
+    <header className="ws-head">
+      <LayoutGridIcon size={15} className="ws-head-icon" />
+
+      {renaming ? (
+        <input
+          className="ws-rename"
+          defaultValue={active?.name ?? ''}
+          autoFocus
+          onBlur={e => onRenameDone(e.currentTarget.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') onRenameDone(e.currentTarget.value);
+            if (e.key === 'Escape') onRenameDone('');
+          }}
+        />
+      ) : (
+        <button type="button" className="ws-name" onClick={onToggleMenu}
+                title={active?.name ?? 'Workspace'}>
+          {active ? shortWorkspaceName(active.name) : 'Workspace'}
+          <ChevronDownIcon size={12} className="ws-chev" />
+        </button>
+      )}
+
+      <div className="ws-head-spacer" />
+
+      {/*
+        The way back to the documentation.
+
+        Closing it writes `workspace.docsOpen: closed`, and the control that
+        would open it again lived *inside* the panel that preference hides —
+        so the panel could be shut once and never brought back. It is a saved
+        preference, so "never" meant across restarts too.
+      */}
+      {!docsOpen && (
+        <button
+          type="button"
+          className="ws-overflow"
+          title="Show the documentation"
+          onClick={() => onShowDocs()}
+        >
+          <DocumentIcon size={13} />
+        </button>
+      )}
+
+      <button
+        type="button"
+        className="ws-overflow"
+        title="Rename or delete this workspace"
+        onClick={() => setOverflow(o => !o)}
+      >
+        <SettingsIcon size={13} />
+      </button>
+
+      {overflow && (
+        <div className="ws-menu ws-menu--right" onMouseLeave={() => setOverflow(false)}>
+          <button type="button" className="ws-menu-item" onClick={() => { setOverflow(false); onRenameStart(); }}>
+            <PencilIcon size={12} /> Rename
+          </button>
+          <button type="button" className="ws-menu-item ws-menu-item--danger" onClick={() => { setOverflow(false); onDelete(); }}>
+            <TrashIcon size={12} /> Delete
+          </button>
+        </div>
+      )}
+
+      {menuOpen && (
+        <div className="ws-menu" ref={menuRef}>
+          <div className="ws-menu-head">Workspaces</div>
+          {workspaces.map(w => (
+            <button
+              key={w.id}
+              type="button"
+              className={`ws-menu-item${w.id === active?.id ? ' ws-menu-item--on' : ''}`}
+              onClick={() => onPick(w.id)}
+            >
+              <LayoutGridIcon size={12} />
+              <span className="ws-menu-label" title={w.name}>{shortWorkspaceName(w.name)}</span>
+              {w.id === active?.id && <CheckIcon size={12} className="ws-menu-tick" />}
+            </button>
+          ))}
+          <div className="ws-menu-rule" />
+          <button type="button" className="ws-menu-item" onClick={onCreate}>
+            <PlusIcon size={12} /> Create workspace
+          </button>
+          <button type="button" className="ws-menu-item" onClick={onOpen}>
+            <FolderOpenIcon size={12} /> Open workspace
+          </button>
+          <button type="button" className="ws-menu-item" onClick={onImport}>
+            <DownloadIcon size={12} /> Import workspace
+          </button>
+          <button type="button" className="ws-menu-item" onClick={onExport}>
+            <UploadIcon size={12} /> Export workspace
+          </button>
+        </div>
+      )}
+    </header>
+  );
+}
+
+// ── Pieces ───────────────────────────────────────────────────────────────────
+
+/**
+ * A number and what it counts.
+ *
+ * A zero keeps its colour. Greying it out would say "this does not apply", when
+ * what it means is "there are none yet" — and the whole point of the strip is
+ * that it reads at a glance either way.
+ */
+function Stat({ n, label, tone }: { n: number; label: string; tone: string }) {
+  return (
+    <div className="ws-stat">
+      <div className={`ws-stat-n ws-stat-n--${tone}`}>{n}</div>
+      <div className="ws-stat-l">{label}</div>
+    </div>
+  );
+}
+
+function Action({ tone, icon, label, onClick }: {
+  tone: string; icon: React.ReactNode; label: string; onClick: () => void;
+}) {
+  return (
+    <button type="button" className={`ws-act ws-act--${tone}`} onClick={onClick}>
+      {icon}{label}
+    </button>
+  );
+}
+
+/**
+ * What this workspace holds, in words.
+ *
+ * The counts above say how much; this says what — and, more usefully, what is
+ * common rather than scoped, because "why can I still see my mock servers?" is
+ * the first question a workspace raises.
+ */
+function WorkspaceFacts({ active, stats }: {
+  active?: Workspace;
+  stats: { collections: number; environments: number; requests: number };
+}) {
+  const empty = stats.collections === 0 && stats.environments === 0;
+  return (
+    <div className="ws-facts">
+      {empty ? (
+        <div className="ws-empty">
+          <FolderIcon size={26} />
+          <p>Nothing here yet. Create a collection, or import one you already have.</p>
+        </div>
+      ) : (
+        <p className="ws-fact">
+          <b title={active?.name}>{shortWorkspaceName(active?.name)}</b> holds {stats.collections} collection{stats.collections === 1 ? '' : 's'}
+          {stats.environments > 0 && <> and {stats.environments} environment{stats.environments === 1 ? '' : 's'}</>}.
+        </p>
+      )}
+      <p className="ws-fact ws-fact--muted">
+        Mock servers, dk8s and your model providers are shared across every workspace — a
+        workspace scopes what you are testing, not what you are testing it with.
+      </p>
+    </div>
+  );
+}
+
+export { CloseIcon };

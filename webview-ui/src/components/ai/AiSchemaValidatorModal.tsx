@@ -7,6 +7,7 @@ import { SparkleIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
 import { ModalView, AIButtonView, ButtonView, EditorView, ResizablePanelView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface Props {
   responseBody: string;
@@ -76,9 +77,10 @@ export function AiSchemaValidatorModal({ responseBody, method, url, status, onCl
       schema: schema.slice(0, 3000),
     });
 
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'rest.schema.validate',
+      screen: 'REST · Response',
       systemPrompts: [systemPrompt],
       userPrompt,
       conversation: [], tools: [],

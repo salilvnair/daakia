@@ -7,6 +7,9 @@ import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { postMsg } from '../../../vscode';
 import { CodeEditor } from '../../shared';
 import { TrashIcon, RefreshIcon, SearchIcon, CloseIcon, ChevronDownIcon } from '../../../icons';
+import { ModalView, ButtonView } from '@salilvnair/dui';
+import { RequestAuditDetail, parseRequestAudit } from './RequestAuditDetail';
+import { SessionAuditDetail, parseSessionAudit } from './SessionAuditDetail';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,6 +67,7 @@ const MODULE_MAP: Record<string, ModuleInfo> = {
   'AI Features': { label: 'AI Features', color: 'var(--color-protocol-ai)' },
   'Tabs':        { label: 'Tabs',        color: 'var(--color-text-secondary)' },
   'Environment': { label: 'Environment', color: 'var(--color-success)' },
+  'dk8s':        { label: 'dk8s',        color: 'var(--color-dk8s)' },
 };
 
 function moduleFromStage(stage: string): ModuleInfo {
@@ -88,6 +92,15 @@ function moduleFromStage(stage: string): ModuleInfo {
   if (stage.startsWith('tab.'))                          return MODULE_MAP['Tabs']!;
   if (stage.startsWith('env.'))                          return MODULE_MAP['Environment']!;
   if (stage.startsWith('history.'))                      return MODULE_MAP['History']!;
+  /*
+    Before this line existed, every dk8s event fell through to the fallback
+    below and was filed under "System" — the bucket for events whose origin is
+    unknown. Collecting a heap dump from a production pod is not a system
+    event; it is the most specific thing in the log, and it was the one row
+    you could not search for.
+  */
+  if (stage.startsWith('dk8s.') || stage.startsWith('heap.') || stage.startsWith('threads.'))
+    return MODULE_MAP['dk8s']!;
   return { label: 'System', color: 'var(--color-text-muted)' };
 }
 
@@ -245,7 +258,19 @@ export function AuditLogTab() {
     return () => window.removeEventListener('message', handler);
   }, [load]);
 
-  const handleClear = () => {
+  /*
+    Clearing the audit log is asked about first.
+
+    One click of a 12px icon wiped every AI call and UI action ever recorded —
+    the log exists precisely to answer questions after the fact, so it is the
+    one thing here whose loss cannot be worked around by redoing something.
+  */
+  const [confirmClear, setConfirmClear] = useState(false);
+
+  const handleClear = () => setConfirmClear(true);
+
+  const reallyClear = () => {
+    setConfirmClear(false);
     postMsg({ type: 'aiAudit:clear' });
     postMsg({ type: 'uiAudit:clear' });
     setAiEntries([]); setUiEntries([]); setExpanded(null);
@@ -270,6 +295,29 @@ export function AuditLogTab() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
+      <ModalView
+        open={confirmClear}
+        onClose={() => setConfirmClear(false)}
+        title="Clear the audit log?"
+        size="sm"
+        footerRight={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <ButtonView variant="secondary" size="sm" onClick={() => setConfirmClear(false)}>
+              Cancel
+            </ButtonView>
+            <ButtonView variant="primary" size="sm" accentColor="var(--color-error)"
+                        onClick={reallyClear}>
+              Clear {allEntries.length ? `${allEntries.length} entries` : 'all'}
+            </ButtonView>
+          </div>
+        }
+      >
+        <span className="text-[12px]" style={{ color: 'var(--color-text-secondary)' }}>
+          Every AI call and UI action recorded so far is removed, and cannot be
+          recovered. The log is what answers questions after the fact.
+        </span>
+      </ModalView>
+
       {/* ─── Toolbar ─── */}
       <div className="flex items-center border-b shrink-0"
         style={{ height: 28, borderColor: 'var(--color-surface-border)', backgroundColor: 'color-mix(in srgb, var(--color-text-primary) 3%, transparent)' }}>
@@ -339,7 +387,7 @@ export function AuditLogTab() {
 
                 const modelOrButton = e.kind === 'ai' ? (e.model ?? '—') : (e.action ?? '—');
                 const previewText = e.kind === 'ai'
-                  ? (e.error ? `⚠ ${e.error}` : (e.user_prompt ?? '').slice(0, 80) || '—')
+                  ? (e.error ? `${e.error}`: (e.user_prompt ?? '').slice(0, 80) || '—')
                   : (e.event_type);
 
                 return (
@@ -417,7 +465,18 @@ export function AuditLogTab() {
                                   </div>
                                 )}
                               </div>
-                              {e.metadata && <PayloadBlock label="Metadata" value={e.metadata} color={color} />}
+                              {/* Realtime connections get the session layout, request
+                                  protocols the request one, and anything else
+                                  (including older thin rows) falls back to the
+                                  raw payload block. */}
+                              {(() => {
+                                const session = parseSessionAudit(e.metadata);
+                                if (session) return <SessionAuditDetail record={session} />;
+                                const record = parseRequestAudit(e.metadata);
+                                return record
+                                  ? <RequestAuditDetail record={record} />
+                                  : e.metadata ? <PayloadBlock label="Metadata" value={e.metadata} color={color} /> : null;
+                              })()}
                             </div>
                           )}
                         </td>

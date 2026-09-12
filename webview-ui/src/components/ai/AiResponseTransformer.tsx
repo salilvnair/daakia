@@ -7,6 +7,7 @@ import { SparkleIcon, RefreshIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useAiResponseActionsStore } from '../../store/ai-response-actions-store';
 import { ModalView, AIButtonView, ButtonView, IconButtonView, MultilineInputView, CopyButtonView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface Props {
   tabId: string;
@@ -92,9 +93,10 @@ export function AiResponseTransformer({ tabId, responseBody, contentType, method
     const pid = `ai-transform-${Date.now()}`;
     reqIdRef.current = pid;
 
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'rest.response.transform',
+      screen: 'REST · Response',
       systemPrompts: [SYSTEM_PROMPT],
       userPrompt: `Endpoint: ${method || 'GET'} ${url || ''}\nContent-Type: ${contentType || 'application/json'}\n\nTransformation: ${instruction}\n\nResponse body:\n${responseBody.slice(0, 6000)}`,
       conversation: [], tools: [],

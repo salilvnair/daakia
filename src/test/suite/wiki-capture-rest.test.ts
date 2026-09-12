@@ -53,6 +53,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'REST — Params',
     explanation: 'Query parameters editor. Params typed here sync automatically with the URL bar, and each row can be individually enabled/disabled without deleting it.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'addTab', patch: BASE_TAB_PATCH },
       { action: 'click', selector: 'button[data-tab="params"]' },
       { action: 'wait', ms: 300 },
@@ -63,6 +64,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'REST — Headers',
     explanation: 'Request headers editor, with environment variable interpolation (e.g. {{$random.uuid}}) and AI-assisted header suggestions.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'addTab', patch: BASE_TAB_PATCH },
       { action: 'click', selector: 'button[data-tab="headers"]' },
       { action: 'wait', ms: 300 },
@@ -73,6 +75,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'REST — Body (JSON)',
     explanation: 'Request body editor with JSON/XML/form-data/urlencoded modes, syntax highlighting, and AI-assisted body generation.',
     directives: [
+      { action: 'closeAllTabs' },
       {
         action: 'addTab',
         patch: {
@@ -92,6 +95,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'REST — Authorization',
     explanation: 'Auth editor supporting Bearer token, Basic, API Key, OAuth 2.0, and Digest — with per-request or inherited-from-collection modes.',
     directives: [
+      { action: 'closeAllTabs' },
       {
         action: 'addTab',
         patch: { ...BASE_TAB_PATCH, authType: 'bearer', authData: { token: 'eyJhbGciOiJIUzI1NiJ9.mock_token_for_docs' } },
@@ -105,6 +109,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'REST — Scripts',
     explanation: 'Pre-request and post-response scripting with the dk.* runtime — set variables, run assertions, and chain requests.',
     directives: [
+      { action: 'closeAllTabs' },
       {
         action: 'addTab',
         patch: {
@@ -122,6 +127,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'REST — Variables',
     explanation: 'Per-request variables scoped to this tab only, layered on top of environment and collection variables.',
     directives: [
+      { action: 'closeAllTabs' },
       {
         action: 'addTab',
         patch: { ...BASE_TAB_PATCH, variables: [{ id: 'v1', key: 'userId', value: '42', enabled: true }] },
@@ -135,6 +141,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'REST — Response',
     explanation: 'Response viewer with syntax-highlighted body, headers, cookies, timeline, and test results — populated here from a real captured response.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'addTab', patch: { ...BASE_TAB_PATCH, response: SAMPLE_RESPONSE } },
       { action: 'wait', ms: 1800 }, // Monaco needs real time to mount + tokenize on first use
     ],

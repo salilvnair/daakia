@@ -3,7 +3,7 @@ import { EnvironmentEditor } from '../../rest/request/EnvironmentEditor';
 import { GLOBAL_ENV_ID } from '../../../store/env-store';
 import { useEnvStore } from '../../../store/env-store';
 import { RenameIcon } from '../../../icons/daakia-icons';
-import { ModalView, ButtonView, IconButtonView } from '@salilvnair/dui';
+import { ModalView, ButtonView, IconButtonView, TextInputView } from '@salilvnair/dui';
 
 interface EnvironmentModalProps {
   open: boolean;
@@ -25,18 +25,29 @@ export function EnvironmentModal({ open, envId, title, onSave, onCancel, accentC
     if (!open) setEditingName(false);
   }, [open]);
 
+  /*
+    The name field is dui's input, not a bare one.
+
+    It was a raw `<input>` with `px-0`, so the name started at the pixel where
+    its border ended — text jammed against the box. The shared control brings
+    the padding, the height and the focus ring every other field has; only the
+    title's own type size is set at the call site.
+  */
   const headerTitle = (
     <div className="flex items-center gap-2">
       {editingName && activeEnv && !nameReadOnly ? (
-        <input
-          type="text"
+        <TextInputView
           value={activeEnv.name}
           onChange={(e) => renameEnvironment(activeEnv.id, e.target.value)}
           onBlur={() => setEditingName(false)}
           onKeyDown={(e) => e.key === 'Enter' && setEditingName(false)}
           autoFocus
-          className="text-[18px] font-semibold bg-transparent border-b-2 text-[var(--color-text-primary)] focus:outline-none px-0 py-0.5"
-          style={{ borderColor: accentColor || 'var(--color-primary)' }}
+          size="lg"
+          accentColor={accentColor}
+          style={{ minWidth: 300 }}
+          // The title keeps its own size while it is being edited; `style` is
+          // the box, `inputStyle` is the text inside it.
+          inputStyle={{ fontSize: 18, fontWeight: 600 }}
         />
       ) : (
         <span

@@ -2,6 +2,7 @@ import { useCollectionsStore } from '../../store/collections-store';
 import { useDebugStore } from '../../store/debug-store';
 import type { RequestTab, AuthType } from '../../store/tabs-store';
 import { postMsg } from '../../vscode';
+import { isAuditEventEnabled } from '../../store/ui-audit-store';
 import { createResolver, resolveKV, resolveObj } from '../resolve/resolve-service';
 
 /** Resolves auth: inherits from collection if request auth is 'none' */
@@ -72,6 +73,10 @@ function buildPayload(tab: RequestTab, opts?: { downloadResponse?: boolean }) {
   return {
     type: 'executeRequest' as const,
     tabId: tab.id,
+    // The per-event on/off config lives in the webview, but the audit record is
+    // written by the host after the response — so the decision travels with the
+    // request rather than the host guessing.
+    auditEnabled: isAuditEventEnabled('rest.send'),
     envId: tab.envId,
     protocol: tab.protocol || 'rest',
     method: tab.method,
@@ -96,6 +101,9 @@ function buildPayload(tab: RequestTab, opts?: { downloadResponse?: boolean }) {
     postResponseScript: tab.postResponseScript,
     variables: tab.variables,
     collectionId: tab.collectionId,
+    // The host resolves global → collection → this. Sent even when empty so
+    // the request level always exists as a layer.
+    settings: tab.settings,
     // Debugger breakpoints — when present, extension uses async debug session
     // Filter out disabled breakpoints so they don't trigger pauses
     // If breakpoints are muted, send empty arrays
@@ -167,6 +175,11 @@ export function saveRequest(tab: RequestTab) {
       variables: tab.variables,
       preRequestScript: tab.preRequestScript,
       postResponseScript: tab.postResponseScript,
+      // Both live in the blob rather than a column: no migration, and they
+      // travel with every export and sync that already carries `data`.
+      chainExtractions: tab.chainExtractions,
+      docs: tab.docs,
+      examples: tab.examples,
     };
 
     if (tab.protocol === 'ai') {

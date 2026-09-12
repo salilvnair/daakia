@@ -6,6 +6,7 @@
  */
 import './WikiShared.css';
 import { MdViewer } from '../../../../components/shared/display/MdViewer';
+import { WikiIcon } from './WikiIcon';
 
 // ─── Chip color palette ────────────────────────────────────────────────────────
 // A varied multi-hue palette (matching the FeatureChip pattern in
@@ -23,15 +24,18 @@ export function chips(labels: string[]): { label: string; color: string }[] {
 // (see the `hero` prop on WikiScrollPage) — picks up the active tab's accent
 // color automatically since DaakiaViewPage sets --color-accent on its root.
 interface WikiHeroProps {
-  emoji: string;
+  icon: string;
   title: string;
   subtitle: string;
   chips?: { label: string; color?: string }[];
 }
-export function WikiHero({ emoji, title, subtitle, chips }: WikiHeroProps) {
+export function WikiHero({ icon, title, subtitle, chips }: WikiHeroProps) {
   return (
     <div className="dw-hero">
-      <h1 className="dw-hero-title">{emoji} {title}</h1>
+      <h1 className="dw-hero-title">
+        <WikiIcon name={icon} size={22} className="dw-hero-icon" />
+        {title}
+      </h1>
       <p className="dw-hero-subtitle">{subtitle}</p>
       {chips && chips.length > 0 && (
         <div className="dw-hero-chips">
@@ -60,11 +64,11 @@ interface CalloutProps {
   title?: string;
   children: React.ReactNode;
 }
+const CALLOUT_ICON = { info: 'info', warn: 'warning', ok: 'check', tip: 'ai' } as const;
 export function Callout({ type, title, children }: CalloutProps) {
-  const emoji = type === 'info' ? 'ℹ️' : type === 'warn' ? '⚠️' : type === 'ok' ? '✅' : '💡';
   return (
     <div className={`dw-callout ${type}`}>
-      <span className="dw-callout-icon">{emoji}</span>
+      <span className="dw-callout-icon"><WikiIcon name={CALLOUT_ICON[type]} size={15} /></span>
       <div className="dw-callout-text">
         {title && <strong>{title}</strong>}
         {children}
@@ -129,12 +133,12 @@ export function Steps({ steps }: { steps: (string | React.ReactNode)[] }) {
 }
 
 // ─── Feature card grid ────────────────────────────────────────────────────────
-export function FeatureGrid({ items }: { items: { emoji: string; title: string; desc: string }[] }) {
+export function FeatureGrid({ items }: { items: { icon: string; title: string; desc: string }[] }) {
   return (
     <div className="dw-feat-grid">
       {items.map((item) => (
         <div key={item.title} className="dw-feat-card">
-          <div className="dw-feat-icon">{item.emoji}</div>
+          <div className="dw-feat-icon"><WikiIcon name={item.icon} size={17} /></div>
           <div className="dw-feat-title">{item.title}</div>
           <div className="dw-feat-desc">{item.desc}</div>
         </div>
@@ -316,10 +320,10 @@ export function AuthTabPanel() {
 }
 
 // ─── Section title ────────────────────────────────────────────────────────────
-export function SectionTitle({ id, emoji, children }: { id?: string; emoji: string; children: React.ReactNode }) {
+export function SectionTitle({ id, icon, children }: { id?: string; icon: string; children: React.ReactNode }) {
   return (
     <h2 id={id} className="dw-section-title">
-      <span className="dw-section-emoji">{emoji}</span>
+      <span className="dw-section-emoji"><WikiIcon name={icon} size={15} /></span>
       {children}
     </h2>
   );
@@ -329,7 +333,7 @@ export function SectionTitle({ id, emoji, children }: { id?: string; emoji: stri
 // Scrolls the target SectionTitle (by id) into view within whichever scrollable
 // ancestor contains it — works regardless of nesting since scrollIntoView walks
 // up the real scroll chain, not a hardcoded ref.
-export interface TocItem { id: string; emoji: string; label: string }
+export interface TocItem { id: string; icon: string; label: string }
 export function TocBar({ items }: { items: TocItem[] }) {
   const handleClick = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -338,7 +342,7 @@ export function TocBar({ items }: { items: TocItem[] }) {
     <div className="dw-toc-bar">
       {items.map(item => (
         <button key={item.id} type="button" className="dw-toc-bar-item" onClick={() => handleClick(item.id)}>
-          <span>{item.emoji}</span>{item.label}
+          <WikiIcon name={item.icon} size={13} />{item.label}
         </button>
       ))}
     </div>
@@ -451,7 +455,7 @@ export function WikiCard({ title, icon, children }: { title: string; icon?: stri
   return (
     <div className="dw-card">
       <div className="dw-card-header">
-        {icon && <span>{icon}</span>}
+        <WikiIcon name={icon} size={14} />
         {title}
       </div>
       <div className="dw-card-body">{children}</div>
@@ -460,6 +464,39 @@ export function WikiCard({ title, icon, children }: { title: string; icon?: stri
 }
 
 // ─── Divider ──────────────────────────────────────────────────────────────────
+/**
+ * A diagram with the claim it is making written underneath it.
+ *
+ * The caption is not decoration: a picture with no stated claim leaves the
+ * reader to guess which part of it is the point. `label` is the same claim for
+ * anyone who cannot see the drawing, which is why both are required rather
+ * than optional.
+ *
+ * Wide diagrams scroll inside this box rather than widening the page — a wiki
+ * that scrolls sideways as a whole is worse than one figure that does.
+ */
+export function WikiFigure({ label, caption, children }: {
+  label: string;
+  caption: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <figure className="my-1 flex flex-col gap-2">
+      <div
+        className="overflow-x-auto rounded-[var(--dw-card-radius)] px-4 py-4"
+        style={{ background: 'var(--dw-surface)', border: '1px solid var(--dw-border)' }}
+        role="img"
+        aria-label={label}
+      >
+        {children}
+      </div>
+      <figcaption className="text-[11px] leading-relaxed" style={{ color: 'var(--dw-muted)' }}>
+        {caption}
+      </figcaption>
+    </figure>
+  );
+}
+
 export function Divider() {
   return <div className="dw-divider" />;
 }

@@ -4,6 +4,7 @@ import { EditorView, IconButtonView, CopyButtonView } from '@salilvnair/dui';
 import { downloadBlob } from '../../../services/response';
 import { WrapLinesIcon, DownloadIcon, SearchIcon, MoreVerticalIcon, CloseCircleIcon } from '../../../icons';
 import { useClickOutside } from '../../../hooks/useClickOutside';
+import { useComparable } from '../../../services/compare/comparable-registry';
 
 interface RawViewProps {
   response: { body: string; contentType: string };
@@ -35,8 +36,13 @@ export function RawResponseView({ response, wrapLines, setWrapLines, tabId }: Ra
     monacoEditorRef.current = editor;
   }, []);
 
+  /* Right-click → Compare with clipboard. The editor's own module copy is
+     invisible to `window.monaco`, so the surface hands over its text itself. */
+  const comparableRef = useRef<HTMLDivElement>(null);
+  useComparable(comparableRef, 'Response body', () => response.body ?? '');
+
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div ref={comparableRef} className="flex-1 flex flex-col min-h-0">
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-1.5">
         <span className="text-[12px] text-[var(--color-primary)] font-medium">Raw Response Body</span>

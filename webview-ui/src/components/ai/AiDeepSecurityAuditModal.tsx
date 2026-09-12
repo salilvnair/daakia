@@ -35,12 +35,12 @@ Analyze for:
 Format output as:
 ## Security Score: X/100
 
-### Critical Issues 🔴
+### Critical Issues 
 | Endpoint | Vulnerability | PoC | Remediation |
 
-### High Issues 🟠
-### Medium Issues 🟡
-### Low Issues 🟢
+### High Issues 
+### Medium Issues 
+### Low Issues 
 
 ### Pentest Checklist
 - [ ] Manual checks to perform
@@ -145,7 +145,7 @@ export function AiDeepSecurityAuditModal({ collectionNode, onClose }: Props) {
             background: 'color-mix(in srgb, var(--color-error) 8%, transparent)',
             border: '1px solid color-mix(in srgb, var(--color-error) 25%, transparent)',
           }}>
-            <p style={{ fontSize: 11, fontWeight: 500, marginBottom: 4, color: 'var(--color-error)' }}>⚠ Security Audit</p>
+            <p style={{ fontSize: 11, fontWeight: 500, marginBottom: 4, color: 'var(--color-error)'}}> Security Audit</p>
             <p style={{ fontSize: 11, margin: 0, color: 'var(--color-text-muted)' }}>
               AI will perform a deep OWASP Top 10 scan of <strong>{collectionNode.name}</strong>: exposed tokens, injection surfaces, missing auth on sensitive endpoints, CORS misconfig, and SSRF vectors. Generates a pentest checklist with PoC payloads.
             </p>

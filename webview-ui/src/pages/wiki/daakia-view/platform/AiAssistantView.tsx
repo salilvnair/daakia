@@ -4,12 +4,12 @@ import { GeneralAssistantIcon } from '../../../../icons';
 import { PLATFORM_CAPTURES } from './captures';
 
 const TOC_ITEMS: TocItem[] = [
-  { id: 'ai-chat', emoji: '💬', label: 'Daakia AI Chat' },
-  { id: 'ai-inline', emoji: '✨', label: 'Inline AI Features' },
-  { id: 'ai-providers', emoji: '🔌', label: 'Providers' },
-  { id: 'ai-library', emoji: '📚', label: 'Prompt Library' },
-  { id: 'ai-audit', emoji: '🧾', label: 'AI Audit' },
-  { id: 'ai-scripting', emoji: '⚙️', label: 'dk.* Scripting' },
+  { id: 'ai-chat', icon: 'mail', label: 'Daakia AI Chat' },
+  { id: 'ai-inline', icon: '✨', label: 'Inline AI Features' },
+  { id: 'ai-providers', icon: 'connect', label: 'Providers' },
+  { id: 'ai-library', icon: 'book', label: 'Prompt Library' },
+  { id: 'ai-audit', icon: 'file', label: 'AI Audit' },
+  { id: 'ai-scripting', icon: 'settings', label: 'dk.* Scripting' },
 ];
 
 export function AiAssistantView() {
@@ -19,7 +19,7 @@ export function AiAssistantView() {
     <WikiScrollPage
       hero={
         <WikiHero
-          emoji="🤖"
+          icon="agent"
           title="AI Assistant"
           subtitle="A dedicated Daakia AI chat panel, plus 80+ inline AI features spread across every protocol — each triggered right where you need it, not from one central menu."
           chips={chips(['Daakia AI Chat', 'Inline Features', 'Multi-Provider', 'Prompt Library'])}
@@ -40,14 +40,14 @@ export function AiAssistantView() {
 
       <div>
         <Callout type="info" title="Two Ways to Use AI">
-          <strong>1. Daakia AI panel</strong> — a dedicated chat tab in the sidebar (bottom-right icon), built on the same{' '}
-          <Code>ConvEngineChat</Code> library used everywhere conversational UI appears in Daakia.{' '}
+          <strong>1. Daakia AI panel</strong> — a dedicated chat tab in the sidebar (bottom-right icon), built on the same
+          <Code>ConvEngineChat</Code> library used everywhere conversational UI appears in Daakia.
           <strong>2. Inline AI features</strong> — dozens of single-purpose AI tools wired directly into the request
           builder, response panels, and Collections tree — a sparkle (✨) icon or a right-click menu item, not a
           separate chat.
         </Callout>
 
-        <SectionTitle id="ai-chat" emoji="💬">Daakia AI Chat</SectionTitle>
+        <SectionTitle id="ai-chat" icon="mail">Daakia AI Chat</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           Open it from the sidebar's AI icon. It's a full conversational panel — ask it to translate a Postman
           script, explain a WSDL, or generate test data, and it routes to the same underlying features the inline
@@ -70,7 +70,7 @@ export function AiAssistantView() {
       <Divider />
 
       <div>
-        <SectionTitle id="ai-inline" emoji="✨">Inline AI Features</SectionTitle>
+        <SectionTitle id="ai-inline" icon="✨">Inline AI Features</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           There are over 80 of these across the app — each one is a real, independently-wired component, not a
           fabricated "agent" list. A representative sample, grouped by where you'll actually find them:
@@ -111,12 +111,12 @@ export function AiAssistantView() {
           </p>
         </Collapsible>
 
-        <SectionTitle id="ai-providers" emoji="🔌">Supported Providers</SectionTitle>
+        <SectionTitle id="ai-providers" icon="connect">Supported Providers</SectionTitle>
         <FeatureGrid items={[
-          { emoji: '🎭', title: 'DaakiaAI (Mock)', desc: 'Built-in, no API key — deterministic fake responses for trying features offline.' },
-          { emoji: '🐙', title: 'GitHub Copilot', desc: 'No API key — uses VS Code\'s own Language Model API and your existing Copilot subscription.' },
-          { emoji: '🔑', title: 'Bring your own key', desc: 'OpenAI, Anthropic, Google Gemini, Groq, Together, Mistral, xAI (Grok), DeepSeek, Azure OpenAI, or a Custom OpenAI-compatible endpoint.' },
-          { emoji: '🖥️', title: 'Ollama (local)', desc: 'Point at a local Ollama server — fully offline, no key needed.' },
+          { icon: 'mock', title: 'DaakiaAI (Mock)', desc: 'Built-in, no API key — deterministic fake responses for trying features offline.' },
+          { icon: '', title: 'GitHub Copilot', desc: 'No API key — uses VS Code\'s own Language Model API and your existing Copilot subscription.' },
+          { icon: 'key', title: 'Bring your own key', desc: 'OpenAI, Anthropic, Google Gemini, Groq, Together, Mistral, xAI (Grok), DeepSeek, Azure OpenAI, or a Custom OpenAI-compatible endpoint.' },
+          { icon: 'server', title: 'Ollama (local)', desc: 'Point at a local Ollama server — fully offline, no key needed.' },
         ]} />
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           Configure providers in <strong>Settings → LLM Provider</strong>: add a provider, pick its models, set one as
@@ -127,7 +127,7 @@ export function AiAssistantView() {
       {cap('ai-authorization')}
 
       <div>
-        <SectionTitle id="ai-library" emoji="📚">Prompt Library</SectionTitle>
+        <SectionTitle id="ai-library" icon="book">Prompt Library</SectionTitle>
         <Steps steps={[
           'Open <strong>Settings → Prompt Library</strong>',
           'Browse under two real sections: <strong>Agent Prompts</strong> (the system prompts behind each AI feature above) and <strong>AI Actions</strong> (the request templates each inline trigger sends)',
@@ -139,7 +139,7 @@ export function AiAssistantView() {
       {cap('ai-settings-tab')}
 
       <div>
-        <SectionTitle id="ai-audit" emoji="🧾">AI Audit Trail</SectionTitle>
+        <SectionTitle id="ai-audit" icon="file">AI Audit Trail</SectionTitle>
         <Callout type="info">
           <strong>Settings → AI Audit</strong> logs every AI call in full: the exact system prompt, user prompt, request
           payload, response payload, headers, model, duration, and any error — not just a token count. Useful for
@@ -151,9 +151,9 @@ export function AiAssistantView() {
       <Divider />
 
       <div>
-        <SectionTitle id="ai-scripting" emoji="⚙️">dk.* Scripting API (used by AI-generated scripts)</SectionTitle>
+        <SectionTitle id="ai-scripting" icon="settings">dk.* Scripting API (used by AI-generated scripts)</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
-          When an AI feature generates a Pre-request/Post-response script, it uses the same real{' '}
+          When an AI feature generates a Pre-request/Post-response script, it uses the same real
           <Code>dk.*</Code> runtime you'd write by hand — never a <Code>daakia.*</Code> or <Code>pm.*</Code> namespace:
         </p>
         <WikiTable

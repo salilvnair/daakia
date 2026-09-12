@@ -1,17 +1,18 @@
 import { WikiScrollPage, CaptureCard } from '../capture/CaptureScrollView';
-import { WikiHero, SectionTitle, SubTitle, Steps, FeatureGrid, Callout, WikiTable, Code, Collapsible, WikiCard, Divider, ProtocolActivateNote, chips, TocBar, type TocItem } from '../shared/WikiShared';
+import { WikiHero, SectionTitle, SubTitle, Steps, FeatureGrid, Callout, WikiTable, Code, CodeBlock, Collapsible, WikiCard, Divider, ProtocolActivateNote, chips, TocBar, type TocItem } from '../shared/WikiShared';
 import { CollectionsFolderIcon, ClockIcon, LayersIcon } from '../../../../icons';
 import { PLATFORM_CAPTURES } from './captures';
 
 const TOC_ITEMS: TocItem[] = [
-  { id: 'ce-collections', emoji: '📁', label: 'Collections' },
-  { id: 'ce-environments', emoji: '🌿', label: 'Environments' },
-  { id: 'ce-history', emoji: '🕐', label: 'History' },
-  { id: 'ce-auth', emoji: '🔒', label: 'Auth' },
-  { id: 'ce-scripts', emoji: '📝', label: 'Scripts' },
-  { id: 'ce-cookies', emoji: '🍪', label: 'Cookies' },
-  { id: 'ce-timeline', emoji: '⏱️', label: 'Timeline' },
-  { id: 'ce-devtools', emoji: '🛠️', label: 'DevTools' },
+  { id: 'ce-collections', icon: 'folder', label: 'Collections' },
+  { id: 'ce-environments', icon: 'git', label: 'Environments' },
+  { id: 'ce-history', icon: 'clock', label: 'History' },
+  { id: 'ce-auth', icon: 'lock', label: 'Auth' },
+  { id: 'ce-scripts', icon: 'pencil', label: 'Scripts' },
+  { id: 'ce-cookies', icon: 'cookie', label: 'Cookies' },
+  { id: 'ce-timeline', icon: 'clock', label: 'Timeline' },
+  { id: 'ce-cli', icon: 'agent', label: 'CI runner' },
+  { id: 'ce-devtools', icon: 'settings', label: 'DevTools' },
 ];
 
 // A pixel `crop` here (x/width slice of the capture, to zoom into just the
@@ -34,7 +35,7 @@ export function CollectionsEnvView() {
     <WikiScrollPage
       hero={
         <WikiHero
-          emoji="🗂️"
+          icon="folder"
           title="Collections, Environments & More"
           subtitle="Everything that lives around a request — folders, variables, history, auth, scripts, cookies, and the request timeline."
           chips={chips(['Collections', 'Environments', 'History', 'Auth', 'Scripts', 'Cookies'])}
@@ -59,12 +60,12 @@ export function CollectionsEnvView() {
       <Divider />
 
       <div>
-        <SectionTitle id="ce-collections" emoji="📁">Collections</SectionTitle>
+        <SectionTitle id="ce-collections" icon="folder">Collections</SectionTitle>
         <FeatureGrid items={[
-          { emoji: '📂', title: 'Organize', desc: 'Create nested folders and group requests by domain, project, or environment.' },
-          { emoji: '✏️', title: 'CRUD', desc: 'Right-click any item — Rename, Duplicate, Delete, Move — inline editing.' },
-          { emoji: '🖱️', title: 'Drag & Drop', desc: 'Reorder requests and folders by dragging. Move between collections.' },
-          { emoji: '▶️', title: 'Collection Runner', desc: 'Run all requests in a collection sequentially with optional delay and stop-on-error.' },
+          { icon: 'folderOpen', title: 'Organize', desc: 'Create nested folders and group requests by domain, project, or environment.' },
+          { icon: 'pencil', title: 'CRUD', desc: 'Right-click any item — Rename, Duplicate, Delete, Move — inline editing.' },
+          { icon: 'select', title: 'Drag & Drop', desc: 'Reorder requests and folders by dragging. Move between collections.' },
+          { icon: 'play', title: 'Collection Runner', desc: 'Run all requests in a collection sequentially with optional delay and stop-on-error.' },
         ]} />
         <SubTitle>Import Formats</SubTitle>
         <WikiTable
@@ -89,16 +90,17 @@ export function CollectionsEnvView() {
             ['Insomnia', 'Insomnia workspace export'],
             ['Bruno (.bru)', 'Bruno\'s plain-text request format'],
             ['HTTPie', 'Command-line HTTPie syntax, one file per request'],
-            ['OpenAPI 3.0', 'Reverse-generated spec from your requests'],
+            ['OpenAPI 3.1', 'Reverse-generated spec — with servers, security schemes and your Docs text'],
             ['API Docs (Markdown)', 'Human-readable Markdown documentation of the collection'],
           ]}
         />
         <Callout type="info">
-          The top-level sidebar toolbar's "Export as JSON" shortcut isn't wired up yet (shows a "not implemented" toast)
-          — use right-click → Export on a specific collection for the real export flow.
+          Every format above is on both menus. The toolbar's <b>Export</b> submenu writes
+          <b>all</b> your collections in the chosen format; right-click a single collection and its
+          Export submenu writes just that one.
         </Callout>
         <SubTitle>Collection Properties</SubTitle>
-        <WikiCard title="Collection-Level Settings" icon="⚙️">
+        <WikiCard title="Collection-Level Settings" icon="settings">
           <Steps steps={[
             'Right-click a collection → <strong>Properties</strong>',
             '<strong>Variables tab</strong>: Set variables for all requests directly in this collection/folder',
@@ -140,7 +142,7 @@ export function CollectionsEnvView() {
 
       {/* ─── Environments ─────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="ce-environments" emoji="🌿">Environments & Variables</SectionTitle>
+        <SectionTitle id="ce-environments" icon="git">Environments & Variables</SectionTitle>
         <Callout type="tip" title="Variable Priority (Highest → Lowest)">
           Request Variables → Collection Variables → Active Environment → Global Environment
         </Callout>
@@ -161,7 +163,7 @@ export function CollectionsEnvView() {
           ]}
         />
         <Callout type="info">
-          "Global" isn't a per-variable toggle inside a normal environment — it's a whole separate, always-active{' '}
+          "Global" isn't a per-variable toggle inside a normal environment — it's a whole separate, always-active
           <strong>Global</strong> environment. Variables you add there resolve everywhere without switching, which is
           why they act like app-wide constants.
         </Callout>
@@ -187,15 +189,15 @@ export function CollectionsEnvView() {
 
       {/* ─── History ──────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="ce-history" emoji="🕐">History</SectionTitle>
+        <SectionTitle id="ce-history" icon="clock">History</SectionTitle>
         <FeatureGrid items={[
-          { emoji: '📋', title: 'Auto-recorded', desc: 'Every sent request is saved automatically — method, URL, status, time.' },
-          { emoji: '▶️', title: 'Replay', desc: 'Click any history entry to open it in a new tab with full headers, body, and auth.' },
-          { emoji: '🗑️', title: 'Clear', desc: 'Delete individual entries or clear all history at once.' },
-          { emoji: '💾', title: 'Persistent', desc: 'Stored in SQLite — history survives VS Code restarts.' },
+          { icon: 'clipboard', title: 'Auto-recorded', desc: 'Every sent request is saved automatically — method, URL, status, time.' },
+          { icon: 'play', title: 'Replay', desc: 'Click any history entry to open it in a new tab with full headers, body, and auth.' },
+          { icon: 'trash', title: 'Clear', desc: 'Delete individual entries or clear all history at once.' },
+          { icon: 'save', title: 'Persistent', desc: 'Stored in SQLite — history survives VS Code restarts.' },
         ]} />
         <Callout type="info">
-          Replaying a history entry that had a file upload will show the original file path. If the file was moved or deleted, a red warning ⚠️ appears on the form-data row.
+          Replaying a history entry that had a file upload will show the original file path. If the file was moved or deleted, a red warning  appears on the form-data row.
         </Callout>
         {byId['platform-sidebar-history'] && <CaptureCard entry={byId['platform-sidebar-history']} />}
       </div>
@@ -204,7 +206,7 @@ export function CollectionsEnvView() {
 
       {/* ─── Authentication ───────────────────────────────────────── */}
       <div>
-        <SectionTitle id="ce-auth" emoji="🔒">Authentication</SectionTitle>
+        <SectionTitle id="ce-auth" icon="lock">Authentication</SectionTitle>
         <SubTitle>Built-in Auth Types</SubTitle>
         <WikiTable
           headers={['Type', 'What it sends', 'Best for']}
@@ -216,7 +218,7 @@ export function CollectionsEnvView() {
           ]}
         />
         <SubTitle>OAuth 2.0 Grant Types</SubTitle>
-        <WikiCard title="Client Credentials" icon="🔑">
+        <WikiCard title="Client Credentials" icon="key">
           <Steps steps={[
             'Go to request <strong>Auth</strong> tab → select OAuth 2.0',
             'Set Grant Type: <strong>Client Credentials</strong>',
@@ -225,7 +227,7 @@ export function CollectionsEnvView() {
             'Token is injected as <strong>Authorization: Bearer ...</strong> on send',
           ]} />
         </WikiCard>
-        <WikiCard title="Authorization Code (PKCE)" icon="🌐">
+        <WikiCard title="Authorization Code (PKCE)" icon="globe">
           <Steps steps={[
             'Grant Type: <strong>Authorization Code</strong>',
             'Fill Auth URL, Token URL, Client ID, Redirect URI, Scope',
@@ -248,7 +250,7 @@ export function CollectionsEnvView() {
 
       {/* ─── Scripts & Testing ────────────────────────────────────── */}
       <div>
-        <SectionTitle id="ce-scripts" emoji="📝">Scripts & Testing</SectionTitle>
+        <SectionTitle id="ce-scripts" icon="pencil">Scripts & Testing</SectionTitle>
         <Callout type="info" title="What are Scripts?">
           JavaScript snippets that run before a request (Pre-request) or after the response (Post-response).
           Use them to set dynamic headers, chain requests, and write automated test assertions.
@@ -295,10 +297,10 @@ export function CollectionsEnvView() {
           ]}
         />
         <Callout type="warn">
-          There's no <Code>daakia.*</Code> namespace — every script API is under <Code>dk.*</Code> (e.g. <Code>dk.env</Code>,{' '}
-          <Code>dk.request</Code>, <Code>dk.response</Code>, <Code>dk.test</Code>, <Code>dk.expect</Code>). Methods like{' '}
+          There's no <Code>daakia.*</Code> namespace — every script API is under <Code>dk.*</Code> (e.g. <Code>dk.env</Code>,
+          <Code>dk.request</Code>, <Code>dk.response</Code>, <Code>dk.test</Code>, <Code>dk.expect</Code>). Methods like
           <Code>dk.setVariable</Code>, <Code>dk.fetch</Code>, or <Code>.toBeArray()</Code> that show up in older AI-generated
-          scripts don't exist — use <Code>dk.env.set</Code>, <Code>dk.sendRequest({'{ url }'})</Code>, and{' '}
+          scripts don't exist — use <Code>dk.env.set</Code>, <Code>dk.sendRequest({'{ url }'})</Code>, and
           <Code>toMatchSchema({'{ type: \'array\' }'})</Code> instead.
         </Callout>
         <Collapsible title="Collection-Level Scripts">
@@ -312,12 +314,12 @@ export function CollectionsEnvView() {
 
       {/* ─── Cookies ──────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="ce-cookies" emoji="🍪">Cookies</SectionTitle>
+        <SectionTitle id="ce-cookies" icon="cookie">Cookies</SectionTitle>
         <FeatureGrid items={[
-          { emoji: '📥', title: 'Auto-capture', desc: 'Cookies from Set-Cookie headers are automatically stored per domain.' },
-          { emoji: '📤', title: 'Auto-send', desc: 'Stored cookies are sent with subsequent requests to the same domain.' },
-          { emoji: '👁️', title: 'Cookie Viewer', desc: 'See all cookies in the Response panel → Cookies tab after a request.' },
-          { emoji: '🌐', title: 'Domain-scoped', desc: 'Cookies are isolated per domain — httpbin.org and api.example.com are separate.' },
+          { icon: 'download', title: 'Auto-capture', desc: 'Cookies from Set-Cookie headers are automatically stored per domain.' },
+          { icon: 'upload', title: 'Auto-send', desc: 'Stored cookies are sent with subsequent requests to the same domain.' },
+          { icon: 'eye', title: 'Cookie Viewer', desc: 'See all cookies in the Response panel → Cookies tab after a request.' },
+          { icon: 'globe', title: 'Domain-scoped', desc: 'Cookies are isolated per domain — httpbin.org and api.example.com are separate.' },
         ]} />
         <Callout type="info">
           Cookie jar is global across tabs — all tabs share cookies for the same domain.
@@ -330,7 +332,7 @@ export function CollectionsEnvView() {
 
       {/* ─── Timeline ─────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="ce-timeline" emoji="⏱️">Timeline & Network</SectionTitle>
+        <SectionTitle id="ce-timeline" icon="clock">Timeline & Network</SectionTitle>
         <SubTitle>Timeline Breakdown</SubTitle>
         <WikiTable
           headers={['Phase', 'What it measures']}
@@ -358,7 +360,60 @@ export function CollectionsEnvView() {
 
       {/* ─── DevTools ─────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="ce-devtools" emoji="🛠️">DevTools Panel</SectionTitle>
+        <SectionTitle id="ce-cli" icon="agent">Running a collection in CI</SectionTitle>
+        <p className="dw-p">
+          Export a collection (or point at a Postman v2.1 file) and run it from a pipeline. The
+          runner speaks the two things CI needs: an exit code, and a report a build page can
+          render.
+        </p>
+        <Callout type="info" title="The same iteration in the app">
+          <b>Run collection</b> takes an iteration count, or a CSV/JSON data file — one pass per
+          row, each column bound as a variable, so a request saying <Code>{'{{email}}'}</Code> gets
+          that row&rsquo;s value. A data file wins over the count rather than multiplying with it.
+          The file is parsed by the same module the CLI uses, so fifty rows here are fifty rows in
+          the pipeline.
+        </Callout>
+        <CodeBlock label="A pipeline step" lang="bash">
+{`node cli/daakia-run.mjs api.daakia.json \
+  --env staging.json \
+  --env-var token=$API_TOKEN \
+  --folder Smoke \
+  --junit report.xml`}
+        </CodeBlock>
+        <WikiTable
+          headers={['Flag', 'Does']}
+          rows={[
+            ['--env <file>', 'Environment file — a {"key":"value"} map or a Daakia env export'],
+            ['--env-var k=v', 'Override one variable; repeatable, and it beats the file — this is where a CI secret goes'],
+            ['--folder <name>', 'Run one folder. Matched on whole path segments, so it cannot quietly match a request name'],
+            ['--filter <text>', 'Run requests whose name contains the text'],
+            ['--data <file>', 'CSV or JSON rows — one run of the collection per row, columns bound as variables'],
+            ['--iterations <n>', 'Run n times, when there is no data file'],
+            ['--delay <ms>', 'Wait between requests — between batches when running concurrently'],
+            ['--concurrency <n>', 'Send n at a time, in batches: for suites whose order does not matter'],
+            ['--timeout <ms>', 'Per-request timeout (default 30000)'],
+            ['--bail', 'Stop at the first failure'],
+            ['--insecure', 'Ignore TLS certificate errors'],
+            ['--json', 'Machine-readable report on stdout'],
+            ['--junit <file>', 'JUnit XML — what GitHub Actions, GitLab and Jenkins actually display'],
+          ]}
+        />
+        <Callout type="info" title="Fifty accounts from a CSV">
+          <Code>--data users.csv</Code> runs the whole collection once per row, with each column
+          bound as a variable: a request that says <Code>{'{{email}}'}</Code> gets row one&rsquo;s
+          email on the first pass and row two&rsquo;s on the second. The JUnit report gives each
+          iteration its own suite, so a failure names the row rather than repeating the request.
+        </Callout>
+        <Callout type="warn" title="The exit code is the contract">
+          <Code>0</Code> when every request passed, <Code>1</Code> when any failed. Nothing else —
+          a run that exits any other way is the runner itself failing, and worth reporting.
+        </Callout>
+      </div>
+
+      <Divider />
+
+      <div>
+        <SectionTitle id="ce-devtools" icon="settings">DevTools Panel</SectionTitle>
         <Callout type="info" title="Not the same as the Response panel">
           The bottom DevTools panel is app-wide — it aggregates script console output and network activity across every tab, independent of whichever single request/response you're currently looking at.
         </Callout>

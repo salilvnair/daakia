@@ -89,21 +89,37 @@ function JsonNode({ path, value, depth, onAssert, hovered, setHovered }: JsonNod
   );
 }
 
-function generateAssertion(path: string, value: unknown): string {
-  const accessor = path.split('.').reduce((acc, part) => {
-    if (part.includes('[')) {
-      const [key, idx] = part.split('[');
-      return `${acc}.${key}[${idx.replace(']', '')}]`;
-    }
-    return `${acc}.${part}`;
-  }, 'data');
+/**
+ * The expression that reads this field out of `data`.
+ *
+ * The tree already builds paths in JavaScript's own syntax — `users[0].id`,
+ * or `[0].name` for a response whose root is an array — so this only has to
+ * decide whether a dot belongs between `data` and the path. Splitting on `.`
+ * and rejoining, as this did, produced `data.[0].name` for every root-level
+ * array: a syntax error written into the user's script, by a panel nothing
+ * had ever rendered.
+ */
+function accessorFor(path: string): string {
+  if (!path) return 'data';
+  return path.startsWith('[') ? `data${path}` : `data.${path}`;
+}
+
+export function generateAssertion(path: string, value: unknown): string {
+  const accessor = accessorFor(path);
 
   if (value === null) return `dk.expect(${accessor}).toBeNull();`;
   if (typeof value === 'boolean') return `dk.expect(${accessor}).toBe(${value});`;
   if (typeof value === 'number') return `dk.expect(${accessor}).toBe(${value});`;
   if (typeof value === 'string') {
     if (value.includes('@')) return `dk.expect(${accessor}).toMatch(/^[^@]+@[^@]+\\.[^@]+$/);`;
-    return `dk.expect(${accessor}).toBe("${value}");`;
+    /*
+      Quoted by JSON, not by hand.
+
+      A value with a double quote, a backslash or a newline in it — a message
+      field, say — closed the string early and left the generated script
+      unparseable.
+    */
+    return `dk.expect(${accessor}).toBe(${JSON.stringify(value)});`;
   }
   return `dk.expect(${accessor}).toBeTruthy();`;
 }

@@ -3,6 +3,10 @@
  * All domain logic is delegated to handler modules in ./handlers/.
  */
 import * as vscode from 'vscode';
+import {
+  handleTerminalOpen, handleTerminalInput, handleTerminalResize,
+  handleTerminalClose, closeAllTerminals,
+} from './handlers/terminal-handler';
 import * as path from 'path';
 import * as fs from 'fs';
 import { getSqliteStatus, getDbPath, getHistory, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt, getAiPromptTemplates, setAiPromptTemplates, saveAiConversation, loadAiConversation, clearAiConversation, type AiConversationMessage, getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries, insertUiAudit, getUiAuditEntries, clearUiAuditEntries, getDbTables, getDbTableRows, deleteDbRow } from '../../storage/db';
@@ -10,7 +14,7 @@ import { archiveHistoryEntry, archiveHistoryBatch } from '../../services/bin';
 import { getProviderKeyStatus } from '../../services/llm/llm-provider-service';
 import { storeApiKey, deleteApiKey, getAllKeyStatus } from '../../services/secret-store';
 // Handler imports
-import { handleExecuteRequest, handleGetOAuth2Token } from './handlers/request-handler';
+import { handleExecuteRequest, handleGetOAuth2Token, handleGetEffectiveSettings } from './handlers/request-handler';
 import { cancelRestRequest } from '../../http/request-executor';
 import { cancelGraphQLRequest } from './handlers/graphql-handler';
 import {
@@ -23,20 +27,27 @@ import {
   handleExportEnvironmentsInsomnia, handleExportEnvironmentsHttpie,
 } from './handlers/environment-handler';
 import {
+  handleGetWorkspaces, handleSwitchWorkspace, handleCreateWorkspace,
+  handleRenameWorkspace, handleDeleteWorkspace, handleSaveWorkspaceDocs,
+  handleWorkspaceDocsContext,
+  handleImportWorkspace, handleOpenWorkspace, handleExportWorkspace,
+} from './handlers/workspace-handler';
+import {
   handleGetCollections, handleGetCollectionTree, handleGetCollectionChildren,
+  handleImportCollectionUrl,
   handleGetCollectionBreadcrumb, handleCreateCollection, handleCreateFolder,
   handleRenameCollection, handleRenameRequest, handleDeleteCollection,
   handleMoveCollection, handleSaveCollection, handleSaveRequestToCollection,
   handleDeleteRequestFromCollection, handleUpdateCollectionProperties,
   handleGetCollectionProperties, handleClearCollections, handleDuplicateCollection,
   handleDuplicateRequest, handleReorderCollections, handleMoveRequest,
-  handleReorderRequests, handleRunCollection, handleStopCollectionRun,
+  handleReorderRequests, handleRunCollection, handleStopCollectionRun, handlePickRunData, handleSearchCollections,
 } from './handlers/collection-handler';
 import {
   handleExportCollectionDaakia, handleExportCollectionPostman,
   handleExportCollectionBruno, handleExportCollectionInsomnia,
   handleExportCollectionHttpie, handleExportCollectionOpenApi,
-  handleExportCollectionDocs,
+  handleExportCollectionDocs, handleExportCollectionDocsHtml,
 } from '../../services/collection-exporter';
 import {
   handleStartMockServer, handleStopMockServer, handleUpdateMockRoutes,
@@ -61,6 +72,9 @@ import {
 } from './handlers/ai-handler';
 import { handleAiDiscovery } from './handlers/ai-discovery-handler';
 import { handleAiFuzz } from './handlers/ai-fuzz-handler';
+import { handleLoadStart, handleLoadStop } from './handlers/load-handler';
+import { handleBulkRun, handleBulkStop } from './handlers/bulk-handler';
+import { handleInterceptorStart, handleInterceptorStop } from './handlers/interceptor-handler';
 import { handleMcpConnect, handleMcpDisconnect, handleMcpCallTool, handleMcpGetPrompt, handleMcpReadResource, cleanupAllMcpClients, handleMcpConnectServer, handleMcpDisconnectServer, handleMcpCallToolOnServer } from './handlers/mcp-handler';
 import { handleAiMcpConnect, handleAiMcpDisconnect, cleanupAiMcpClients } from './handlers/ai-mcp-handler';
 import { handleSaveUiState, handleGetUiState, handleSaveWorkspaceSnapshot, handleGetWorkspaceSnapshot } from './handlers/ui-state-handler';
@@ -76,6 +90,70 @@ import {
   handleBinPermanentlyDelete, handleBinPermanentlyDeleteGroup, handleBinEmpty,
 } from './handlers/bin-handler';
 import { handleDebugMessage } from './handlers/debug-handler';
+import { noteProtocolSend, auditProtocolResponse } from '../../services/protocol-audit';
+import { noteSessionConnect, auditSessionMessage, flushOpenSessions } from '../../services/session-audit';
+import {
+  handleDk8sProbe, handleDk8sUseContext, handleDk8sNamespaces,
+  handleDk8sSetNamespace, handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSetLogLineNumbers, handleDk8sSearchLogs, handleDk8sCancelSearch, handleDk8sCancelExport,
+  handleDk8sProbePv, handleDk8sSavePv, handleDk8sOpenLogFile, handleDk8sProbeAccess,
+  handleDk8sGetFormats, handleDk8sSaveFormat, handleDk8sDeleteFormat,
+  handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat,
+  handleDk8sListArtifacts, handleDk8sImportArtifact, handleDk8sDeleteArtifact,
+  handleDk8sOpenArtifact, handleDk8sSetKubectlPath,
+  handleDk8sWatchPods, handleDk8sStopWatch, disposeDk8s,
+  handleDk8sPinNamespace, handleDk8sUnpinNamespace,
+  handleDk8sUseContexts, handleDk8sSetTargets, handleDk8sExportLogs,
+  handleDk8sExportSearch,
+  handleDk8sLogsOpen,
+  handleDk8sLogsClose,
+  handleDk8sDescribe,
+  handleDk8sShell,
+  handleDk8sProbePod,
+  handleDk8sAsk, handleDk8sCollect, handleDk8sAnalyze, handleDk8sRevealArtifacts,
+} from './handlers/k8s-handler';
+import {
+  normalizeProxyConfig, toUiProxyConfig, resolveProxy,
+  DEFAULT_PROXY, UNPROXIED_PROTOCOLS,
+  type ProxyConfig, type ProxyUiConfig,
+} from '../../services/proxy-config';
+import {
+  handleHeapOpen, handleHeapAnalyze, handleHeapCancel, handleHeapQuery,
+  handleHeapSetBaseline, handleHeapLocateClass, handleHeapOpenSource,
+  handleThreadsOpen, handleThreadsAnalyze, handleLogsOpen, handleLogsAnalyze,
+} from './handlers/heap-handler';
+import {
+  handleFilesList,
+  handleFilesMounts,
+  handleFilesDirSize, handleFilesSearch, handleFilesRead,
+  handleFilesDownload, handleFilesDownloadDir, handleFilesReveal,
+  handleFilesSearchMany,
+  handleDk8sCancel,
+} from './handlers/files-handler';
+import { handleJfrOpen, handleJfrAnalyze, handleJfrEvents } from './handlers/jfr-handler';
+import { handleDk8sHeapInvestigate } from './handlers/heap-investigate';
+import {
+  registerMonitor, pauseMonitor, removeMonitor, checkMonitorNow, disposeMonitors,
+  type MonitorRule,
+} from './handlers/monitor-handler';
+import {
+  initDkgh, handleDkghProbe, handleDkghRecheck, handleDkghSetPath,
+  handleDkghSetRepo, handleDkghBoard, handleDkghRepoOptions, handleDkghSearchRepos,
+  handleDkghPinRepo, handleDkghDiagnose, handleDkghFindGh, handleDkghBrowseGh,
+  handleDkghDismissOldGh, handleDkghPlanEdit, handleDkghApplyEdit, handleDkghCommands,
+  handleDkghInspectRepo, handleDkghRepoMeta, handleDkghIssue, handleDkghEvidence,
+  handleDkghTimeline, handleDkghExport,
+  handleDkghImport, handleDkghPlanTemplates, handleDkghApplyTemplates,
+  handleDkghPlanLabels, handleDkghApplyLabels,
+  handleDkghPlanUpload, handleDkghApplyUpload,
+  handleDkghProject, handleDkghPlanProject,
+  handleDkghPlanProjectItem,
+  handleDkghApplyProjectItem, handleDkghApplyProject,
+  handleDkghTerminal, handleDkghRelations,
+  handleDkghHarvest, handleDkghHarvestCancel,
+  handleDkghSchedules, handleDkghSaveSchedule, handleDkghDeleteSchedule,
+  handleDkghScheduleRan, disposeDkgh, handleDkghFieldMap, handleDkghLabelsFrom,
+  handleDkghSearchIssues, handleDkghPlanCreate, handleDkghApplyCreate,
+} from './handlers/dkgh-handler';
 import { scheduleAutoExport, COLLECTION_MUTATION_TYPES, startAutoSyncTimer, stopAutoSyncTimer } from '../../services/git-sync';
 import {
   initSmWorkflowStorage,
@@ -157,6 +235,9 @@ export class MainPanel {
 
     initMockLogForwarding(this._post);
     initSmWorkflowStorage();
+    // A gh path saved in Settings has to be in force before anything asks
+    // whether gh exists, or the first probe answers for the wrong binary.
+    initDkgh(this._post);
     handleGetMockServerState(this._post);
 
     handleGetEnvironments(this._post);
@@ -172,7 +253,13 @@ export class MainPanel {
 
   public dispose() {
     MainPanel.currentPanel = undefined;
+    // Before the transports are torn down: a live connection has no close event
+    // coming, and the long-lived ones are the most worth having recorded.
+    flushOpenSessions();
+    disposeDk8s();
+    disposeDkgh();
     stopAutoSyncTimer();
+    disposeMonitors();
     cleanupAllWsConnections();
     cleanupAllSseConnections();
     cleanupAllSocketIOConnections();
@@ -188,7 +275,18 @@ export class MainPanel {
   }
 
   // Bound postMessage shorthand for passing to handlers
-  private _post = (msg: unknown) => this.postMessage(msg);
+  /**
+   * Every message to the webview passes here, which makes it the one place a
+   * protocol response can be audited regardless of which of a handler's return
+   * paths produced it. See src/services/protocol-audit.ts.
+   */
+  private _post = (msg: unknown) => {
+    auditProtocolResponse(msg as Record<string, unknown>);
+    // Realtime protocols are sessions, not requests: this tallies their traffic
+    // and writes one row when the connection ends. See services/session-audit.ts.
+    auditSessionMessage(msg as Record<string, unknown>);
+    this.postMessage(msg);
+  };
 
   // ────────────────── Git Sync — auto-sync timer + post-sync UI refresh ──────
 
@@ -224,6 +322,10 @@ export class MainPanel {
       queueMicrotask(() => scheduleAutoExport());
     }
 
+    // Stash sends so the response hook on _post can pair them into one audit row.
+    noteProtocolSend(msg);
+    noteSessionConnect(msg);
+
     switch (msg.type) {
       case 'ready':
         this.refreshInitialState();
@@ -232,6 +334,165 @@ export class MainPanel {
       // ── Request Execution ──
       case 'executeRequest':
         handleExecuteRequest(msg, this._post, () => handleGetEnvironments(this._post), () => this._sendHistory((msg.protocol as string) || 'rest'));
+        break;
+      // What a request or collection would inherit, for the Inherit labels in
+      // its Settings tab. Resolved on the host so there is one implementation.
+      // dkgh. One probe answers all three first-run screens; they are three
+      // states of the same question and must not be asked separately.
+      case 'dkgh:probe':
+        handleDkghProbe(this._post);
+        break;
+      case 'dkgh:recheck':
+        handleDkghRecheck(this._post);
+        break;
+      case 'dkgh:setPath':
+        handleDkghSetPath(msg, this._post);
+        break;
+      case 'dkgh:setRepo':
+        handleDkghSetRepo(msg, this._post);
+        break;
+      case 'dkgh:repoOptions':
+        handleDkghRepoOptions(this._post);
+        break;
+      case 'dkgh:searchRepos':
+        handleDkghSearchRepos(msg, this._post);
+        break;
+      case 'dkgh:pinRepo':
+        handleDkghPinRepo(msg, this._post);
+        break;
+      case 'dkgh:diagnose':
+        handleDkghDiagnose(this._post);
+        break;
+      case 'dkgh:findGh':
+        handleDkghFindGh(this._post);
+        break;
+      case 'dkgh:browseGh':
+        handleDkghBrowseGh(this._post);
+        break;
+      case 'dkgh:dismissOldGh':
+        handleDkghDismissOldGh(msg, this._post);
+        break;
+      case 'dkgh:planEdit':
+        handleDkghPlanEdit(msg, this._post);
+        break;
+      case 'dkgh:applyEdit':
+        handleDkghApplyEdit(msg, this._post);
+        break;
+      case 'dkgh:commands':
+        handleDkghCommands(this._post);
+        break;
+      case 'dkgh:board':
+        handleDkghBoard(msg, this._post);
+        break;
+      case 'dkgh:inspectRepo':
+        handleDkghInspectRepo(msg, this._post);
+        break;
+      case 'dkgh:repoMeta':
+        handleDkghRepoMeta(msg, this._post);
+        break;
+      case 'dkgh:issue':
+        handleDkghIssue(msg, this._post);
+        break;
+      case 'dkgh:labelsFrom':
+        handleDkghLabelsFrom(msg, this._post);
+        break;
+      case 'dkgh:fieldMap':
+        handleDkghFieldMap(msg, this._post);
+        break;
+      case 'dkgh:schedules':
+        handleDkghSchedules(msg, this._post);
+        break;
+      case 'dkgh:schedule:save':
+        handleDkghSaveSchedule(msg, this._post);
+        break;
+      case 'dkgh:schedule:delete':
+        handleDkghDeleteSchedule(msg, this._post);
+        break;
+      case 'dkgh:schedule:ran':
+        handleDkghScheduleRan(msg, this._post);
+        break;
+      case 'dkgh:harvest':
+        handleDkghHarvest(msg, this._post);
+        break;
+      case 'dkgh:harvest:cancel':
+        handleDkghHarvestCancel(msg, this._post);
+        break;
+      case 'dkgh:relations':
+        handleDkghRelations(msg, this._post);
+        break;
+      case 'dkgh:timeline':
+        handleDkghTimeline(msg, this._post);
+        break;
+      case 'dkgh:export':
+        handleDkghExport(msg, this._post);
+        break;
+      case 'dkgh:import':
+        handleDkghImport(msg, this._post);
+        break;
+      case 'dkgh:planTemplates':
+        handleDkghPlanTemplates(msg, this._post);
+        break;
+      case 'dkgh:applyTemplates':
+        handleDkghApplyTemplates(msg, this._post);
+        break;
+      case 'dkgh:planLabels':
+        handleDkghPlanLabels(msg, this._post);
+        break;
+      case 'dkgh:applyLabels':
+        handleDkghApplyLabels(msg, this._post);
+        break;
+      case 'dkgh:planUpload':
+        handleDkghPlanUpload(msg, this._post);
+        break;
+      case 'dkgh:applyUpload':
+        handleDkghApplyUpload(msg, this._post);
+        break;
+      case 'dkgh:terminal':
+        handleDkghTerminal(msg, this._post);
+        break;
+      case 'dkgh:project':
+        handleDkghProject(msg, this._post);
+        break;
+      case 'dkgh:planProject':
+        handleDkghPlanProject(msg, this._post);
+        break;
+      case 'dkgh:planProjectItem':
+        handleDkghPlanProjectItem(msg, this._post);
+        break;
+      case 'dkgh:applyProjectItem':
+        handleDkghApplyProjectItem(msg, this._post);
+        break;
+      case 'dkgh:applyProject':
+        handleDkghApplyProject(msg, this._post);
+        break;
+      case 'dkgh:searchIssues':
+        handleDkghSearchIssues(msg, this._post);
+        break;
+      case 'dkgh:planCreate':
+        handleDkghPlanCreate(msg, this._post);
+        break;
+      case 'dkgh:applyCreate':
+        handleDkghApplyCreate(msg, this._post);
+        break;
+      case 'dkgh:evidence':
+        handleDkghEvidence(msg, this._post);
+        break;
+      // Scheduled API checks. The panel has posted these since it was built;
+      // until now nothing answered, so no check ever ran.
+      case 'monitor:register':
+        registerMonitor(msg.rule as MonitorRule, this._post);
+        break;
+      case 'monitor:pause':
+        pauseMonitor((msg.rule as MonitorRule)?.id ?? (msg.ruleId as string));
+        break;
+      case 'monitor:remove':
+        removeMonitor(msg.ruleId as string);
+        break;
+      case 'monitor:checkNow':
+        checkMonitorNow(msg.rule as MonitorRule, this._post);
+        break;
+      case 'settings:getEffective':
+        handleGetEffectiveSettings(msg, this._post);
         break;
       case 'cancelRequest':
         cancelRestRequest(msg.tabId as string);
@@ -300,6 +561,152 @@ export class MainPanel {
         break;
       case 'mqtt:publish':
         handleMqttPublish(msg, this._post);
+        break;
+
+      // ── Dk8s — Daakia K8s ──
+      case 'dk8s:probe':
+        handleDk8sProbe(this._post);
+        break;
+      case 'dk8s:useContext':
+        handleDk8sUseContext(msg, this._post);
+        break;
+      case 'dk8s:useContexts':
+        handleDk8sUseContexts(msg, this._post);
+        break;
+      case 'dk8s:setTargets':
+        handleDk8sSetTargets(msg, this._post);
+        break;
+      case 'dk8s:exportLogs':
+        handleDk8sExportLogs(msg, this._post);
+        break;
+      case 'dk8s:exportSearch':
+        handleDk8sExportSearch(msg, this._post);
+        break;
+      case 'dk8s:namespaces':
+        handleDk8sNamespaces(msg, this._post);
+        break;
+      case 'dk8s:setNamespace':
+        handleDk8sSetNamespace(msg, this._post);
+        break;
+      case 'dk8s:setSensitivity':
+        handleDk8sSetSensitivity(msg, this._post);
+        break;
+      case 'dk8s:setGuardHeapDump':
+        handleDk8sSetGuardHeapDump(msg, this._post);
+        break;
+      case 'dk8s:listArtifacts':
+        handleDk8sListArtifacts(this._post);
+        break;
+      case 'dk8s:importArtifact':
+        handleDk8sImportArtifact(this._post);
+        break;
+      case 'dk8s:deleteArtifact':
+        handleDk8sDeleteArtifact(msg, this._post);
+        break;
+      case 'dk8s:openArtifact':
+        handleDk8sOpenArtifact(msg, this._post, this._extensionUri.fsPath);
+        break;
+      case 'dk8s:getFormats':
+        handleDk8sGetFormats(this._post);
+        break;
+      // Archived logs on a mounted volume.
+      case 'dk8s:probeAccess':
+        void handleDk8sProbeAccess(msg, this._post);
+        break;
+      case 'dk8s:openLogFile':
+        void handleDk8sOpenLogFile(msg);
+        break;
+      case 'dk8s:setLogLineNumbers':
+        handleDk8sSetLogLineNumbers(msg, this._post);
+        break;
+      case 'dk8s:probePv':
+        void handleDk8sProbePv(msg, this._post);
+        break;
+      case 'dk8s:savePv':
+        void handleDk8sSavePv(msg, this._post);
+        break;
+      case 'dk8s:saveFormat':
+        handleDk8sSaveFormat(msg, this._post);
+        break;
+      case 'dk8s:deleteFormat':
+        handleDk8sDeleteFormat(msg, this._post);
+        break;
+      case 'dk8s:testFormat':
+        handleDk8sTestFormat(msg, this._post);
+        break;
+      case 'dk8s:sampleLines':
+        handleDk8sSampleLines(msg, this._post);
+        break;
+      case 'dk8s:detectFormat':
+        handleDk8sDetectFormat(msg, this._post);
+        break;
+      case 'dk8s:searchLogs':
+        handleDk8sSearchLogs(msg, this._post);
+        break;
+      case 'dk8s:cancelExport':
+        handleDk8sCancelExport(this._post);
+        break;
+      case 'dk8s:cancelSearch':
+        handleDk8sCancelSearch(this._post);
+        break;
+      case 'dk8s:setKubectlPath':
+        handleDk8sSetKubectlPath(msg, this._post);
+        break;
+      case 'dk8s:watchPods':
+        handleDk8sWatchPods(msg, this._post);
+        break;
+      case 'dk8s:stopWatch':
+        handleDk8sStopWatch();
+        break;
+      case 'dk8s:pinNamespace':
+        handleDk8sPinNamespace(msg, this._post);
+        break;
+      case 'dk8s:unpinNamespace':
+        handleDk8sUnpinNamespace(msg, this._post);
+        break;
+      case 'dk8s:openLogs':
+        void handleDk8sLogsOpen(msg, this._post);
+        break;
+      case 'dk8s:closeLogs':
+        handleDk8sLogsClose();
+        break;
+      case 'dk8s:describe':
+        handleDk8sDescribe(msg, this._post);
+        break;
+      case 'term:open':
+        void handleTerminalOpen(msg, this._post);
+        break;
+      case 'term:input':
+        handleTerminalInput(msg);
+        break;
+      case 'term:resize':
+        handleTerminalResize(msg);
+        break;
+      case 'term:close':
+        handleTerminalClose(msg);
+        break;
+      case 'dk8s:shell':
+        void handleDk8sShell(msg, this._post);
+        break;
+      case 'dk8s:probePod':
+        handleDk8sProbePod(msg, this._post);
+        break;
+      case 'dk8s:ask':
+        handleDk8sAsk(msg, this._post);
+        break;
+      // The heap gets its own entry point because it is the one artifact the
+      // model can ask follow-up questions about — see heap-investigate.
+      case 'dk8s:heapInvestigate':
+        handleDk8sHeapInvestigate(msg, this._post);
+        break;
+      case 'dk8s:collect':
+        handleDk8sCollect(msg, this._post);
+        break;
+      case 'dk8s:analyze':
+        handleDk8sAnalyze(msg, this._post, this._extensionUri.fsPath);
+        break;
+      case 'dk8s:revealArtifacts':
+        handleDk8sRevealArtifacts();
         break;
 
       // ── gRPC Client ──
@@ -405,6 +812,43 @@ export class MainPanel {
       case 'aiStreamRequest':
         handleAiStreamRequest(msg, this._post);
         break;
+      // ── Load testing — real requests, measured. The panel used to invent
+      // its own latencies and status codes in the webview.
+      // ── Bulk URL checks — real responses, run with a worker pool.
+      // ── Request interceptor — the panel posted these to nothing at all.
+      case 'interceptor:start':
+        handleInterceptorStart(msg, this._post);
+        break;
+      case 'interceptor:stop':
+        handleInterceptorStop(msg, this._post);
+        break;
+      case 'bulk:run':
+        handleBulkRun(msg, this._post);
+        break;
+      case 'bulk:stop':
+        handleBulkStop(msg);
+        break;
+      /*
+        The clipboard, read where it can actually be read.
+
+        A webview frequently denies `clipboard-read`, so
+        `navigator.clipboard.readText()` there fails with no way to ask the
+        user for permission. The extension host has no such restriction.
+      */
+      case 'clipboard:read': {
+        const requestId = msg.requestId as string | undefined;
+        void vscode.env.clipboard.readText().then(
+          text => this._post({ type: 'clipboard:text', requestId, text }),
+          () => this._post({ type: 'clipboard:text', requestId, text: '', failed: true }),
+        );
+        break;
+      }
+      case 'load:start':
+        handleLoadStart(msg, this._post);
+        break;
+      case 'load:stop':
+        handleLoadStop(msg);
+        break;
       case 'fuzz:run':
         handleAiFuzz(msg, this._post);
         break;
@@ -466,6 +910,112 @@ export class MainPanel {
       case 'mockServer:saveAll':
         handleSaveMockConfigs(msg);
         break;
+      // ── Doctor / heap ──
+      // ── Proxy ──
+      // These two cases did not exist. The settings dialog posted
+      // 'proxy:configure' into the void and kept its own copy in webview
+      // localStorage, so the extension host never learned about a proxy at all.
+      case 'proxy:configure': {
+        const normalized = normalizeProxyConfig(msg.config as ProxyUiConfig);
+        const existing = getSetting<Record<string, unknown>>('general') ?? {};
+        setSetting('general', { ...existing, proxy: normalized });
+        const summary = resolveProxy(normalized, 'https://example.invalid/');
+        this._post({ type: 'proxy:configured', config: toUiProxyConfig(normalized), summary });
+        this._post({
+          type: 'toast',
+          toastType: normalized.mode === 'none' ? 'info' : 'success',
+          message: normalized.mode === 'none'
+            ? 'Proxy disabled — requests will go direct.'
+            : `Proxy saved: ${summary.description}`,
+        });
+        break;
+      }
+      case 'proxy:get': {
+        const stored = (getSetting<Record<string, unknown>>('general') ?? {}).proxy as ProxyConfig | undefined;
+        const cfg = stored ?? DEFAULT_PROXY;
+        this._post({
+          type: 'proxy:state',
+          config: toUiProxyConfig(cfg),
+          summary: resolveProxy(cfg, 'https://example.invalid/'),
+          unproxied: UNPROXIED_PROTOCOLS,
+        });
+        break;
+      }
+
+      case 'heap:open':
+        handleHeapOpen(this._post, this._extensionUri.fsPath);
+        break;
+      case 'heap:analyze':
+        handleHeapAnalyze(msg, this._post, this._extensionUri.fsPath);
+        break;
+      case 'heap:cancel':
+        handleHeapCancel(this._post);
+        break;
+      case 'heap:query':
+        handleHeapQuery(msg, this._post);
+        break;
+      case 'heap:setBaseline':
+        handleHeapSetBaseline(this._post);
+        break;
+      case 'heap:locateClass':
+        handleHeapLocateClass(msg, this._post);
+        break;
+      case 'heap:openSource':
+        handleHeapOpenSource(msg);
+        break;
+      case 'jfr:open':
+        void handleJfrOpen(this._post);
+        break;
+      case 'files:searchMany':
+        void handleFilesSearchMany(msg, this._post);
+        break;
+      // One stop for every long dk8s operation — see cancel.ts.
+      case 'dk8s:cancel':
+        handleDk8sCancel(msg, this._post);
+        break;
+      case 'files:revealFolder':
+        void handleFilesReveal(msg, this._post);
+        break;
+      case 'files:dirSize':
+        void handleFilesDirSize(msg, this._post);
+        break;
+      case 'files:mounts':
+        void handleFilesMounts(msg, this._post);
+        break;
+      case 'files:list':
+        void handleFilesList(msg, this._post);
+        break;
+      case 'files:search':
+        void handleFilesSearch(msg, this._post);
+        break;
+      case 'files:read':
+        void handleFilesRead(msg, this._post);
+        break;
+      case 'files:download':
+        void handleFilesDownload(msg, this._post);
+        break;
+      case 'files:downloadDir':
+        void handleFilesDownloadDir(msg, this._post);
+        break;
+      case 'jfr:analyze':
+        handleJfrAnalyze(msg, this._post);
+        break;
+      case 'jfr:events':
+        handleJfrEvents(msg, this._post);
+        break;
+      case 'threads:open':
+        handleThreadsOpen(this._post, this._extensionUri.fsPath);
+        break;
+      case 'threads:analyze':
+        handleThreadsAnalyze(msg, this._post, this._extensionUri.fsPath);
+        break;
+      case 'logs:open':
+        handleLogsOpen(this._post, this._extensionUri.fsPath);
+        break;
+      case 'logs:analyze':
+        handleLogsAnalyze(msg, this._post, this._extensionUri.fsPath);
+        break;
+
       case 'mockServer:getAll':
         handleGetMockServerState(this._post);
         break;
@@ -486,6 +1036,30 @@ export class MainPanel {
           if (uris && uris.length > 0) {
             this._post({ type: 'mockServer:bodyFilePicked', callbackId, filePath: uris[0].fsPath });
           }
+        });
+        break;
+      }
+
+      /*
+        Save any text the webview has already produced.
+
+        Every export before this one was a bespoke case that knew how to build
+        its own content. Schema Diff builds its report and its migration SQL in
+        the webview -- the comparison lives there -- so the host's only job is
+        the save dialog. The extension chooses the filter, so a .sql is offered
+        as SQL and a .md as Markdown without the caller having to say.
+      */
+      case 'saveTextFile': {
+        const content = (msg.content as string) ?? '';
+        const filename = (msg.filename as string) ?? 'daakia-export.txt';
+        const ext = filename.includes('.') ? filename.split('.').pop()! : 'txt';
+        vscode.window.showSaveDialog({
+          defaultUri: vscode.Uri.file(filename),
+          filters: { [ext.toUpperCase()]: [ext], 'All Files': ['*'] },
+          saveLabel: 'Save',
+          title: (msg.title as string) ?? 'Save file',
+        }).then(uri => {
+          if (uri) { fs.writeFileSync(uri.fsPath, content, 'utf-8'); }
         });
         break;
       }
@@ -631,6 +1205,41 @@ export class MainPanel {
         break;
 
       // ── Environments ──
+      // -- Workspaces --
+      case 'getWorkspaces':
+        handleGetWorkspaces(this._post);
+        break;
+      case 'switchWorkspace':
+        handleSwitchWorkspace(msg, this._post);
+        break;
+      case 'createWorkspace':
+        handleCreateWorkspace(msg, this._post);
+        break;
+      case 'renameWorkspace':
+        handleRenameWorkspace(msg, this._post);
+        break;
+      case 'deleteWorkspace':
+        handleDeleteWorkspace(msg, this._post);
+        break;
+      case 'saveWorkspaceDocs':
+        handleSaveWorkspaceDocs(msg, this._post);
+        break;
+      case 'importCollectionUrl':
+        void handleImportCollectionUrl(msg, this._post);
+        break;
+      case 'importWorkspace':
+        void handleImportWorkspace(this._post);
+        break;
+      case 'openWorkspace':
+        void handleOpenWorkspace(this._post);
+        break;
+      case 'exportWorkspace':
+        void handleExportWorkspace(this._post);
+        break;
+      case 'workspaceDocsContext':
+        handleWorkspaceDocsContext(this._post);
+        break;
+
       case 'getEnvironments':
         handleGetEnvironments(this._post);
         break;
@@ -756,8 +1365,17 @@ export class MainPanel {
       case 'exportCollectionDocs':
         handleExportCollectionDocs(msg, this._post);
         break;
+      case 'exportCollectionDocsHtml':
+        handleExportCollectionDocsHtml(msg, this._post);
+        break;
       case 'runCollection':
         handleRunCollection(msg, this._post);
+        break;
+      case 'pickRunData':
+        handlePickRunData(msg, this._post);
+        break;
+      case 'searchCollections':
+        handleSearchCollections(msg, this._post);
         break;
       case 'stopCollectionRun':
         handleStopCollectionRun();

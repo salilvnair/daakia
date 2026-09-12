@@ -10,13 +10,13 @@ const PROTOCOL_COLORS: Record<string, string> = {
 };
 
 const TOC_ITEMS: TocItem[] = [
-  { id: 'mock-routes', emoji: '🛣️', label: 'Routes' },
-  { id: 'mock-state-machine', emoji: '🔀', label: 'State Machine' },
-  { id: 'mock-chaos', emoji: '⚡', label: 'Chaos' },
-  { id: 'mock-traffic', emoji: '📡', label: 'Traffic' },
-  { id: 'mock-protocols', emoji: '🧩', label: 'Per-Protocol Config' },
-  { id: 'mock-importexport', emoji: '📦', label: 'Import/Export' },
-  { id: 'mock-catalog', emoji: '📚', label: 'Catalog & AI' },
+  { id: 'mock-routes', icon: 'timeline', label: 'Routes' },
+  { id: 'mock-state-machine', icon: 'refresh', label: 'State Machine' },
+  { id: 'mock-chaos', icon: '⚡', label: 'Chaos' },
+  { id: 'mock-traffic', icon: 'radio', label: 'Traffic' },
+  { id: 'mock-protocols', icon: 'mcp', label: 'Per-Protocol Config' },
+  { id: 'mock-importexport', icon: 'layers', label: 'Import/Export' },
+  { id: 'mock-catalog', icon: 'book', label: 'Catalog & AI' },
 ];
 
 export function MockServerView() {
@@ -26,7 +26,7 @@ export function MockServerView() {
     <WikiScrollPage
       hero={
         <WikiHero
-          emoji="🎭"
+          icon="mock"
           title="Mock Server"
           subtitle="Spin up real local HTTP/WS/gRPC/MQTT servers with routes, catalogs, state machines, and fault injection — no internet needed."
           chips={chips(['Routes', 'Catalog', 'State Machine', 'Fault Injection'])}
@@ -56,7 +56,7 @@ export function MockServerView() {
             </span>
           ))}
         </div>
-        <SectionTitle id="mock-routes" emoji="🛣️">Create & Run a REST Mock Server</SectionTitle>
+        <SectionTitle id="mock-routes" icon="timeline">Create & Run a REST Mock Server</SectionTitle>
         <Steps steps={[
           'Click the <strong>Mock Server</strong> icon in the left rail',
           'Click <strong>+ Create Mock Server</strong> → name it, select protocol <strong>REST</strong>',
@@ -134,7 +134,7 @@ export function MockServerView() {
       </div>
 
       <div>
-        <SectionTitle id="mock-state-machine" emoji="🔀">State Machine — Gate a Route Behind Session State</SectionTitle>
+        <SectionTitle id="mock-state-machine" icon="refresh">State Machine — Gate a Route Behind Session State</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           A route can require the session to be in a specific state before it'll match — useful for simulating
           multi-step flows (login → checkout → confirm) where hitting a step out of order should realistically fail.
@@ -163,7 +163,7 @@ export function MockServerView() {
       <div>
         <SubTitle>The Visual Canvas</SubTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
-          The workflow itself is designed on a real node/edge canvas — states as nodes, events as edges —{' '}
+          The workflow itself is designed on a real node/edge canvas — states as nodes, events as edges —
           <strong>Connect to Mock Server</strong> wires the finished workflow into the server so routes can reference
           its states and events.
         </p>
@@ -175,7 +175,7 @@ export function MockServerView() {
       {byId['mockserver-rest-catalog'] && <CaptureCard entry={byId['mockserver-rest-catalog']} />}
 
       <div>
-        <SectionTitle id="mock-chaos" emoji="⚡">Chaos — Fault Injection</SectionTitle>
+        <SectionTitle id="mock-chaos" icon="⚡">Chaos — Fault Injection</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           Two levels: a global dial for the whole server, and a per-route override. Both use a probability slider
           (0–100%, 5% steps) plus quick Low/Medium/High presets. Fault types are protocol-aware:
@@ -189,7 +189,7 @@ export function MockServerView() {
         />
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           There's also a Global Rate Limit sub-section (requests per second/minute/hour window), and per-route Fault
-          Injection additionally supports its own rate limit that returns a real <Code>429</Code> with a{' '}
+          Injection additionally supports its own rate limit that returns a real <Code>429</Code> with a
           <Code>Retry-After</Code> header once a burst allowance is exceeded.
         </p>
       </div>
@@ -198,7 +198,7 @@ export function MockServerView() {
       <Divider />
 
       <div>
-        <SectionTitle id="mock-traffic" emoji="📡">Traffic — Record, Proxy & Inspect</SectionTitle>
+        <SectionTitle id="mock-traffic" icon="radio">Traffic — Record, Proxy & Inspect</SectionTitle>
         <WikiTable
           headers={['Sub-tab', 'What it does']}
           rows={[
@@ -213,7 +213,7 @@ export function MockServerView() {
       <Divider />
 
       <div>
-        <SectionTitle id="mock-protocols" emoji="🧩">Per-Protocol Config</SectionTitle>
+        <SectionTitle id="mock-protocols" icon="mcp">Per-Protocol Config</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           Every non-REST protocol tab has its own dedicated config screen — not a shared generic form:
         </p>
@@ -228,8 +228,8 @@ export function MockServerView() {
       <Divider />
 
       <div>
-        <SectionTitle id="mock-catalog" emoji="📚">Catalog & AI Generation</SectionTitle>
-        <WikiCard title="✨ Generate with AI" icon="🤖">
+        <SectionTitle id="mock-catalog" icon="book">Catalog & AI Generation</SectionTitle>
+        <WikiCard title="✨ Generate with AI" icon="agent">
           <Steps steps={[
             'Add a description to your mock server (e.g. "E-commerce product catalog API")',
             'Click the <strong>✨ Generate</strong> button in the protocol config section',
@@ -244,7 +244,7 @@ export function MockServerView() {
         <Callout type="info" title="Load Samples vs. Catalog">
           <strong>Load Sample</strong> is a quick dropdown of hand-built fixture sets (Calculator, Weather, E-commerce,
           Chat) — picking one <strong>replaces</strong> existing config, no duplicates, and can also install a matching
-          pre-built State Machine workflow. The <strong>📚 Catalog</strong> tab is the same idea but
+          pre-built State Machine workflow. The <strong> Catalog</strong> tab is the same idea but
           organized as a searchable, tagged library of route bundles (e.g. "Users CRUD", "Auth Flow", "Error
           Scenarios") you can browse and add from, rather than one flat dropdown.
         </Callout>
@@ -253,7 +253,7 @@ export function MockServerView() {
       {byId['mockserver-grpc-routes'] && <CaptureCard entry={byId['mockserver-grpc-routes']} />}
 
       <div>
-        <SectionTitle id="mock-importexport" emoji="📦">Import & Export</SectionTitle>
+        <SectionTitle id="mock-importexport" icon="layers">Import & Export</SectionTitle>
         <WikiTable
           headers={['Protocol', 'Import formats']}
           rows={[

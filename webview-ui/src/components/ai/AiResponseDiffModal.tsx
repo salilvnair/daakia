@@ -7,6 +7,7 @@ import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
 import { ModalView, AIButtonView, ButtonView, EditorView, SplitPanelView, ResizablePanelView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface Props {
   currentResponseBody: string;
@@ -97,9 +98,10 @@ export function AiResponseDiffModal({ currentResponseBody, method, url, onClose 
       responseB: responseB.slice(0, 3000),
     });
 
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'rest.response.diff',
+      screen: 'REST · Response',
       systemPrompts: [systemPrompt],
       userPrompt,
       conversation: [], tools: [],

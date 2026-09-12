@@ -254,7 +254,7 @@ export const GRPC_SAMPLES: GrpcSample[] = [
         streamResponses: [
           { data: '{"id": "sys_1", "room_id": "room-001", "sender": "system", "content": "You joined #general", "timestamp": 1716900000, "type": 1}', delayMs: 0 },
           { data: '{"id": "msg_1", "room_id": "room-001", "sender": "alice", "content": "Hey! Welcome!", "timestamp": 1716900002, "type": 0}', delayMs: 2000 },
-          { data: '{"id": "msg_2", "room_id": "room-001", "sender": "bob", "content": "Hi there 👋", "timestamp": 1716900004, "type": 0}', delayMs: 2000 },
+          { data: '{"id": "msg_2", "room_id": "room-001", "sender": "bob", "content": "Hi there ", "timestamp": 1716900004, "type": 0}', delayMs: 2000 },
         ],
       },
       {

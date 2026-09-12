@@ -5,7 +5,7 @@ import { postMsg } from '../../vscode';
 import { PlayIcon, SaveIcon, StopSquareIcon, UploadIcon, MoreVerticalIcon, SparkleIcon } from '../../icons';
 import { saveRequest } from '../../services/request';
 import { SoapWsdlImport } from './SoapWsdlImport';
-import { logUiEvent } from '../../store/ui-audit-store';
+import { logUiEvent, isAuditEventEnabled } from '../../store/ui-audit-store';
 import { SoapOperationSelector } from './SoapOperationSelector';
 import { useMockSuggestions } from '../../hooks/useMockSuggestions';
 import { AiPreflightPopover } from '../ai/AiPreflightPopover';
@@ -83,7 +83,9 @@ export function SoapUrlBar() {
     const endpoint = activeTab.url.trim();
     if (!endpoint) return;
 
-    logUiEvent('soap.invoke', { url: endpoint, operation: activeTab.soapOperation });
+    // Audited by the extension host once the response arrives, where the
+    // headers, status and timing exist. Logging on click as well produced
+    // two rows per request, the click-time one nearly empty.
     const envelope = activeTab.soapEnvelope || (soapVersion === '1.2' ? DEFAULT_ENVELOPE_12 : DEFAULT_ENVELOPE_11);
 
     const enabledAttachments = (activeTab.soapAttachments || [])
@@ -93,6 +95,9 @@ export function SoapUrlBar() {
     postMsg({
       type: 'soap:invoke',
       tabId: activeTab.id,
+      // The per-event audit toggle lives in the webview; the host writes the
+      // record, so the decision travels with the request.
+      auditEnabled: isAuditEventEnabled('soap.invoke'),
       endpoint,
       soapVersion,
       soapAction,
@@ -169,8 +174,9 @@ export function SoapUrlBar() {
 
         {/* Version (1.1 / 1.2) + Endpoint URL — unified DUI component. Shrinks down to
             minWidth; past that the bar scrolls horizontally instead of squeezing/overlapping. */}
-        <div className="flex-[2] min-w-0" style={{ minWidth: 140 }}>
+        <div className="flex-[2] min-w-0" style={{ minWidth: 140 }} data-menu="url">
           <SelectTextInputView
+          testId="url-bar"
             selectOptions={SOAP_VERSION_OPTIONS}
             selectValue={soapVersion}
             onSelectChange={handleVersionChange}

@@ -5,6 +5,11 @@
  * Extracted from App.tsx — behavior is verbatim.
  */
 import { useEffect } from 'react';
+import { wireWorkspaceMessages } from '../store/workspace-store';
+import { applyChainExtractions } from '../services/request/chaining';
+import { logUiEvent } from '../store/ui-audit-store';
+import { nameForStage, screenForStage } from '../store/ai-audit-events';
+import { showAiFailure, showSilentFailure } from './ai-failure-toast';
 import { useTabsStore } from '../store/tabs-store';
 import { useToastStore } from '../store/toast-store';
 import { useEnvStore } from '../store/env-store';
@@ -106,6 +111,52 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
           useAppSettingsStore.getState().setSettings(msg.settings || {});
           break;
         }
+        /*
+          An AI call that failed, audited centrally.
+
+          Thirty-seven components handle `ai:error` for their own UI; none of
+          them recorded it, so a run that failed left the same trace as one
+          that was never made — which is the gap behind "nothing happens and
+          nothing shows in the footprint".
+        */
+        case 'ai:error': {
+          const feature = msg.stage ? nameForStage(msg.stage) : 'Unnamed AI call';
+          logUiEvent('ai.failed', {
+            stage: msg.stage ?? 'DAAKIA_AI',
+            feature,
+            screen: msg.screen ?? (msg.stage ? screenForStage(msg.stage) : 'Daakia AI'),
+            code: msg.code,
+            message: typeof msg.message === 'string' ? msg.message.slice(0, 200) : undefined,
+          });
+          /*
+            And on screen, always.
+
+            Thirty-seven components handle `ai:error` for their own UI, and
+            whether a failure is visible depends on which one asked: the
+            workspace documentation generator showed nothing at all, so
+            pressing "Generate with AI" against a provider that is not signed
+            in looked exactly like pressing it and it working. The audit had
+            the reason the whole time.
+
+            Raised here rather than in each of the thirty-seven, because the
+            one that forgets is the one that matters. A component that shows
+            its own inline error still does — this is the floor, not the
+            ceiling.
+          */
+          showAiFailure(feature, msg.message, msg.code);
+          break;
+        }
+        /*
+          The other four that failed quietly — two of them reaching no
+          listener at all. See `SILENT_ERROR_TYPES`.
+        */
+        case 'dk8s:aiError':
+        case 'dk8s:artifactError':
+        case 'soap:wsdlImportError':
+        case 'ai:conversationSaveError': {
+          showSilentFailure(msg.type as string, msg as Record<string, unknown>);
+          break;
+        }
         case 'responseData': {
           const { tabId, response, scriptLogs, scriptErrors, testResults, consoleLogs } = msg;
           useTabsStore.getState().updateTab(tabId, {
@@ -122,6 +173,26 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
             loading: false,
             requestProgress: undefined,
           });
+          /*
+            Chaining, on arrival.
+
+            This is the whole feature: a login writes `{{token}}` and the next
+            request already has it. Placed after `updateTab` so the rules are
+            read against a tab that already holds this response, and silent on
+            success — a toast per send would be noise on a request that chains
+            every time.
+          */
+          if (response) {
+            const chained = applyChainExtractions(tabId, response);
+            // Off by default: a chained request fires this on every send, and
+            // an audit nobody asked for is noise in the one they did.
+            if (chained.applied.length || chained.missed.length) {
+              logUiEvent('rest.chain_auto', {
+                variables: chained.applied.map(a => a.name),
+                missed: chained.missed,
+              });
+            }
+          }
           // Push structured console logs to DevTools
           if (consoleLogs && consoleLogs.length > 0) {
             const reqTab = useTabsStore.getState().tabs.find(t => t.id === tabId);
@@ -177,6 +248,7 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
               responseCookies: responseCookiesArr.length > 0 ? responseCookiesArr : undefined,
               duration: response.time || 0,
               size: response.size || 0,
+              proxy: msg.proxy,
               contentType: response.contentType || 'text/plain',
               isBlob: isBlobContent && !!response.body,
               blobMimeType: isBlobContent ? ct : undefined,
@@ -508,14 +580,21 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
         }
         case 'workspaceSnapshot': {
           const snapshot = msg.data as { tabs?: unknown[]; activeTabId?: string; activeProtocol?: string; sidebarSection?: string; sidebarOpen?: boolean; sidebarWidth?: number; breakpoints?: Record<string, number[]>; disabledBreakpoints?: Record<string, number[]>; conditions?: Record<string, Record<number, string>> } | null;
-          if (snapshot && snapshot.tabs && snapshot.tabs.length > 0) {
-            const tabsStore = useTabsStore.getState();
-            // Only restore if app started with no tabs (fresh load)
-            if (tabsStore.tabs.length === 0) {
-              tabsStore.hydrateSnapshot(snapshot.tabs as any[], snapshot.activeTabId || '', snapshot.activeProtocol as any || 'rest');
-              if (snapshot.sidebarSection) setSidebarSection(snapshot.sidebarSection as SidebarSection);
-              if (snapshot.sidebarOpen !== undefined) setSidebarOpen(snapshot.sidebarOpen);
-              if (snapshot.sidebarWidth) setSidebarWidth(snapshot.sidebarWidth);
+          // Only restore into a fresh app: a snapshot arriving after the user
+          // has started working must not overwrite what they are doing.
+          if (snapshot && useTabsStore.getState().tabs.length === 0) {
+            /*
+              The sidebar restores whether or not there are tabs to restore
+              with it. This used to sit inside the tabs branch, so a workspace
+              that had never saved a tab left the sidebar on its built-in
+              default — and the panel opened uninvited on every launch.
+            */
+            if (snapshot.sidebarSection) setSidebarSection(snapshot.sidebarSection as SidebarSection);
+            if (snapshot.sidebarOpen !== undefined) setSidebarOpen(snapshot.sidebarOpen);
+            if (snapshot.sidebarWidth) setSidebarWidth(snapshot.sidebarWidth);
+
+            if (snapshot.tabs && snapshot.tabs.length > 0) {
+              useTabsStore.getState().hydrateSnapshot(snapshot.tabs as any[], snapshot.activeTabId || '', snapshot.activeProtocol as any || 'rest');
               // Restore breakpoints from snapshot
               if (snapshot.breakpoints || snapshot.disabledBreakpoints || snapshot.conditions) {
                 useDebugStore.setState({
@@ -542,17 +621,36 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
 
     window.addEventListener('message', handler);
     getVsCodeApi().postMessage({ type: 'ready' });
-    getVsCodeApi().postMessage({ type: 'getEnvironments' });
-    // Preload URL suggestions from history + collections on startup — one request per protocol
-    // so sidebar-data-store cache is never contaminated with cross-protocol entries
-    (['rest', 'graphql', 'websocket', 'grpc', 'soap', 'mcp'] as const).forEach(p =>
-      getVsCodeApi().postMessage({ type: 'getHistory', protocol: p })
-    );
-    getVsCodeApi().postMessage({ type: 'getCollections', protocol: 'rest' });
-    getVsCodeApi().postMessage({ type: 'getCollections', protocol: 'graphql' });
-    getVsCodeApi().postMessage({ type: 'getCollections', protocol: 'websocket' });
+    loadWorkspaceScopedData();
+    getVsCodeApi().postMessage({ type: 'getWorkspaces' });
     getVsCodeApi().postMessage({ type: 'aiProviders:load' });
     getVsCodeApi().postMessage({ type: 'aiPromptTemplates:load' });
-    return () => window.removeEventListener('message', handler);
+
+    /* Switching workspace makes every scoped view stale at once. Re-asking here
+       rather than in each view keeps the set in one place: a view that forgot to
+       refetch would show another project's requests under this project's name,
+       and look completely normal doing it. */
+    const unwire = wireWorkspaceMessages(loadWorkspaceScopedData);
+
+    return () => { window.removeEventListener('message', handler); unwire(); };
   }, []);
+}
+
+/**
+ * Everything scoped to a workspace, asked for again.
+ *
+ * Called on startup and after every workspace switch. One list, because
+ * "loaded at boot" and "reloaded after a switch" are the same requirement, and
+ * two lists that have to stay in step is a bug waiting to happen.
+ */
+export function loadWorkspaceScopedData(): void {
+  getVsCodeApi().postMessage({ type: 'getEnvironments' });
+  // One request per protocol so the sidebar cache is never contaminated with
+  // cross-protocol entries.
+  (['rest', 'graphql', 'websocket', 'grpc', 'soap', 'mcp'] as const).forEach(p =>
+    getVsCodeApi().postMessage({ type: 'getHistory', protocol: p })
+  );
+  (['rest', 'graphql', 'websocket'] as const).forEach(p =>
+    getVsCodeApi().postMessage({ type: 'getCollections', protocol: p })
+  );
 }

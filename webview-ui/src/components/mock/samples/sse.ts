@@ -102,7 +102,7 @@ export const SSE_SAMPLES: SSESample[] = [
     label: 'Social Media Feed',
     description: 'Live social feed with posts, likes, and trending topics',
     events: [
-      { eventName: 'post', data: '{"id": "post-991", "author": {"name": "Jane Dev", "avatar": "jd", "verified": true}, "content": "Just deployed v2.0! 🚀", "likes": 42, "comments": 7, "timestamp": "2026-05-24T10:15:00Z"}', intervalMs: 6000, delay: 0, repeat: true },
+      { eventName: 'post', data: '{"id": "post-991", "author": {"name": "Jane Dev", "avatar": "jd", "verified": true}, "content": "Just deployed v2.0! ", "likes": 42, "comments": 7, "timestamp": "2026-05-24T10:15:00Z"}', intervalMs: 6000, delay: 0, repeat: true },
       { eventName: 'like', data: '{"postId": "post-991", "user": "Bob Smith", "totalLikes": 43}', intervalMs: 3000, delay: 2000, repeat: true },
       { eventName: 'trending', data: '{"topics": [{"tag": "#typescript", "posts": 1250}, {"tag": "#vscode", "posts": 890}, {"tag": "#webdev", "posts": 2100}]}', intervalMs: 30000, delay: 10000, repeat: true },
     ],

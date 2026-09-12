@@ -1,0 +1,14 @@
+Process 1: python -u /src/AsyncioLoad.py
+Python v3.11.16 (/usr/local/bin/python3.11)
+
+Thread 1 (idle): "MainThread"
+    price_lookup (AsyncioLoad.py:29)
+    handle (AsyncioLoad.py:42)
+    worker (AsyncioLoad.py:49)
+    _run (asyncio/events.py:84)
+    _run_once (asyncio/base_events.py:1936)
+    run_forever (asyncio/base_events.py:608)
+    run_until_complete (asyncio/base_events.py:641)
+    run (asyncio/runners.py:118)
+    run (asyncio/runners.py:190)
+    <module> (AsyncioLoad.py:61)

@@ -90,6 +90,22 @@ export function getSqliteStatus(): { ok: boolean; error?: string } {
   return { ok: _sqliteOk, error: _sqliteError };
 }
 
+/**
+ * The live handle, for modules that own their own tables.
+ *
+ * db.ts is 2000 lines already; a feature with its own table is better off in
+ * its own file than appended here. Returns undefined before init and after a
+ * failed open, which every caller has to handle anyway.
+ */
+export function getDb(): SqlJsDatabase | undefined {
+  return _db ?? undefined;
+}
+
+/** Queue a write to disk. Same debounce every mutation in here uses. */
+export function scheduleSave(): void {
+  _scheduleSave();
+}
+
 export function getDbPath(): string {
   return _dbPath;
 }
@@ -184,6 +200,8 @@ function _createSchema(db: SqlJsDatabase): void {
   db.run(`CREATE INDEX IF NOT EXISTS idx_history_created ON request_history(created_at DESC)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_history_method  ON request_history(method)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_history_protocol ON request_history(protocol)`);
+
+  _createWorkspacesTable(db);
 
   // ── Collections table ──
   db.run(`
@@ -407,6 +425,20 @@ function _runMigrations(db: SqlJsDatabase): void {
     // table doesn't exist yet — schema will handle it
   }
 
+  // Migration 5: Workspaces.
+  //
+  // Everything that exists predates the idea, so it all belongs to one. The
+  // migration creates `My Workspace`, adds workspace_id to the three tables a
+  // workspace owns, and stamps every existing row with it — nobody loses
+  // anything and nobody is asked to choose a workspace before they can send a
+  // request. Guarded by the column check rather than a version number, the way
+  // the migrations above are.
+  try {
+    _migrateWorkspaces(db);
+  } catch (err) {
+    console.error('[daakia] workspace migration failed:', err);
+  }
+
   // Migration 4: Add response columns to collection_requests (History already captured
   // a response for every request; saving to a Collection silently dropped it).
   try {
@@ -423,6 +455,192 @@ function _runMigrations(db: SqlJsDatabase): void {
     }
   } catch {
     // table doesn't exist yet — schema will handle it
+  }
+  // Migration 6: relabel requests a non-REST collection saved as an HTTP verb.
+  try {
+    _relabelNonRestRequests(db);
+  } catch (err) {
+    console.error('[daakia] request-label migration failed:', err);
+  }
+}
+
+/**
+ * The label a protocol’s requests carry, mirroring `getDisplayMethod` in the
+ * webview. Duplicated rather than imported because the host cannot reach into
+ * webview code, and a migration that silently disagreed with the writer would
+ * be worse than one that repeats six strings.
+ */
+const PROTOCOL_LABEL: Record<string, string> = {
+  graphql: 'GQL', grpc: 'GRPC', soap: 'SOAP', ai: 'AI', mcp: 'MCP',
+};
+
+/** The four realtime transports, as `getDisplayMethod` spells them. */
+const RT_LABEL: Record<string, string> = {
+  sse: 'SSE', socketio: 'SIO', mqtt: 'MQTT', websocket: 'WS',
+};
+
+const HTTP_VERBS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
+
+/**
+ * Relabel requests that a non-REST collection saved as an HTTP verb.
+ *
+ * See the note on Migration 6. Idempotent: a second run finds no row whose
+ * method is still a verb, so it writes nothing.
+ */
+function _relabelNonRestRequests(db: SqlJsDatabase): void {
+  const info = db.exec('PRAGMA table_info(collections)');
+  if (info.length === 0) return;
+  const cols = info[0].values.map(row => row[1]);
+  if (!cols.includes('protocol')) return;
+
+  /* The root of each collection decides the protocol: a subfolder made before
+     the protocol column existed says 'rest' while its tree is GraphQL. */
+  const rows = db.exec(`
+    WITH RECURSIVE root(id, root_id) AS (
+      SELECT id, id FROM collections WHERE parent_id IS NULL
+      UNION ALL
+      SELECT c.id, r.root_id FROM collections c JOIN root r ON c.parent_id = r.id
+    )
+    SELECT req.id, req.method, req.data, c.protocol
+      FROM collection_requests req
+      JOIN root  ON root.id = req.collection_id
+      JOIN collections c ON c.id = root.root_id
+     WHERE c.protocol IS NOT NULL AND c.protocol <> 'rest'
+  `);
+  if (rows.length === 0) return;
+
+  let changed = 0;
+  for (const row of rows[0].values) {
+    const id = String(row[0]);
+    const method = String(row[1] ?? '').toUpperCase();
+    if (!HTTP_VERBS.has(method)) continue;
+
+    const protocol = String(row[3]);
+    let label = PROTOCOL_LABEL[protocol];
+    if (!label) {
+      if (protocol !== 'websocket') continue;
+      /* The transport is in the request’s own blob, not in a column. */
+      let transport = 'websocket';
+      try {
+        const data = JSON.parse(String(row[2] ?? '{}'));
+        const rt = data?.authData?.rt_protocol ?? data?.rt_protocol;
+        if (typeof rt === 'string' && rt in RT_LABEL) transport = rt;
+      } catch {
+        // a blob we cannot read is a websocket request with nothing recorded
+      }
+      label = RT_LABEL[transport];
+    }
+
+    db.run('UPDATE collection_requests SET method = ? WHERE id = ?', [label, id]);
+    changed++;
+  }
+
+  if (changed > 0) {
+    console.log(`[daakia] relabelled ${changed} request(s) saved with an HTTP verb by a non-REST collection`);
+    scheduleSave();
+  }
+}
+
+/** Testing seam: run the relabel migration against a handle the test owns. */
+export function _relabelNonRestRequestsForTest(db: SqlJsDatabase): void {
+  _relabelNonRestRequests(db);
+}
+/** The workspace every pre-workspace row is stamped with. */
+export const DEFAULT_WORKSPACE_ID = 'ws-default';
+
+/**
+ * The workspace the scoped queries below read and write against.
+ *
+ * Imported lazily rather than at module load: workspaces.ts imports getDb from
+ * here, and a static import both ways is a cycle that leaves one of the two
+ * half-initialised depending on which is loaded first.
+ */
+function activeWorkspaceId(): string {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  return (require('./workspaces') as typeof import('./workspaces')).getActiveWorkspaceId();
+}
+
+/**
+ * The box above collections.
+ *
+ * A workspace owns what you are testing — collections, environments, and the
+ * history of requests sent from them. It deliberately does not own what you
+ * test *with*: mock servers bind real ports on this machine, dk8s points at
+ * real infrastructure, and provider keys are yours rather than the project's.
+ * Those stay common.
+ *
+ * Created here rather than only in _createSchema because an existing database
+ * runs its migrations *before* the schema statements, so the workspace
+ * migration would otherwise be inserting into a table that does not exist yet
+ * — and would silently do nothing for one whole session.
+ */
+function _createWorkspacesTable(db: SqlJsDatabase): void {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS workspaces (
+      id           TEXT PRIMARY KEY,
+      name         TEXT NOT NULL,
+      path         TEXT,
+      color        TEXT,
+      docs         TEXT,
+      sort_order   INTEGER NOT NULL DEFAULT 0,
+      created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+      last_used_at TEXT
+    )
+  `);
+}
+
+/** Columns on a table, or [] when the table is not there yet. */
+function _columns(db: SqlJsDatabase, table: string): string[] {
+  try {
+    const info = db.exec(`PRAGMA table_info(${table})`);
+    return info.length > 0 ? info[0].values.map(row => String(row[1])) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** The three tables a workspace owns — and only those three. */
+const WORKSPACE_SCOPED = ['collections', 'environments', 'request_history'] as const;
+
+/** Testing seam: run the workspace migration against a handle the test owns. */
+export function _migrateWorkspacesForTest(db: SqlJsDatabase): void {
+  _migrateWorkspaces(db);
+}
+
+function _migrateWorkspaces(db: SqlJsDatabase): void {
+  _createWorkspacesTable(db);
+
+  // Someone has to own the rows that already exist.
+  const existing = db.exec('SELECT COUNT(*) FROM workspaces');
+  const count = existing.length > 0 ? Number(existing[0].values[0][0]) : 0;
+  if (count === 0) {
+    db.run(
+      `INSERT INTO workspaces (id, name, sort_order, last_used_at)
+       VALUES (?, ?, 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+      [DEFAULT_WORKSPACE_ID, 'My Workspace'],
+    );
+  }
+
+  for (const table of WORKSPACE_SCOPED) {
+    const cols = _columns(db, table);
+    if (cols.length === 0) continue;
+
+    if (!cols.includes('workspace_id')) {
+      /* No NOT NULL: SQLite cannot add a NOT NULL column without a constant
+         default, and a default here would silently re-home rows written by a
+         later bug. The stamp below fills them instead. */
+      db.run(`ALTER TABLE ${table} ADD COLUMN workspace_id TEXT`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_${table}_workspace ON ${table}(workspace_id)`);
+    }
+
+    /* Unconditional, not only when the column is new. A row with no workspace
+       belongs to nobody, so every scoped query filters it out and it is gone
+       from the app while still sitting in the file — which is indistinguishable
+       from data loss. It can happen from a crash between the ALTER and the
+       stamp, or from any import path that forgets the id. Adopting it into the
+       default workspace on every open is the repair. */
+    db.run(`UPDATE ${table} SET workspace_id = ? WHERE workspace_id IS NULL`,
+           [DEFAULT_WORKSPACE_ID]);
   }
 }
 
@@ -515,37 +733,7 @@ export interface HistoryRow {
 export function insertHistory(entry: HistoryRow): void {
   if (!_db) { return; }
   _db.run(`
-    INSERT INTO request_history (request_id, method, url, status, status_text, response_time, response_size, request_data, response_data, protocol)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [
-    entry.request_id ?? null,
-    entry.method,
-    entry.url,
-    entry.status ?? null,
-    entry.status_text ?? null,
-    entry.response_time ?? null,
-    entry.response_size ?? null,
-    entry.request_data ?? null,
-    entry.response_data ?? null,
-    entry.protocol ?? 'rest',
-  ]);
-  _scheduleSave();
-}
-
-/** Insert a history row only if no row with the same request_id + created_at already exists —
- * used by git-sync import so re-syncing the same history.daakia.json never duplicates entries.
- * created_at is required for the dedup check; rows without it (shouldn't happen — the column
- * defaults on insert) are skipped rather than risk duplicate-free import silently importing dupes. */
-export function insertHistoryIfNew(entry: HistoryRow): boolean {
-  if (!_db || !entry.created_at) return false;
-  const stmt = _db.prepare('SELECT id FROM request_history WHERE request_id IS ? AND created_at = ? LIMIT 1');
-  stmt.bind([entry.request_id ?? null, entry.created_at]);
-  const exists = stmt.step();
-  stmt.free();
-  if (exists) return false;
-
-  _db.run(`
-    INSERT INTO request_history (request_id, method, url, status, status_text, response_time, response_size, request_data, response_data, protocol, created_at)
+    INSERT INTO request_history (request_id, method, url, status, status_text, response_time, response_size, request_data, response_data, protocol, workspace_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     entry.request_id ?? null,
@@ -558,7 +746,40 @@ export function insertHistoryIfNew(entry: HistoryRow): boolean {
     entry.request_data ?? null,
     entry.response_data ?? null,
     entry.protocol ?? 'rest',
+    activeWorkspaceId(),
+  ]);
+  _scheduleSave();
+}
+
+/** Insert a history row only if no row with the same request_id + created_at already exists —
+ * used by git-sync import so re-syncing the same history.daakia.json never duplicates entries.
+ * created_at is required for the dedup check; rows without it (shouldn't happen — the column
+ * defaults on insert) are skipped rather than risk duplicate-free import silently importing dupes. */
+export function insertHistoryIfNew(entry: HistoryRow): boolean {
+  if (!_db || !entry.created_at) return false;
+  const stmt = _db.prepare(
+    'SELECT id FROM request_history WHERE workspace_id = ? AND request_id IS ? AND created_at = ? LIMIT 1');
+  stmt.bind([activeWorkspaceId(), entry.request_id ?? null, entry.created_at]);
+  const exists = stmt.step();
+  stmt.free();
+  if (exists) return false;
+
+  _db.run(`
+    INSERT INTO request_history (request_id, method, url, status, status_text, response_time, response_size, request_data, response_data, protocol, created_at, workspace_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    entry.request_id ?? null,
+    entry.method,
+    entry.url,
+    entry.status ?? null,
+    entry.status_text ?? null,
+    entry.response_time ?? null,
+    entry.response_size ?? null,
+    entry.request_data ?? null,
+    entry.response_data ?? null,
+    entry.protocol ?? 'rest',
     entry.created_at,
+    activeWorkspaceId(),
   ]);
   _scheduleSave();
   return true;
@@ -567,10 +788,12 @@ export function insertHistoryIfNew(entry: HistoryRow): boolean {
 export function getHistory(limit = 100, offset = 0, protocol?: string): HistoryRow[] {
   if (!_db) { return []; }
   const sql = protocol
-    ? 'SELECT * FROM request_history WHERE protocol = ? ORDER BY created_at DESC LIMIT ? OFFSET ?'
-    : 'SELECT * FROM request_history ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    ? 'SELECT * FROM request_history WHERE workspace_id = ? AND protocol = ? ORDER BY created_at DESC LIMIT ? OFFSET ?'
+    : 'SELECT * FROM request_history WHERE workspace_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?';
   const stmt = _db.prepare(sql);
-  stmt.bind(protocol ? [protocol, limit, offset] : [limit, offset]);
+  stmt.bind(protocol
+    ? [activeWorkspaceId(), protocol, limit, offset]
+    : [activeWorkspaceId(), limit, offset]);
   const results: HistoryRow[] = [];
   while (stmt.step()) {
     results.push(stmt.getAsObject() as unknown as HistoryRow);
@@ -592,9 +815,9 @@ export function getHistoryById(id: number): HistoryRow | undefined {
 export function clearHistory(protocol?: string): void {
   if (!_db) { return; }
   if (protocol) {
-    _db.run('DELETE FROM request_history WHERE protocol = ?', [protocol]);
+    _db.run('DELETE FROM request_history WHERE workspace_id = ? AND protocol = ?', [activeWorkspaceId(), protocol]);
   } else {
-    _db.run('DELETE FROM request_history');
+    _db.run('DELETE FROM request_history WHERE workspace_id = ?', [activeWorkspaceId()]);
   }
   _scheduleSave();
 }
@@ -608,10 +831,10 @@ export function deleteHistoryById(id: number): void {
 export function trimHistory(maxEntries: number): void {
   if (!_db || maxEntries <= 0) { return; }
   _db.run(
-    `DELETE FROM request_history WHERE id NOT IN (
-      SELECT id FROM request_history ORDER BY created_at DESC LIMIT ?
+    `DELETE FROM request_history WHERE workspace_id = ? AND id NOT IN (
+      SELECT id FROM request_history WHERE workspace_id = ? ORDER BY created_at DESC LIMIT ?
     )`,
-    [maxEntries]
+    [activeWorkspaceId(), activeWorkspaceId(), maxEntries]
   );
   _scheduleSave();
 }
@@ -814,7 +1037,8 @@ export interface CollectionTreeNode {
 /** Get flat list of all collections */
 export function getAllCollections(): CollectionRow[] {
   if (!_db) { return []; }
-  const stmt = _db.prepare('SELECT id, name, parent_id, sort_order FROM collections ORDER BY sort_order, name');
+  const stmt = _db.prepare('SELECT id, name, parent_id, sort_order FROM collections WHERE workspace_id = ? ORDER BY sort_order, name');
+  stmt.bind([activeWorkspaceId()]);
   const results: CollectionRow[] = [];
   while (stmt.step()) {
     results.push(stmt.getAsObject() as unknown as CollectionRow);
@@ -829,10 +1053,10 @@ export function getCollectionTree(protocol?: string): CollectionTreeNode[] {
 
   // Get collections filtered by protocol
   const colSql = protocol
-    ? 'SELECT id, name, parent_id, sort_order FROM collections WHERE protocol = ? ORDER BY sort_order, name'
-    : 'SELECT id, name, parent_id, sort_order FROM collections ORDER BY sort_order, name';
+    ? 'SELECT id, name, parent_id, sort_order FROM collections WHERE workspace_id = ? AND protocol = ? ORDER BY sort_order, name'
+    : 'SELECT id, name, parent_id, sort_order FROM collections WHERE workspace_id = ? ORDER BY sort_order, name';
   const colStmt = _db.prepare(colSql);
-  if (protocol) { colStmt.bind([protocol]); }
+  colStmt.bind(protocol ? [activeWorkspaceId(), protocol] : [activeWorkspaceId()]);
   const flatList: CollectionTreeNode[] = [];
   while (colStmt.step()) {
     const row = colStmt.getAsObject() as { id: string; name: string; parent_id: string | null; sort_order: number };
@@ -841,7 +1065,7 @@ export function getCollectionTree(protocol?: string): CollectionTreeNode[] {
   colStmt.free();
 
   // Get all requests
-  const reqStmt = _db.prepare('SELECT id, collection_id, name, method, url, data, sort_order FROM collection_requests ORDER BY sort_order');
+  const reqStmt = _db.prepare('SELECT id, collection_id, name, method, url, data, sort_order, status, status_text, response_time, response_size, response_data FROM collection_requests ORDER BY sort_order');
   while (reqStmt.step()) {
     const req = reqStmt.getAsObject() as unknown as CollectionRequestRow;
     const parent = flatList.find(c => c.id === req.collection_id);
@@ -870,9 +1094,9 @@ export function getCollectionChildren(parentId: string | null): { folders: Colle
 
   const folders: CollectionRow[] = [];
   const folderStmt = parentId
-    ? _db.prepare('SELECT id, name, parent_id, sort_order FROM collections WHERE parent_id = ? ORDER BY sort_order, name')
-    : _db.prepare('SELECT id, name, parent_id, sort_order FROM collections WHERE parent_id IS NULL ORDER BY sort_order, name');
-  if (parentId) { folderStmt.bind([parentId]); }
+    ? _db.prepare('SELECT id, name, parent_id, sort_order FROM collections WHERE workspace_id = ? AND parent_id = ? ORDER BY sort_order, name')
+    : _db.prepare('SELECT id, name, parent_id, sort_order FROM collections WHERE workspace_id = ? AND parent_id IS NULL ORDER BY sort_order, name');
+  folderStmt.bind(parentId ? [activeWorkspaceId(), parentId] : [activeWorkspaceId()]);
   while (folderStmt.step()) {
     folders.push(folderStmt.getAsObject() as unknown as CollectionRow);
   }
@@ -880,7 +1104,7 @@ export function getCollectionChildren(parentId: string | null): { folders: Colle
 
   const requests: CollectionRequestRow[] = [];
   if (parentId) {
-    const reqStmt = _db.prepare('SELECT id, collection_id, name, method, url, data, sort_order FROM collection_requests WHERE collection_id = ? ORDER BY sort_order');
+    const reqStmt = _db.prepare('SELECT id, collection_id, name, method, url, data, sort_order, status, status_text, response_time, response_size, response_data FROM collection_requests WHERE collection_id = ? ORDER BY sort_order');
     reqStmt.bind([parentId]);
     while (reqStmt.step()) {
       requests.push(reqStmt.getAsObject() as unknown as CollectionRequestRow);
@@ -917,15 +1141,15 @@ export function upsertCollection(id: string, name: string, parentId?: string | n
   if (!_db) { return; }
   if (protocol) {
     _db.run(
-      `INSERT INTO collections (id, name, parent_id, protocol, updated_at) VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      `INSERT INTO collections (id, name, parent_id, protocol, workspace_id, updated_at) VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
        ON CONFLICT(id) DO UPDATE SET name = excluded.name, parent_id = excluded.parent_id, protocol = excluded.protocol, updated_at = excluded.updated_at`,
-      [id, name, parentId ?? null, protocol]
+      [id, name, parentId ?? null, protocol, activeWorkspaceId()]
     );
   } else {
     _db.run(
-      `INSERT INTO collections (id, name, parent_id, updated_at) VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      `INSERT INTO collections (id, name, parent_id, workspace_id, updated_at) VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
        ON CONFLICT(id) DO UPDATE SET name = excluded.name, parent_id = excluded.parent_id, updated_at = excluded.updated_at`,
-      [id, name, parentId ?? null]
+      [id, name, parentId ?? null, activeWorkspaceId()]
     );
   }
   _scheduleSave();
@@ -1004,8 +1228,8 @@ export function duplicateCollection(id: string): string | null {
   // Create new collection with " Copy" suffix
   const newId = crypto.randomUUID();
   _db.run(
-    `INSERT INTO collections (id, name, parent_id, data, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
-    [newId, `${source.name} Copy`, source.parent_id, source.data, source.sort_order + 1]
+    `INSERT INTO collections (id, name, parent_id, data, sort_order, workspace_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+    [newId, `${source.name} Copy`, source.parent_id, source.data, source.sort_order + 1, activeWorkspaceId()]
   );
 
   // Copy all requests
@@ -1048,8 +1272,8 @@ function _duplicateCollectionRecursive(sourceId: string, newParentId: string): v
 
   const newId = crypto.randomUUID();
   _db.run(
-    `INSERT INTO collections (id, name, parent_id, data, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
-    [newId, source.name, newParentId, source.data, source.sort_order]
+    `INSERT INTO collections (id, name, parent_id, data, sort_order, workspace_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+    [newId, source.name, newParentId, source.data, source.sort_order, activeWorkspaceId()]
   );
 
   // Copy requests
@@ -1100,7 +1324,8 @@ export function duplicateCollectionRequest(requestId: string): string | null {
  * `protocol` per node — used to snapshot a collection into the trash bin before deleting it. */
 export function getCollectionSubtree(id: string): (CollectionTreeNode & { protocol?: string }) | undefined {
   if (!_db) { return undefined; }
-  const colStmt = _db.prepare('SELECT id, name, parent_id, sort_order, protocol FROM collections');
+  const colStmt = _db.prepare('SELECT id, name, parent_id, sort_order, protocol FROM collections WHERE workspace_id = ?');
+  colStmt.bind([activeWorkspaceId()]);
   const flatMap = new Map<string, CollectionTreeNode & { protocol?: string }>();
   while (colStmt.step()) {
     const row = colStmt.getAsObject() as { id: string; name: string; parent_id: string | null; sort_order: number; protocol?: string };
@@ -1128,7 +1353,8 @@ export function getCollectionSubtree(id: string): (CollectionTreeNode & { protoc
  * no specific collection selected). Mirrors {@link getCollectionSubtree}. */
 export function getAllCollectionTrees(): (CollectionTreeNode & { protocol?: string })[] {
   if (!_db) { return []; }
-  const colStmt = _db.prepare('SELECT id, name, parent_id, sort_order, protocol FROM collections ORDER BY sort_order, name');
+  const colStmt = _db.prepare('SELECT id, name, parent_id, sort_order, protocol FROM collections WHERE workspace_id = ? ORDER BY sort_order, name');
+  colStmt.bind([activeWorkspaceId()]);
   const flatMap = new Map<string, CollectionTreeNode & { protocol?: string }>();
   while (colStmt.step()) {
     const row = colStmt.getAsObject() as { id: string; name: string; parent_id: string | null; sort_order: number; protocol?: string };
@@ -1260,7 +1486,8 @@ export interface EnvironmentRow {
 
 export function getAllEnvironments(): EnvironmentRow[] {
   if (!_db) { return []; }
-  const stmt = _db.prepare('SELECT id, name, variables, is_active FROM environments ORDER BY name');
+  const stmt = _db.prepare('SELECT id, name, variables, is_active FROM environments WHERE workspace_id = ? ORDER BY name');
+  stmt.bind([activeWorkspaceId()]);
   const results: EnvironmentRow[] = [];
   while (stmt.step()) {
     results.push(stmt.getAsObject() as unknown as EnvironmentRow);
@@ -1272,10 +1499,10 @@ export function getAllEnvironments(): EnvironmentRow[] {
 export function upsertEnvironment(env: { id: string; name: string; variables: string; is_active: number }): void {
   if (!_db) { return; }
   _db.run(
-    `INSERT INTO environments (id, name, variables, is_active, updated_at)
-     VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    `INSERT INTO environments (id, name, variables, is_active, workspace_id, updated_at)
+     VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
      ON CONFLICT(id) DO UPDATE SET name = excluded.name, variables = excluded.variables, is_active = excluded.is_active, updated_at = excluded.updated_at`,
-    [env.id, env.name, env.variables, env.is_active]
+    [env.id, env.name, env.variables, env.is_active, activeWorkspaceId()]
   );
   _scheduleSave();
 }

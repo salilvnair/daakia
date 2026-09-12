@@ -241,7 +241,17 @@ export interface MockServer {
   name: string;
   description: string;
   protocol: MockServerProtocol;
+  /** The port it is listening on right now — null while it is stopped. */
   port: number | null;
+  /**
+   * The port the user asked for, if they asked for one.
+   *
+   * Only ever set while the fixed-port setting is on — see `fixed-port.ts`.
+   * Deliberately not the same field as `port`: that one is what the server was
+   * given, and letting it double as the ask would mean every restart silently
+   * demanded whatever port the last run happened to get.
+   */
+  requestedPort?: number;
   routes: MockRoute[];
   graphqlSchema?: string;
   graphqlOperations?: GraphQLMockOperation[];

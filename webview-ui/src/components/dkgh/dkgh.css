@@ -1,0 +1,2998 @@
+/*
+ * dkgh's own stylesheet, taken from `plan/daakia_wiki/dkgh-mock.html`.
+ *
+ * The mock is not a sketch — it is a rendered design with exact paddings, type
+ * sizes, icon sizes and colours, and the agreement was that what is drawn there
+ * is what gets built. So the rules below are the mock's rules, values unchanged,
+ * with every selector scoped under `.dkgh` so nothing leaks into the rest of the
+ * app.
+ *
+ * **`.dkgh` is the mock's `.body`.** The mock draws a whole editor — a rail down
+ * the left and a tab bar across the top — because it has to show where the tab
+ * lives. Daakia already has both, so only what is inside `.body` is ported, and
+ * `.body` itself becomes this file's root.
+ *
+ * The mock's `--dk-*` tokens are declared here rather than globally, for the
+ * same reason: they are dkgh's palette, not the app's. Their dark values are the
+ * mock's own; the light ones are the app's, so a light-themed editor does not
+ * get a dark panel.
+ *
+ * **One number is changed, and it is changed everywhere.** The mock is a figure
+ * in a document, drawn a few hundred pixels wide, and at that size 14.4px type and
+ * 14.4px glyphs read fine. The tab is a whole panel, and the same numbers read
+ * small in it. So every px length in this file — type, glyph, padding, gap,
+ * radius — is the mock's number times 1.2. Multiplying all of them by the same
+ * factor is the point: every proportion the mock chose survives exactly, and the
+ * result is the mock, larger. Hairlines are left at 1px, because a 1.4px border
+ * is a blurry 1px border, and `999px` is left alone because it is not a length,
+ * it is how CSS spells "a pill".
+ *
+ * The order of the three parts is load-bearing. The rules that adapt the mock to
+ * a live app come **last**: they mostly tie on specificity with the rule they are
+ * adapting, and a tie is decided by which came later. When they were first, an
+ * override like `.compose .right { width: auto }` lost silently to the mock's
+ * `285.6px` and the metadata column would not stretch with its split.
+ *
+ * When the mock changes, this file is regenerated from it rather than edited by
+ * hand. A stylesheet that has drifted from the design it was taken from is worse
+ * than no design.
+ */
+
+/*
+  `.ghsheet` is here for one reason: a `SheetView` portals to `document.body`,
+  so a panel of dkgh's content has no `.dkgh` ancestor to read the palette
+  from. It cannot simply *be* `.dkgh` — that carries `flex: 1` and the sheet
+  fills the window — so it takes the variables and leaves the layout. The
+  content inside it is wrapped in `Dk` as usual.
+*/
+.dkgh,
+.ghsheet {
+  /* The mock's palette, verbatim. */
+  --dk-panel: #1e1e1e;
+  --dk-surface: #252526;
+  --dk-raised: #2d2d30;
+  --dk-hover: #37373a;
+  --dk-border: #3c3c3c;
+  --dk-text: #cccccc;
+  --dk-muted: #858585;
+  --dk-faint: #6a6a6a;
+
+  --dk-gh: #DE7356;
+  --dk-gh-deep: #c05a3e;
+
+  --dk-cyan: #22d3ee;
+  --dk-green: #3fb950;
+  --dk-red: #f85149;
+  --dk-amber: #d29922;
+  --dk-orange: #db6d28;
+  --dk-blue: #58a6ff;
+  --dk-pink: #e535ab;
+  --dk-ws: #2dd4bf;
+
+  /* The app already ships Inter and JetBrains Mono, which is what the mock
+     was drawn in — so the type is identical without loading anything. */
+  --sans: var(--font-sans);
+  --mono: var(--font-mono);
+
+  /* From the mock's `.app`: the frame's own type scale, which everything
+     inside it is sized against. The border, radius and shadow are not here —
+     they belong to a floating card in a document, and this fills a panel. */
+  font-family: var(--sans);
+  font-size: 14.4px;
+  line-height: 1.45;
+  color: var(--dk-text);
+  background: var(--dk-panel);
+}
+
+/*
+  Light theme.
+
+  Only the greys move. The accents stay where they are apart from dkgh's own,
+  which the app already deepens for a light ground.
+*/
+[data-theme="light"] .dkgh,
+[data-theme="light"] .ghsheet,
+.vscode-light .dkgh,
+.vscode-light .ghsheet {
+  --dk-panel: #ffffff;
+  --dk-surface: #f6f6f6;
+  --dk-raised: #ececec;
+  --dk-hover: #e0e0e0;
+  --dk-border: #d8d8d8;
+  --dk-text: #1f2328;
+  --dk-muted: #57606a;
+  --dk-faint: #8c959f;
+  --dk-gh: #c0543a;
+  --dk-gh-deep: #9c422d;
+}
+
+.dkgh * { box-sizing: border-box; }
+
+/*
+  A floor under every icon.
+  
+  The mock sizes its glyphs in CSS, per place — 18px in the repository line,
+  14.4px in the sub-tabs, 13.2px on a chip, all scaled with everything else — and an
+  icon in a spot it never drew has no rule at all. A `<svg>` with no width fills its container, so one
+  missing rule turns a chevron into a wall. This is the least specific rule in
+  the file, so every one of the mock's own sizes still wins.
+*/
+.dkgh svg { width: 14.4px; height: 14.4px; flex-shrink: 0; }
+
+/*
+  ── The button reset, and why it is in a layer ──
+
+  A button in the mock is a span; here it is a real button, so it needs the
+  browser's chrome taken off it.
+
+  The trouble is that `.dkgh button` is (0,1,1), which outranks the single-class
+  rules every component library styles its own buttons with — `.dui_button--primary`,
+  `.dui_mde__ask button` — and dkgh's stylesheet loads after theirs. So this
+  reset silently won inside components that are not ours: dui's Save came out as
+  a ghost that only filled on hover, and the editor's Apply and Cancel lost their
+  padding and their hit area.
+
+  Two attempts to fix that with `:not()` both made it worse. `:not()` takes the
+  specificity of its argument, so `.dkgh button:not(.dui_mde *)` is (0,2,1) —
+  which outranks `.dkgh .btn` at (0,2,0) and every other class the mock styles
+  its buttons with, and stripped the padding from every button in the tab.
+
+  A cascade layer is the actual answer, because the problem was never
+  specificity — it was reach. **Anything unlayered beats anything layered,
+  whatever its specificity.** So this reset now loses to dui's rules and to the
+  mock's own `.btn`, and still wins where nothing else has an opinion, which is
+  exactly the job it was written for. Nothing has to be restated to out-specify
+  it, and there is nothing left for a future `:not()` to be tempted by.
+
+  The order is pinned rather than left to import order: `dkgh-reset` last means
+  it still beats Tailwind's preflight `button`, which lives in `base`. Those
+  four names are Tailwind's own, in Tailwind's own order — re-declaring them
+  here only fixes where ours sits relative to them.
+*/
+@layer theme, base, components, utilities, dkgh-reset;
+
+@layer dkgh-reset {
+  .dkgh button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+  }
+}
+
+
+/* ── The mock's rules, scoped and scaled, otherwise untouched ── */
+
+/* The app frame */
+.dkgh { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.dkgh .head { padding: 14.4px 19.2px 0; display: flex; align-items: center; gap: 12px; }
+.dkgh .repo { display: flex; align-items: center; gap: 9.6px; font-size: 15.6px; font-weight: 600; }
+.dkgh .repo svg { width: 18px; height: 18px; color: var(--dk-gh); }
+.dkgh .repo .path { font-family: var(--mono); color: var(--dk-text); font-weight: 500; }
+.dkgh .repo .path span { color: var(--dk-muted); }
+.dkgh .head .spacer { flex: 1; }
+.dkgh .head .ago { font-size: 12.6px; color: var(--dk-faint); font-family: var(--mono); }
+.dkgh .subtabs { display: flex; gap: 3.6px; padding: 12px 19.2px 0; border-bottom: 1px solid var(--dk-border); }
+.dkgh .subtabs .s {
+    padding: 6px 12px 8.4px; font-size: 13.8px; color: var(--dk-muted);
+    border-bottom: 2.4px solid transparent; display: flex; align-items: center; gap: 7.2px;
+  }
+.dkgh .subtabs .s svg { width: 14.4px; height: 14.4px; }
+.dkgh .subtabs .s.on { color: var(--dk-gh); border-bottom-color: var(--dk-gh); font-weight: 600; }
+.dkgh .subtabs .s .cnt {
+    font-family: var(--mono); font-size: 11.4px; padding: 0 6px; border-radius: 999px;
+    background: var(--dk-raised); color: var(--dk-muted);
+  }
+.dkgh .subtabs .s.on .cnt { background: color-mix(in srgb, var(--dk-gh) 20%, transparent); color: var(--dk-gh); }
+/* Chips */
+.dkgh .chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.dkgh .chip {
+    font-size: 11.4px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+    padding: 1px 7.2px; border-radius: 4.8px; border: 1px solid var(--dk-border); color: var(--dk-muted);
+    white-space: nowrap;
+  }
+.dkgh .c-ui { color: var(--dk-blue);   border-color: color-mix(in srgb, var(--dk-blue) 45%, transparent);   background: color-mix(in srgb, var(--dk-blue) 13%, transparent); }
+.dkgh .c-api { color: var(--dk-cyan);   border-color: color-mix(in srgb, var(--dk-cyan) 45%, transparent);   background: color-mix(in srgb, var(--dk-cyan) 13%, transparent); }
+.dkgh .c-be { color: var(--dk-pink);   border-color: color-mix(in srgb, var(--dk-pink) 45%, transparent);   background: color-mix(in srgb, var(--dk-pink) 13%, transparent); }
+.dkgh .c-xl { color: var(--dk-green);  border-color: color-mix(in srgb, var(--dk-green) 45%, transparent);  background: color-mix(in srgb, var(--dk-green) 13%, transparent); }
+.dkgh .c-prod { color: var(--dk-red);    border-color: color-mix(in srgb, var(--dk-red) 45%, transparent);    background: color-mix(in srgb, var(--dk-red) 13%, transparent); }
+.dkgh .c-dev { color: var(--dk-muted);  border-color: var(--dk-border); }
+.dkgh .c-stale { color: var(--dk-amber);  border-color: color-mix(in srgb, var(--dk-amber) 45%, transparent);  background: color-mix(in srgb, var(--dk-amber) 12%, transparent); }
+.dkgh .c-gh { color: var(--dk-gh);     border-color: color-mix(in srgb, var(--dk-gh) 45%, transparent);     background: color-mix(in srgb, var(--dk-gh) 12%, transparent); }
+/* State and priority: semantic, and separate from the accent. */
+.dkgh .st { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.dkgh .st b { width: 7.2px; height: 7.2px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.dkgh .st-todo { color: var(--dk-muted); }
+.dkgh .st-prog { color: var(--dk-blue); }
+.dkgh .st-review { color: var(--dk-gh); }
+.dkgh .st-done { color: var(--dk-green); }
+.dkgh .st-block { color: var(--dk-red); }
+.dkgh .pr { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
+.dkgh .pr b { width: 8.4px; height: 8.4px; border-radius: 50%; border: 2.4px solid currentColor; flex-shrink: 0; }
+.dkgh .pr-urgent { color: var(--dk-red); }
+.dkgh .pr-high { color: var(--dk-orange); }
+.dkgh .pr-med { color: var(--dk-amber); }
+.dkgh .pr-low { color: var(--dk-green); }
+.dkgh .av {
+    width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0;
+    display: grid; place-items: center; font-size: 9px; font-weight: 700; color: #0d0d0f;
+  }
+.dkgh .av-s { background: #f0a06a; }
+.dkgh .av-r { background: #7ec8a9; }
+.dkgh .av-m { background: #9db3f0; }
+.dkgh .av-k { background: #e0a3d0; }
+.dkgh .av-t { background: #c9c56a; }
+/* Toolbar and query */
+.dkgh .toolbar {
+    display: flex; align-items: center; gap: 8.4px; padding: 10.8px 19.2px;
+    border-bottom: 1px solid var(--dk-border); flex-wrap: wrap;
+  }
+.dkgh .search {
+    flex: 1; min-width: 240px; display: flex; align-items: center; gap: 8.4px;
+    padding: 6px 10.8px; border-radius: 7.2px; border: 1px solid var(--dk-border);
+    background: var(--dk-surface); font-family: var(--mono); font-size: 12.6px;
+  }
+.dkgh .search svg { width: 14.4px; height: 14.4px; color: var(--dk-faint); flex-shrink: 0; }
+.dkgh .search .k { color: var(--dk-gh); }
+.dkgh .search .v { color: var(--dk-cyan); }
+.dkgh .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12.6px; padding: 4.8px 10.8px; border-radius: 7.2px;
+    border: 1px solid var(--dk-border); color: var(--dk-muted); white-space: nowrap;
+  }
+.dkgh .pill svg { width: 13.2px; height: 13.2px; }
+.dkgh .pill.on { color: var(--dk-gh); border-color: color-mix(in srgb, var(--dk-gh) 45%, transparent); background: color-mix(in srgb, var(--dk-gh) 12%, transparent); }
+.dkgh .pill.go { background: var(--dk-gh-deep); border-color: var(--dk-gh-deep); color: #fff; font-weight: 600; }
+.dkgh .pill b { font-weight: 700; }
+/* Where the chips come from */
+.dkgh .srcgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9.6px; }
+.dkgh .srcc {
+    border: 1px solid var(--dk-border); border-radius: 9.6px; background: var(--dk-surface);
+    padding: 10.8px 13.2px; display: flex; flex-direction: column; gap: 6px; min-width: 0;
+  }
+.dkgh .srcc .sh { display: flex; align-items: center; gap: 8.4px; font-size: 13.2px; font-weight: 600; color: var(--dk-text); }
+.dkgh .srcc .sh svg { width: 14.4px; height: 14.4px; flex-shrink: 0; }
+.dkgh .srcc .sl {
+    font-family: var(--mono); font-size: 11.4px; color: var(--dk-faint);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+.dkgh .srcc .stat-ok { font-size: 11.4px; color: var(--dk-green); }
+.dkgh .srcc .stat-warn { font-size: 11.4px; color: var(--dk-amber); }
+.dkgh .bsrc {
+    font-size: 10.2px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    padding: 1px 6px; border-radius: 4.8px; white-space: nowrap;
+  }
+.dkgh .b-form { color: var(--dk-gh);    background: color-mix(in srgb, var(--dk-gh) 16%, transparent); }
+.dkgh .b-proj { color: var(--dk-blue);  background: color-mix(in srgb, var(--dk-blue) 16%, transparent); }
+.dkgh .b-label { color: var(--dk-amber); background: color-mix(in srgb, var(--dk-amber) 16%, transparent); }
+.dkgh .b-native { color: var(--dk-muted); background: var(--dk-raised); }
+/* The architecture drawing, on paper rather than in the app */
+.dkgh figure.arch { margin: 31.2px 0 12px; }
+.dkgh figure.arch svg { width: 100%; height: auto; display: block; color: var(--ink-soft); }
+/* Search, and the filters you can see */
+.dkgh .search .ph { color: var(--dk-faint); font-family: var(--sans); font-size: 13.2px; }
+.dkgh .chiprow {
+    display: flex; align-items: center; gap: 7.2px; flex-wrap: wrap;
+    padding: 8.4px 19.2px; border-bottom: 1px solid var(--dk-border);
+    background: color-mix(in srgb, var(--dk-gh) 5%, transparent);
+  }
+.dkgh .chiprow .lead {
+    font-size: 11.4px; font-weight: 700; letter-spacing: .09em;
+    text-transform: uppercase; color: var(--dk-faint); margin-right: 2.4px;
+  }
+.dkgh .chiprow .sp { flex: 1; }
+.dkgh .fchip {
+    display: inline-flex; align-items: center; gap: 8.4px; white-space: nowrap;
+    font-size: 12.6px; padding: 3.6px 8.4px 3.6px 10.8px; border-radius: 7.2px;
+    border: 1px solid color-mix(in srgb, var(--dk-gh) 40%, transparent);
+    background: color-mix(in srgb, var(--dk-gh) 12%, transparent); color: var(--dk-text);
+  }
+.dkgh .fchip .k { color: var(--dk-faint); }
+.dkgh .fchip .x { color: var(--dk-muted); font-size: 14.4px; line-height: 1; }
+.dkgh .chiprow .clr { font-size: 12.6px; color: var(--dk-muted); padding: 0 4.8px; }
+.dkgh .chiprow .adv {
+    display: inline-flex; align-items: center; gap: 7.2px; font-size: 12px;
+    color: var(--dk-muted); padding: 3.6px 9.6px; border-radius: 7.2px; border: 1px solid var(--dk-border);
+  }
+.dkgh .chiprow .adv.on { color: var(--dk-gh); border-color: color-mix(in srgb, var(--dk-gh) 45%, transparent); }
+.dkgh .chiprow .adv svg { width: 13.2px; height: 13.2px; }
+.dkgh .advbar {
+    display: flex; align-items: center; gap: 10.8px; padding: 8.4px 19.2px;
+    border-bottom: 1px solid var(--dk-border); background: var(--dk-panel);
+  }
+.dkgh .advbar .q {
+    flex: 1; min-width: 0; padding: 6px 10.8px; border-radius: 7.2px;
+    border: 1px solid var(--dk-border); background: var(--dk-surface);
+    font-family: var(--mono); font-size: 12.6px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+.dkgh .advbar .q .k { color: var(--dk-gh); }
+.dkgh .advbar .q .v { color: var(--dk-cyan); }
+.dkgh .advbar .hint { font-size: 12px; color: var(--dk-faint); }
+/* Roadmap: dragging, lanes, dependencies, baselines */
+.dkgh .tl-rows { position: relative; }
+.dkgh .ghost {
+    position: absolute; top: 9.6px; height: 16.8px; border-radius: 4.8px;
+    border: 1px dashed var(--dk-faint); background: transparent;
+  }
+.dkgh .dragtip {
+    position: absolute; z-index: 4; padding: 3.6px 8.4px; border-radius: 6px;
+    background: var(--dk-raised); border: 1px solid var(--dk-gh);
+    font-size: 11.4px; color: var(--dk-text); white-space: nowrap;
+    box-shadow: 0 7.2px 21.6px rgba(0,0,0,.5);
+  }
+.dkgh .grip {
+    position: absolute; top: 9.6px; width: 4.8px; height: 16.8px; border-radius: 2.4px;
+    background: var(--dk-text); opacity: .85;
+  }
+.dkgh .lnk { position: absolute; pointer-events: none; }
+.dkgh .arw {
+    position: absolute; width: 0; height: 0;
+    border-top: 4.2px solid transparent; border-bottom: 4.2px solid transparent;
+  }
+.dkgh .lane {
+    display: grid; grid-template-columns: 252px 1fr; align-items: center;
+    background: var(--dk-surface); border-bottom: 1px solid var(--dk-border);
+  }
+.dkgh .lane .lh {
+    display: flex; align-items: center; gap: 9.6px; padding: 6px 14.4px;
+    font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+    color: var(--dk-text);
+  }
+.dkgh .lane .lh .n { font-family: var(--mono); font-weight: 500; letter-spacing: 0; color: var(--dk-faint); }
+.dkgh .load { display: grid; grid-template-columns: repeat(12, 1fr); height: 26.4px; align-items: end; }
+.dkgh .load i {
+    display: block; margin: 0 2.4px; border-radius: 2.4px 2.4px 0 0;
+    border-left: 1px solid color-mix(in srgb, var(--dk-border) 40%, transparent);
+  }
+/* Dialogs drawn over a screen */
+.dkgh .dlgwrap { position: relative; }
+.dkgh .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.55); z-index: 3; }
+.dkgh .dlg {
+    position: absolute; z-index: 4; left: 50%; transform: translateX(-50%);
+    border-radius: 12px; border: 1px solid var(--dk-border); background: var(--dk-surface);
+    box-shadow: 0 24px 72px rgba(0,0,0,.6); overflow: hidden;
+  }
+.dkgh .dlg .dh {
+    display: flex; align-items: center; gap: 9.6px; padding: 12px 15.6px;
+    border-bottom: 1px solid var(--dk-border); font-size: 14.4px; font-weight: 700; color: var(--dk-text);
+  }
+.dkgh .dlg .dh svg { width: 15.6px; height: 15.6px; color: var(--dk-gh); }
+.dkgh .dlg .dh .sp { flex: 1; }
+.dkgh .dlg .db { padding: 14.4px 15.6px; display: flex; flex-direction: column; gap: 13.2px; }
+.dkgh .dlg .df {
+    display: flex; align-items: center; gap: 9.6px; padding: 12px 15.6px;
+    border-top: 1px solid var(--dk-border); background: var(--dk-panel);
+  }
+.dkgh .dlg .df .sp { flex: 1; }
+.dkgh .fieldrow { display: flex; flex-direction: column; gap: 6px; }
+.dkgh .fieldrow .fl { font-size: 11.4px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--dk-faint); }
+.dkgh .inp {
+    padding: 7.2px 10.8px; border-radius: 7.2px; border: 1px solid var(--dk-border);
+    background: var(--dk-panel); font-size: 13.8px; color: var(--dk-text);
+  }
+.dkgh .inp.focus { border-color: var(--dk-gh); box-shadow: 0 0 0 3.6px color-mix(in srgb, var(--dk-gh) 16%, transparent); }
+.dkgh .inp .ph { color: var(--dk-faint); }
+.dkgh .picks { display: flex; gap: 6px; flex-wrap: wrap; }
+.dkgh .picks span {
+    width: 30px; height: 30px; border-radius: 7.2px; display: grid; place-items: center;
+    border: 1px solid var(--dk-border); color: var(--dk-muted);
+  }
+.dkgh .picks span svg { width: 15.6px; height: 15.6px; }
+.dkgh .picks span.on { border-color: var(--dk-gh); color: var(--dk-gh); background: color-mix(in srgb, var(--dk-gh) 12%, transparent); }
+/* Unsaved-view bar */
+.dkgh .dirtybar {
+    display: flex; align-items: center; gap: 9.6px; padding: 8.4px 19.2px;
+    border-bottom: 1px solid var(--dk-border);
+    background: color-mix(in srgb, var(--dk-amber) 9%, transparent);
+    font-size: 12.6px; color: var(--dk-text);
+  }
+.dkgh .dirtybar svg { width: 14.4px; height: 14.4px; color: var(--dk-amber); }
+.dkgh .dirtybar .sp { flex: 1; }
+.dkgh .viewbar .v .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dk-amber); }
+.dkgh .fchip.new { border-color: color-mix(in srgb, var(--dk-amber) 55%, transparent); background: color-mix(in srgb, var(--dk-amber) 14%, transparent); }
+.dkgh .fchip.gone { opacity: .5; text-decoration: line-through; }
+/* Chart builder */
+.dkgh .cbuild { display: flex; min-height: 300px; }
+.dkgh .cbuild .cfg { width: 249.6px; flex-shrink: 0; border-right: 1px solid var(--dk-border); background: var(--dk-surface); padding: 13.2px 14.4px; display: flex; flex-direction: column; gap: 12px; }
+.dkgh .cbuild .prev { flex: 1; min-width: 0; padding: 14.4px 16.8px; }
+.dkgh .seg { display: flex; gap: 3.6px; }
+.dkgh .seg span { flex: 1; text-align: center; font-size: 12px; padding: 4.8px 0; border-radius: 6px; border: 1px solid var(--dk-border); color: var(--dk-muted); }
+.dkgh .seg span.on { border-color: var(--dk-gh); color: var(--dk-gh); background: color-mix(in srgb, var(--dk-gh) 12%, transparent); font-weight: 600; }
+/* Manage views list */
+.dkgh .vlist { display: flex; flex-direction: column; }
+.dkgh .vrow {
+    display: flex; align-items: center; gap: 10.8px; padding: 8.4px 14.4px;
+    border-bottom: 1px solid color-mix(in srgb, var(--dk-border) 55%, transparent);
+    font-size: 13.2px; color: var(--dk-text);
+  }
+.dkgh .vrow svg { width: 14.4px; height: 14.4px; color: var(--dk-faint); }
+.dkgh .vrow .sp { flex: 1; }
+.dkgh .vrow.drag { background: var(--dk-raised); border: 1px solid var(--dk-gh); border-radius: 8.4px; }
+.dkgh .vrow .cx { font-family: var(--mono); font-size: 11.4px; color: var(--dk-faint); }
+/* Sub-screen index */
+.dkgh .subindex { display: flex; gap: 7.2px; flex-wrap: wrap; margin: 4.8px 0 9.6px; }
+.dkgh .subindex a {
+    font-size: 13.8px; text-decoration: none; color: var(--ink-soft);
+    padding: 4.8px 12px; border-radius: 999px; border: 1px solid var(--rule); background: var(--card);
+  }
+.dkgh .subindex a b { color: var(--accent); font-family: var(--mono); font-size: 12px; margin-right: 6px; }
+.dkgh .subindex a:hover { border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+/* Renderer map, for the composer's architecture */
+.dkgh .rmap { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9.6px; }
+.dkgh .rcard {
+    border: 1px solid var(--dk-border); border-radius: 9.6px; background: var(--dk-surface);
+    padding: 10.8px 13.2px; display: flex; flex-direction: column; gap: 6px;
+  }
+.dkgh .rcard .rk {
+    font-family: var(--mono); font-size: 12px; color: var(--dk-gh); font-weight: 500;
+  }
+.dkgh .rcard .rd { font-size: 12px; color: var(--dk-faint); line-height: 1.5; }
+.dkgh .rcard .rm { font-family: var(--mono); font-size: 11.4px; color: var(--dk-muted); }
+/* The chat library, as it is configured here */
+.dkgh .replypill {
+    display: flex; align-items: center; gap: 10.8px; margin: 10.8px 14.4px 0;
+    padding: 7.2px 12px; border-radius: 8.4px;
+    background: color-mix(in srgb, var(--dk-gh) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--dk-gh) 26%, transparent);
+    font-size: 12.6px; color: var(--dk-text);
+  }
+.dkgh .replypill .bar { width: 2.4px; align-self: stretch; border-radius: 2.4px; background: var(--dk-gh); }
+.dkgh .replypill .lbl {
+    display: block; font-size: 10.2px; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--dk-gh); margin-bottom: 1px;
+  }
+.dkgh .replypill .sp { flex: 1; }
+.dkgh .replypill .x { color: var(--dk-muted); font-size: 14.4px; }
+.dkgh .ask .who .rk {
+    font-family: var(--mono); font-size: 9.6px; font-weight: 500; letter-spacing: 0;
+    text-transform: none; padding: 1px 6px; border-radius: 3.6px; margin-left: 6px;
+    background: var(--dk-raised); color: var(--dk-muted);
+  }
+.dkgh .qopts span.hot {
+    border-color: color-mix(in srgb, var(--dk-gh) 50%, transparent);
+    color: var(--dk-gh); background: color-mix(in srgb, var(--dk-gh) 10%, transparent);
+  }
+.dkgh .evreq {
+    border: 1px solid color-mix(in srgb, var(--dk-gh) 40%, transparent); border-radius: 10.8px;
+    background: color-mix(in srgb, var(--dk-gh) 6%, transparent); padding: 10.8px 13.2px; max-width: 92%;
+  }
+.dkgh .evreq .who {
+    font-size: 10.2px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--dk-gh); margin-bottom: 6px;
+  }
+.dkgh .evreq .who .rk, .dkgh .evreq .who .nb {
+    font-family: var(--mono); font-size: 9.6px; font-weight: 500; letter-spacing: 0;
+    text-transform: none; padding: 1px 6px; border-radius: 3.6px; margin-left: 6px;
+    background: var(--dk-raised); color: var(--dk-muted);
+  }
+.dkgh .composer {
+    display: flex; align-items: center; gap: 9.6px; margin: auto 14.4px 14.4px;
+    padding: 8.4px 12px; border-radius: 9.6px;
+    border: 1px solid var(--dk-border); background: var(--dk-surface);
+  }
+/* The pipeline: one artefact per panel, drawn in the app's own palette */
+.dkgh .pipe { display: flex; flex-direction: column; gap: 0; }
+.dkgh .pipe-row { display: grid; grid-template-columns: 1fr 40.8px 1fr; align-items: stretch; }
+.dkgh .pipe-row.solo { grid-template-columns: 1fr; }
+.dkgh .pnl {
+    border: 1px solid var(--dk-border); border-radius: 12px; background: var(--dk-surface);
+    overflow: hidden; display: flex; flex-direction: column; min-width: 0;
+  }
+.dkgh .pnl.hot { border-color: color-mix(in srgb, var(--dk-gh) 45%, transparent); }
+.dkgh .pnl .ph {
+    display: flex; align-items: center; gap: 9.6px; padding: 8.4px 13.2px;
+    background: var(--dk-raised); border-bottom: 1px solid var(--dk-border);
+  }
+.dkgh .pnl .ph .num {
+    width: 20.4px; height: 20.4px; border-radius: 6px; flex-shrink: 0;
+    display: grid; place-items: center; font-family: var(--mono); font-size: 11.4px; font-weight: 700;
+    background: color-mix(in srgb, var(--dk-gh) 20%, transparent); color: var(--dk-gh);
+  }
+.dkgh .pnl .ph .t { font-size: 13.2px; font-weight: 600; color: var(--dk-text); }
+.dkgh .pnl .ph .w {
+    margin-left: auto; font-family: var(--mono); font-size: 10.8px; color: var(--dk-faint);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+.dkgh .pnl .pb { padding: 12px 14.4px; flex: 1; min-width: 0; }
+.dkgh .pnl .pf {
+    padding: 7.2px 13.2px; border-top: 1px solid var(--dk-border);
+    font-size: 12px; color: var(--dk-faint); line-height: 1.5;
+  }
+.dkgh .pnl .pf b { color: var(--dk-text); font-weight: 600; }
+.dkgh pre.code {
+    margin: 0; font-family: var(--mono); font-size: 12.6px; line-height: 1.65;
+    color: var(--dk-text); white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+.dkgh pre.code .k { color: var(--dk-gh); }
+.dkgh pre.code .s { color: var(--dk-cyan); }
+.dkgh pre.code .c { color: var(--dk-faint); }
+.dkgh pre.code .h { color: var(--dk-blue); font-weight: 600; }
+.dkgh pre.code .g { color: var(--dk-green); }
+.dkgh .arrowdown {
+    display: grid; place-items: center; padding: 10.8px 0;
+    grid-column: 1 / -1;
+  }
+.dkgh .arrowdown span {
+    display: inline-flex; align-items: center; gap: 9.6px;
+    font-size: 12px; color: var(--dk-faint); font-family: var(--mono);
+  }
+.dkgh .arrowdown i {
+    width: 0; height: 0; border-left: 4.8px solid transparent; border-right: 4.8px solid transparent;
+    border-top: 7.2px solid var(--dk-gh); display: block;
+  }
+.dkgh .arrowright { display: grid; place-items: center; }
+.dkgh .arrowright i {
+    width: 0; height: 0; border-top: 4.8px solid transparent; border-bottom: 4.8px solid transparent;
+    border-left: 7.2px solid var(--dk-gh); display: block;
+  }
+/* The numbered walkthrough */
+.dkgh .steps { display: flex; flex-direction: column; gap: 2.4px; margin: 26.4px 0 12px; }
+.dkgh .step {
+    display: grid; grid-template-columns: 40.8px 1fr; gap: 16.8px; align-items: start;
+    padding: 16.8px 0; border-top: 1px solid var(--rule);
+  }
+.dkgh .step:last-child { border-bottom: 1px solid var(--rule); }
+.dkgh .step .sn {
+    font-family: var(--mono); font-size: 14.4px; font-weight: 700; color: var(--accent);
+    background: var(--accent-soft); border-radius: 8.4px;
+    height: 31.2px; display: grid; place-items: center;
+  }
+.dkgh .step .sb h5 {
+    margin: 0 0 7.2px; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink);
+  }
+.dkgh .step .sb p { margin: 0 0 9.6px; font-size: 16.2px; line-height: 1.6; color: var(--ink-soft); max-width: 74ch; }
+.dkgh .step .sb p:last-child { margin-bottom: 0; }
+.dkgh .step .sb p.meta {
+    font-size: 13.8px; color: var(--ink-faint);
+    padding-left: 12px; border-left: 2.4px solid var(--rule);
+  }
+.dkgh .step .sb p.meta b { color: var(--ink-soft); }
+.dkgh .step .sb p.warn {
+    font-size: 15px; color: var(--ink-soft);
+    padding: 9.6px 13.2px; border-radius: 8.4px;
+    background: color-mix(in srgb, #d29922 12%, transparent);
+    border-left: 2.4px solid #d29922;
+  }
+/* Selection, dragging, limits &mdash; the board's second layer */
+.dkgh .sel {
+    width: 15.6px; height: 15.6px; border-radius: 4.8px; flex-shrink: 0;
+    border: 1px solid var(--dk-border); display: grid; place-items: center;
+  }
+.dkgh .sel.on { background: var(--dk-gh-deep); border-color: var(--dk-gh-deep); }
+.dkgh .sel.on svg { width: 10.8px; height: 10.8px; color: #fff; }
+.dkgh .card.picked {
+    border-color: color-mix(in srgb, var(--dk-gh) 55%, transparent);
+    background: color-mix(in srgb, var(--dk-gh) 8%, transparent);
+  }
+.dkgh .bulkbar {
+    display: flex; align-items: center; gap: 8.4px; padding: 9.6px 19.2px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--dk-border);
+    background: color-mix(in srgb, var(--dk-gh) 10%, transparent);
+  }
+.dkgh .bulkbar .sp { flex: 1; }
+.dkgh .bulkbar .n { font-size: 13.2px; font-weight: 600; color: var(--dk-text); }
+.dkgh .dragcard {
+    position: absolute; z-index: 6; width: 240px; transform: rotate(-2deg);
+    box-shadow: 0 16.8px 40.8px rgba(0,0,0,.55); pointer-events: none;
+    border: 1px solid var(--dk-gh); border-radius: 8.4px;
+    background: var(--dk-raised); padding: 8.4px 9.6px;
+  }
+.dkgh .slot {
+    border: 1px dashed color-mix(in srgb, var(--dk-gh) 50%, transparent); border-radius: 8.4px;
+    background: color-mix(in srgb, var(--dk-gh) 8%, transparent); height: 62.4px;
+  }
+.dkgh .wip {
+    display: flex; align-items: center; gap: 7.2px; font-size: 10.8px;
+    color: var(--dk-faint); padding: 3.6px 0 0;
+  }
+.dkgh .wip .track { flex: 1; height: 3.6px; border-radius: 2.4px; background: var(--dk-raised); overflow: hidden; }
+.dkgh .wip .track i { display: block; height: 100%; }
+.dkgh .kcol.over .kh { border-bottom-color: var(--dk-red); }
+/* Table controls */
+.dkgh .colpick { display: flex; flex-direction: column; }
+.dkgh .colrow {
+    display: flex; align-items: center; gap: 9.6px; padding: 4.8px 12px;
+    font-size: 12.6px; color: var(--dk-text);
+    border-bottom: 1px solid color-mix(in srgb, var(--dk-border) 45%, transparent);
+  }
+.dkgh .colrow svg { width: 13.2px; height: 13.2px; color: var(--dk-faint); flex-shrink: 0; }
+.dkgh .colrow .sp { flex: 1; }
+.dkgh .colrow.pinned { background: color-mix(in srgb, var(--dk-gh) 8%, transparent); }
+.dkgh table.tbl th .sortmark { color: var(--dk-gh); font-size: 9.6px; margin-left: 4.8px; }
+.dkgh table.tbl th.sorted { color: var(--dk-gh); }
+.dkgh table.tbl tr.rowsel td { background: color-mix(in srgb, var(--dk-gh) 12%, transparent) !important; }
+.dkgh table.tbl tr.cursor td { box-shadow: inset 2.4px 0 0 var(--dk-gh); }
+.dkgh .celledit {
+    display: inline-flex; align-items: center; gap: 7.2px; padding: 2.4px 8.4px; border-radius: 6px;
+    border: 1px solid var(--dk-gh); background: var(--dk-panel);
+    box-shadow: 0 0 0 3.6px color-mix(in srgb, var(--dk-gh) 15%, transparent);
+  }
+.dkgh .kbd {
+    font-family: var(--mono); font-size: 10.8px; padding: 1px 6px; border-radius: 4.8px;
+    border: 1px solid var(--dk-border); background: var(--dk-panel); color: var(--dk-muted);
+  }
+/* Explain panel */
+.dkgh .why-row {
+    display: flex; align-items: flex-start; gap: 9.6px; padding: 6px 0;
+    font-size: 12.6px; color: var(--dk-muted); line-height: 1.5;
+  }
+.dkgh .why-row .mark { width: 15.6px; flex-shrink: 0; text-align: center; font-size: 12px; }
+.dkgh .why-row.pass .mark { color: var(--dk-green); }
+.dkgh .why-row.fail .mark { color: var(--dk-red); }
+.dkgh .why-row b { color: var(--dk-text); font-weight: 600; }
+/* Peek */
+.dkgh .peek {
+    position: absolute; z-index: 5; width: 396px; border-radius: 12px;
+    border: 1px solid var(--dk-border); background: var(--dk-surface);
+    box-shadow: 0 21.6px 55.2px rgba(0,0,0,.55); overflow: hidden;
+  }
+.dkgh .peek .pkh {
+    display: flex; align-items: center; gap: 8.4px; padding: 9.6px 13.2px;
+    background: var(--dk-raised); border-bottom: 1px solid var(--dk-border); font-size: 13.2px;
+  }
+.dkgh .peek .pkb { padding: 10.8px 13.2px; font-size: 12.6px; color: var(--dk-text); line-height: 1.6; }
+/* Facet extras */
+.dkgh .fsearch {
+    display: flex; align-items: center; gap: 7.2px; margin: 2.4px 12px 6px;
+    padding: 3.6px 8.4px; border-radius: 6px; border: 1px solid var(--dk-border);
+    background: var(--dk-panel); font-size: 12px; color: var(--dk-faint);
+  }
+.dkgh .fsearch svg { width: 12px; height: 12px; }
+.dkgh .fct .only {
+    margin-left: auto; font-size: 10.8px; color: var(--dk-gh); opacity: 0; padding-left: 7.2px;
+  }
+.dkgh .fct.hover .only { opacity: 1; }
+.dkgh .fct.excluded { color: var(--dk-red); }
+.dkgh .fct.excluded .bx { background: var(--dk-red); border-color: var(--dk-red); }
+.dkgh .andor {
+    display: flex; gap: 2.4px; margin: 3.6px 12px 7.2px;
+  }
+.dkgh .andor span {
+    flex: 1; text-align: center; font-size: 10.8px; padding: 2.4px 0; border-radius: 4.8px;
+    border: 1px solid var(--dk-border); color: var(--dk-muted);
+  }
+.dkgh .andor span.on { border-color: var(--dk-gh); color: var(--dk-gh); background: color-mix(in srgb, var(--dk-gh) 12%, transparent); }
+.dkgh .hl { background: color-mix(in srgb, var(--dk-amber) 30%, transparent); border-radius: 2.4px; padding: 0 1px; }
+/* Card board */
+.dkgh .groups { padding: 15.6px 19.2px 21.6px; display: flex; flex-direction: column; gap: 20.4px; }
+.dkgh .group > .gh { display: flex; align-items: center; gap: 10.8px; margin-bottom: 9.6px; }
+.dkgh .group > .gh .name { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--dk-text); }
+.dkgh .group > .gh .rule { flex: 1; height: 1px; background: var(--dk-border); }
+.dkgh .group > .gh .n { font-family: var(--mono); font-size: 12px; color: var(--dk-muted); }
+.dkgh .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9.6px; }
+.dkgh .card {
+    border: 1px solid var(--dk-border); border-radius: 9.6px; background: var(--dk-surface);
+    padding: 10.8px 12px; display: flex; flex-direction: column; gap: 8.4px; min-width: 0;
+  }
+.dkgh .card .num { font-family: var(--mono); font-size: 12px; color: var(--dk-faint); }
+.dkgh .card .title { font-size: 13.8px; font-weight: 600; color: var(--dk-text); line-height: 1.38; }
+.dkgh .card .foot { display: flex; align-items: center; gap: 8.4px; font-size: 12px; color: var(--dk-faint); }
+.dkgh .card .foot .sp { flex: 1; }
+.dkgh .shot {
+    height: 55.2px; border-radius: 6px; border: 1px solid var(--dk-border);
+    background:
+      linear-gradient(115deg, color-mix(in srgb, var(--dk-blue) 16%, transparent), transparent 62%),
+      repeating-linear-gradient(0deg, var(--dk-raised) 0 8.4px, var(--dk-surface) 8.4px 16.8px);
+    position: relative; overflow: hidden;
+  }
+.dkgh .shot::after {
+    content: 'evidence'; position: absolute; left: 6px; bottom: 3.6px;
+    font-size: 9.6px; letter-spacing: .08em; text-transform: uppercase; color: var(--dk-faint);
+  }
+/* Empty states */
+.dkgh .empty { padding: 40.8px 31.2px 36px; }
+.dkgh .empty .mark { display: grid; place-items: center; margin-bottom: 16.8px; }
+.dkgh .empty .mark svg { width: 48px; height: 48px; color: var(--dk-faint); opacity: .55; }
+.dkgh .empty .t { font-size: 19.2px; font-weight: 700; color: var(--dk-text); text-align: center; margin-bottom: 7.2px; }
+.dkgh .empty .p { font-size: 13.8px; color: var(--dk-muted); max-width: 54ch; margin: 0 auto 21.6px; line-height: 1.65; text-align: center; }
+.dkgh .plat { display: flex; gap: 3.6px; justify-content: center; margin-bottom: 16.8px; }
+.dkgh .plat span {
+    font-size: 12.6px; padding: 4.8px 14.4px; border-radius: 7.2px; color: var(--dk-muted);
+    border: 1px solid transparent;
+  }
+.dkgh .plat span.on { color: var(--dk-text); background: var(--dk-raised); border-color: var(--dk-border); font-weight: 600; }
+.dkgh .opts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9.6px; max-width: 792px; margin: 0 auto; }
+.dkgh .opt {
+    border: 1px solid var(--dk-border); border-radius: 9.6px; background: var(--dk-surface);
+    padding: 10.8px 13.2px; display: flex; flex-direction: column; gap: 7.2px;
+  }
+.dkgh .opt.pick { border-color: color-mix(in srgb, var(--dk-gh) 50%, transparent); background: color-mix(in srgb, var(--dk-gh) 7%, transparent); }
+.dkgh .opt .oh { display: flex; align-items: center; gap: 8.4px; font-size: 13.2px; font-weight: 600; color: var(--dk-text); }
+.dkgh .opt .oh .tag {
+    font-size: 10.2px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    padding: 1px 6px; border-radius: 4.8px; color: var(--dk-gh);
+    background: color-mix(in srgb, var(--dk-gh) 15%, transparent);
+  }
+.dkgh .opt .oh .sp { flex: 1; }
+.dkgh .cmd {
+    display: flex; align-items: center; gap: 9.6px; padding: 7.2px 9.6px; border-radius: 7.2px;
+    background: var(--dk-panel); border: 1px solid var(--dk-border);
+    font-family: var(--mono); font-size: 12.6px; color: var(--dk-text);
+  }
+.dkgh .cmd .p { color: var(--dk-green); }
+.dkgh .cmd .sp { flex: 1; }
+.dkgh .cmd .copy { font-family: var(--sans); font-size: 11.4px; color: var(--dk-faint); white-space: nowrap; }
+.dkgh .opt .sub { font-size: 12px; color: var(--dk-faint); line-height: 1.5; }
+.dkgh .opt .sub u { color: var(--dk-blue); text-decoration: none; }
+.dkgh .note {
+    margin: 19.2px auto 0; max-width: 792px; font-size: 12.6px; color: var(--dk-faint);
+    line-height: 1.65; padding: 10.8px 14.4px; border-radius: 8.4px;
+    border: 1px solid var(--dk-border); background: var(--dk-surface);
+    display: flex; gap: 10.8px; align-items: flex-start;
+  }
+.dkgh .note svg { width: 15.6px; height: 15.6px; flex-shrink: 0; margin-top: 2.4px; color: var(--dk-muted); }
+.dkgh .note b { color: var(--dk-text); font-weight: 600; }
+.dkgh .actions { display: flex; gap: 8.4px; justify-content: center; margin-top: 19.2px; }
+/* Tables */
+.dkgh .tblw { overflow-x: auto; }
+.dkgh table.tbl { border-collapse: collapse; width: 100%; font-size: 13.2px; }
+.dkgh table.tbl th {
+    text-align: left; font-size: 11.4px; font-weight: 600; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--dk-faint); padding: 8.4px 14.4px;
+    border-bottom: 1px solid var(--dk-border); white-space: nowrap; background: var(--dk-surface);
+  }
+.dkgh table.tbl td {
+    padding: 7.2px 14.4px; border-bottom: 1px solid color-mix(in srgb, var(--dk-border) 55%, transparent);
+    color: var(--dk-text); white-space: nowrap; vertical-align: middle;
+  }
+.dkgh table.tbl tr:nth-child(even) td { background: color-mix(in srgb, var(--dk-surface) 55%, transparent); }
+.dkgh table.tbl td.num, .dkgh table.tbl td.dt { font-family: var(--mono); font-size: 12px; color: var(--dk-muted); font-variant-numeric: tabular-nums; }
+.dkgh table.tbl td.ttl { color: var(--dk-text); font-weight: 500; max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+.dkgh table.tbl td .who { display: flex; align-items: center; gap: 7.2px; font-size: 12px; color: var(--dk-muted); }
+.dkgh .late { color: var(--dk-red); }
+/* Kanban */
+.dkgh .kan { display: grid; grid-template-columns: repeat(5, 1fr); gap: 9.6px; padding: 15.6px 19.2px 21.6px; }
+.dkgh .kcol { display: flex; flex-direction: column; gap: 8.4px; min-width: 0; }
+.dkgh .kcol .kh {
+    display: flex; align-items: center; gap: 8.4px; padding-bottom: 7.2px;
+    border-bottom: 2.4px solid var(--dk-border);
+  }
+.dkgh .kcol .kh .n { font-family: var(--mono); font-size: 11.4px; color: var(--dk-faint); margin-left: auto; }
+.dkgh .kcol.k-prog .kh { border-bottom-color: var(--dk-blue); }
+.dkgh .kcol.k-review .kh { border-bottom-color: var(--dk-gh); }
+.dkgh .kcol.k-done .kh { border-bottom-color: var(--dk-green); }
+.dkgh .kcol.k-block .kh { border-bottom-color: var(--dk-red); }
+.dkgh .kcard {
+    border: 1px solid var(--dk-border); border-radius: 8.4px; background: var(--dk-surface);
+    padding: 8.4px 9.6px; display: flex; flex-direction: column; gap: 6px; min-width: 0;
+  }
+.dkgh .kcard .t { font-size: 12.6px; font-weight: 500; color: var(--dk-text); line-height: 1.4; }
+.dkgh .kcard .f { display: flex; align-items: center; gap: 7.2px; font-size: 11.4px; color: var(--dk-faint); }
+.dkgh .kcard .f .sp { flex: 1; }
+.dkgh .drop {
+    border: 1px dashed color-mix(in srgb, var(--dk-gh) 45%, transparent); border-radius: 8.4px;
+    height: 40.8px; display: grid; place-items: center; font-size: 11.4px; color: var(--dk-gh);
+    background: color-mix(in srgb, var(--dk-gh) 7%, transparent);
+  }
+/* Timeline / roadmap */
+.dkgh .tl { padding: 0 0 21.6px; }
+.dkgh .tl-months, .dkgh .tl-days {
+    display: grid; grid-template-columns: 252px 1fr; align-items: center;
+    border-bottom: 1px solid var(--dk-border);
+  }
+.dkgh .tl-scale { display: grid; grid-template-columns: repeat(12, 1fr); }
+.dkgh .tl-scale span {
+    font-size: 11.4px; color: var(--dk-faint); text-align: center; padding: 4.8px 0;
+    border-left: 1px solid color-mix(in srgb, var(--dk-border) 60%, transparent);
+    font-family: var(--mono);
+  }
+.dkgh .tl-months .tl-scale span { color: var(--dk-muted); font-weight: 600; letter-spacing: .05em; }
+.dkgh .tl-row {
+    display: grid; grid-template-columns: 252px 1fr; align-items: center;
+    border-bottom: 1px solid color-mix(in srgb, var(--dk-border) 50%, transparent);
+  }
+.dkgh .tl-row .lbl {
+    display: flex; align-items: center; gap: 8.4px; padding: 8.4px 14.4px;
+    font-size: 12.6px; color: var(--dk-text); min-width: 0;
+  }
+.dkgh .tl-row .lbl .n { font-family: var(--mono); font-size: 11.4px; color: var(--dk-faint); }
+.dkgh .tl-row .lbl .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dkgh .tl-track { position: relative; height: 36px; }
+.dkgh .tl-track .grid { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(12, 1fr); }
+.dkgh .tl-track .grid i { border-left: 1px solid color-mix(in srgb, var(--dk-border) 45%, transparent); }
+.dkgh .bar {
+    position: absolute; top: 9.6px; height: 16.8px; border-radius: 4.8px;
+    display: flex; align-items: center; padding: 0 7.2px; font-size: 10.8px;
+    color: #0d0d0f; font-weight: 600; white-space: nowrap; overflow: hidden;
+  }
+.dkgh .b-ui { background: var(--dk-blue); }
+.dkgh .b-api { background: var(--dk-cyan); }
+.dkgh .b-be { background: var(--dk-pink); }
+.dkgh .b-xl { background: var(--dk-green); }
+.dkgh .bar.over { background: repeating-linear-gradient(45deg, var(--dk-red) 0 6px, #c0392f 6px 12px); color: #fff; }
+.dkgh .today { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--dk-red); z-index: 2; }
+.dkgh .today::before {
+    content: ''; position: absolute; top: -3px; left: -2.5px;
+    width: 7.2px; height: 7.2px; border-radius: 50%; background: var(--dk-red);
+  }
+/* Facets / filter rail */
+.dkgh .split { display: flex; min-height: 360px; }
+.dkgh .facets {
+    width: 235.2px; flex-shrink: 0; border-right: 1px solid var(--dk-border);
+    background: var(--dk-surface); padding: 12px 0; overflow: hidden;
+  }
+.dkgh .facet { margin-bottom: 14.4px; }
+.dkgh .facet .fh {
+    display: flex; align-items: center; gap: 7.2px; padding: 3.6px 14.4px 6px;
+    font-size: 11.4px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--dk-faint);
+  }
+.dkgh .facet .fh .n { margin-left: auto; font-family: var(--mono); font-weight: 500; }
+.dkgh .fct {
+    display: flex; align-items: center; gap: 8.4px; padding: 3.6px 14.4px;
+    font-size: 12.6px; color: var(--dk-muted);
+  }
+.dkgh .fct .bx {
+    width: 13.2px; height: 13.2px; border-radius: 3.6px; border: 1px solid var(--dk-border);
+    flex-shrink: 0; display: grid; place-items: center;
+  }
+.dkgh .fct.on {
+    color: var(--dk-text); border-radius: 6px;
+    background: color-mix(in srgb, var(--dk-gh) 10%, transparent);
+  }
+.dkgh .fct.on .bx { background: var(--dk-gh-deep); border-color: var(--dk-gh-deep); }
+.dkgh .fct.on .bx svg { width: 9.6px; height: 9.6px; color: #fff; }
+.dkgh .fct .n { margin-left: auto; font-family: var(--mono); font-size: 11.4px; color: var(--dk-faint); }
+.dkgh .fct .sw { width: 9.6px; height: 9.6px; border-radius: 50%; flex-shrink: 0; }
+.dkgh .pane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+/* Saved views bar and menu */
+.dkgh .viewbar {
+    display: flex; align-items: center; gap: 2.4px; padding: 0 14.4px;
+    border-bottom: 1px solid var(--dk-border); background: var(--dk-panel);
+  }
+.dkgh .viewbar .v {
+    display: flex; align-items: center; gap: 7.2px; padding: 8.4px 12px;
+    font-size: 13.2px; color: var(--dk-muted); border-bottom: 2.4px solid transparent;
+  }
+.dkgh .viewbar .v svg { width: 14.4px; height: 14.4px; }
+.dkgh .viewbar .v.on { color: var(--dk-text); border-bottom-color: var(--dk-gh); font-weight: 600; }
+.dkgh .viewbar .v.on svg { color: var(--dk-gh); }
+.dkgh .viewbar .v .cx { font-family: var(--mono); font-size: 10.8px; color: var(--dk-faint); }
+.dkgh .viewbar .add { color: var(--dk-faint); font-size: 13.2px; padding: 8.4px 12px; }
+.dkgh .menu {
+    position: absolute; z-index: 5; min-width: 223.2px; padding: 6px;
+    border-radius: 9.6px; border: 1px solid var(--dk-border); background: var(--dk-raised);
+    box-shadow: 0 12px 36px rgba(0,0,0,.45);
+  }
+.dkgh .menu .mi {
+    display: flex; align-items: center; gap: 10.8px; padding: 6px 9.6px; border-radius: 6px;
+    font-size: 13.2px; color: var(--dk-text);
+  }
+.dkgh .menu .mi svg { width: 14.4px; height: 14.4px; color: var(--dk-muted); flex-shrink: 0; }
+.dkgh .menu .mi.on { background: var(--dk-hover); }
+.dkgh .menu .mi.danger { color: var(--dk-red); }
+.dkgh .menu .mi.danger svg { color: var(--dk-red); }
+.dkgh .menu hr { border: 0; border-top: 1px solid var(--dk-border); margin: 4.8px 2.4px; }
+.dkgh .rel { position: relative; }
+/* Composer */
+.dkgh .compose { display: flex; min-height: 360px; }
+.dkgh .compose .left { flex: 1.55; min-width: 0; border-right: 1px solid var(--dk-border); display: flex; flex-direction: column; }
+.dkgh .compose .right { width: 285.6px; flex-shrink: 0; display: flex; flex-direction: column; }
+.dkgh .paneh {
+    display: flex; align-items: center; gap: 9.6px; padding: 9.6px 14.4px;
+    border-bottom: 1px solid var(--dk-border);
+    font-size: 11.4px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--dk-faint);
+  }
+.dkgh .paneh .sp { flex: 1; }
+.dkgh .paneh svg { width: 14.4px; height: 14.4px; }
+.dkgh .editor { padding: 13.2px 14.4px; display: flex; flex-direction: column; gap: 10.8px; }
+.dkgh .titlein {
+    padding: 8.4px 10.8px; border-radius: 7.2px; border: 1px solid var(--dk-gh);
+    background: var(--dk-surface); font-size: 14.4px; color: var(--dk-text);
+    box-shadow: 0 0 0 3.6px color-mix(in srgb, var(--dk-gh) 16%, transparent);
+  }
+.dkgh .titlein .ph { color: var(--dk-faint); }
+.dkgh .lbl-s { font-size: 12px; color: var(--dk-muted); font-weight: 600; }
+.dkgh .lbl-s .req { color: var(--dk-red); }
+.dkgh .mdbar {
+    display: flex; align-items: center; gap: 2.4px; padding: 6px 8.4px;
+    border: 1px solid var(--dk-border); border-bottom: 0; border-radius: 8.4px 8.4px 0 0;
+    background: var(--dk-surface);
+  }
+.dkgh .mdbar .tg { display: flex; gap: 2.4px; margin-right: auto; }
+.dkgh .mdbar .tg span { font-size: 12.6px; padding: 3.6px 10.8px; border-radius: 6px; color: var(--dk-muted); }
+.dkgh .mdbar .tg span.on { background: var(--dk-raised); color: var(--dk-text); font-weight: 600; }
+.dkgh .mdbar .ic { width: 25.2px; height: 22.8px; display: grid; place-items: center; border-radius: 4.8px; color: var(--dk-muted); }
+.dkgh .mdbar .ic svg { width: 14.4px; height: 14.4px; }
+.dkgh .mdbar .sep { width: 1px; height: 15.6px; background: var(--dk-border); margin: 0 4.8px; }
+.dkgh .mdbody {
+    border: 1px solid var(--dk-border); border-radius: 0 0 8.4px 8.4px; background: var(--dk-surface);
+    padding: 12px 13.2px; min-height: 129.6px; font-size: 13.8px; color: var(--dk-text); line-height: 1.65;
+  }
+.dkgh .mdbody .ph { color: var(--dk-faint); }
+.dkgh .mdbody h5 { margin: 0 0 3.6px; font-size: 13.2px; font-weight: 700; color: var(--dk-text); }
+.dkgh .mdbody p { margin: 0 0 10.8px; max-width: none; }
+.dkgh .dropzone {
+    display: flex; align-items: center; gap: 9.6px; padding: 8.4px 12px; border-radius: 8.4px;
+    border: 1px dashed var(--dk-border); font-size: 12.6px; color: var(--dk-faint);
+  }
+.dkgh .dropzone.hot { border-color: var(--dk-gh); color: var(--dk-gh); background: color-mix(in srgb, var(--dk-gh) 8%, transparent); }
+.dkgh .dropzone svg { width: 15.6px; height: 15.6px; }
+.dkgh .msec { padding: 10.8px 14.4px; border-bottom: 1px solid color-mix(in srgb, var(--dk-border) 60%, transparent); }
+.dkgh .msec .mh {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 12px; font-weight: 700; color: var(--dk-text); margin-bottom: 6px;
+  }
+.dkgh .msec .mh svg { width: 14.4px; height: 14.4px; color: var(--dk-faint); }
+.dkgh .msec .val { font-size: 12.6px; color: var(--dk-muted); display: flex; align-items: center; gap: 7.2px; flex-wrap: wrap; }
+.dkgh .msec .val.set { color: var(--dk-text); }
+.dkgh .lbldot { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dk-text); }
+.dkgh .lbldot b { width: 9.6px; height: 9.6px; border-radius: 50%; }
+/* AI conversation */
+.dkgh .qa { padding: 12px 14.4px; display: flex; flex-direction: column; gap: 9.6px; overflow: hidden; }
+.dkgh .ask, .dkgh .said { font-size: 13.2px; line-height: 1.6; padding: 8.4px 12px; border-radius: 9.6px; max-width: 92%; }
+.dkgh .ask {
+    border: 1px solid color-mix(in srgb, var(--dk-gh) 40%, transparent);
+    background: color-mix(in srgb, var(--dk-gh) 9%, transparent); color: var(--dk-text);
+  }
+.dkgh .ask .who { font-size: 10.2px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--dk-gh); display: block; margin-bottom: 3.6px; }
+.dkgh .said { align-self: flex-end; background: var(--dk-raised); color: var(--dk-text); }
+.dkgh .qopts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 7.2px; }
+.dkgh .qopts span {
+    font-size: 12px; padding: 2.4px 9.6px; border-radius: 999px;
+    border: 1px solid var(--dk-border); color: var(--dk-muted);
+  }
+.dkgh .filled { padding: 12px 14.4px; display: flex; flex-direction: column; gap: 6px; }
+.dkgh .row2 { display: flex; gap: 9.6px; font-size: 13.2px; align-items: baseline; }
+.dkgh .row2 .k {
+    width: 93.6px; flex-shrink: 0; font-size: 11.4px; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--dk-faint);
+  }
+.dkgh .row2 .v { color: var(--dk-text); min-width: 0; }
+.dkgh .row2 .v.miss { color: var(--dk-amber); font-style: italic; }
+.dkgh .row2 .v.ok { color: var(--dk-green); }
+.dkgh .footbar {
+    display: flex; align-items: center; gap: 9.6px; padding: 10.8px 14.4px;
+    border-top: 1px solid var(--dk-border); margin-top: auto;
+  }
+.dkgh .footbar .sp { flex: 1; }
+.dkgh .btn {
+    font-size: 12.6px; padding: 6px 13.2px; border-radius: 7.2px;
+    border: 1px solid var(--dk-border); color: var(--dk-muted);
+    display: inline-flex; align-items: center; gap: 7.2px; white-space: nowrap;
+  }
+.dkgh .btn svg { width: 14.4px; height: 14.4px; }
+.dkgh .btn.ai { border-color: color-mix(in srgb, var(--dk-gh) 45%, transparent); color: var(--dk-gh); background: color-mix(in srgb, var(--dk-gh) 12%, transparent); font-weight: 600; }
+.dkgh .btn.go { background: var(--dk-gh-deep); border-color: var(--dk-gh-deep); color: #fff; font-weight: 600; }
+.dkgh .btn.ok { background: color-mix(in srgb, var(--dk-green) 18%, transparent); border-color: color-mix(in srgb, var(--dk-green) 45%, transparent); color: var(--dk-green); font-weight: 600; }
+.dkgh .runcmd {
+    font-family: var(--mono); font-size: 12px; color: var(--dk-faint);
+    padding: 7.2px 12px; border-radius: 7.2px; background: var(--dk-panel);
+    border: 1px solid var(--dk-border); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+.dkgh .runcmd b { color: var(--dk-gh); font-weight: 400; }
+/* Issue detail */
+.dkgh .tline { display: flex; flex-direction: column; gap: 0; padding: 4.8px 0 0; }
+.dkgh .tev { display: flex; gap: 12px; align-items: flex-start; padding: 6px 0; }
+.dkgh .tev .dotc { width: 24px; flex-shrink: 0; display: grid; place-items: center; color: var(--dk-faint); }
+.dkgh .tev .dotc svg { width: 14.4px; height: 14.4px; }
+.dkgh .tev .txt { font-size: 12.6px; color: var(--dk-muted); line-height: 1.5; }
+.dkgh .tev .txt b { color: var(--dk-text); font-weight: 600; }
+.dkgh .tev .txt i { font-style: normal; color: var(--dk-faint); }
+.dkgh .cmt { border: 1px solid var(--dk-border); border-radius: 9.6px; background: var(--dk-surface); overflow: hidden; }
+.dkgh .cmt .ch {
+    display: flex; align-items: center; gap: 8.4px; padding: 7.2px 12px;
+    background: var(--dk-raised); border-bottom: 1px solid var(--dk-border); font-size: 12.6px; color: var(--dk-muted);
+  }
+.dkgh .cmt .ch b { color: var(--dk-text); font-weight: 600; }
+.dkgh .cmt .cb { padding: 10.8px 13.2px; font-size: 13.2px; color: var(--dk-text); line-height: 1.6; }
+.dkgh .gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8.4px; }
+/* Export */
+.dkgh .fmt { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8.4px; }
+.dkgh .fmtc {
+    border: 1px solid var(--dk-border); border-radius: 9.6px; background: var(--dk-surface);
+    padding: 10.8px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+  }
+.dkgh .fmtc.pick { border-color: var(--dk-gh); background: color-mix(in srgb, var(--dk-gh) 9%, transparent); }
+.dkgh .fmtc svg { width: 20.4px; height: 20.4px; color: var(--dk-muted); }
+.dkgh .fmtc.pick svg { color: var(--dk-gh); }
+.dkgh .fmtc .n { font-size: 13.2px; font-weight: 600; color: var(--dk-text); }
+.dkgh .fmtc .d { font-size: 11.4px; color: var(--dk-faint); line-height: 1.45; }
+.dkgh .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px 12px; }
+.dkgh .sheet { border: 1px solid var(--dk-border); border-radius: 8.4px; overflow: hidden; background: var(--dk-panel); }
+.dkgh .sheet .sr { display: grid; grid-template-columns: 31.2px 1.6fr 1fr .8fr .8fr .8fr .8fr; }
+.dkgh .sheet .sr > span {
+    padding: 4.8px 8.4px; font-size: 11.4px; font-family: var(--mono); color: var(--dk-muted);
+    border-right: 1px solid color-mix(in srgb, var(--dk-border) 55%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--dk-border) 55%, transparent);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+.dkgh .sheet .sr.hd > span { background: var(--dk-raised); color: var(--dk-text); font-weight: 700; font-family: var(--sans); font-size: 10.8px; letter-spacing: .05em; text-transform: uppercase; }
+.dkgh .sheet .sr > span.gut { background: var(--dk-surface); color: var(--dk-faint); text-align: center; }
+/* Charts */
+.dkgh .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 15.6px 19.2px 21.6px; }
+.dkgh .chartc { border: 1px solid var(--dk-border); border-radius: 10.8px; background: var(--dk-surface); padding: 12px 14.4px; }
+.dkgh .chartc .ct { font-size: 12.6px; font-weight: 600; color: var(--dk-text); margin-bottom: 2.4px; }
+.dkgh .chartc .cs { font-size: 11.4px; color: var(--dk-faint); margin-bottom: 10.8px; }
+.dkgh .chartc svg { width: 100%; height: auto; display: block; }
+.dkgh .barrow { display: flex; align-items: center; gap: 9.6px; margin-bottom: 6px; font-size: 12px; }
+.dkgh .barrow .bl { width: 96px; flex-shrink: 0; color: var(--dk-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dkgh .barrow .bt { flex: 1; height: 10.8px; border-radius: 3.6px; background: var(--dk-raised); overflow: hidden; display: flex; }
+.dkgh .barrow .bt i { height: 100%; display: block; }
+.dkgh .barrow .bv { width: 31.2px; text-align: right; font-family: var(--mono); font-size: 11.4px; color: var(--dk-muted); font-variant-numeric: tabular-nums; }
+/* Document tables */
+.dkgh table.doc { border-collapse: collapse; width: 100%; font-size: 16.2px; margin: 21.6px 0; }
+.dkgh table.doc th {
+    text-align: left; font-size: 12.6px; font-weight: 700; letter-spacing: .09em;
+    text-transform: uppercase; color: var(--ink-faint); padding: 9.6px 14.4px 9.6px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+.dkgh table.doc td { padding: 10.8px 14.4px 10.8px 0; border-bottom: 1px solid var(--rule); vertical-align: top; color: var(--ink-soft); }
+.dkgh table.doc td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
+.dkgh table.doc td b { color: var(--ink); }
+.dkgh .two { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; }
+
+
+/*
+  ── The one place this file adds to the mock ──
+
+  A mock is static, so it draws every control in the state that shows it best:
+  the title field is drawn focused, ringed in the accent, because that is what
+  the reader needs to see. A real field cannot be permanently focused.
+
+  So these rules take the mock's styling and attach it to the state it actually
+  belongs to. Nothing here changes a value — the focused field is the mock's
+  focused field, exactly; it just waits to be focused. The same for hover on a
+  button, and for the resets a real `<input>` needs and a `<div>` does not.
+*/
+
+.dkgh .titlein {
+  width: 100%;
+  font-family: inherit;
+  outline: none;
+  /* Unfocused, it is an ordinary field. The mock's accent border and ring are
+     below, on `:focus`, which is the state it was drawn in. */
+  border-color: var(--dk-border);
+  box-shadow: none;
+}
+.dkgh .titlein::placeholder { color: var(--dk-faint); }
+.dkgh .titlein:focus {
+  border-color: var(--dk-gh);
+  box-shadow: 0 0 0 3.6px color-mix(in srgb, var(--dk-gh) 16%, transparent);
+}
+
+.dkgh textarea.mdbody {
+  width: 100%;
+  font-family: inherit;
+  outline: none;
+  resize: vertical;
+}
+.dkgh textarea.mdbody::placeholder { color: var(--dk-faint); }
+
+.dkgh button.btn,
+.dkgh button.pill,
+.dkgh button.fct,
+.dkgh button.mh,
+.dkgh button.s,
+.dkgh button.opt,
+.dkgh button.vrow,
+.dkgh button.t { cursor: pointer; }
+
+.dkgh button.btn:hover:not(:disabled) { background: var(--dk-hover); }
+.dkgh button.btn.go:hover:not(:disabled) { background: var(--dk-gh); }
+.dkgh button.btn:disabled { opacity: .5; cursor: default; }
+
+.dkgh button.fct:hover { background: var(--dk-hover); }
+
+/*
+  The mock is a figure of a fixed size; this is a panel somebody resizes. So the
+  scroll containers are named here — no value changes, only which box takes the
+  leftover height and which one scrolls when there is not enough.
+*/
+.dkgh .compose { flex: 1; min-height: 0; }
+/*
+  The split's panes are plain blocks, so the panel inside one takes its height
+  rather than stretching into it. The split draws the divider now, so `.left`
+  does not draw its own, and `.right` takes its width from the drag.
+*/
+.dkgh .compose .left { min-height: 0; height: 100%; border-right: 0; }
+.dkgh .compose .right { width: auto; height: 100%; }
+.dkgh .split .facets { height: 100%; }
+.dkgh .split .pane { height: 100%; }
+.dkgh .compose .left .editor { flex: 1; min-height: 0; overflow-y: auto; }
+.dkgh .compose .left .editor > div:has(> .mdbar) { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.dkgh .compose .left .editor > div > textarea.mdbody { flex: 1; }
+.dkgh .compose .right { overflow-y: auto; }
+
+/*
+  ── Why nothing inside this tab could scroll ──
+
+  `.dkgh` is a flex item, and a flex item's `min-height` defaults to `auto`,
+  which means *never shrink below your own content*. So the root grew to the
+  full height of the board — a thousand-odd pixels of facets — and the host
+  clipped it. Every box inside was then sized against a container that was
+  already too tall, so no scroll container ever discovered it was short on room:
+  the panel simply ran off the bottom of the tab and the last two facets could
+  not be reached at all. One declaration, and the whole tab is bounded again.
+
+  The same `auto` applies to the split's own panes, which are flex items too.
+*/
+.dkgh { min-height: 0; }
+.dkgh .split > * { min-height: 0; }
+
+/*
+  The board's split fills the panel and scrolls inside it, same reason.
+
+  The child selectors here used to be `>`, which was wrong twice over: the split
+  wraps each side in a pane of its own, so nothing inside it is a direct child,
+  and the mock's `.facets` carries `overflow: hidden` because a figure never
+  scrolls. Together that meant a filter panel taller than the tab simply had its
+  bottom cut off — every facet below Dates unreachable, with no scrollbar to say
+  so.
+
+  `scrollbar-gutter: stable` is the other half. Without it the scrollbar appears
+  over the last 16.8px of the row, which is exactly where every facet keeps its
+  count, so turning a facet on hid the number that said what it did.
+*/
+.dkgh .split { flex: 1; min-height: 0; }
+.dkgh .split .facets { overflow: hidden auto; scrollbar-gutter: stable; }
+.dkgh .split .pane { min-height: 0; }
+
+/*
+  A left panel is draggable, so its width comes from the split rather than from
+  the mock's fixed rail — and it is the one thing here that has to change, since
+  a facet panel somebody cannot widen truncates the one label they needed.
+*/
+.dkgh .split .facets { width: auto; }
+
+/*
+  Search, and groups that collapse — the shape the app's own Settings nav uses,
+  so a panel with a search box and section headers behaves the way every other
+  one in Daakia does. The `.fh` heading keeps the mock's type and spacing; what
+  is added is the count, the chevron, and the fact that it is a button.
+*/
+.dkgh .panelsearch {
+  display: flex; align-items: center; gap: 7.2px; margin: 2.4px 12px 9.6px;
+  padding: 4.8px 9.6px; border-radius: 7.2px; border: 1px solid var(--dk-border);
+  background: var(--dk-panel); font-size: 12.6px; color: var(--dk-text);
+}
+.dkgh .panelsearch svg { width: 13.2px; height: 13.2px; color: var(--dk-faint); flex-shrink: 0; }
+.dkgh .panelsearch input {
+  flex: 1; min-width: 0; background: transparent; border: none; outline: none;
+  color: inherit; font: inherit;
+}
+.dkgh .panelsearch input::placeholder { color: var(--dk-faint); }
+.dkgh .panelsearch .n {
+  font-family: var(--mono); font-size: 11.4px; color: var(--dk-faint);
+  padding: 0 6px; border-radius: 999px; background: var(--dk-raised);
+}
+
+/*
+  The heading's own count has to land in the same column as the counts on the
+  rows below it. The rows put theirs hard against the panel's right gutter with
+  `margin-left: auto`, so the heading's is last in the row and does the same —
+  which is why the chevron leads instead of trailing. See GhPanel.
+*/
+.dkgh .facet .fh { width: 100%; cursor: pointer; }
+/*
+  The mock only ever draws a heading inside a facet, so its "push the count to
+  the right" rule is scoped to one. The same heading is now used for a section
+  of a screen — Recent, This account — where there is no facet above it, and
+  without this the aside welds itself to the title.
+*/
+.dkgh .fh .n { margin-left: auto; }
+.dkgh .facet .fh .n { margin-left: auto; }
+.dkgh .facet .fh .clr { margin-left: auto; }
+.dkgh .facet .fh .clr + .n { margin-left: 0; }
+.dkgh .facet .fh .chev {
+  width: 12px; height: 12px; transition: transform 120ms; color: var(--dk-faint);
+}
+.dkgh .facet .fh .chev.shut { transform: rotate(-90deg); }
+.dkgh .facet .fh:hover { color: var(--dk-muted); }
+.dkgh button.pill:hover:not(:disabled) { background: var(--dk-hover); }
+.dkgh button.pill:disabled { opacity: .45; cursor: default; }
+
+/*
+  ── A tab that answers back ──
+
+  This is the part a mock cannot draw. A figure is always at rest, so hover,
+  press and keyboard focus have no state to be drawn in, and a bar without them
+  feels like a picture of a bar rather than a control. Nothing here is a new
+  colour: hover is the panel's own `--dk-hover` with the top corners rounded, so
+  the tab lifts out of the bar, and the underline previews the accent it is
+  about to commit to. The active tab is raised the same way and keeps it,
+  because the tab you are on is a tab that has been pressed.
+*/
+.dkgh .subtabs .s {
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  transition: color 110ms ease, background 110ms ease, border-bottom-color 110ms ease;
+}
+.dkgh .subtabs .s:hover:not(:disabled) {
+  color: var(--dk-text);
+  background: var(--dk-hover);
+  border-bottom-color: color-mix(in srgb, var(--dk-gh) 45%, transparent);
+}
+.dkgh .subtabs .s:active:not(:disabled) { background: var(--dk-raised); }
+.dkgh .subtabs .s:focus-visible { outline: 2.4px solid var(--dk-gh); outline-offset: -3px; }
+/* The tab you are on is raised out of the bar and lit in the accent, with its
+   count on a soft accent chip. The view strip copies this exactly — see below —
+   because the section you are in and the view you are in are the same kind of
+   fact and should not be drawn two different ways. */
+.dkgh .subtabs .s.on { background: var(--dk-hover); }
+
+/*
+  ── The saved views, as a strip rather than a second row of tabs ──
+
+  Two rows of near-identical tabs a few pixels apart is a bar nobody can read:
+  the eye cannot tell which row it is choosing from. A section is *where you are
+  in the tab*; a saved view is *which question the board is answering* — two
+  different kinds of choice, so they get two different kinds of control. Tabs
+  above; here, a segmented strip recessed into the row, the same shape the rest
+  of the app uses for a filter like this.
+
+  **Two colours, doing two jobs.** The segment itself is the accent — the same
+  accent hovered and selected, so the strip reads as one control rather than as
+  two competing highlights, and the difference between the two states is weight
+  and fill rather than hue. The count wears the accent too, and never changes
+  under the pointer — it is the number the row exists for, and it is the one
+  thing here that should hold still while everything around it reacts.
+*/
+.dkgh .viewbar {
+  gap: 12px;
+  padding: 10.8px 16.8px;
+  background: var(--dk-surface);
+}
+.dkgh .viewbar .vseg {
+  display: flex; align-items: center; gap: 2.4px;
+  padding: 3.6px; border-radius: 10.8px;
+  border: 1px solid var(--dk-border); background: var(--dk-panel);
+}
+.dkgh .viewbar .vs {
+  display: flex; align-items: center; gap: 7.2px;
+  padding: 6px 13.2px; border-radius: 7.2px;
+  font-size: 13.2px; color: var(--dk-muted); white-space: nowrap; cursor: pointer;
+  transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .viewbar .vs:hover {
+  color: var(--dk-gh);
+  background: color-mix(in srgb, var(--dk-gh) 14%, transparent);
+}
+/* The same on-state as a section tab, minus the underline: raised on the panel
+   grey, accent text, accent chip. */
+.dkgh .viewbar .vs.on {
+  color: var(--dk-gh); font-weight: 600;
+  background: var(--dk-hover);
+}
+.dkgh .viewbar .vs .cnt {
+  font-family: var(--mono); font-size: 10.8px; line-height: 1.7;
+  padding: 0 7.2px; border-radius: 999px;
+  color: var(--dk-gh); background: color-mix(in srgb, var(--dk-gh) 20%, transparent);
+}
+.dkgh .viewbar .vs .dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--dk-amber); flex-shrink: 0;
+}
+
+/*
+  `New view` closes the strip, separated by a hairline rather than by being
+  moved outside it: it makes the next segment in this row, so it belongs at the
+  end of the row — the same place a browser puts `+`.
+*/
+.dkgh .viewbar .vs.add {
+  color: var(--dk-faint);
+  margin-left: 3.6px;
+  padding-left: 14.4px;
+  border-left: 1px solid var(--dk-border);
+  border-radius: 0 7.2px 7.2px 0;
+}
+.dkgh .viewbar .vs.add svg { width: 12px; height: 12px; }
+/*
+  `New view` is the one button in this strip that makes something, so its hover
+  commits — the solid accent the badges use, white on it — rather than the wash
+  the segments beside it get. A wash says "you are pointing at a choice"; this
+  is not a choice, it is an action.
+*/
+.dkgh .viewbar .vs.add:hover { background: var(--dk-gh-deep); color: #fff; }
+.dkgh .viewbar .vs.add:hover svg { color: #fff; }
+
+/* Housekeeping, not a view — so it is a gear with nothing drawn around it. */
+.dkgh .viewbar .vgear {
+  display: grid; place-items: center; width: 31.2px; height: 31.2px;
+  border-radius: 8.4px; color: var(--dk-faint); cursor: pointer;
+  transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .viewbar .vgear:hover {
+  color: var(--dk-gh);
+  background: color-mix(in srgb, var(--dk-gh) 14%, transparent);
+}
+.dkgh .viewbar .vgear svg { width: 16.8px; height: 16.8px; }
+
+
+/*
+  ── Everything you can press, pressable ──
+
+  The mock draws its controls as spans, so nothing in it has a cursor or a
+  hover: a figure is a picture of a toolbar and a picture needs neither. Ported
+  literally, that produced screen after screen of text that does something when
+  you click it and gives no sign beforehand that it would.
+
+  So this is the floor, once, for the whole tab: anything that is a button or
+  says it is one gets the hand and a hover, and anything disabled gets neither.
+  The rules further up that name a particular control are for tuning what its
+  hover looks like, not for deciding whether it has one.
+*/
+.dkgh button:not(:disabled),
+.dkgh [role="button"]:not([aria-disabled="true"]),
+.dkgh summary,
+.dkgh label:has(input[type="checkbox"]) { cursor: pointer; }
+.dkgh button:disabled, .dkgh [aria-disabled="true"] { cursor: default; }
+
+/* The two in the chip row the mock left as plain words. */
+.dkgh .chiprow .clr,
+.dkgh .fchip .x {
+  border-radius: 6px;
+  transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .chiprow .clr { padding: 2.4px 8.4px; }
+.dkgh .chiprow .clr:hover { color: var(--dk-text); background: var(--dk-hover); }
+.dkgh .fchip .x { padding: 0 3.6px; }
+.dkgh .fchip .x:hover { color: var(--dk-red); background: color-mix(in srgb, var(--dk-red) 16%, transparent); }
+.dkgh .chiprow .adv:hover { color: var(--dk-text); background: var(--dk-hover); }
+
+
+/*
+  ── A row in a panel is a row, not a stripe ──
+
+  The mock's `.fct` is drawn inside a fixed rail, so its full-bleed hover ends
+  neatly at the rail's edge. In a panel somebody drags wider, the same rule
+  paints a stripe from one side of the screen to the other with square corners.
+  So the hover is inset to the panel's own gutter and rounded — the same
+  highlight, given an edge to stop at.
+*/
+/*
+  The gutter moves to the section, so a row and its heading are the same box.
+
+  It was margin on the row, which read fine until you noticed the numbers: a
+  heading's count and its rows' counts both sit at `margin-left: auto`, so they
+  land in one column only if both boxes end at the same x. They did not — and
+  worse, several of these rows carry an inline `width: 100%`, which with a
+  margin resolves to *wider than the space available*, so the panel was quietly
+  overflowing sideways and every row count was pushed out past its heading's.
+
+  Giving `.facet` the padding fixes both at once: one containing block, both
+  boxes filling it exactly, `100%` meaning what it says.
+*/
+.dkgh .facet { padding: 0 7.2px; }
+.dkgh .facet .fh { padding-left: 7.2px; padding-right: 7.2px; }
+/* The heading is tracked out; its count must not be, or the last digit sits a
+   pixel short of the digits below it. */
+.dkgh .facet .fh .n { letter-spacing: normal; }
+.dkgh .fct {
+  padding-left: 7.2px;
+  padding-right: 7.2px;
+  border-radius: 6px;
+}
+
+/*
+  A word that acts like a link, and behaves like one. The mock draws these as
+  coloured text — `assign yourself`, `search this repository`, `see the command`
+  — and coloured text with no cursor and no hover is a thing people read rather
+  than press.
+
+  Not `.lnk`: the mock already spends that name on the absolutely-positioned
+  hairlines that connect a callout to what it is pointing at, and a word wearing
+  `position: absolute` lands on top of the sentence it belongs to.
+*/
+.dkgh .textlink {
+  color: var(--dk-blue); cursor: pointer; border-radius: 4.8px; padding: 0 2.4px;
+  transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .textlink:hover {
+  text-decoration: underline;
+  background: color-mix(in srgb, var(--dk-blue) 14%, transparent);
+}
+
+/*
+  `clear` on a section heading is an icon, not a word: the heading already
+  carries a title, a count and a chevron, and a fourth piece of text in the same
+  row is the one you read last and the one you meant to press.
+*/
+.dkgh .facet .fh .clr {
+  display: grid; place-items: center; width: 18px; height: 18px; margin-left: 4.8px;
+  border-radius: 4.8px; color: var(--dk-faint); cursor: pointer; flex-shrink: 0;
+}
+.dkgh .facet .fh .clr svg { width: 10.8px; height: 10.8px; }
+.dkgh .facet .fh .clr:hover { background: var(--dk-hover); color: var(--dk-red); }
+
+/*
+  Pinning a column. The pin is the app's own — the same drawing pin the tab bar
+  uses — because a reader who has pinned a request tab already knows what it
+  means, and a second pin glyph would be a second thing to learn.
+*/
+.dkgh .colrow .pin {
+  display: grid; place-items: center; width: 18px; height: 18px; border-radius: 4.8px;
+  color: var(--dk-faint); cursor: pointer; flex-shrink: 0;
+  opacity: 0; transition: opacity 110ms ease, color 110ms ease, background 110ms ease;
+}
+.dkgh .colrow:hover .pin, .dkgh .colrow .pin.on { opacity: 1; }
+.dkgh .colrow .pin.on { color: var(--dk-gh); }
+.dkgh .colrow .pin:hover { background: var(--dk-hover); color: var(--dk-text); }
+.dkgh .colrow .pin svg { width: 13.2px; height: 13.2px; }
+
+/*
+  Copied.
+
+  The button is the icon alone — the word "Copy" beside a copy glyph says the
+  same thing twice — and the feedback is the icon becoming a green tick for a
+  moment. A press with no answer is a press people make twice.
+*/
+/* Row, not grid: this is also worn by a button that has a label beside its
+   icon, and `grid` stacked the two. Centring an icon-only button is what
+   `inline-flex` with centred items does anyway. */
+.dkgh button.copyb { display: inline-flex; align-items: center; gap: 7.2px; cursor: pointer; }
+.dkgh button.copyb svg { transition: transform 140ms ease, color 140ms ease; }
+.dkgh button.copyb.done { color: var(--dk-green); border-color: color-mix(in srgb, var(--dk-green) 45%, transparent); }
+.dkgh button.copyb.done svg { animation: dkgh-pop 260ms ease; }
+@keyframes dkgh-pop {
+  0% { transform: scale(.5); opacity: 0; }
+  60% { transform: scale(1.18); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/*
+  `only` and `except` — two verbs on a facet row, and the two words most likely
+  to be wanted there. The mock draws them as text with a middot between; here
+  they are buttons with room to be pressed, and the separator is a gap rather
+  than a character, because a middot between two buttons looks like a third one.
+*/
+.dkgh .fct .only { display: flex; align-items: center; gap: 4.8px; }
+.dkgh .fct .only .v {
+  padding: 1px 6px; border-radius: 4.8px; color: var(--dk-gh); cursor: pointer;
+  transition: background 110ms ease, color 110ms ease;
+}
+.dkgh .fct .only .v:hover { background: color-mix(in srgb, var(--dk-gh) 20%, transparent); }
+.dkgh .fct .only .v:last-child { color: var(--dk-red); }
+.dkgh .fct .only .v:last-child:hover { background: color-mix(in srgb, var(--dk-red) 20%, transparent); }
+
+/*
+  The metadata pane's pick rows, under the pointer.
+
+  Everywhere else in the tab a hover is the panel's own grey, because those rows
+  sit in a rail you are scanning. These are the opposite: a short list you opened
+  on purpose, to press one thing in. So the hover is the accent itself, half
+  transparent — enough that the row you are about to commit to is unmistakable
+  across a pane of nine sections, and still dark enough behind white text to
+  read.
+*/
+.dkgh .compose .right button.fct:hover {
+  background: color-mix(in srgb, var(--dk-gh) 55%, transparent);
+  color: #fff;
+}
+.dkgh .compose .right button.fct:hover .bx { border-color: rgba(255, 255, 255, .6); }
+
+/*
+  The keyboard sheet's keys.
+
+  `KbdView` writes its metrics inline, so a stylesheet cannot reach them without
+  saying so. The size prop only goes so far and these have to read as keys —
+  something with a face you could press — beside 15.6px prose, which is the whole
+  point of the sheet.
+*/
+.dkgh .dkkeys kbd {
+  min-width: 36px !important;
+  height: 31.2px !important;
+  padding: 0 12px !important;
+  font-size: 14.4px !important;
+  border-radius: 8.4px !important;
+}
+
+/*
+  A scrollbar you can see.
+
+  The panel scrolls, and until you know that, a facet list that ends at Author
+  looks like a facet list that has no Dates in it. The overlay bar this webview
+  draws by default appears for a moment on a wheel event and is invisible the
+  rest of the time, which is exactly no use to somebody wondering whether there
+  is more. So it is always there, sized to the gutter already reserved for it,
+  and it darkens under the pointer.
+*/
+.dkgh ::-webkit-scrollbar { width: 10.8px; height: 10.8px; }
+.dkgh ::-webkit-scrollbar-track { background: transparent; }
+.dkgh ::-webkit-scrollbar-thumb {
+  background: var(--dk-border);
+  border-radius: 999px;
+  border: 2.4px solid transparent;
+  background-clip: content-box;
+}
+.dkgh ::-webkit-scrollbar-thumb:hover { background: var(--dk-muted); background-clip: content-box; }
+.dkgh ::-webkit-scrollbar-corner { background: transparent; }
+
+/*
+  A number on a toolbar pill is the same kind of number as a count on a tab, so
+  it wears the same badge. As a bare bold digit it read as part of the word —
+  `Filters 1` looked like the pill was named that.
+*/
+.dkgh .toolbar .pill .cnt {
+  font-family: var(--mono); font-size: 10.8px; line-height: 1.7;
+  padding: 0 7.2px; border-radius: 999px;
+  color: var(--dk-gh); background: color-mix(in srgb, var(--dk-gh) 20%, transparent);
+}
+/*
+  A count on the thing you are currently in is inverted rather than tinted —
+  solid accent, white on it. Everywhere else the badge is a soft accent wash,
+  which reads well on the panel; on a control that is itself lit, a second wash
+  of the same colour is a number you have to hunt for. One rule for all three
+  places that have counts: the section tabs, the view strip, the toolbar pills.
+*/
+.dkgh .toolbar .pill.on .cnt,
+.dkgh .subtabs .s.on .cnt,
+.dkgh .viewbar .vs.on .cnt { background: var(--dk-gh-deep); color: #fff; }
+
+/*
+  Hover must not undo the active state. The mock's generic pill hover is the
+  panel grey and it is declared after `.pill.on`, so hovering an open Filters
+  pill turned it from accent back to grey — the one control on the toolbar that
+  is currently doing something, going quiet under the pointer.
+*/
+.dkgh button.pill.on:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dk-gh) 22%, transparent);
+}
+
+/*
+  A button that throws work away and a button that keeps it should not look the
+  same. In the changed-view bar, `Reset to saved` discards what you changed and
+  `Save as new view` keeps it under another name — opposite acts, drawn in
+  opposite colours, with `Update` left holding the accent because it is what
+  the bar exists to offer.
+*/
+/*
+  The strip itself first. The mock washes it in amber, and amber over a near-
+  black panel comes out olive — a wide dull band across the whole tab, which is
+  a lot of screen to spend on a message that says one view has unsaved changes.
+  It keeps the amber, but as a single line down the left edge, the way an
+  editor marks a changed file, over the ordinary raised surface.
+*/
+.dkgh .dirtybar {
+  background: var(--dk-surface);
+  border-left: 2.4px solid var(--dk-amber);
+}
+
+/*
+  Discard is red, but a muted one: a button people press several times an hour
+  should not look like deleting the repository. Colour enough to be told apart
+  from its neighbour, not enough to flinch at.
+*/
+.dkgh button.btn.warn {
+  color: color-mix(in srgb, var(--dk-red) 72%, var(--dk-text));
+  border-color: var(--dk-border);
+  background: transparent;
+}
+.dkgh button.btn.warn:hover:not(:disabled) {
+  color: var(--dk-red);
+  border-color: color-mix(in srgb, var(--dk-red) 40%, transparent);
+  background: color-mix(in srgb, var(--dk-red) 14%, transparent);
+}
+.dkgh button.btn.alt {
+  color: color-mix(in srgb, var(--dk-cyan) 72%, var(--dk-text));
+  border-color: var(--dk-border);
+  background: transparent;
+}
+.dkgh button.btn.alt:hover:not(:disabled) {
+  color: var(--dk-cyan);
+  border-color: color-mix(in srgb, var(--dk-cyan) 40%, transparent);
+  background: color-mix(in srgb, var(--dk-cyan) 14%, transparent);
+}
+
+/*
+  ── Rendered markdown, at a peek's size ──
+
+  `MarkdownView` is built for a document: its own type scale, its own margins,
+  a heading that opens with 24px of air above it. Dropped into a panel that is
+  on screen for four seconds it swamps the panel.
+
+  So the wrapper hands it dkgh's own size to inherit and pulls the vertical
+  rhythm in. Nothing about how it renders changes — a fence is still a fence
+  with its own background, a list is still a list — only how much room each
+  takes, which is the whole difference between a document and a glance.
+*/
+.dkgh .dkgh-md { font-size: inherit; line-height: 1.6; color: var(--dk-text); }
+.dkgh .dkgh-md > :first-child { margin-top: 0; }
+.dkgh .dkgh-md > :last-child { margin-bottom: 0; }
+.dkgh .dkgh-md p,
+.dkgh .dkgh-md ul,
+.dkgh .dkgh-md ol,
+.dkgh .dkgh-md blockquote,
+.dkgh .dkgh-md table { margin: 0 0 8.4px; font-size: inherit; }
+.dkgh .dkgh-md h1,
+.dkgh .dkgh-md h2,
+.dkgh .dkgh-md h3,
+.dkgh .dkgh-md h4 {
+  margin: 12px 0 4.8px; font-size: 1.05em; font-weight: 700; color: var(--dk-text);
+}
+.dkgh .dkgh-md ul, .dkgh .dkgh-md ol { padding-left: 21.6px; }
+.dkgh .dkgh-md li { margin: 1px 0; }
+.dkgh .dkgh-md code {
+  font-family: var(--mono); font-size: .92em;
+  padding: 1px 4.8px; border-radius: 4.8px;
+  background: var(--dk-raised); color: var(--dk-cyan);
+}
+.dkgh .dkgh-md pre {
+  margin: 0 0 8.4px; padding: 9.6px 12px; border-radius: 8.4px;
+  border: 1px solid var(--dk-border); background: var(--dk-panel);
+  overflow-x: auto; font-size: .92em; line-height: 1.55;
+}
+/* Inside a fence the chip styling is wrong — it is already on its own ground. */
+.dkgh .dkgh-md pre code { padding: 0; background: none; color: var(--dk-text); font-size: 1em; }
+.dkgh .dkgh-md blockquote {
+  padding-left: 10.8px; border-left: 2.4px solid var(--dk-border); color: var(--dk-muted);
+}
+.dkgh .dkgh-md a { color: var(--dk-blue); }
+.dkgh .dkgh-md a:hover { text-decoration: underline; }
+.dkgh .dkgh-md img { max-width: 100%; border-radius: 7.2px; }
+.dkgh .dkgh-md hr { border: 0; border-top: 1px solid var(--dk-border); margin: 10.8px 0; }
+.dkgh .dkgh-md table { border-collapse: collapse; }
+.dkgh .dkgh-md th, .dkgh .dkgh-md td {
+  border: 1px solid var(--dk-border); padding: 3.6px 8.4px; text-align: left;
+}
+
+/*
+  The peek's close. It only appears when the peek can be closed at all — a held
+  one is dismissed by letting go — so it sits at the end of the header rather
+  than reserving a slot the status word would otherwise have.
+*/
+.dkgh .peek .pkx {
+  display: grid; place-items: center; width: 24px; height: 24px; margin-left: 4.8px;
+  border-radius: 6px; color: var(--dk-faint); cursor: pointer; flex-shrink: 0;
+  transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .peek .pkx svg { width: 13.2px; height: 13.2px; }
+.dkgh .peek .pkx:hover { color: var(--dk-red); background: color-mix(in srgb, var(--dk-red) 16%, transparent); }
+
+/*
+  ── The peek, inside the app's own dialog ──
+
+  `ModalView` portals to the body and takes `noPadding`, so the peek keeps its
+  own `.pkb` gutter. It is widened here rather than in the mock's rule because
+  the dialog is wider than the mock's 396px card and the mock's gutter looks
+  pinched at that width.
+*/
+.dkgh .pkb { padding: 16.8px 19.2px 19.2px; }
+.dkgh .pkb > .dkgh-md:first-child { margin-top: 0; }
+
+/* A footer button is a row, never two. Squeezed by the dialog's own flex, the
+   icon was wrapping above its label. */
+.dkgh .footbar .btn,
+.dkgh button.btn { white-space: nowrap; flex-shrink: 0; }
+
+/*
+  ── A code fence in rendered markdown ──
+
+  `MarkdownView` lays its `<pre>` out flush to the block's edge, which reads as
+  a payload spilling out of its own box — and a JSON body is the commonest
+  thing in an issue comment. It gets a gutter, and the header above it gets the
+  same one so the language pill and the Copy line up with the code under them.
+
+  Copy answers with a green tick. dui already swaps the icon and adds
+  `dui-mdv-copied` for two seconds; what it does not do is make that read as
+  success at a glance, which is the whole point of answering.
+*/
+.dkgh .dkgh-md .dui-mdv-code-block {
+  border: 1px solid var(--dk-border); border-radius: 9.6px; overflow: hidden;
+  margin: 0 0 9.6px;
+}
+.dkgh .dkgh-md .dui-mdv-code-header {
+  padding: 6px 14.4px;
+  border-bottom: 1px solid var(--dk-border);
+  background: var(--dk-raised);
+}
+.dkgh .dkgh-md .dui-mdv-code-block pre { margin: 0; border: 0; border-radius: 0; padding: 12px 16.8px; }
+.dkgh .dkgh-md .dui-mdv-copy-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2.4px 8.4px; border-radius: 6px; cursor: pointer;
+  color: var(--dk-muted);
+  transition: color 140ms ease, background 140ms ease;
+}
+.dkgh .dkgh-md .dui-mdv-copy-btn:hover { color: var(--dk-text); background: var(--dk-hover); }
+.dkgh .dkgh-md .dui-mdv-copy-btn.dui-mdv-copied {
+  color: var(--dk-green);
+  background: color-mix(in srgb, var(--dk-green) 16%, transparent);
+}
+.dkgh .dkgh-md .dui-mdv-copy-btn.dui-mdv-copied svg { animation: dkgh-pop 260ms ease; }
+
+/*
+  A row in a picker. The mock has no dropdown of its own, so this borrows the
+  shape every other list in the tab uses: inset from the panel's gutter, rounded
+  so the highlight has an edge to stop at, and an accent wash on hover because
+  it is a list you opened to press one thing in.
+*/
+.dkgh .pick-row {
+  margin: 0 6px;
+  padding: 6px 8.4px;
+  border-radius: 7.2px;
+  background: transparent;
+  border: none;
+  transition: background 110ms ease;
+}
+.dkgh .pick-row:hover { background: color-mix(in srgb, var(--dk-gh) 50%, transparent); }
+.dkgh .pick-row:hover span { color: #fff !important; }
+
+/*
+  The two accent hovers, on a light ground.
+
+  Both of these put white text on the accent at about half strength, which is
+  the right weight over the dark panel: #DE7356 at 55% over #1e1e1e is still
+  dark enough to read white off. Over white it is not — #c0543a at 55% over
+  #ffffff composites to a pale salmon, and white on it measures 2.2:1, which is
+  a row you can see highlight and cannot read.
+
+  The wash goes solid rather than the text going dark, because the point of
+  these two hovers is that the row you are about to commit to is unmistakable
+  across a pane of nine sections. Solid #c0543a under white is 4.6:1 and keeps
+  that.
+*/
+[data-theme="light"] .dkgh .pick-row:hover,
+.vscode-light .dkgh .pick-row:hover,
+[data-theme="light"] .dkgh .compose .right button.fct:hover,
+.vscode-light .dkgh .compose .right button.fct:hover {
+  background: var(--dk-gh);
+}
+
+/*
+  ── The first-run screens, made pressable ──
+
+  The mock draws these as spans, so the platform tabs and every `copy` in a
+  command block are text that happens to do something. They are buttons here,
+  and these are the states a static figure has nothing to say about.
+*/
+.dkgh .plat button {
+  font-size: 12.6px; padding: 4.8px 14.4px; border-radius: 7.2px;
+  color: var(--dk-muted); border: 1px solid transparent; background: transparent;
+  cursor: pointer; transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .plat button:hover { color: var(--dk-text); background: var(--dk-hover); }
+.dkgh .plat button.on {
+  color: var(--dk-text); background: var(--dk-raised);
+  border-color: var(--dk-border); font-weight: 600;
+}
+
+.dkgh .cmd .copy {
+  padding: 1px 7.2px; border-radius: 4.8px; cursor: pointer;
+  transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .cmd .copy:hover { color: var(--dk-text); background: var(--dk-hover); }
+.dkgh .cmd .copy.done {
+  color: var(--dk-green);
+  background: color-mix(in srgb, var(--dk-green) 16%, transparent);
+}
+
+/*
+  A note stacks under the one above it. The mock draws one at a time, so its
+  rule has no bottom margin and two of them ended up welded together.
+*/
+.dkgh .empty .note + .note { margin-top: 9.6px; }
+/*
+  The mock's own `code` rule is drawn against the wiki page's `--ink`, which
+  does not exist here. It is the same rule in dkgh's tokens, and it is not
+  confined to the empty states: a dialog quotes a path or a command too.
+*/
+.dkgh code {
+  font-family: var(--mono); font-size: .92em; padding: 1px 4.8px; border-radius: 3.6px;
+  background: var(--dk-raised); color: var(--dk-text);
+}
+
+/*
+  `.sub` is the mock's small grey line. It draws it only inside an `.opt`, so
+  that is where the rule sits — but the line itself is not about option cards,
+  and every screen that wants one outside a card was getting body text.
+*/
+.dkgh .sub { font-size: 14.4px; color: var(--dk-faint); line-height: 1.5; }
+
+/*
+  The mock's `.inp` is a `<div>` with a fake placeholder inside it, because a
+  mock never types. A real one is an `<input>`, which arrives with the
+  browser's font and its own focus ring, and `.inp.focus` — a class a mock can
+  hand-apply — has to become the real `:focus`.
+*/
+.dkgh input.inp, .dkgh textarea.inp {
+  width: 100%; font-family: inherit; outline: none;
+  transition: border-color 110ms ease, box-shadow 110ms ease;
+}
+.dkgh textarea.inp { resize: vertical; line-height: 1.6; }
+.dkgh input.inp.mono, .dkgh textarea.inp.mono { font-family: var(--mono); }
+.dkgh input.inp::placeholder, .dkgh textarea.inp::placeholder { color: var(--dk-faint); }
+.dkgh input.inp:focus, .dkgh textarea.inp:focus {
+  border-color: var(--dk-gh);
+  box-shadow: 0 0 0 4.3px color-mix(in srgb, var(--dk-gh) 16%, transparent);
+}
+
+/*
+  A row of paths, of held items, of anything the reader picks from: the mock's
+  own filter row, borrowed. Outside the filter panel it needs the hover it
+  never had there, because there it is a checkbox and here it is a button.
+*/
+.dkgh .opt .fct { padding: 7.2px 12px; border-radius: 7.2px; width: 100%; text-align: left; }
+.dkgh .opt button.fct { background: transparent; border: none; font-family: inherit; color: inherit; }
+.dkgh .opt button.fct:hover { background: var(--dk-hover); color: var(--dk-text); }
+/* A `<button>` needs its background reset, and the reset then outranks `.on`. */
+.dkgh .opt button.fct.on {
+  color: var(--dk-text); background: color-mix(in srgb, var(--dk-gh) 10%, transparent);
+}
+
+/*
+  The row's own small verbs. The mock draws the icons bare, because a mock
+  never hovers — but these are five buttons in a row and the reader has to be
+  able to tell which one is under the pointer before they press it.
+*/
+.dkgh .vrow .t {
+  display: inline-grid; place-items: center; width: 26.4px; height: 26.4px;
+  border-radius: 6px; border: none; background: transparent; color: var(--dk-faint);
+  cursor: pointer; transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .vrow .t:hover:not(:disabled) { color: var(--dk-text); background: var(--dk-hover); }
+.dkgh .vrow .t:disabled { opacity: .3; cursor: default; }
+.dkgh .vrow:last-child { border-bottom: none; }
+
+/*
+  The one destructive confirm, and it is solid.
+
+  `.warn` is the muted red for a discard somebody does several times an hour;
+  this is the other kind — the button that ends something — and it should not
+  look like its neighbour at a glance.
+*/
+.dkgh button.btn.stop {
+  background: var(--dk-red); border-color: var(--dk-red); color: #fff; font-weight: 600;
+}
+.dkgh button.btn.stop:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dk-red) 84%, #000);
+}
+
+/*
+  A table of sentences, rather than of values.
+
+  The board's table holds short things — a number, a state, a name — so the
+  mock makes every cell `nowrap` and that is right there. A table that explains
+  something is a different object: it has to wrap, or a dialog grows a
+  horizontal scrollbar for the sake of one column that could have been two
+  lines.
+*/
+.dkgh .tblw.prose table.tbl th,
+.dkgh .tblw.prose table.tbl td {
+  white-space: normal; padding-left: 9.6px; padding-right: 9.6px;
+}
+.dkgh .tblw.prose table.tbl td.dt { white-space: nowrap; }
+
+/*
+  The markdown bar does something now.
+
+  It was drawn as spans, because a mock never presses anything — so Write and
+  Preview did not switch and the nine buttons were decoration. They are real
+  controls, and a control with no cursor and no hover is one nobody discovers.
+*/
+.dkgh .mdbar .tg span {
+  cursor: pointer; transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .mdbar .tg span:hover:not(.on) { color: var(--dk-text); background: var(--dk-hover); }
+.dkgh .mdbar button.ic {
+  background: transparent; border: none; padding: 0; cursor: pointer;
+  transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .mdbar button.ic:hover { color: var(--dk-text); background: var(--dk-hover); }
+.dkgh .mdbar button.ic:active { background: var(--dk-raised); }
+.dkgh .mdbar .sp { flex: 1; }
+
+/* The box says which one has the caret, the way every other field here does. */
+.dkgh textarea.mdbody:focus {
+  border-color: var(--dk-gh);
+  box-shadow: 0 0 0 3.6px color-mix(in srgb, var(--dk-gh) 14%, transparent);
+}
+
+/*
+  Preview is the same box, rendered.
+
+  It borrows `.mdbody` for its frame so switching tabs does not move anything,
+  and `.dkgh-md` for the markdown itself — one set of type sizes across the
+  peek, the issue page and this.
+*/
+.dkgh .mdbody.dkgh-md > *:first-child { margin-top: 0; }
+.dkgh .mdbody.dkgh-md > *:last-child { margin-bottom: 0; }
+
+/*
+  `.fh` outside the filter rail.
+
+  The mock only ever draws it inside a `.facet`, so that is where the rule was
+  scoped — and the lane headings on the column board and the roadmap, and the
+  headings in the why panel, came out as body text with the count glued to the
+  name. The facet's own rule still wins inside a facet, so nothing there moves.
+*/
+.dkgh .fh {
+  display: flex; align-items: center; gap: 7.2px;
+  font-size: 11.4px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--dk-faint);
+}
+.dkgh .fh .n { margin-left: auto; font-family: var(--mono); font-weight: 500; }
+
+/*
+  ── A note on the numbers below, and above ──
+
+  Everything in this file is scaled by `build.py`, the same ×1.2 the mock's own
+  rules get. So the values written here are the *unscaled* ones — 12px here is
+  14.4px in the output — and writing a pre-scaled number produces a rule 20%
+  larger than intended. The picker, the mention list and the sheet were all
+  built that way once; this is the note that stops it happening again.
+*/
+
+/*
+  ── An icon inside a chart card ──
+
+  The mock gives `.chartc svg` `width: 100%`, because the only `<svg>` it ever
+  draws in one is the line chart, which should fill the card. 16D puts a real
+  control in the card's heading — unpin — and its 12px glyph inherited that
+  rule and came out the size of the chart.
+
+  Scoped to a button rather than undoing the mock's rule: the line chart still
+  fills its card, and anything pressable keeps the size the rest of the tab
+  uses for the same glyph.
+*/
+.dkgh .chartc button svg { width: 12px; height: 12px; }
+.dkgh .chartc .barrow svg { width: 12px; height: 12px; }
+
+/*
+  ── A row of icon controls ──
+
+  The mock draws `edit` and `delete` as words, which is right in a figure with
+  two rows in it. The Labels tab has as many rows as the repository has labels,
+  and the same two words repeated nine times down the right-hand edge reads as
+  a column of prose rather than as controls.
+
+  `.vrow .t` already has these metrics; this is the same control somewhere that
+  is not a `.vrow`.
+*/
+.dkgh .iconbtn {
+  display: inline-grid; place-items: center; width: 26.4px; height: 26.4px;
+  border-radius: 6px; border: none; background: transparent; color: var(--dk-faint);
+  cursor: pointer; transition: color 110ms ease, background 110ms ease, transform 80ms ease;
+}
+.dkgh .iconbtn:hover:not(:disabled) { color: var(--dk-text); background: var(--dk-hover); }
+.dkgh .iconbtn:active:not(:disabled) { transform: scale(.9); }
+.dkgh .iconbtn:disabled { opacity: .3; cursor: default; }
+.dkgh .iconbtn.on { color: var(--dk-gh); background: color-mix(in srgb, var(--dk-gh) 14%, transparent); }
+.dkgh .iconbtn.danger:hover:not(:disabled) {
+  color: var(--dk-red); background: color-mix(in srgb, var(--dk-red) 14%, transparent);
+}
+
+/*
+  ── The close, everywhere ──
+
+  dui's own modal close, in dkgh's palette: muted until you reach it, a red
+  wash on hover, a deeper wash and a small squash on the press. The numbers are
+  `.dui_modal__close-btn`'s, unchanged, so closing a dialog and closing a
+  screen feel like the same gesture rather than two designs.
+*/
+.dkgh .ghx {
+  display: inline-grid; place-items: center; border-radius: 6px;
+  border: none; background: transparent; color: var(--dk-faint);
+  cursor: pointer; flex-shrink: 0;
+  transition: background 120ms, transform 80ms, color 120ms;
+}
+.dkgh .ghx svg { width: 12px; height: 12px; }
+.dkgh .ghx:hover {
+  color: var(--dk-red); background: color-mix(in srgb, var(--dk-red) 12%, transparent);
+}
+.dkgh .ghx:active {
+  background: color-mix(in srgb, var(--dk-red) 22%, transparent);
+  transform: scale(.88);
+  transition: background 60ms, transform 60ms;
+}
+
+/* The same gesture on the filter chips' own little `×`, which is a close too. */
+.dkgh .fchip .x:active { transform: scale(.88); transition: transform 60ms; }
+
+/*
+  ── Air between facet rows ──
+
+  A `.fct.on` wears an accent wash, and the mock never draws two of them
+  touching. Six consecutive ticked columns on the export screen do touch, and
+  they merge into one unbroken slab where six separate rows should be — you can
+  no longer see where one ends and the next begins.
+
+  A hairline gap is enough: each row keeps its own rounded edge, and an
+  unselected list looks exactly as it did.
+*/
+.dkgh .fct { margin-bottom: 2.4px; border-radius: 6px; }
+.dkgh .fct:last-child { margin-bottom: 0; }
+
+/*
+  ── The app's own Markdown editor, inside dkgh ──
+
+  `GhMarkdown` is `MarkdownEditorView` now — the same editor a request's Docs
+  tab uses — so the rules here are only the two things that differ: how tall
+  the writing surface starts, which each caller decides, and the type scale,
+  which is dkgh's rather than the app's.
+
+  The editor's own classes are dui's. Nothing here reaches into its toolbar:
+  if that needs changing it should change for every screen that has one.
+*/
+.dkgh .dkgh-mde .dui_mde__surface,
+.dkgh .dkgh-mde .dui_mde__source {
+  min-height: var(--dkgh-mde-min, 120px);
+  font-size: 13.2px;
+}
+
+/* The mock's own frame around the box, so it sits in the panel like the
+   fields above it rather than floating in it. */
+.dkgh .dkgh-mde .dui_mde {
+  border-radius: 9.6px;
+  border: 1px solid var(--dk-border);
+  background: var(--dk-surface);
+  overflow: hidden;
+}
+
+/*
+  ── A copy that answers ──
+
+  The same green tick and the same pop the code fences already use, so a copy
+  is a copy wherever it is pressed. `.copied` is the two seconds after it
+  worked; `popped` is the glyph that just changed.
+*/
+.dkgh button.btn.copied {
+  color: var(--dk-green);
+  border-color: color-mix(in srgb, var(--dk-green) 45%, transparent);
+  background: color-mix(in srgb, var(--dk-green) 10%, transparent);
+}
+.dkgh svg.popped { animation: dkgh-pop 260ms ease; }
+
+/*
+  ── dui's own controls, inside dkgh ──
+
+  `.dkgh button` zeroes padding, because the mock draws its buttons as spans
+  and every one of them sets its own. That reset has the same specificity as
+  dui's `.dui_mde__modes button`, and dkgh's stylesheet loads second — so the
+  Rich Text / Markdown switch lost its padding and rendered as
+  "Rich TextMarkdown", two words jammed together inside one thin outline.
+
+  The fix is to stop the reset at dui's door rather than to out-specify it rule
+  by rule: anything inside `.dkgh-mde` is dui's component, and dkgh has no
+  business restyling its internals.
+*/
+
+/*
+  The switch itself, at dkgh's scale.
+
+  dui draws it at 9.5px for a toolbar of 11px icons. dkgh's toolbar is
+  everything times 1.2, and a 9.5px control in it reads as a mistake — so the
+  metrics are scaled the way every other number in this file is, and the height
+  is fixed so the switch and anything beside it line up.
+*/
+.dkgh .dkgh-mde .dui_mde__modes {
+  height: 24px;
+  align-items: stretch;
+  border-radius: 6px;
+  font-size: 11.4px;
+}
+.dkgh .dkgh-mde .dui_mde__modes button {
+  display: inline-flex; align-items: center;
+  padding: 0 10.8px;
+  transition: color 120ms, background 120ms;
+}
+
+/*
+  ── The metadata picker, as github.com draws it ──
+
+  A panel under the gear: a heading, a filter box, a list of checkbox rows with
+  a description under each name, and a divider between what is on the issue and
+  what is not.
+
+  It is `position: absolute` inside its section rather than a portal, because a
+  portal would need its own copy of the palette (see `Dk`) and would have to
+  re-derive a position that CSS already knows. The trade is that the rail must
+  not clip it — the rail's own `overflow` is set for that.
+*/
+.dkgh .ghpick {
+  /*
+    Fixed and portalled out of the rail — `useDropPanel` puts it where the pen
+    is. Absolute inside the section meant a 408px panel living in a 321.6px
+    column: clipped at the rail's edge, and a horizontal scrollbar across the
+    bottom of the whole pane. Neither of those is a z-index problem.
+
+    Wider than the rail on purpose. Squeezed to fit, a label list is a narrow
+    column of wrapped two-line rows with a scrollbar after five of them — a
+    dropdown jammed into a sidebar rather than the panel github.com draws.
+  */
+  position: fixed; z-index: 120;
+  width: min(408px, 92vw);
+  min-width: 268px; max-width: 92vw;
+  background: var(--dk-raised);
+  border: 1px solid var(--dk-border);
+  border-radius: 9.6px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
+  overflow: hidden;
+  animation: dkgh-drop 120ms ease;
+}
+/* No centring translate any more — the panel is placed by its own `left` now,
+   so the animation is free to be the plain drop it always looked like. */
+@keyframes dkgh-drop {
+  from { opacity: 0; transform: translateY(-3.33px); }
+  to { opacity: 1; transform: none; }
+}
+/* One gutter down the whole panel: heading, filter and rows all start on the
+   same line, which is the difference between a popover and a pile. */
+.dkgh .ghpick { --pick-gutter: 12px; }
+.dkgh .ghpick-h {
+  padding: 9.6px var(--pick-gutter); font-size: 12.6px; font-weight: 600;
+  color: var(--dk-text);
+  border-bottom: 1px solid var(--dk-border);
+}
+.dkgh .ghpick-f {
+  display: flex; align-items: center; gap: 7.2px;
+  padding: 8.4px var(--pick-gutter); border-bottom: 1px solid var(--dk-border);
+}
+.dkgh .ghpick-f svg { width: 13.2px; height: 13.2px; color: var(--dk-faint); }
+.dkgh .ghpick-f input {
+  flex: 1; min-width: 0; background: var(--dk-panel);
+  border: 1px solid var(--dk-border); border-radius: 6px;
+  padding: 4.8px 8.4px; font-family: inherit; font-size: 12.6px; color: var(--dk-text);
+  outline: none; transition: border-color 110ms ease, box-shadow 110ms ease;
+}
+.dkgh .ghpick-f input:focus {
+  border-color: color-mix(in srgb, var(--dk-gh) 65%, transparent);
+  box-shadow: 0 0 0 2.4px color-mix(in srgb, var(--dk-gh) 12%, transparent);
+}
+/*
+  The list scrolls, and its bar keeps to itself.
+
+  dkgh's own scrollbar is 13px with a 2.9px inset — right for a facet rail
+  you scan, far too much furniture inside a 336px popover, where it sat on top
+  of the label names. Thin, quiet, and it darkens under the pointer like every
+  other one.
+
+  `scrollbar-gutter: stable` so the rows do not shuffle sideways the moment the
+  filter narrows the list to something that fits.
+*/
+.dkgh .ghpick-l {
+  /* Taller. It was 300px, which is five rows and a scrollbar — a list you page
+     through to find a label you can already name. `min(…, 46vh)` keeps it off
+     the bottom of a short window. */
+  max-height: min(504px, 46vh); overflow-y: auto; padding: 4.8px 0;
+  /* `scrollbar-gutter` reserves the *UA's* width unless `scrollbar-width`
+     says otherwise — without this it held 12px open for a 8.4px bar. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--dk-border) transparent;
+  scrollbar-gutter: stable;
+}
+.dkgh .ghpick-l::-webkit-scrollbar { width: 7.2px; }
+.dkgh .ghpick-l::-webkit-scrollbar-thumb {
+  background: var(--dk-border); border: none; border-radius: 999px;
+}
+.dkgh .ghpick-l::-webkit-scrollbar-thumb:hover { background: var(--dk-muted); }
+.dkgh .ghpick-e {
+  padding: 10.8px var(--pick-gutter); font-size: 12px; color: var(--dk-faint);
+}
+.dkgh .ghpick-s { height: 1px; background: var(--dk-border); margin: 4.8px 0; }
+.dkgh .ghpick-r {
+  display: flex; align-items: flex-start; gap: 8.4px; width: 100%;
+  padding: 6px var(--pick-gutter); background: transparent; border: none; cursor: pointer;
+  text-align: left; color: var(--dk-text); font-size: 12.6px;
+  transition: background 110ms ease;
+}
+.dkgh .ghpick-r:hover { background: var(--dk-hover); }
+.dkgh .ghpick-r.on { background: color-mix(in srgb, var(--dk-gh) 10%, transparent); }
+.dkgh .ghpick-r .bx { margin-top: 1px; }
+/*
+  `.bx` and `.sw` take their shape from `.fct .bx` and `.fct .sw`, and neither
+  selector matches in here. Without these the checkbox is a bare tick floating
+  where a box should be, and the colour dot is a zero-width nothing.
+*/
+.dkgh .ghpick-r .bx {
+  width: 13.2px; height: 13.2px; border-radius: 3.6px; border: 1px solid var(--dk-border);
+  flex-shrink: 0; display: grid; place-items: center; margin-top: 2.4px;
+}
+.dkgh .ghpick-r .bx svg { width: 9.6px; height: 9.6px; }
+/* Ticked, it fills — the same accent the facet rows use for the same state. */
+.dkgh .ghpick-r.on .bx {
+  background: var(--dk-gh-deep); border-color: var(--dk-gh-deep); color: #fff;
+}
+.dkgh .ghpick-r .sw {
+  width: 9.6px; height: 9.6px; border-radius: 50%; flex-shrink: 0; margin-top: 4.2px;
+}
+.dkgh .ghpick-r .av { margin-top: 0; }
+.dkgh .ghpick-t { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.dkgh .ghpick-t b { font-weight: 600; color: var(--dk-text); }
+.dkgh .ghpick-t i { font-style: normal; font-size: 11.4px; color: var(--dk-muted); }
+.dkgh .ghpick-b {
+  padding: 8.4px var(--pick-gutter); border-top: 1px solid var(--dk-border);
+  font-size: 12px; text-align: center;
+}
+
+/*
+  The rail has to let the panel out.
+
+  `.meta` scrolls its own contents, and a scrolling box clips anything
+  absolutely positioned inside it. Vertical scrolling is what the rail needs
+  and horizontal overflow is what the panel needs, and `overflow-x: visible`
+  with `overflow-y: auto` is not a combination CSS honours — so the rail keeps
+  its scroll and the panel is kept inside its width instead.
+*/
+.dkgh .meta { overflow-x: clip; }
+
+/*
+  ── 08E, as a sheet ──
+
+  "Why am I seeing these?" has a short answer — a count, a sentence, and one
+  line per filter — and it is an answer about the rows, so it belongs under
+  them. As a 268px rail it was three lines at the top of a full-height column
+  with six hundred pixels of nothing beneath.
+
+  It takes the height it needs and no more, stopping a little under half the
+  board so what it is explaining stays on screen behind it.
+*/
+.dkgh .whysheet {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 25;
+  max-height: 46%;
+  overflow-y: auto;
+  /* One gutter, everywhere. The sheet used to set `padding: 12px 0` and let
+     each row supply its own inset, so the heading sat flush against the left
+     edge while the text under it did not — the alignment was different on
+     every line. */
+  padding: 14.4px 16.8px 16.8px;
+  background: var(--dk-surface);
+  border-top: 1px solid var(--dk-border);
+  box-shadow: 0 -11.67px 34px rgba(0, 0, 0, .38);
+  animation: dkgh-rise 140ms ease;
+}
+
+/* ── The head: the figure, what it means, and the way out ───────────────── */
+
+.dkgh .why-head { display: flex; align-items: flex-start; gap: 14px; }
+
+/*
+  The two numbers, as a figure.
+
+  They were "2 OF 2 SHOWN" in 10.8px caps — a label about the subject rather than
+  the subject. A tabular figure and its denominator underneath reads at a
+  glance and holds its width as the count changes.
+*/
+.dkgh .why-stat {
+  flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-width: 62.4px; padding: 6px 10.8px;
+  border: 1px solid var(--dk-border); border-radius: 8.4px;
+  background: var(--dk-raised);
+}
+.dkgh .why-stat b {
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: 21.6px; line-height: 1.1; font-weight: 600; color: var(--dk-text);
+}
+.dkgh .why-stat i {
+  font-style: normal; font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: 10.8px; color: var(--dk-faint); margin-top: 1px;
+}
+
+.dkgh .why-said { flex: 1; min-width: 0; }
+.dkgh .why-said h4 {
+  margin: 1px 0 3.6px; font-size: 15px; font-weight: 600; color: var(--dk-text);
+}
+.dkgh .why-said p {
+  margin: 0; font-size: 12.6px; line-height: 1.5; color: var(--dk-muted);
+  max-width: 68ch;
+}
+
+/* ── The body: three answers, side by side ─────────────────────────────── */
+
+.dkgh .why-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(276px, 1fr));
+  gap: 14px;
+  margin-top: 14.4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--dk-border);
+  align-items: start;
+}
+/* Capped, so the one-column case does not run a single row of "state Open …
+   0" the whole width of the board with the number a foot from its label. */
+.dkgh .why-col { min-width: 0; max-width: 460px; }
+.dkgh .why-h {
+  display: flex; align-items: center; gap: 7.2px;
+  padding-bottom: 7.2px;
+  font-size: 11.4px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--dk-muted);
+}
+.dkgh .why-h .n {
+  margin-left: auto; letter-spacing: 0; text-transform: none;
+  font-family: var(--mono); font-size: 10.8px; color: var(--dk-faint);
+}
+
+.dkgh .why-list {
+  border: 1px solid var(--dk-border); border-radius: 8.4px;
+  background: var(--dk-panel);
+  padding: 4px;
+  max-height: 177.6px; overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: var(--dk-border) transparent;
+}
+.dkgh .why-row {
+  display: flex; align-items: center; gap: 8.4px; width: 100%;
+  padding: 6px 8.4px; border-radius: 6px;
+  border: none; background: transparent; cursor: pointer;
+  text-align: left; font-size: 12.6px; color: var(--dk-text);
+  transition: background 110ms;
+}
+.dkgh .why-row + .why-row { margin-top: 2.4px; }
+.dkgh .why-row:hover:not(.still) { background: var(--dk-hover); }
+.dkgh .why-row.on { background: color-mix(in srgb, var(--dk-gh) 14%, transparent); }
+/* A row that states a fact rather than offering a choice. */
+.dkgh .why-row.still { cursor: default; align-items: flex-start; }
+.dkgh .why-row svg { width: 13.2px; height: 13.2px; flex-shrink: 0; margin-top: 2.4px;
+                     color: var(--dk-green); }
+.dkgh .why-row.bad svg { color: var(--dk-red); }
+.dkgh .why-num {
+  font-family: var(--mono); font-size: 11.4px; color: var(--dk-gh); flex-shrink: 0;
+}
+.dkgh .why-t { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.dkgh .why-t b { font-weight: 600; }
+.dkgh .why-t i { font-style: normal; font-size: 11.4px; color: var(--dk-muted); }
+.dkgh .why-row.bad .why-t i { color: var(--dk-red); }
+
+/*
+  A term, as a field and a value rather than a sentence.
+
+  "state Open", "assignee Nobody" and "quiet for 14 days" set as three
+  identical runs of grey text are three rows you have to read to tell apart.
+  The field is the quiet half and the value wears the chip every other value in
+  this tab wears.
+*/
+.dkgh .why-field { color: var(--dk-muted); flex-shrink: 0; }
+.dkgh .why-row .chip { flex-shrink: 0; }
+.dkgh .why-t .chip { align-self: flex-start; margin-top: 2.4px; }
+
+/* The count a term removes, right-aligned so the column reads as a column. */
+.dkgh .why-cost {
+  margin-left: auto; flex-shrink: 0;
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: 12px; color: var(--dk-amber);
+}
+.dkgh .why-cost.idle { color: var(--dk-faint); }
+
+.dkgh .why-note {
+  margin-top: 8.4px; font-size: 11.4px; line-height: 1.55; color: var(--dk-faint);
+}
+.dkgh .why-note b { color: var(--dk-text); font-weight: 600; }
+@keyframes dkgh-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+/*
+  ── The export preview, at its real width ──
+
+  The mock's `.sheet` fixes seven tracks, because the figure it was drawn for
+  has six columns. A real export has as many as you tick, and cutting the
+  preview at six with a line saying so is a preview that does not show what is
+  going to be written.
+
+  So the row's tracks come from a variable the screen sets, and the whole sheet
+  scrolls sideways inside its box. The bar is hidden: under a five-row table it
+  is more furniture than the table, and a wheel or a trackpad reaches it
+  anyway.
+*/
+.dkgh .sheetw { overflow-x: auto; scrollbar-width: none; }
+.dkgh .sheetw::-webkit-scrollbar { display: none; }
+.dkgh .sheetw .sheet { min-width: max-content; }
+.dkgh .sheet .sr { grid-template-columns: var(--sheet-cols, 31.2px 1.6fr 1fr .8fr .8fr .8fr .8fr); }
+
+/*
+  ── Moving a column ──
+
+  The order the list is in is the order the file is written in, so the ticked
+  ones are shown in that order with a way to change it. The arrows only appear
+  under the pointer: a rail of eighteen rows with two arrows on each is a rail
+  of thirty-six controls.
+*/
+.dkgh .colmove { display: inline-flex; gap: 1px; margin-left: auto; opacity: 0; }
+.dkgh .fct:hover .colmove { opacity: 1; }
+.dkgh .colmove button {
+  display: grid; place-items: center; width: 18px; height: 18px;
+  border-radius: 4.8px; border: none; background: transparent; color: var(--dk-faint);
+  cursor: pointer; transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .colmove button:hover:not(:disabled) { color: var(--dk-text); background: var(--dk-hover); }
+.dkgh .colmove button:disabled { opacity: .25; cursor: default; }
+.dkgh .colmove svg { width: 10px; height: 10px; }
+
+/*
+  ── The `#` list ──
+
+  github.com's shape: a number, a title, and the state when it is closed.
+  Positioned at the caret, so it appears where you are typing rather than in a
+  corner you have to look for.
+*/
+.dkgh .ghmention {
+  position: absolute; z-index: 40; min-width: 264px; max-width: 420px;
+  background: var(--dk-raised);
+  border: 1px solid var(--dk-border);
+  border-radius: 8.4px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .45);
+  overflow: hidden auto; max-height: 240px;
+  /* A gutter, so the highlighted row is a rounded row inside a panel rather
+     than a band painted edge to edge across it — the same gutter the facet
+     rail and the picker already keep. */
+  padding: 4px;
+  /* Its own keyframes: this list is positioned at the caret and is not centred
+     on anything, so it cannot share the picker's, which carry a -50% translate. */
+  animation: dkgh-rise 110ms ease;
+}
+@keyframes dkgh-rise {
+  from { opacity: 0; transform: translateY(-3.33px); }
+  to { opacity: 1; transform: none; }
+}
+.dkgh .ghmention-r {
+  display: flex; align-items: baseline; gap: 8.4px; width: 100%;
+  padding: 6px 10px; background: transparent; border: none; cursor: pointer;
+  border-radius: 6px;
+  text-align: left; font-size: 12.6px; color: var(--dk-text);
+  transition: background 110ms ease;
+}
+.dkgh .ghmention-r + .ghmention-r { margin-top: 3px; }
+.dkgh .ghmention-r:hover,
+.dkgh .ghmention-r.on { background: color-mix(in srgb, var(--dk-gh) 14%, transparent); }
+.dkgh .ghmention-n {
+  font-family: var(--mono); font-size: 11.4px; color: var(--dk-faint); flex-shrink: 0;
+}
+.dkgh .ghmention-r.on .ghmention-n { color: var(--dk-gh); }
+.dkgh .ghmention-t {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;
+}
+
+/*
+  ── Closing an issue, in GitHub's own colour ──
+
+  github.com closes an issue in purple: the state a closed issue is *in* is
+  purple everywhere on the site — the badge, the icon, the timeline dot — and
+  green there means merged, which this is not.
+
+  Solid, like the Comment beside it, because the two are the pair somebody
+  chooses between and an outline against a fill reads as one real button and
+  one suggestion.
+*/
+.dkgh { --dk-purple: #8957e5; }
+.dkgh .btn.shut,
+.dkgh button.btn.shut {
+  background: var(--dk-purple);
+  border-color: var(--dk-purple);
+  color: #fff;
+  font-weight: 600;
+}
+.dkgh button.btn.shut:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dk-purple) 86%, #000);
+  border-color: color-mix(in srgb, var(--dk-purple) 86%, #000);
+}
+.dkgh button.btn.shut svg { color: #fff; }
+
+/*
+  An empty toolbar is not a toolbar.
+
+  In Markdown view the editor draws no format buttons — the source *is* the
+  document — and with the mode switch moved to the card header there is
+  nothing left but the spacer. That rendered as a thin blank strip with a
+  border under it, which reads as a row that failed to load.
+
+  `:has()` rather than a flag from the component: the condition is "this
+  toolbar has nothing in it", and that is a fact about the markup rather than
+  something the caller should have to know.
+*/
+.dkgh .dkgh-mde .dui_mde__toolbar:not(:has(> *:not(.dui_mde__spacer))) {
+  display: none;
+}
+
+/*
+  ── The mode switch, out of the toolbar ──
+
+  It sits in the card's own header now. Same metrics as the one dui draws, so
+  moving it did not change how it looks — only where it is.
+*/
+.dkgh .dkgh-modes {
+  display: inline-flex; align-items: stretch; height: 24px;
+  border: 1px solid var(--dk-border); border-radius: 6px; overflow: hidden;
+  font-size: 11.4px; flex-shrink: 0;
+}
+.dkgh .dkgh-modes button {
+  display: inline-flex; align-items: center; padding: 0 10.8px;
+  border: none; background: none; cursor: pointer; color: var(--dk-muted);
+  transition: color 120ms, background 120ms;
+}
+.dkgh .dkgh-modes button:hover:not(.on) { color: var(--dk-text); }
+.dkgh .dkgh-modes button.on {
+  font-weight: 600; color: var(--dk-gh);
+  background: color-mix(in srgb, var(--dk-gh) 16%, transparent);
+}
+
+/*
+  ── Dragging a column into place ──
+
+  Up and down arrows move one row one step, which is four presses to move a
+  column four places and no sense of where it is going. A row you pick up and
+  put down is the whole gesture at once — the same one the terminal themes use.
+
+  The handle only shows on a chosen row: an unticked column has no place in the
+  order to move within.
+*/
+.dkgh .colgrip {
+  display: inline-grid; place-items: center; width: 16.8px; margin-right: -2px;
+  color: var(--dk-faint); cursor: grab; opacity: 0;
+  transition: opacity 110ms ease, color 110ms ease;
+}
+.dkgh .fct:hover .colgrip { opacity: 1; }
+.dkgh .colgrip:active { cursor: grabbing; }
+.dkgh .colgrip svg { width: 12px; height: 12px; }
+.dkgh .fct.lifting { opacity: .45; }
+.dkgh .fct.dropzone {
+  box-shadow: inset 0 2.4px 0 -1px var(--dk-gh);
+}
+.dkgh .fct.dropzone.below { box-shadow: inset 0 -2px 0 -1px var(--dk-gh); }
+
+/*
+  ── The composer, as one box ──
+
+  It was drawn as three stacked rectangles: a card, a header strip inside it
+  saying "You", the editor in its own border inside that, and the buttons under
+  all of it. One thing, four borders.
+
+  So the box owns the border and the radius, and everything else sits flush
+  inside it — tabs on the top edge, the surface in the middle, the buttons on
+  the bottom edge floated right. `GhMarkdown` draws it; this is its shape.
+*/
+.dkgh .dkgh-cmp {
+  border: 1px solid var(--dk-border);
+  border-radius: 8px;
+  background: var(--dk-surface);
+}
+
+/* Write | Preview, on the top edge. The active tab is the same surface as the
+   body below it with its bottom border removed, so the two read as one sheet
+   rather than as a button sitting above a box. */
+.dkgh .dkgh-cmp-tabs {
+  display: flex; align-items: center; gap: 2px;
+  padding: 6px 8px 0;
+  border-bottom: 1px solid var(--dk-border);
+  background: var(--dk-raised);
+  border-radius: 8px 8px 0 0;
+}
+.dkgh .dkgh-cmp-sp { flex: 1; }
+.dkgh .dkgh-cmp-tabs .sub { font-size: 11px; }
+.dkgh .dkgh-cmp-tab {
+  /* Deliberately larger than the toolbar under it. This is the one control on
+     the box that changes what the box *is*, and at the toolbar's own scale it
+     read as another quiet icon rather than as the choice it is. */
+  padding: 9px 18px;
+  font-size: 12.5px; font-weight: 600;
+  color: var(--dk-muted); background: transparent;
+  border: 1px solid transparent; border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: color 120ms, background 120ms;
+}
+.dkgh .dkgh-cmp-tab:hover { color: var(--dk-text); }
+.dkgh .dkgh-cmp-tab.on {
+  color: var(--dk-text);
+  background: var(--dk-surface);
+  border-color: var(--dk-border);
+}
+
+.dkgh .dkgh-cmp-body { position: relative; }
+
+/* The editor's own frame, off. The box outside it is the frame now. */
+.dkgh .dkgh-cmp .dkgh-mde .dui_mde {
+  border: 0; border-radius: 0; background: transparent;
+}
+
+.dkgh .dkgh-cmp-prev {
+  min-height: var(--dkgh-mde-min, 120px);
+  padding: 10px 12px;
+  font-size: 11px;
+}
+
+/* The buttons, on the bottom edge and floated right. */
+.dkgh .dkgh-cmp-foot {
+  display: flex; align-items: center; justify-content: flex-end; gap: 7px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--dk-border);
+}
+
+/*
+  ── Dragging it taller ──
+
+  github.com's own corner grip. Not the native `resize` handle: the surface
+  being resized is a `contenteditable` in one view and a `<textarea>` in the
+  other, and a native handle on either would move only that one.
+
+  Two hairlines drawn with a gradient rather than an icon, because it is three
+  pixels of texture and an SVG for it would be the heaviest thing in the box.
+*/
+.dkgh .dkgh-grip {
+  position: absolute; right: 3px; bottom: 3px;
+  width: 12px; height: 12px;
+  cursor: ns-resize;
+  opacity: .45;
+  background:
+    linear-gradient(135deg, transparent 46%, var(--dk-muted) 46%, var(--dk-muted) 54%, transparent 54%),
+    linear-gradient(135deg, transparent 71%, var(--dk-muted) 71%, var(--dk-muted) 79%, transparent 79%);
+}
+.dkgh .dkgh-grip:hover { opacity: .9; }
+
+/*
+  ── The board's cards, and dragging one ──
+
+  Bigger. They were 9.6px of padding around a 15.1px line, which is a table row
+  with a border round it — fine for a list, wrong for a board you are meant to
+  read across the room and take hold of. A Kanban card is a card.
+
+  The drag itself is in `card-drag.ts`; these are the three states it needs:
+  the card left behind, the copy under the cursor, and the column being
+  hovered.
+*/
+.dkgh .kcard {
+  padding: 13.2px 13.2px;
+  gap: 9px;
+  min-height: 72px;
+  border-radius: 9px;
+  /* `transform` and `box-shadow` only — both composited, so the hover costs no
+     layout on a board of forty cards. */
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease,
+              opacity 140ms ease;
+}
+.dkgh .kcard .t { font-size: 14px; line-height: 1.45; }
+.dkgh .kcard .f { font-size: 12px; }
+.dkgh .kcard:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2.4px 10px rgba(0, 0, 0, .35);
+  border-color: color-mix(in srgb, var(--dk-gh) 35%, var(--dk-border));
+}
+
+/* What is left where the card was: its own outline, so the column does not
+   collapse under the pointer while you are still deciding. */
+.dkgh .kcard.lifted {
+  opacity: .3 !important;
+  border-style: dashed;
+  box-shadow: none;
+  transform: none;
+}
+
+/* The copy under the cursor. Fixed, composited, and untouchable — it must
+   never be what `elementFromPoint` finds, or it would hover itself. */
+.dkgh .kghost {
+  position: fixed; top: 0; left: 0; z-index: 60;
+  pointer-events: none;
+  will-change: transform;
+}
+.dkgh .kghost .kcard {
+  cursor: grabbing;
+  /* The tilt, and nothing else. It was `rotate(1.5deg) scale(1.02)`, and a
+     card that changes size the moment you pick it up is a card you have to
+     re-aim — the lift is already said by the shadow and the accent border. */
+  transform: rotate(1.5deg);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .5);
+  border-color: var(--dk-gh);
+  background: var(--dk-raised);
+}
+body.dkgh-dragging { cursor: grabbing; user-select: none; }
+body.dkgh-dragging .kcard:hover { transform: none; box-shadow: none; }
+
+/*
+  The column being hovered, and the gap that opens in it.
+
+  The padding is not decoration: the tint is a rounded panel now, and without
+  it the column heading and its count sat on the rounded corner with nothing
+  between them and the edge. Negative margins keep the columns themselves on
+  the grid they were on, so nothing moves when one lights up.
+*/
+.dkgh .kcol {
+  transition: background 140ms ease;
+  border-radius: 9px;
+  padding: 8.4px 7.2px 7.2px;
+  /* Already at the built scale: `build.py` multiplies every positive px by
+     1.2 and leaves negatives alone, so a `-7px` here would not have matched
+     the 10.1px above it and every column would have crept 1.7px. */
+  margin: -8.4px -7.2px -7.2px;
+}
+.dkgh .kcol.over {
+  background: color-mix(in srgb, var(--dk-gh) 7%, transparent);
+}
+.dkgh .slot {
+  animation: dkgh-slot 150ms cubic-bezier(.2, .8, .3, 1);
+  transition: height 150ms ease;
+}
+@keyframes dkgh-slot {
+  from { height: 0; opacity: 0; }
+  to { height: 62.4px; opacity: 1; }
+}
+
+/*
+  ── The `…` on a comment ──
+
+  github.com's own menu, in dkgh's palette: a panel under the button, rows with
+  an icon and a label, a divider before the row that leaves the app. Same
+  gutter and same rounded rows as the picker and the mention list, because
+  three different shapes of dropdown in one tab is three things to learn.
+*/
+.dkgh .ghmenu { position: relative; display: inline-flex; margin-left: 7.2px; }
+.dkgh .ghmenu-p {
+  /* Fixed and portalled — see `portalTo`. The card it belongs to is
+     `overflow: hidden` and the pane scrolls, so an absolutely positioned panel
+     was cut off at the card's bottom edge with Delete half-drawn. `top` and
+     `left` come from the button's own rect. */
+  position: fixed; z-index: 120;
+  min-width: 210px;
+  padding: 4px;
+  background: var(--dk-raised);
+  border: 1px solid var(--dk-border);
+  border-radius: 8.4px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .45);
+  animation: dkgh-rise 110ms ease;
+}
+.dkgh .ghmenu-r {
+  display: flex; align-items: flex-start; gap: 8.4px; width: 100%;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: transparent; border: none; cursor: pointer;
+  text-align: left; font-size: 12.6px; color: var(--dk-text);
+  text-decoration: none;
+  transition: background 110ms ease, color 110ms ease;
+}
+.dkgh .ghmenu-r + .ghmenu-r { margin-top: 3px; }
+.dkgh .ghmenu-r:hover { background: var(--dk-hover); }
+.dkgh .ghmenu-r svg { width: 13.2px; height: 13.2px; margin-top: 2px; color: var(--dk-muted); }
+.dkgh .ghmenu-r:hover svg { color: var(--dk-text); }
+/* The two seconds after it worked. Same green tick as everywhere else. */
+.dkgh .ghmenu-r.ok, .dkgh .ghmenu-r.ok svg { color: var(--dk-green); }
+.dkgh .ghmenu-t { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.dkgh .ghmenu-t i { font-style: normal; font-size: 11px; color: var(--dk-muted); }
+.dkgh .ghmenu-s { height: 1px; background: var(--dk-border); margin: 4px 0; }
+
+/*
+  Delete, in the colour it deserves.
+
+  Red on the row itself rather than only on hover: this is the one entry in the
+  menu that cannot be undone, and a row that looks like the four above it until
+  the cursor is already on it is a row that gets clicked on the way past.
+*/
+.dkgh .ghmenu-r.danger, .dkgh .ghmenu-r.danger svg { color: var(--dk-red); }
+.dkgh .ghmenu-r.danger i { color: color-mix(in srgb, var(--dk-red) 70%, var(--dk-muted)); }
+.dkgh .ghmenu-r.danger:hover {
+  background: color-mix(in srgb, var(--dk-red) 14%, transparent);
+}
+
+/*
+  ── One thread ──
+
+  The events and the comments share a rail now, so a comment inside `.tline`
+  needs the room a card needs rather than the line-height an event row has.
+  The rail's own indent stays: an event is a line beside a glyph, a comment is
+  a card, and the eye should be able to tell them apart down the left edge.
+*/
+.dkgh .tline .cmt { margin: 12px 0; }
+.dkgh .tline .tev + .cmt { margin-top: 9.6px; }
+.dkgh .tline .cmt + .tev { margin-top: 9.6px; }
+
+/*
+  ── Faces ──
+
+  The circle was already the right size and already had a colour picked from
+  the login; the picture just fills it. `object-fit: cover` because GitHub
+  serves whatever square the user uploaded and some of them are not square.
+*/
+.dkgh .av .avimg,
+.dkgh .av-s .avimg,
+.dkgh .av-t .avimg {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+/* A timeline row's face: smaller than a comment's, and on the text baseline
+   rather than above it — this is a line of prose with a face in it. */
+.dkgh .tev .av-t {
+  width: 16.8px; height: 16.8px;
+  font-size: 9.6px;
+  margin-right: 4.8px;
+  vertical-align: -3px;
+}
+
+/*
+  A condensed row reads as one sentence.
+
+  "added enhancement and removed enhancement" — the joins are the only part
+  that is not somebody's words, so they are the muted half of the line.
+*/
+.dkgh .tev .evj { color: var(--dk-faint); }
+
+/*
+  ── The Export pill ──
+
+  dk8s's own export button: amber fill, panel-coloured text, no border, bold.
+  `--color-warning` is the app's token — the same one dk8s reads — rather than
+  dkgh's `--dk-amber`, so the control that writes files is one colour across
+  both tabs and follows the light theme with them.
+*/
+.dkgh .pill.exp,
+.dkgh button.pill.exp {
+  background: var(--color-warning);
+  border-color: var(--color-warning);
+  color: var(--color-panel, #12141a);
+  font-weight: 600;
+}
+.dkgh button.pill.exp:hover {
+  background: color-mix(in srgb, var(--color-warning) 86%, #000);
+  border-color: color-mix(in srgb, var(--color-warning) 86%, #000);
+}
+.dkgh .pill.exp svg { color: inherit; }
+
+/*
+  ── The composer's own footer ──
+
+  Three buttons that are one set. They differ in weight and fill on purpose;
+  they should not differ in height, and they did — the outlined one carried no
+  icon, so its content box was a line of text against the others' 14.4px glyph.
+  Both halves are fixed: Discard has an icon now, and the row states the height
+  rather than leaving it to whatever is inside.
+*/
+.dkgh .dkgh-cmp-foot .btn {
+  min-height: 28.8px;
+  font-weight: 600;
+}
+
+/*
+  A timeline row is one line.
+
+  The face and the name were wrapping apart — the avatar landing on one line
+  and `salilvnair added …` on the next — because `.txt` is the row's only
+  flexible box and an inline-block circle inside it is a break opportunity like
+  any other. The row is prose with a face in it, so the face and the name it
+  belongs to stay together and the rest wraps around them.
+*/
+.dkgh .tev .txt { min-width: 0; }
+.dkgh .tev .av-t,
+.dkgh .tev .av-t + b { white-space: nowrap; }
+.dkgh .tev .av-t { display: inline-flex; align-items: center; justify-content: center; }
+
+/* GitHub's own actors wear GitHub's mark rather than a letter. */
+.dkgh .av.avbot,
+.dkgh .av-s.avbot,
+.dkgh .av-t.avbot { background: var(--dk-raised); color: var(--dk-text); }
+.dkgh .avbot svg { width: 72%; height: 72%; }
+
+/*
+  ── One height across the view bar ──
+
+  Export and the terminal button sat at two different heights: one is a pill
+  with a label and the other a pill with only a glyph, and nothing stated a
+  height, so each took whatever its contents gave it. The row states it.
+*/
+.dkgh .pill {
+  /* The height a pill with a label computes to. Stated, so the icon-only ones
+     — the terminal button beside Export — do not come out three pixels
+     shorter for having no line of text in them. */
+  min-height: 29px;
+  box-sizing: border-box;
+}
+
+/*
+  The count in the footer is the way back into 08E.
+
+  A button, but not drawn as one: it sits in a line of quiet footer text and a
+  bordered control there would read as the loudest thing on the board.
+*/
+.dkgh .whycount {
+  cursor: pointer;
+  border-radius: 4.8px;
+  padding: 1px 6px;
+  margin-left: -5px;
+  transition: background 120ms, color 120ms;
+}
+.dkgh .whycount:hover { background: var(--dk-hover); color: var(--dk-text); }
+.dkgh .whycount.on {
+  background: color-mix(in srgb, var(--dk-gh) 16%, transparent);
+  color: var(--dk-gh);
+}
+
+/*
+  ── Who is carrying what ──
+
+  People down the left, their issues on the right. The rail is the same width
+  and the same surface as the metadata rail on an issue, because it is the same
+  kind of thing — a list you pick from that changes what is beside it.
+*/
+.dkgh .ghteam-rail {
+  width: 261.6px; flex-shrink: 0;
+  display: flex; flex-direction: column;
+  border-right: 1px solid var(--dk-border);
+  background: var(--dk-panel, var(--dk-surface));
+  overflow-y: auto;
+}
+.dkgh .ghteam-row {
+  display: flex; align-items: center; gap: 9.6px; width: 100%;
+  padding: 8.4px 12px;
+  border: none; background: transparent; cursor: pointer;
+  border-left: 2.4px solid transparent;
+  text-align: left; color: var(--dk-text); font-size: 12.6px;
+  transition: background 120ms, border-color 120ms;
+}
+.dkgh .ghteam-row:hover { background: var(--dk-hover); }
+.dkgh .ghteam-row.on {
+  background: color-mix(in srgb, var(--dk-gh) 12%, transparent);
+  border-left-color: var(--dk-gh);
+}
+.dkgh .ghteam-t { display: flex; flex-direction: column; gap: 3.6px; flex: 1; min-width: 0; }
+.dkgh .ghteam-t b {
+  font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* The load bar: against the busiest lane, not the total — see `loadPercent`. */
+.dkgh .ghteam-bar {
+  display: block; height: 3.6px; border-radius: 2.4px;
+  background: var(--dk-raised); overflow: hidden;
+}
+.dkgh .ghteam-bar i {
+  display: block; height: 100%;
+  background: color-mix(in srgb, var(--dk-gh) 70%, transparent);
+  transition: width 200ms ease;
+}
+.dkgh .ghteam-row.on .ghteam-bar i { background: var(--dk-gh); }
+.dkgh .ghteam-n {
+  font-family: var(--mono); font-size: 11.4px; color: var(--dk-faint);
+  flex-shrink: 0;
+}
+.dkgh .ghteam-row.on .ghteam-n { color: var(--dk-gh); }
+/* The pile nobody owns wears a person outline rather than a letter. */
+.dkgh .av-none {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+  background: var(--dk-raised); color: var(--dk-muted);
+}
+.dkgh .av-none svg { width: 13.2px; height: 13.2px; }
+
+/*
+  The issue, in a sheet off the right edge.
+
+  A class of its own rather than `.dkgh` on the panel: `.dkgh` is the tab's
+  root rule and carries `flex: 1 1 0%`, which beat `SheetView`'s `flex: none`
+  and made the sheet fill the window. The palette comes in through `Dk` — see
+  `GhTeam` — and this is only the surface it sits on.
+*/
+.ghsheet { background: var(--dk-panel); }
+.ghsheet .dui_sheet__content { display: flex; flex-direction: column; }
+
+/*
+  ── The issue's own title, and the pencil on it ──
+
+  A heading with two controls on the end of it, on one baseline. The pencil and
+  the `…` are the toolbar's size, not the heading's, because they belong to the
+  row rather than to the words.
+*/
+.dkgh .ghtitle { display: flex; align-items: center; gap: 8.4px; min-width: 0; }
+.dkgh .ghtitle-t {
+  font-size: 18px; font-weight: 700; color: var(--dk-text);
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dkgh .ghtitle-n {
+  font-family: var(--mono); font-size: 15.6px; color: var(--dk-faint); flex-shrink: 0;
+}
+/* Only once the row is hovered — a pencil sitting on every title all the time
+   reads as a state rather than an offer. It stays visible while it has focus,
+   so the keyboard can still reach it. */
+.dkgh .ghtitle .iconbtn { opacity: 0; transition: opacity 120ms; }
+.dkgh .ghtitle:hover .iconbtn,
+.dkgh .ghtitle .iconbtn:focus-visible,
+.dkgh .ghtitle .iconbtn.on { opacity: 1; }
+
+/*
+  The field and its two buttons are dui's, all at `size="lg"` — they take their
+  height from one token and set it inline, so there is nothing here to keep in
+  step. The row only says how they sit beside each other.
+*/
+.dkgh .ghtitle-edit { display: flex; align-items: center; gap: 8.4px; }
+
+/* A menu row that cannot be pressed still has to be readable — the reason
+   under it is the whole point of drawing it. */
+.dkgh .ghmenu-r:disabled { cursor: default; opacity: .55; }
+.dkgh .ghmenu-r:disabled:hover { background: transparent; }
+
+/*
+  Nothing here about dui's buttons any more.
+
+  Their fills used to be restated at `.dkgh .dui_button--primary` to out-specify
+  the `.dkgh button` reset, which is a thing you have to remember to do again
+  for every component that comes along. The reset is in a cascade layer now —
+  see header.css — so dui's own unlayered rules beat it without help.
+*/

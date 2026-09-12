@@ -1,5 +1,5 @@
 {
-  "appUrl": "http://localhost:5173",
+  "appUrl": "http://localhost:5174",
   "output": {
     "name": "daakia_showcase",
     "width": 1280,
@@ -14,8 +14,17 @@
     "enabled": true,
     "durationSec": 3.2,
     "title": "Daakia",
-    "tagline": "One API client. Every protocol.",
-    "badges": ["REST", "GraphQL", "WebSocket", "gRPC", "SOAP", "Mock Server"],
+    "tagline": "Every protocol. Your cluster. Your issues.",
+    "badges": [
+      "REST",
+      "GraphQL",
+      "gRPC",
+      "SOAP",
+      "MCP",
+      "Mock",
+      "Dk8s",
+      "DkGH"
+    ],
     "accentColor": "#2ad4a8",
     "effect": "static"
   },
@@ -25,113 +34,171 @@
       "label": "REST",
       "recipe": "restRequest",
       "effect": "static",
-      "trimStartSec": 1.5,
-      "options": { "url": "https://jsonplaceholder.typicode.com/users/1" }
+      "trimStartSec": 1.2,
+      "options": {
+        "url": "https://jsonplaceholder.typicode.com/posts"
+      }
     },
     {
-      "id": "json_body",
-      "label": "JSON Body",
-      "recipe": "jsonBodyType",
+      "id": "body_types",
+      "label": "Body Types",
+      "recipe": "bodyTypes",
       "effect": "static",
-      "trimStartSec": 1.5
-    },
-    {
-      "id": "ai_chat",
-      "label": "Daakia AI",
-      "recipe": "aiChatType",
-      "effect": "static",
-      "trimStartSec": 1.5
-    },
-    {
-      "id": "ws",
-      "label": "WebSocket",
-      "recipe": "wsMessageType",
-      "effect": "static",
-      "trimStartSec": 1.5
+      "trimStartSec": 1.2
     },
     {
       "id": "graphql",
       "label": "GraphQL",
-      "recipe": "graphqlQueryType",
+      "recipe": "graphqlQuery",
       "effect": "static",
-      "trimStartSec": 1.5
+      "trimStartSec": 1.2
+    },
+    {
+      "id": "websocket",
+      "label": "WebSocket",
+      "recipe": "websocketEcho",
+      "effect": "static",
+      "trimStartSec": 1.2
     },
     {
       "id": "grpc",
       "label": "gRPC",
-      "recipe": "grpcMessageType",
+      "recipe": "grpcMessage",
       "effect": "static",
-      "trimStartSec": 1.5
+      "trimStartSec": 1.2
     },
     {
       "id": "soap",
       "label": "SOAP",
-      "recipe": "soapEnvelopeType",
+      "recipe": "soapEnvelope",
       "effect": "static",
-      "trimStartSec": 1.5
+      "trimStartSec": 1.2
     },
     {
       "id": "mcp",
       "label": "MCP",
-      "recipe": "mcpServerType",
+      "recipe": "mcpServer",
       "effect": "static",
-      "trimStartSec": 1.5
+      "trimStartSec": 1.2
     },
     {
-      "id": "mock",
-      "label": "Mock Server",
-      "recipe": "mockServerRun",
+      "id": "ai_chat",
+      "label": "Daakia AI",
+      "recipe": "aiChat",
       "effect": "static",
-      "trimStartSec": 1.5
+      "trimStartSec": 1.2,
+      "warmupMs": 2000
     },
     {
-      "id": "devtools",
-      "label": "DevTools",
-      "recipe": "devToolsShow",
+      "id": "settings_ai",
+      "label": "Settings — AI",
+      "recipe": "aiSettings",
       "effect": "static",
-      "trimStartSec": 1.5
+      "trimStartSec": 1.2,
+      "warmupMs": 1800
     },
     {
       "id": "collections",
       "label": "Collections",
-      "recipe": "collectionsCreate",
+      "recipe": "collections",
       "effect": "static",
-      "trimStartSec": 1.5
+      "trimStartSec": 1.2
+    },
+    {
+      "id": "environment",
+      "label": "Environments",
+      "recipe": "environments",
+      "effect": "static",
+      "trimStartSec": 1.2
     },
     {
       "id": "history",
       "label": "History",
       "recipe": "historyShow",
       "effect": "static",
-      "trimStartSec": 1.5
+      "trimStartSec": 1.2
     },
     {
-      "id": "environment",
-      "label": "Environment",
-      "recipe": "environmentCreate",
+      "id": "mock",
+      "label": "Mock Server",
+      "recipe": "mockServerRun",
       "effect": "static",
-      "trimStartSec": 1.5
+      "trimStartSec": 1.2,
+      "warmupMs": 2000
     },
     {
-      "id": "settings_general",
-      "label": "Settings — General",
-      "recipe": "settingsShow",
+      "id": "dk8s_pods",
+      "label": "Dk8s — Pods",
+      "recipe": "dk8sPods",
       "effect": "static",
-      "trimStartSec": 1.5
+      "trimStartSec": 1.2,
+      "warmupMs": 2500
     },
     {
-      "id": "settings_provider",
-      "label": "Settings — LLM Provider",
-      "recipe": "settingsProviderShow",
+      "id": "dk8s_detail",
+      "label": "Dk8s — Pod detail",
+      "recipe": "dk8sDetail",
       "effect": "static",
-      "trimStartSec": 1.5
+      "trimStartSec": 1.2,
+      "warmupMs": 2500
     },
     {
-      "id": "settings_prompt",
-      "label": "Settings — Prompt Library",
-      "recipe": "settingsPromptShow",
+      "id": "dkgh_board",
+      "label": "DkGH — Board",
+      "recipe": "dkghBoard",
       "effect": "static",
-      "trimStartSec": 1.5
+      "trimStartSec": 1.2,
+      "warmupMs": 2500
+    },
+    {
+      "id": "dkgh_team",
+      "label": "DkGH — Team",
+      "recipe": "dkghTeam",
+      "effect": "static",
+      "trimStartSec": 1.2,
+      "warmupMs": 2500
+    },
+    {
+      "id": "dkgh_sections",
+      "label": "DkGH — Insights & Repo",
+      "recipe": "dkghSections",
+      "effect": "static",
+      "trimStartSec": 1.2,
+      "warmupMs": 2500
+    },
+    {
+      "id": "settings_dkgh",
+      "label": "Settings — GitHub CLI",
+      "recipe": "dkghSettings",
+      "effect": "static",
+      "trimStartSec": 1.2,
+      "warmupMs": 1800
+    },
+    {
+      "id": "devtools",
+      "label": "DevTools",
+      "recipe": "devTools",
+      "effect": "static",
+      "trimStartSec": 1.2
+    },
+    {
+      "id": "settings_mock",
+      "label": "Settings — Mock Server",
+      "recipe": "settings",
+      "effect": "static",
+      "trimStartSec": 1.2,
+      "options": {
+        "section": "Mock Server",
+        "expect": "Port Range"
+      }
+    },
+    {
+      "id": "settings_dk8s",
+      "label": "Settings — Dk8s",
+      "recipe": "dk8sSettings",
+      "effect": "static",
+      "trimStartSec": 1.2,
+      "warmupMs": 1800
     }
   ]
 }

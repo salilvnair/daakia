@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { useUiStateStore } from '../../store/ui-state-store';
+import { ProtocolSettingsTab } from '../shared/settings/ProtocolSettingsTab';
+import { countOverrides } from '../shared/settings/execution-settings';
 import { AuthEditor, ScriptsEditor } from '../shared';
 import type { KeyValueRow } from '../shared';
 import { SoapFormEditor } from './SoapFormEditor';
@@ -105,6 +107,15 @@ export function SoapRequestConfig() {
       dotColor: ACCENT,
     },
     { id: 'wsdl', label: 'WSDL' },
+    // Per-request execution overrides. GraphQL and SOAP go out over HTTP
+    // through the same proxy and TLS decisions as REST, so they get the same
+    // tab rather than a second, quieter set of rules.
+    {
+      id: 'settings', label: 'Settings',
+      badge: countOverrides(activeTab.settings) || undefined,
+      badgeColor: ACCENT,
+    },
+
   ];
 
   const handleHeadersChange = (rows: KeyValueRow[]) => {
@@ -199,7 +210,8 @@ export function SoapRequestConfig() {
         )}
 
         {activeSubTab === 'headers' && (
-          <div className="h-full flex flex-col overflow-hidden">
+          <div className="h-full flex flex-col overflow-hidden"
+               data-menu="kv" data-table="headers" data-label="the headers">
             <KeyValueTableView
               rows={activeTab.headers || []}
               onChange={handleHeadersChange}
@@ -284,6 +296,8 @@ export function SoapRequestConfig() {
             />
           </div>
         )}
+
+        {activeSubTab === 'settings' && <ProtocolSettingsTab tab={activeTab} accent={ACCENT} />}
 
         {activeSubTab === 'wsdl' && (
           <div className="h-full flex flex-col min-h-0">

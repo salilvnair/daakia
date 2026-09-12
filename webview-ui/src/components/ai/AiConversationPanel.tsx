@@ -6,6 +6,7 @@ import { AiHistoryPanel } from './AiHistoryPanel';
 import { TrashIcon, McpToolIcon, SendIcon, SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MultilineInputView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 /**
  * AiConversationPanel — Shows the conversation history for an AI *request* tab (protocol='ai').
@@ -288,19 +289,19 @@ export function AiConversationPanel() {
               const effectiveModel = model || providerInfo?.models.find(m => m.enabled)?.id || '';
 
               // Re-send conversation with tool results — userPrompt is empty (continuation)
-              postMsg({
-                type: 'ai:send',
+              sendAiRequest({
                 tabId: activeTabId,
+                stage: 'ai.chat.tools',
+                screen: 'Daakia AI',
                 provider,
                 model: effectiveModel,
-                baseUrl: '',
                 systemPrompts: tab.aiSystemPrompts || [],
                 userPrompt: '',
                 conversation: updatedConv,
                 tools: tab.aiTools || [],
                 settings: tab.aiSettings || {},
                 mcpServerConfigs: tab.mcpServerConfigs || [],
-                envId: tab.envId,
+                context: { envId: tab.envId },
               });
             }}
           />

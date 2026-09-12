@@ -9,6 +9,7 @@ import { useSidebarDataStore } from '../../store/sidebar-data-store';
 import { MdViewer } from '../shared/display/MdViewer';
 import { ModalView, AIButtonView, SelectInputView } from '@salilvnair/dui';
 import { useAiCollectionCacheStore } from '../../store/ai-collection-cache-store';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface DependencyNode {
   name: string;
@@ -118,9 +119,10 @@ export function AiApiDependencyGraph({ onClose }: Props) {
     const pid = `ai-deps-${Date.now()}`;
     reqIdRef.current = pid;
 
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'collection.dependency.graph',
+      screen: 'Collections',
       systemPrompts: [SYSTEM_PROMPT],
       userPrompt: `Analyze dependencies for collection: ${collection.name}\n\nEndpoints: (collection data would be serialized here)`,
       conversation: [], tools: [],

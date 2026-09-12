@@ -138,7 +138,7 @@ export function McpPromptsTab() {
                     className="h-[28px] px-4 text-[11.5px] font-medium rounded text-white cursor-pointer hover:opacity-90 transition-opacity self-start"
                     style={{ backgroundColor: ACCENT }}
                   >
-                    ▶ Run Prompt
+                    Run Prompt
                   </button>
                 </div>
               )}

@@ -58,6 +58,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'WebSocket — Communication',
     explanation: 'The default WebSocket sub-tab — connected (green dot), message composer at the bottom, live log above with sent (green) and received (purple) entries.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'addTab', patch: { protocol: 'websocket', url: 'wss://echo.example.com/socket', authData: { rt_protocol: 'websocket' } } },
       { action: 'wait', ms: 400 },
       { action: 'seedRealtimeState', realtimeProtocol: 'ws', realtimeMessages: WS_MESSAGES, realtimeConnState: 'connected' },
@@ -69,6 +70,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'WebSocket — Log',
     explanation: 'The live message log — collapsible entries, green dot for sent / purple dot for received, auto-scroll toggle, clear-log and scroll-to-top/bottom controls.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'addTab', patch: { protocol: 'websocket', url: 'wss://echo.example.com/socket', authData: { rt_protocol: 'websocket' } } },
       { action: 'wait', ms: 400 },
       { action: 'seedRealtimeState', realtimeProtocol: 'ws', realtimeMessages: WS_MESSAGES, realtimeConnState: 'connected' },
@@ -80,6 +82,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'WebSocket — Protocols',
     explanation: 'Subprotocol list sent during the WebSocket handshake (Sec-WebSocket-Protocol) — each one individually enabled/disabled, e.g. graphql-ws for GraphQL subscriptions.',
     directives: [
+      { action: 'closeAllTabs' },
       {
         action: 'addTab',
         patch: {
@@ -104,6 +107,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'WebSocket — Templates',
     explanation: 'Saved message templates you can re-send with one click instead of retyping a JSON payload every time.',
     directives: [
+      { action: 'closeAllTabs' },
       {
         action: 'addTab',
         patch: {
@@ -127,6 +131,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Realtime — Server-Sent Events',
     explanation: 'SSE connection panel, connected — event log shows real incoming events with type and data as they arrive.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'addTab', patch: { protocol: 'websocket', url: 'https://api.example.com/events', authData: { rt_protocol: 'sse', sse_eventType: 'data' } } },
       { action: 'wait', ms: 400 },
       { action: 'seedRealtimeState', realtimeProtocol: 'sse', realtimeMessages: SSE_EVENTS, realtimeConnState: 'connected' },
@@ -139,6 +144,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Socket.IO — Communication',
     explanation: 'Emit/listen composer — event name plus JSON payload, connected with a real socket id, live event log below.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'addTab', patch: { protocol: 'websocket', url: 'https://api.example.com', authData: { rt_protocol: 'socketio', sio_subTab: 'communication' } } },
       { action: 'wait', ms: 400 },
       { action: 'seedRealtimeState', realtimeProtocol: 'sio', realtimeMessages: SIO_EVENTS, realtimeConnState: 'connected', realtimeSocketId: 'sock_9f3a1c' },
@@ -150,6 +156,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Socket.IO — Log',
     explanation: "Live event log for every emitted and received Socket.IO event, same auto-scroll and clear controls as WebSocket's Log tab.",
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'addTab', patch: { protocol: 'websocket', url: 'https://api.example.com', authData: { rt_protocol: 'socketio', sio_subTab: 'communication' } } },
       { action: 'wait', ms: 400 },
       { action: 'seedRealtimeState', realtimeProtocol: 'sio', realtimeMessages: SIO_EVENTS, realtimeConnState: 'connected', realtimeSocketId: 'sock_9f3a1c' },
@@ -161,6 +168,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Socket.IO — Authorization',
     explanation: 'The only realtime sub-protocol with a real Authorization tab — same AuthEditor as REST, sent as Socket.IO connection auth on handshake.',
     directives: [
+      { action: 'closeAllTabs' },
       {
         action: 'addTab',
         patch: {
@@ -180,6 +188,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Realtime — MQTT',
     explanation: 'MQTT connection panel (over WebSocket transport), connected — 2 active subscriptions, live messages with QoS/retain per row.',
     directives: [
+      { action: 'closeAllTabs' },
       {
         action: 'addTab',
         patch: {

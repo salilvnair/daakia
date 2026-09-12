@@ -10,7 +10,11 @@ import { getProtocolAccent } from '../../../colors';
 import { IconButtonView, TextInputView, ContextMenuView, InfoPopupView, ButtonView, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
 import { logUiEvent } from '../../../store/ui-audit-store';
 
-export function EnvironmentsPanel() {
+export function EnvironmentsPanel({ createSignal = 0 }: {
+  /** Bump to open the create flow. See CollectionsPanel: a prop reaches one
+      instance, a broadcast reaches every mounted one. */
+  createSignal?: number;
+} = {}) {
   const activeProtocol = useTabsStore(s => s.activeProtocol);
   const {
     environments,
@@ -110,6 +114,18 @@ export function EnvironmentsPanel() {
     setEditingEnvId(newId);
     setEditingTitle('New Environment');
   };
+
+  /* The workspace tab asks for this panel own create flow rather than making
+     a second one, so an environment is created the same way from both. */
+  /* Only a change counts — see CollectionsPanel. Firing on mount reopened the
+     dialog on every tab switch once the button had been used. */
+  const seenCreate = useRef(createSignal);
+  useEffect(() => {
+    if (createSignal === seenCreate.current) return;
+    seenCreate.current = createSignal;
+    openCreateModal();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createSignal]);
 
   const openEditModal = (envId: string) => {
     setCreatedEnvId(null);
@@ -232,14 +248,15 @@ export function EnvironmentsPanel() {
       </div>
 
       <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-surface-border)]">
-        <button
-          type="button"
+        <ButtonView
+          variant="ghost"
+          size="sm"
+          iconLeft={<PlusIcon size={14} />}
           onClick={openCreateModal}
-          className="flex items-center gap-2 text-[13px] text-[var(--color-text-primary)] hover:text-white cursor-pointer"
+          accentColor="var(--color-sidebar-environments)"
         >
-          <PlusIcon size={14} />
-          <span>New</span>
-        </button>
+          New
+        </ButtonView>
 
         <div className="flex items-center gap-1">
           <div ref={infoAnchorRef} style={{ display: 'inline-flex' }}>
@@ -267,6 +284,7 @@ export function EnvironmentsPanel() {
             ]}
             footer="Tip: Variables resolve at send time. Use $daakia_ escape to send raw {{var}} text without resolving."
             width={320}
+            onWikiOpen={() => useTabsStore.getState().openDaakiaWikiTab('collections-env')}
           />
 
           <IconButtonView

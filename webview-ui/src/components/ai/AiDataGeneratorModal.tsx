@@ -11,6 +11,7 @@ import { useTabsStore } from '../../store/tabs-store';
 import { DiceIcon, CopyIcon, CheckIcon, RefreshIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { ModalView, AIButtonView, ButtonView, EditorView, MultilineInputView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,12 +26,12 @@ interface DataCategory {
 }
 
 const DATA_CATEGORIES: DataCategory[] = [
-  { id: 'person',  label: 'Person',  description: 'Name, email, phone, DOB, gender', emoji: '👤' },
-  { id: 'address', label: 'Address', description: 'Street, city, state, zip, country', emoji: '🏠' },
-  { id: 'payment', label: 'Payment', description: 'Card number, expiry, CVV, billing', emoji: '💳' },
-  { id: 'product', label: 'Product', description: 'Name, SKU, price, description, category', emoji: '📦' },
-  { id: 'company', label: 'Company', description: 'Name, domain, industry, size, address', emoji: '🏢' },
-  { id: 'custom',  label: 'Custom',  description: 'Describe any data shape you need', emoji: '✏️' },
+  { id: 'person', label: 'Person', description: 'Name, email, phone, DOB, gender', emoji: ''},
+  { id: 'address', label: 'Address', description: 'Street, city, state, zip, country', emoji: ''},
+  { id: 'payment', label: 'Payment', description: 'Card number, expiry, CVV, billing', emoji: ''},
+  { id: 'product', label: 'Product', description: 'Name, SKU, price, description, category', emoji: ''},
+  { id: 'company', label: 'Company', description: 'Name, domain, industry, size, address', emoji: ''},
+  { id: 'custom',  label: 'Custom',  description: 'Describe any data shape you need', emoji: 'pencil' },
 ];
 
 const COUNTS = [1, 5, 10, 25, 50, 100];
@@ -118,13 +119,13 @@ export function AiDataGeneratorModal({ tabId, onApply, onClose }: Props) {
       customDescription: dataType === 'custom' ? customDesc.trim() : '',
     });
 
-    postMsg({
-      type: 'ai:send',
+    sendAiRequest({
       tabId: pid,
       provider: '',
       model: '',
       baseUrl: '',
       stage: 'data.generate',
+      screen: 'REST · Request',
       systemPrompts: [systemPrompt],
       userPrompt,
       conversation: [],

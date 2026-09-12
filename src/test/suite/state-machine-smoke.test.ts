@@ -25,6 +25,20 @@ import {
   type MockServerConfig,
 } from '../../mock/mock-server-manager';
 
+/*
+  A state-gated route answers 409, not 404.
+
+  These tests asserted 404 and were written when a gated route fell through
+  to the generic "nothing matches" handler. The engine now answers 409 Conflict
+  with the event that could not fire, the state it is in, and the events that
+  would get it there — see the `gatedNearMiss` block in mock-http-server.ts.
+
+  409 is also the honest status. 404 says the endpoint does not exist, which
+  sends someone looking for a typo in a path that is perfectly correct; the
+  problem is the ORDER of their calls. So the assertions moved to the engine's
+  answer rather than the engine moving back to theirs, and each one now checks
+  the message too — the message is the whole reason the status changed.
+*/
 suiteSetup(() => {
   initMockServerManager(__dirname);
 });
@@ -83,7 +97,12 @@ suite('Daakia Mock Server — Built-in State Machine', () => {
 
   test('a route gated on an event is unreachable before that event has a valid transition', async () => {
     const res = await fetch(`http://127.0.0.1:${port}/profile`);
-    assert.strictEqual(res.status, 404, 'GET /profile should 404 while session is still logged_out — VIEW_PROFILE only valid from logged_in');
+    assert.strictEqual(res.status, 409, 'GET /profile is gated: VIEW_PROFILE is only valid from logged_in');
+    const body = await res.json() as { requiredEvent: string; currentState: string; message: string };
+    assert.strictEqual(body.requiredEvent, 'VIEW_PROFILE');
+    assert.strictEqual(body.currentState, 'logged_out');
+    // The hint is the point of the 409: it says which call comes first.
+    assert.ok(body.message.includes('LOGIN'), `expected the message to name LOGIN, got: ${body.message}`);
   });
 
   test('hitting the transition route succeeds and moves the server into the new state', async () => {
@@ -104,7 +123,9 @@ suite('Daakia Mock Server — Built-in State Machine', () => {
 
   test('hitting the transition route again is a no-op (LOGIN has no transition from logged_in)', async () => {
     const res = await fetch(`http://127.0.0.1:${port}/login`, { method: 'POST' });
-    assert.strictEqual(res.status, 404, 'POST /login should 404 now — no LOGIN transition is defined from "logged_in"');
+    assert.strictEqual(res.status, 409, 'no LOGIN transition is defined from "logged_in"');
+    const body = await res.json() as { currentState: string };
+    assert.strictEqual(body.currentState, 'logged_in');
   });
 });
 
@@ -185,9 +206,9 @@ suite('Daakia Mock Server — Built-in State Machine (per-state Mock Responses)'
     assert.strictEqual(body.phase, 'active');
   });
 
-  test('POST /activate again 404s — ACTIVATE has no transition from "active"', async () => {
+  test('POST /activate again 409s — ACTIVATE has no transition from "active"', async () => {
     const res = await fetch(`http://127.0.0.1:${port}/activate`, { method: 'POST' });
-    assert.strictEqual(res.status, 404);
+    assert.strictEqual(res.status, 409);
   });
 });
 
@@ -198,7 +219,7 @@ suite('Daakia Mock Server — Built-in State Machine (per-state Mock Responses)'
  * SmMockServerCanvas.tsx writes from the canvas edges) — no
  * requiredState/newState/stateTransitions on the route at all. Mirrors the
  * canvas's own Dispatch Event panel: wrong event/wrong state -> rejected
- * (404 here), right event from the right state -> fires and moves on.
+ * (409 here — the route exists, the sequence is wrong), right event from
  */
 suite('Daakia Mock Server — Built-in State Machine (event-driven routes, no requiredState)', () => {
   let port: number;
@@ -250,9 +271,9 @@ suite('Daakia Mock Server — Built-in State Machine (event-driven routes, no re
     setPortRange(savedPortRange.min, savedPortRange.max);
   });
 
-  test('PAY before PLACE 404s — no transition for "PAY" from the initial state "cart"', async () => {
+  test('PAY before PLACE 409s — no transition for "PAY" from the initial state "cart"', async () => {
     const res = await fetch(`http://127.0.0.1:${port}/orders/pay`, { method: 'POST' });
-    assert.strictEqual(res.status, 404, 'PAY has no transition from cart — the graph itself rejects it, no requiredState needed');
+    assert.strictEqual(res.status, 409, 'PAY has no transition from cart — the graph itself rejects it, no requiredState needed');
   });
 
   test('PLACE fires from cart — moves the session to "placed"', async () => {
@@ -269,9 +290,9 @@ suite('Daakia Mock Server — Built-in State Machine (event-driven routes, no re
     assert.strictEqual(body.paid, true);
   });
 
-  test('PLACE again 404s — no transition for "PLACE" from the current state "payment"', async () => {
+  test('PLACE again 409s — no transition for "PLACE" from the current state "payment"', async () => {
     const res = await fetch(`http://127.0.0.1:${port}/orders/place`, { method: 'POST' });
-    assert.strictEqual(res.status, 404, 'PLACE is only defined from cart — the graph correctly rejects it from payment');
+    assert.strictEqual(res.status, 409, 'PLACE is only defined from cart — the graph correctly rejects it from payment');
   });
 });
 
@@ -344,9 +365,9 @@ suite('Daakia Mock Server — Auth Flow (Real Validation) sample', () => {
     setPortRange(savedPortRange.min, savedPortRange.max);
   });
 
-  test('GET /api/profile before any login 404s — session starts unauthenticated', async () => {
+  test('GET /api/profile before any login 409s — session starts unauthenticated', async () => {
     const res = await fetch(`http://127.0.0.1:${port}/api/profile`);
-    assert.strictEqual(res.status, 404);
+    assert.strictEqual(res.status, 409);
   });
 
   test('POST /api/auth/login with an empty body 401s — no username/password present', async () => {
@@ -365,9 +386,9 @@ suite('Daakia Mock Server — Auth Flow (Real Validation) sample', () => {
     assert.strictEqual(res.status, 401);
   });
 
-  test('GET /api/profile is still 404 after failed login attempts — no state change happened', async () => {
+  test('GET /api/profile is still gated after failed login attempts — no state change happened', async () => {
     const res = await fetch(`http://127.0.0.1:${port}/api/profile`);
-    assert.strictEqual(res.status, 404);
+    assert.strictEqual(res.status, 409);
   });
 
   test('POST /api/auth/login with real username + password succeeds and fires LOGIN_SUCCESS', async () => {
@@ -762,13 +783,13 @@ suite('Daakia Mock Server — multiple connected workflows track state independe
     assert.strictEqual(res.status, 200, 'workflow B should still be at its own initial state cartB, independent of workflow A');
   });
 
-  test('START again on workflow A 404s — no transition from placedA', async () => {
+  test('START again on workflow A 409s — no transition from placedA', async () => {
     const res = await fetch(`http://127.0.0.1:${port}/a/start`, { method: 'POST' });
-    assert.strictEqual(res.status, 404);
+    assert.strictEqual(res.status, 409);
   });
 
-  test('START again on workflow B 404s too — confirms B genuinely transitioned in the earlier test, not just always-succeeding', async () => {
+  test('START again on workflow B 409s too — confirms B genuinely transitioned in the earlier test, not just always-succeeding', async () => {
     const res = await fetch(`http://127.0.0.1:${port}/b/start`, { method: 'POST' });
-    assert.strictEqual(res.status, 404);
+    assert.strictEqual(res.status, 409);
   });
 });

@@ -9,7 +9,8 @@ import { IconButtonView } from '@salilvnair/dui';
 import { AiBodyGenerate, type AiBodyGenerateHandle } from '../../ai/AiBodyGenerate';
 import { AiDataGeneratorModal } from '../../ai/AiDataGeneratorModal';
 import { AiRequestFuzzerModal } from '../../ai/AiRequestFuzzerModal';
-import { CONTENT_TYPE_MODE, CONTENT_TYPE_LANG, CONTENT_TYPE_PLACEHOLDER, CONTENT_TYPE_OPTIONS } from './bodyContentTypes';
+import { CONTENT_TYPE_MODE, CONTENT_TYPE_LANG, CONTENT_TYPE_PLACEHOLDER, bodyTypeOptions } from './bodyContentTypes';
+import { useComparable } from '../../../services/compare/comparable-registry';
 
 type Tab = ReturnType<typeof useTabsStore.getState>['tabs'][0];
 
@@ -104,16 +105,30 @@ export function BodyEditor({ tab, showFuzzer, onCloseFuzzer }: BodyEditorProps) 
     else updateTab(tab.id, { bodyUrlEncoded: [...tab.bodyUrlEncoded, newRow] });
   };
 
+  /* Right-click → Compare with clipboard. The editor's own module copy is
+     invisible to `window.monaco`, so the surface hands over its text itself. */
+  const comparableRef = useRef<HTMLDivElement>(null);
+  useComparable(comparableRef, 'Request body', () => tab.bodyRaw ?? '');
+
   return (
-    <div className="flex flex-col flex-1 min-h-0 gap-2">
+    <div ref={comparableRef} className="flex flex-col flex-1 min-h-0 gap-2">
       {/* Content Type row */}
       <div className="flex items-center gap-3 px-1">
         <span className="text-[12px] text-[var(--color-text-muted)]">Content Type</span>
+        {/* The labels are short (`JSON`, `XML`), so the menu would come out
+            narrower than the list deserves: a floor of 200px, with 14px of
+            room either side of each row. */}
         <SelectInputView
-          options={CONTENT_TYPE_OPTIONS}
+          /* Named because its label is whatever type the request carries, so
+             it cannot be found by its own text twice in a row. */
+          testId="body-type"
+          options={bodyTypeOptions(dropdownValue)}
           value={dropdownValue}
           onChange={handleContentTypeChange}
           size="md"
+          menuMinWidth={200}
+          menuPaddingX={14}
+          menuFontSize={12.5}
         />
         {bodyMode !== 'none' && contentType !== 'none' && bodyMode !== 'form-data' && bodyMode !== 'x-www-form-urlencoded' && (
           <span className="text-[12px] text-[var(--color-text-muted)] opacity-60">Override</span>

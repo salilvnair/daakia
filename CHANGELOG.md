@@ -4,6 +4,306 @@ All notable changes to the Daakia API Client extension are documented here.
 
 ---
 
+## [3.0.0] — 2026-09-12
+
+Two surfaces that are not an API client at all.
+
+**dk8s** puts Kubernetes in the editor — pods, structured logs, a real
+terminal in the container, a file explorer, search across every watched pod —
+and **Doctor**, which reads a heap dump, a thread dump or a flight recording
+and tells you what is wrong with the process that produced it.
+
+**dkgh** puts one repository's issues there too — a board in four shapes,
+saved views, a team view, charts, and a write path that files, edits, labels
+and closes through the official `gh` CLI, so your GitHub credential stays in
+the OS keychain and never reaches Daakia.
+
+Around them: **Workspaces**, so collections, environments and history belong
+to a project rather than to the app; an in-app **wiki and tour**; the
+**Power Features** shelf wired to real requests; an audit trail behind every
+AI call; and per-request execution settings, the operating system's proxy,
+and four features that had been written months ago and were never reachable
+from the UI.
+
+The major bump is for the shape of the app, not a break in the file formats —
+collections, environments and mock configs from 2.x load unchanged.
+
+![Dk8s and DkGH](https://raw.githubusercontent.com/salilvnair/daakia/main/media/daakia-dk8s-dkgh-3.0.gif)
+
+### Added — dk8s: Kubernetes, without leaving the editor
+- **Pods, watched live** — contexts, namespaces and pod grids with status,
+  restarts and age; starred deployments stay at the top and the tab opens on
+  them
+- **Logs with structure** — a configurable format turns raw lines into
+  fields, and a panel down the left of the log says how the events divide
+  across them: threads, loggers, and any MDC key the application logged
+  (`tenant`, `orderId`). Click a value to include it, again to exclude it,
+  again to clear; the magnifier beside it asks the pod's whole log rather
+  than the buffer
+- **A real terminal in the pod** — a PTY over the Kubernetes exec API
+  carrying your own kubeconfig, so no port is opened and no credential
+  leaves your machine. Themes are configurable (import, export, generate
+  with AI, six at a time), and every theme carries a dark and a light
+  variant with a preview toggle
+- **An Explorer beside it** — the container's filesystem, with folder sizes,
+  downloads that can be stopped and retried, and "open a shell here" from
+  any path or search hit
+- **Search across pods** — text or regex over files and logs in every
+  watched pod, with force-stop that actually kills the child processes
+  rather than setting a flag
+- **Doctor** — open a `.hprof`, a thread dump or a `.jfr` and get a verdict:
+  dominators and retained sizes, leak suspects, deadlocks and contention,
+  CPU hot spots with self and total kept apart, blocking and allocation
+  profiles. The AI can ask for another view and drill, rather than being
+  handed one summary
+- **dk8s as MCP tools**, deliberately read-only
+- Redaction runs over everything that reaches a model, and now catches
+  dotted property names — `spring.datasource.password=…` used to get through
+
+### Added — dkgh: the issue tracker, in the editor
+- **One repository's board, in four shapes** — cards, a table, columns by
+  status, and a roadmap over time. The same filter renders as all four, so
+  changing the question does not mean rebuilding the view
+- **Saved views** — "All open", "Stale & unowned", "My plate", "This sprint",
+  "Closed this week", and your own. Each carries its count, and a shared link
+  says what it drops rather than silently narrowing
+- **A team view** — who is carrying what, unassigned first on purpose,
+  because that is the row a lead needs
+- **One issue in full, over the board** — a sheet rather than a navigation,
+  with comments, a close reason, labels, relations, and the rail edits the
+  way github.com does them
+- **Insights** — open issues over time, where they are by module split by
+  environment, how long they sit, and who is carrying what; plus your own
+  charts, pinned, and a comparison against the period before
+- **Repository** — where the chips come from: issue templates imported, a
+  field map that moves between repositories, and label sets taken from
+  somewhere else
+- **Export** — a real `.xlsx`, a PDF that reads as a status mail, a
+  repository's whole history, and a scheduled export that runs every Friday
+- **Filing** — a composer with the metadata beside it, generate-with-AI, and
+  screenshot upload; creation runs as a sequence with duplicate detection and
+  retry
+- **Through the official `gh` CLI**, never a token in the extension: scopes,
+  hosts and accounts are read from it, every command is disclosed before it
+  runs, and a confirm screen is built so it cannot describe an action other
+  than the one about to happen
+
+### Added — Workspaces
+- **Collections, environments and history belong to a workspace**, across
+  every protocol, so two projects stop sharing one drawer
+- Open, import and export a workspace; the rail says which one you are in
+- What you collapsed stays collapsed, and the badges count everything rather
+  than the first page
+
+### Added — A wiki, and a tour
+- **Documentation inside the extension**, including a Daakia Tour that walks
+  the whole app, with a way to keep its screens fresh rather than letting
+  them rot
+- Help links from settings and the sidebar reach the page they name
+
+### Added — Power features, and AI you can audit
+- **The Load Tester sends real requests**, the **Bulk URL Tester** reports
+  what the server actually said, and the **Request Interceptor** has a proxy
+  behind it — three tools that had a UI and no engine
+- **Every AI feature has a switch, and the switch stops the call** — not the
+  rendering of the result, the call itself
+- **Every AI call has a name, a screen and one door**, and leaves an audit
+  entry — including the ones that fail
+- **Schema Diff and anomaly detection**, and **Compare with clipboard** from
+  the right-click menu of anything holding data
+- **Translate: anything → Daakia**, with the source tool detected rather than
+  asked for
+- **Monitors run**, and a rule can be edited after it is written
+
+### Added — Requests, settings and proxy
+- **Per-request and per-collection execution settings** — timeout,
+  redirects, SSL verification, encoding and proxy, each inheriting from the
+  level above and showing where its value came from. Testing one endpoint
+  with a self-signed cert no longer means flipping a global switch and
+  remembering to flip it back
+- **The operating system's proxy is honoured**, including PAC and WPAD
+- **An audit trail for every protocol** — REST, GraphQL, SOAP, gRPC and the
+  realtime protocols as sessions, recording the whole request rather than
+  method and URL
+- **Keymap settings** — keyboard shortcuts, listed and rebindable
+- **Connect-time payloads** for WebSocket, SSE and Socket.IO
+- **Copy JSON path and Copy XPath**, at every level of a response
+- **Expand and collapse a collection**, whole or by subtree
+
+### Added — The collection runner iterates
+- **An iteration count and a data file** in Run collection: one pass per CSV
+  or JSON row, each column bound as a variable over the environment, so a
+  request saying `{{email}}` gets that row's value. The runner previously took
+  a collection and an environment and ran each request exactly once
+- The file is parsed by **the same module the CLI uses**, so a file that
+  iterates fifty rows in a pipeline iterates the same fifty rows in the app.
+  Rows are capped at 500 — a run is one request per row per request
+- Progress counts across the whole run rather than restarting each pass, and
+  the summary says how many iterations there were
+
+### Added — The CI runner grows up
+- **`--junit <file>`** writes the one report format CI actually renders: a
+  case per request, the folder path as its classname so viewers group by it,
+  and a suite per iteration
+- **`--folder <name>`** runs one folder, matched on whole path segments;
+  **`--env-var k=v`** overrides a variable at the call site, which is where a
+  CI secret belongs
+- **`--concurrency n`** sends n requests at a time, in batches — a smoke
+  suite of forty independent requests no longer takes forty round trips. A
+  batch settles before the next starts, so the report keeps the collection's
+  order and `--bail` still means something
+- **`--data rows.csv`** runs the collection once per row with the row's
+  columns bound as variables — the fifty-accounts case, which could not be
+  expressed before. JSON rows work too; **`--iterations n`** and
+  **`--delay ms`** cover the rest
+
+### Added — Four features that existed and could not be reached
+- **Assert** — click a field in a JSON response, get a `dk.expect(...)`; the
+  assertions land in the request's post-response script
+- **Visualize** — an array of objects as a table, images and PDFs inline.
+  Both tabs appear only when the response has something for them to show
+- **Response chaining** — `data.token` into `{{token}}` without writing a
+  script, applied automatically when a response arrives. It writes the
+  environment's *current* value and leaves the initial one empty, so a token
+  pulled off a response never lands in an export
+- **Starred requests** float to the top of their folder. A per-person view
+  preference: never exported, never synced
+
+### Added — One search across every collection
+- **Ctrl+Shift+F**, or "Search all collections" in the command palette:
+  names, URLs, headers, params, bodies and docs, across every protocol at
+  once. `/pattern/` is a regular expression, plain text is a substring
+- Each hit says **where** it matched — "in the body" and "in the URL" send
+  you to different places — with the matched text beside it, grouped by
+  collection. Folders match on their own name, because an empty folder called
+  `staging` is part of the answer to "where does staging still appear"
+- The sidebar panels each filter their own protocol's tree by name and URL,
+  which could never answer "which request sends this header"
+
+### Added — Requests can carry documentation
+- **A Docs tab** on every request: markdown describing why it exists, what it
+  needs and what it returns, in Edit and Preview. There was nowhere to write
+  this down before, which is most of what makes an exported collection useful
+  to somebody else
+- It **travels with the collection** — into the Markdown docs export above
+  the mechanics, and into the OpenAPI export as the operation's
+  `description`. Both previously had nothing to work from but URLs and
+  payloads
+- Chaining rules persist with the request too, so they survive a closed tab
+
+### Added — Contract testing from an imported spec
+- An imported OpenAPI document **keeps its `components.schemas`** with the
+  collection, so `dk.expect(body).toMatchSchema('#/components/schemas/User')`
+  resolves against the spec instead of a copy pasted into the script.
+  `#/definitions/User` and a bare `User` name the same schema
+- A name that matches nothing **fails as a broken test**, saying which schema
+  is missing rather than reporting it as a body that does not match
+- **`integer` is understood.** The validator compared JSON Schema's types
+  against `typeof`, so every spec that types an id as `integer` failed on a
+  perfectly valid body
+
+### Added — Saved response examples
+- **Save example** on any response keeps it under the request, named after
+  its status and renameable — the 200 that works, the 401 when the token has
+  expired, the 422 with the validation body somebody will ask about. A
+  request used to store exactly one response: the last one
+- They **travel with the request** into the Markdown docs export, which is
+  the half of the documentation a URL and a payload cannot give you
+- Kept deliberately small, because they ride in the record the sidebar reads
+  whole: bodies over 64 KB are trimmed and say so, the last 20 survive, and
+  only headers describing the body or the outcome are kept —
+  `Set-Cookie` is dropped, since a saved example is a file that gets
+  committed
+
+### Changed — The OpenAPI export describes a real API
+- **`servers`** — the base URL is declared once instead of baked into every
+  path, including the `{{baseUrl}}` convention every exported Postman
+  collection uses. That convention used to parse as part of the host, so a
+  request whose whole URL was the variable collapsed to `/` and collided with
+  every other one
+- **`components.securitySchemes`** — the bearer, basic or API-key config each
+  request carries becomes a named scheme the operations reference, instead of
+  vanishing. Two different API-key headers stay two schemes
+- **`{id}` survives** as a path parameter rather than arriving
+  percent-encoded as `%7Bid%7D`, which no tool reads
+- The exporter emits **3.1.0**, the version the AI doc generator has always
+  claimed — one app was producing two spec versions depending which button
+  you pressed
+- **Request bodies carry an inferred schema** instead of
+  `{ type: 'object' }` — true of every JSON payload ever written, and useful
+  for nothing. Types, `integer` apart from `number`, and `date-time`, `date`,
+  `uuid` and `email` formats where a value is unambiguous
+- **Responses come from saved examples**: a status per example, a schema
+  inferred from its body, and the body itself as the example. Without any,
+  the old 200/400/500 placeholders stand — they say nothing, but in a shape
+  tools can read
+
+### Fixed
+- **Imported Postman tests said the opposite of what they meant.**
+  `.to.not.equal(500)` converted to `toBe` with a `/* NOT */` comment inside
+  the argument list — an assertion that passed exactly when it should fail.
+  Negation is real now, and a second bug behind it meant every negative
+  assertion was being commented out instead. `pm.response.to.have.status()`
+  — the first line of most exported collections — converted to a method that
+  does not exist and threw on the first run; it resolves through
+  `dk.expect(dk.response)` now. The translator has 37 tests, several of which
+  execute the converted script rather than grepping it
+- **Mock routes** answered on the variable rather than the path, and allowed
+  two routes for one method and path
+- **Proxy settings never reached the extension host**
+- **Two AI buttons** posted prompt keys that were registered nowhere
+- **Collection Properties** showed the wrong name and led with the request
+- The assertion builder generated `dk.expect(data.[0].name)` for any
+  response whose root is an array, and quoted string values by hand
+- The wiki's "Export as JSON isn't wired up" note was three releases stale
+- **A passing CLI run exited 127.** Any run with more than one request died
+  on Windows with a libuv assertion, because `process.exit()` fired while
+  fetch's connection pool still held sockets it was closing — in CI,
+  indistinguishable from a broken runner
+- **The wiki's "Open Wiki" links did nothing** — a button with an empty
+  handler. They open the page they name now
+- **A global shortcut ate characters you typed.** Three views registered a
+  single-key shortcut on `window` — dk8s's `/`, the issue board's
+  `j k o a l c m g f /`, the wiki tour's — and two of them guarded only
+  `INPUT` and `TEXTAREA`. Every URL bar in the app is a `contenteditable`
+  div and every tab stays mounted once visited, so after opening dk8s once,
+  typing a URL anywhere silently lost every slash:
+  `https://api.example.com/v1/users` became
+  `https:api.example.comv1users`. `window` is the last stop in the bubble
+  path, so nothing downstream could put the character back and there was no
+  way to see why the URL was wrong
+- **The collections panel appeared beside tabs that own the whole screen.**
+  The rule was a list of "is the active tab this kind" comparisons, and the
+  two kinds added most recently — dkgh and Workspaces — were never added to
+  it, so both shipped with a REST collections tree taking a third of the
+  width beside an issue board and a pod list. It asks what a tab *is* now,
+  so the next standalone kind is right without anybody remembering
+- **The editor closed brackets and tags even when told not to.**
+  `autoClosingBrackets` was hard-coded in two places, one of them applied
+  after mount, so nothing outside could turn it off; anything typing a
+  character at a time landed its own closing brace on the one already
+  inserted. A SOAP envelope came out with every tag doubled
+- **dkgh's button reset** was written to out-specify a library rule and broke
+  the whole tab twice, because `:not()` takes the specificity of its
+  argument. It lives in a cascade layer now, where it does not have to win on
+  specificity at all
+- **The repository search returned repositories that were not yours**
+- **A dkgh handler that threw left the screen waiting** forever instead of
+  saying so
+- **A dk8s target with no container list** raised a TypeError rather than
+  rendering an empty one
+- **A dk8s volume export could not finish** — it reports bytes and can be
+  cancelled now
+
+### Removed
+- A second, superseded gRPC client and a "Coming soon" protocol placeholder,
+  both unreferenced; the realtime protocol selector's unreachable "soon"
+  badge
+- The orphaned CSV request-templating panel — the runner and the CLI both
+  iterate over a data file now, which is what it was written for
+
+---
+
 ## [2.0.2] — 2026-07-31
 
 Git-native sync grows up into a real sync engine with encrypted secrets and a

@@ -5,6 +5,8 @@ import { installKeyboardListener } from './services/keyboard';
 
 // Install bridges before any React render so ConvEngineChat fetch/EventSource is ready
 installDaakiaBridges();
+import { useModalStore } from './store/modal-store';
+import { SearchCollectionsModal } from './components/shared';
 import { useKeyboardShortcut } from './hooks/useKeyboardShortcut';
 import { SplitPanelView, ButtonView } from '@salilvnair/dui';
 import { TabBar } from './components/tabs/TabBar';
@@ -17,6 +19,9 @@ import { sendRequest, saveRequest } from './services/request';
 import { AppSidebar, SidebarSection } from './components/sidebar';
 import { SettingsPanel } from './components/sidebar/SettingsPanel';
 import { MockServerPanel } from './components/mock/MockServerPanel';
+import { K8sPanel } from './components/k8s/K8sPanel';
+import { WorkspacePage, railWorkspaceName } from './components/workspace/WorkspacePage';
+import { useWorkspaceStore } from './store/workspace-store';
 import { SmStateMachineTabPage } from './components/mock/SmStateMachineTabPage';
 import { GraphQLPanel } from './components/graphql';
 import { WebSocketPanel } from './components/websocket';
@@ -28,6 +33,10 @@ import { McpPanel } from './components/mcp/McpPanel';
 import { CommandPaletteView } from './components/shared/command-palette/CommandPaletteView';
 import { ApiMonitor } from './components/power/ApiMonitor';
 import { useTabsStore } from './store/tabs-store';
+import { useSurfaceMenu } from './components/shared/menu/SurfaceMenu';
+import {
+  MENU_TABLES, requestMenuItems, type KvRow as MenuKvRow,
+} from './components/shared/menu/requestMenus';
 import { useToastStore } from './store/toast-store';
 import { useEnvStore } from './store/env-store';
 import { useCollectionsStore } from './store/collections-store';
@@ -47,13 +56,16 @@ import { getVsCodeApi, postMsg } from './vscode';
 import { useSMWorkspaceStore } from '@salilvnair/state-machine';
 import { DaakiaSMConsumer } from './consumer/DaakiaSMConsumer';
 import { getProtocolAccent } from './colors';
-import { ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, ServerIcon, DevToolsIcon } from './icons';
+import { ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, ServerIcon, StethoscopeIcon, Dk8sIcon, IssueOpenedIcon, DevToolsIcon, LayoutGridIcon } from './icons';
 import { DevToolsPanel } from './components/shared/devtools';
+import { DkghPanel } from './components/dkgh/DkghPanel';
 import { DebugHud } from './components/shared/debugger';
 import { useExtensionMessages } from './app/use-extension-messages';
-import { ProtocolIcon, ProtocolPlaceholder, EmptyState } from './app/app-shell';
+import { ProtocolIcon, EmptyState } from './app/app-shell';
 import { CaptureBridge } from './pages/wiki/daakia-view/capture/CaptureBridge';
 import { DaakiaViewPage } from './pages/wiki/daakia-view/DaakiaViewPage';
+import { ResponseDiffModal } from './components/power/ResponseDiffModal';
+import { useCompareStore } from './store/compare-store';
 
 type FocusedPanel = 'request' | 'response' | null;
 
@@ -78,7 +90,17 @@ export default function App() {
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
   }, []);
+  const compareOpen = useCompareStore(s => s.open);
+  const compareA = useCompareStore(s => s.a);
+  const compareB = useCompareStore(s => s.b);
+  const compareLabelA = useCompareStore(s => s.labelA);
+  const compareLabelB = useCompareStore(s => s.labelB);
+  const compareFocusB = useCompareStore(s => s.focusB);
+
   const activeProtocol = useTabsStore(s => s.activeProtocol);
+  // Tabs that take over the whole surface, so the protocol rail should show
+  // nothing as selected while one of them is open.
+  const STANDALONE_TABS = ['settings', 'mock-server', 'dk8s', 'dkgh', 'state-machine', 'wiki', 'daakia-ai', 'workspace'];
   const switchProtocol = useTabsStore(s => s.switchProtocol);
   const devToolsOpen = useDevToolsStore(s => s.isOpen);
   const protocolAccent = getProtocolAccent(activeProtocol);
@@ -123,7 +145,19 @@ export default function App() {
 
   // Sidebar resizable
   const [sidebarWidth, setSidebarWidth] = useState(260);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  /*
+    Closed until something says otherwise.
+
+    This defaulted to open, and the default was reached far more often than it
+    looks: the snapshot only restored the sidebar alongside a restored tab, so
+    a workspace that had never saved one fell through to it on every launch.
+    Worse, the panel is protocol-gated (see `showPanel` in AppSidebar) while
+    this flag is not — on a dk8s or settings tab there is no panel to close, so
+    the flag stayed true unopposed and the collections list sprang open the
+    moment a protocol tab came back. Opening now takes either a snapshot that
+    recorded the sidebar open or the user asking for it.
+  */
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarDragging, setSidebarDragging] = useState(false);
   const [showSplitterTip, setShowSplitterTip] = useState(false);
   const sidebarDragRef = useRef({ startX: 0, startWidth: 0, moved: false });
@@ -159,6 +193,43 @@ export default function App() {
   // Track response arrival → auto-maximize response
   const { tabs, activeTabId } = useTabsStore();
   const activeTab = tabs.find(t => t.id === activeTabId);
+
+  /*
+    The request-shaped menu, for whichever protocol tab is on screen. A tab that
+    is not a request — a wiki page, the settings — has no URL and no headers, so
+    the builder is handed an empty request and returns nothing, which leaves the
+    browser's own menu where it belongs.
+  */
+  const appMenu = useSurfaceMenu(surface => requestMenuItems(surface, {
+    protocol: activeTab?.protocol,
+    method: activeTab?.method ?? 'GET',
+    url: activeTab?.url ?? '',
+    headers: (activeTab?.headers ?? []) as MenuKvRow[],
+    params: (activeTab?.params ?? []) as MenuKvRow[],
+    body: activeTab?.bodyRaw ?? '',
+    /*
+      Reads and writes the tables straight off the tab, so a protocol panel
+      gets the table menu by marking its table and nothing else — no hook, no
+      context of its own, no second copy of this wiring per protocol.
+    */
+    rowsOf: name => {
+      const field = MENU_TABLES[name as keyof typeof MENU_TABLES];
+      /* `?? []` because a table nobody has typed in yet is empty rather than
+         missing — gRPC metadata is undefined until the first row — and a menu
+         that refuses to open on an empty table is a menu you cannot use to add
+         the first row to it. */
+      return field && activeTab ? ((activeTab[field] as MenuKvRow[]) ?? []) : undefined;
+    },
+    setRows: (name, rows) => {
+      const field = MENU_TABLES[name as keyof typeof MENU_TABLES];
+      if (field && activeTab) useTabsStore.getState().updateTab(activeTab.id, { [field]: rows });
+    },
+    setUrl: url => activeTab && useTabsStore.getState().updateTab(activeTab.id, { url }),
+    setBody: bodyRaw => activeTab
+      && useTabsStore.getState().updateTab(activeTab.id, { bodyRaw }),
+  }));
+  const standaloneActive = !!activeTab?.type && STANDALONE_TABS.includes(activeTab.type);
+  const activeWorkspaceName = useWorkspaceStore(s => s.workspaces.find(w => w.id === s.activeId)?.name);
   // Subscribe to breakpoint changes for snapshot persistence
   const debugBreakpoints = useDebugStore(s => s.breakpoints);
   const debugDisabledBps = useDebugStore(s => s.disabledBreakpoints);
@@ -199,6 +270,9 @@ export default function App() {
     };
     const tabProtocol = activeTab?.protocol || activeProtocol;
     const accent = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
+      : activeTab?.type === 'workspace' ? 'var(--color-workspace)'
+      : activeTab?.type === 'dkgh' ? 'var(--color-dkgh)'
+      : activeTab?.type === 'dk8s' ? 'var(--color-dk8s)'
       : activeTab?.type === 'state-machine' ? 'var(--color-mock-server)'
       : activeTab?.type === 'settings' ? 'var(--color-settings)'
       : activeTab?.type === 'wiki' ? 'var(--color-wiki)'
@@ -226,6 +300,19 @@ export default function App() {
       return next;
     });
   }, 'Toggle sidebar');
+
+  /*
+    The one search that crosses collections and protocols.
+
+    Ctrl+Shift+F is what every editor binds "find in all files" to, and this
+    is the same question asked of requests rather than files.
+  */
+  const searchCollectionsOpen = useModalStore(s => s.searchCollectionsOpen);
+
+  useKeyboardShortcut('app.search-collections', { key: 'F', ctrlKey: true, shiftKey: true }, (e) => {
+    e.preventDefault();
+    useModalStore.getState().openSearchCollections();
+  }, 'Search all collections');
 
   useKeyboardShortcut('app.toggle-split', { key: '/', altKey: true }, (e) => {
     e.preventDefault();
@@ -387,7 +474,7 @@ export default function App() {
         useDevToolsStore.getState().addLog({
           level: 'info',
           args: [
-            `⚙️ [Settings Audit] AI Providers Changed`,
+            `[Settings Audit] AI Providers Changed`,
             ...changed,
             { providers: state.providers.map(p => ({ id: p.id, name: p.name, enabled: p.enabled, models: p.models.map(m => m.id) })), defaultProviderId: state.defaultProviderId, defaultModelId: state.defaultModelId, changedAt: new Date().toISOString() },
           ],
@@ -453,6 +540,9 @@ export default function App() {
 
   const tabProtocol = activeTab?.protocol || activeProtocol;
   const accentVar = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
+    : activeTab?.type === 'workspace' ? 'var(--color-workspace)'
+    : activeTab?.type === 'dkgh' ? 'var(--color-dkgh)'
+    : activeTab?.type === 'dk8s' ? 'var(--color-dk8s)'
     : activeTab?.type === 'state-machine' ? 'var(--color-mock-server)'
     : activeTab?.type === 'settings' ? 'var(--color-settings)'
     : activeTab?.type === 'wiki' ? 'var(--color-wiki)'
@@ -481,10 +571,41 @@ export default function App() {
       {monitorPrefill && (
         <ApiMonitor prefill={monitorPrefill} onClose={() => setMonitorPrefill(null)} />
       )}
+      {/* A standalone tab — settings, dk8s, doctor, mock-server, wiki, the AI
+          tab, the state machine — owns the whole surface. The protocol rail
+          must not keep showing REST as selected underneath it. */}
       {/* Left protocol icon rail */}
       <div className="flex flex-col items-center w-12 bg-[var(--color-panel)] border-r border-[var(--color-surface-border)] py-2 gap-1 flex-shrink-0">
+        {/* Workspace sits above the protocols, behind a rule, because it is not
+            one of them — it is the box they all work inside. */}
         <ProtocolIcon
-          active={activeProtocol === 'rest'}
+          active={activeTab?.type === 'workspace'}
+          open={tabs.some(t => t.type === 'workspace')}
+          accentColor="var(--color-workspace)"
+          onClick={() => useTabsStore.getState().openWorkspaceTab()}
+          title={activeWorkspaceName ? `Workspace — ${activeWorkspaceName}` : 'Workspace'}
+        >
+          <LayoutGridIcon size={16} strokeWidth={1.8} />
+        </ProtocolIcon>
+
+        {/* The name, under the icon it belongs to. Muted until the workspace
+            tab is the one you are on — this is a watermark, and a watermark
+            that shouts is just another button. */}
+        {activeWorkspaceName && (
+          <button
+            type="button"
+            className={`dk-rail-workspace${activeTab?.type === 'workspace' ? ' dk-rail-workspace--on' : ''}`}
+            title={`Workspace — ${activeWorkspaceName}`}
+            onClick={() => useTabsStore.getState().openWorkspaceTab()}
+          >
+            <span className="dk-rail-workspace-name">{railWorkspaceName(activeWorkspaceName)}</span>
+          </button>
+        )}
+
+        <div className="w-6 h-px bg-[var(--color-surface-border)] my-1 flex-shrink-0" />
+
+        <ProtocolIcon
+          active={!standaloneActive && activeProtocol === 'rest'}
           accentColor="var(--color-protocol-rest)"
           onClick={() => switchProtocol('rest')}
           title="REST"
@@ -493,7 +614,7 @@ export default function App() {
         </ProtocolIcon>
 
         <ProtocolIcon
-          active={activeProtocol === 'graphql'}
+          active={!standaloneActive && activeProtocol === 'graphql'}
           accentColor="var(--color-protocol-graphql)"
           onClick={() => switchProtocol('graphql')}
           title="GraphQL"
@@ -502,7 +623,7 @@ export default function App() {
         </ProtocolIcon>
 
         <ProtocolIcon
-          active={activeProtocol === 'websocket'}
+          active={!standaloneActive && activeProtocol === 'websocket'}
           accentColor="var(--color-protocol-websocket)"
           onClick={() => switchProtocol('websocket')}
           title="Real time"
@@ -511,7 +632,7 @@ export default function App() {
         </ProtocolIcon>
 
         <ProtocolIcon
-          active={activeProtocol === 'grpc'}
+          active={!standaloneActive && activeProtocol === 'grpc'}
           accentColor="var(--color-protocol-grpc)"
           onClick={() => switchProtocol('grpc')}
           title="gRPC"
@@ -520,7 +641,7 @@ export default function App() {
         </ProtocolIcon>
 
         <ProtocolIcon
-          active={activeProtocol === 'soap'}
+          active={!standaloneActive && activeProtocol === 'soap'}
           accentColor="var(--color-protocol-soap)"
           onClick={() => switchProtocol('soap')}
           title="SOAP"
@@ -529,7 +650,7 @@ export default function App() {
         </ProtocolIcon>
 
         <ProtocolIcon
-          active={activeProtocol === 'ai'}
+          active={!standaloneActive && activeProtocol === 'ai'}
           accentColor="var(--color-protocol-ai)"
           onClick={() => switchProtocol('ai')}
           title="AI"
@@ -538,7 +659,7 @@ export default function App() {
         </ProtocolIcon>
 
         <ProtocolIcon
-          active={activeProtocol === 'mcp'}
+          active={!standaloneActive && activeProtocol === 'mcp'}
           accentColor="var(--color-protocol-mcp)"
           onClick={() => switchProtocol('mcp')}
           title="MCP"
@@ -548,6 +669,32 @@ export default function App() {
 
         {/* Spacer pushes bottom icons down */}
         <div className="flex-1" />
+
+        {/* dkgh — GitHub issues. Above dk8s because that is the order the work
+            happens in: dk8s is where you go when the thing under test is
+            misbehaving, dkgh is where you go once you have decided it is a
+            defect. */}
+        <ProtocolIcon
+          active={activeTab?.type === 'dkgh'}
+          open={tabs.some(t => t.type === 'dkgh')}
+          accentColor="var(--color-dkgh)"
+          onClick={() => useTabsStore.getState().openDkghTab()}
+          title="DkGH — Daakia GitHub"
+        >
+          <IssueOpenedIcon size={16} strokeWidth={1.8} />
+        </ProtocolIcon>
+
+        {/* dk8s — Kubernetes. Sits above Doctor because that is the workflow:
+            dk8s collects the artifact, Doctor analyses it. */}
+        <ProtocolIcon
+          active={activeTab?.type === 'dk8s'}
+          open={tabs.some(t => t.type === 'dk8s')}
+          accentColor="var(--color-dk8s)"
+          onClick={() => useTabsStore.getState().openDk8sTab()}
+          title="Dk8s — Daakia K8s"
+        >
+          <Dk8sIcon size={16} strokeWidth={1.8} />
+        </ProtocolIcon>
 
         {/* Mock Server icon — bg stays while tab is open, iOS badge when servers running */}
         <div className="relative">
@@ -597,8 +744,18 @@ export default function App() {
       {/* Main content + sidebar (flex row: content | splitter | sidebar) */}
       <div className="flex-1 min-w-0 overflow-hidden" style={{ height: '100%', display: 'flex' }}>
 
-        {/* Main content */}
-        <div className="flex flex-col h-full flex-1 min-w-0 overflow-hidden">
+        {/*
+          Main content, and the right-click menu over all of it.
+
+          Every protocol panel is somewhere under here, so one handler gives
+          them all a menu; the parts inside say what they are with `data-menu`
+          and the shared builder decides what each offers. A panel that has
+          marked nothing yet still gets the request-level items rather than the
+          browser's Copy and Select All. See `components/shared/menu`.
+        */}
+        <div className="flex flex-col h-full flex-1 min-w-0 overflow-hidden"
+             data-menu="panel" onContextMenu={appMenu.onContextMenu}>
+        {appMenu.node}
         {/* SQLite status banner */}
         <SqliteBanner sqliteOk={sqliteStatus.ok} error={sqliteStatus.error} />
 
@@ -614,6 +771,38 @@ export default function App() {
             style={{ display: activeTab?.type === 'daakia-ai' ? 'flex' : 'none' }}
           >
             <DaakiaAiPanel />
+          </div>
+        )}
+
+        {/* WorkspacePage — kept mounted so a documentation draft somebody is
+            part-way through survives a tab switch. Save is a button here, so
+            unmounting the panel would throw the unsaved half away. */}
+        {tabs.some(t => t.type === 'workspace') && (
+          <div
+            className="flex-1 flex flex-col min-w-0 overflow-hidden"
+            style={{ display: activeTab?.type === 'workspace' ? 'flex' : 'none' }}
+          >
+            <WorkspacePage />
+          </div>
+        )}
+
+        {/* DoctorPanel — kept mounted so a parsed dump and the selected analyzer
+            survive Daakia tab switches instead of being re-parsed on every visit. */}
+        {tabs.some(t => t.type === 'dk8s') && (
+          <div
+            className="flex-1 flex flex-col min-w-0 overflow-hidden"
+            style={{ display: activeTab?.type === 'dk8s' ? 'flex' : 'none' }}
+          >
+            <K8sPanel />
+          </div>
+        )}
+
+        {tabs.some(t => t.type === 'dkgh') && (
+          <div
+            className="flex-1 flex flex-col min-w-0 overflow-hidden"
+            style={{ display: activeTab?.type === 'dkgh' ? 'flex' : 'none' }}
+          >
+            <DkghPanel />
           </div>
         )}
 
@@ -653,12 +842,13 @@ export default function App() {
           </div>
         )}
 
+        {/* Settings draws here; every other standalone tab is mounted in its own
+            keep-alive block above and renders nothing at this point. Asking
+            standaloneActive rather than re-listing the types means a new
+            standalone tab cannot end up drawn on top of the request view. */}
         {activeTab?.type === 'settings' ? (
           <SettingsPanel />
-        ) : activeTab?.type === 'mock-server' ? null
-        : activeTab?.type === 'state-machine' ? null
-        : activeTab?.type === 'wiki' ? null
-        : activeTab?.type === 'daakia-ai' ? null
+        ) : standaloneActive ? null
         : (activeTab?.protocol || activeProtocol) === 'rest' ? (
           !activeTab ? (
             <EmptyState protocol="rest" onNewTab={() => useTabsStore.getState().addTab()} />
@@ -740,7 +930,7 @@ export default function App() {
         </div>
 
         {/* Sidebar splitter — only for protocol tabs that have an expandable panel */}
-        {!(activeTab?.type === 'mock-server' || activeTab?.type === 'state-machine' || activeTab?.type === 'settings') && (
+        {!(activeTab?.type === 'mock-server' || activeTab?.type === 'dk8s' || activeTab?.type === 'state-machine' || activeTab?.type === 'settings') && (
           <div
             className="w-[6px] flex-shrink-0 cursor-col-resize relative select-none group"
             onPointerDown={handleSidebarPointerDown}
@@ -775,8 +965,27 @@ export default function App() {
       </div>
 
       {/* Toast notifications */}
+      {/* One search across every collection and protocol — Ctrl+Shift+F, or
+          the command palette. Mounted here because nothing else owns it. */}
+      <SearchCollectionsModal
+        open={searchCollectionsOpen}
+        onClose={() => useModalStore.getState().closeSearchCollections()}
+      />
+
       <ToastContainer />
       <RightClickMenu />
+      {/* Opened by "Compare with clipboard" in the right-click menu, from
+          wherever the data happened to be. */}
+      {compareOpen && (
+        <ResponseDiffModal
+          initialA={compareA}
+          initialB={compareB}
+          initialLabelA={compareLabelA}
+          initialLabelB={compareLabelB}
+          focusB={compareFocusB}
+          onClose={() => useCompareStore.getState().close()}
+        />
+      )}
       <SaveRequestModal
         open={!!saveAsTabId}
         tab={tabs.find(t => t.id === saveAsTabId) ?? null}

@@ -4,10 +4,11 @@
  * DUI ModalView wrapper — centered modal with backdrop.
  * Runs deterministic checks immediately and offers AI deep analysis.
  */
-import { useEffect, useState, useCallback } from 'react';
-import { postMsg } from '../../vscode';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { SparkleIcon } from '../../icons';
 import { ModalView, AIButtonView, ButtonView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
+import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -141,24 +142,44 @@ function runDeterministicChecks(tab: TabSnapshot): Issue[] {
   return issues;
 }
 
-function buildAiSystemPrompt(_tab: TabSnapshot): string {
-  return `You are a senior API testing expert. Review the following HTTP request and identify any issues, anti-patterns, security concerns, or best-practice violations.
-
-Be concise. Format your response as a bulleted list. Each bullet should start with an emoji (⚠️ warning, ❌ error, ℹ️ tip) followed by the issue and a brief fix suggestion.
-
-Only report genuine issues — do not fabricate problems.`;
+/** The request, as the `rest.preflight` template's variables. */
+function preflightVariables(tab: TabSnapshot): Record<string, string> {
+  const enabledHeaders = tab.headers.filter(h => h.enabled && h.key.trim());
+  return {
+    method: tab.method,
+    url: tab.url,
+    headers: enabledHeaders.map(h => `${h.key}: ${h.value}`).join(', ') || '(none)',
+    authType: tab.authType,
+    body: tab.bodyRaw.slice(0, 500) || '(empty)',
+  };
 }
 
-function buildAiUserMessage(tab: TabSnapshot): string {
-  const enabledHeaders = tab.headers.filter(h => h.enabled && h.key.trim());
-  return `Method: ${tab.method}
-URL: ${tab.url}
-Auth: ${tab.authType}
-Body mode: ${tab.bodyMode}
-Body (first 500 chars): ${tab.bodyRaw.slice(0, 500) || '(empty)'}
-Headers: ${enabledHeaders.map(h => `${h.key}: ${h.value}`).join(', ') || '(none)'}
-
-Review this request for issues.`;
+/**
+ * The answer, as issues in the same list the deterministic checks fill.
+ *
+ * The template asks for `[{severity,field,issue,fix}]`. A model that answers
+ * with prose instead is not an error worth showing as one — the caller falls
+ * back to printing what came back.
+ */
+function parseAiIssues(text: string): Issue[] | null {
+  const start = text.indexOf('[');
+  const end = text.lastIndexOf(']');
+  if (start < 0 || end <= start) return null;
+  try {
+    const rows = JSON.parse(text.slice(start, end + 1));
+    if (!Array.isArray(rows)) return null;
+    return rows
+      .filter(r => r && typeof r === 'object' && (r.issue || r.message))
+      .map(r => ({
+        severity: (String(r.severity ?? 'info').toLowerCase() as Severity) || 'info',
+        code: 'ai',
+        message: String(r.field ? `${r.field}: ${r.issue ?? r.message}` : (r.issue ?? r.message)),
+        hint: r.fix ? String(r.fix) : undefined,
+      }))
+      .map(i => ({ ...i, severity: (['error', 'warning', 'info'] as Severity[]).includes(i.severity) ? i.severity : 'info' }));
+  } catch {
+    return null;
+  }
 }
 
 // ── Severity pill ────────────────────────────────────────────────────────────
@@ -188,21 +209,40 @@ function SeverityPill({ severity }: { severity: Severity }) {
 export function AiPreflightPopover({ tab, onClose }: Props) {
   const [issues] = useState<Issue[]>(() => runDeterministicChecks(tab));
   const [aiText, setAiText] = useState('');
+  const [aiIssues, setAiIssues] = useState<Issue[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiDone, setAiDone] = useState(false);
+  const requestId = useRef('');
+  const accumulated = useRef('');
+  const resolve = useAiPromptTemplatesStore(s => s.resolve);
 
+  /*
+    Keyed on `tabId`, which is what the host actually replies with. This
+    listened for `source: 'preflight'` — a field the host has never sent — so
+    every chunk was discarded and the button spun until the modal closed.
+  */
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       const msg = event.data;
-      if (msg?.type === 'ai:chunk' && msg.source === 'preflight') {
-        setAiText(t => t + (msg.chunk ?? ''));
-      } else if (msg?.type === 'ai:complete' && msg.source === 'preflight') {
+      if (!requestId.current || msg?.tabId !== requestId.current) return;
+
+      if (msg.type === 'ai:chunk') {
+        accumulated.current += (msg.delta as string) || (msg.text as string) || '';
+        setAiText(accumulated.current);
+      } else if (msg.type === 'ai:complete') {
+        const payload = msg.message as { content?: string } | undefined;
+        const text = accumulated.current || payload?.content || '';
+        const parsed = parseAiIssues(text);
+        if (parsed && parsed.length > 0) { setAiIssues(parsed); setAiText(''); }
+        else if (!text.trim()) setAiText('The model returned nothing to report.');
         setAiLoading(false);
         setAiDone(true);
-      } else if (msg?.type === 'ai:error' && msg.source === 'preflight') {
-        setAiText('AI analysis failed. Please try again.');
+        requestId.current = '';
+      } else if (msg.type === 'ai:error') {
+        setAiText((msg.message as string) || 'Could not analyse the request — check the AI provider settings.');
         setAiLoading(false);
         setAiDone(true);
+        requestId.current = '';
       }
     };
     window.addEventListener('message', handler);
@@ -212,18 +252,24 @@ export function AiPreflightPopover({ tab, onClose }: Props) {
   const handleAskAi = useCallback(() => {
     setAiLoading(true);
     setAiText('');
+    setAiIssues([]);
     setAiDone(false);
-    postMsg({
-      type: 'ai:send',
-      source: 'preflight',
-      systemPrompt: buildAiSystemPrompt(tab),
-      messages: [{ role: 'user', content: buildAiUserMessage(tab) }],
-      stream: true,
+    accumulated.current = '';
+    requestId.current = sendAiRequest({
+      stage: 'rest.preflight',
+      screen: 'REST · Request',
+      systemPrompts: [resolve('rest.preflight.system')],
+      userPrompt: resolve('rest.preflight', preflightVariables(tab)),
+      settings: { temperature: 0.2, maxTokens: 900 },
     });
-  }, [tab]);
+  }, [tab, resolve]);
 
-  const errorCount = issues.filter(i => i.severity === 'error').length;
-  const warnCount  = issues.filter(i => i.severity === 'warning').length;
+  /* The AI's findings join the deterministic ones rather than sitting in a
+     second list — they are the same kind of thing to the person reading. */
+  const allIssues = [...issues, ...aiIssues];
+
+  const errorCount = allIssues.filter(i => i.severity === 'error').length;
+  const warnCount  = allIssues.filter(i => i.severity === 'warning').length;
 
   const headerBadges = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -280,13 +326,13 @@ export function AiPreflightPopover({ tab, onClose }: Props) {
     >
       {/* Issues list */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {issues.length === 0 ? (
+        {allIssues.length === 0 ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--color-text-secondary)' }}>
             <span style={{ color: 'var(--color-success)' }}>✓</span>
             No issues detected — request looks good
           </div>
         ) : (
-          issues.map((issue, i) => (
+          allIssues.map((issue, i) => (
             <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                 <SeverityPill severity={issue.severity} />

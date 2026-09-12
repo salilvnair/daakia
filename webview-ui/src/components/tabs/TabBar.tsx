@@ -3,9 +3,9 @@ import { useTabsStore } from '../../store/tabs-store';
 import type { Protocol } from '../../store/tabs-store';
 import { useEnvStore, GLOBAL_ENV_ID } from '../../store/env-store';
 import { getProtocolAccent } from '../../colors';
-import { MethodBadge, ConfirmDialog, StyledDropdown, ContextMenu, type ContextMenuItem, type ContextMenuSubItem, type DropdownOption } from '../shared';
-import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, GeneralAssistantIcon, FilterIcon, BookOpenIcon } from '../../icons';
-import { IconButtonView, StateMachineIcon } from '@salilvnair/dui';
+import { MethodBadge, ConfirmDialog, ContextMenu, type ContextMenuItem, type ContextMenuSubItem } from '../shared';
+import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, GeneralAssistantIcon, FilterIcon, BookOpenIcon, Dk8sIcon, IssueOpenedIcon, StethoscopeIcon, LayoutGridIcon, PinIcon, UnpinIcon } from '../../icons';
+import { IconButtonView, StateMachineIcon, SelectInputView, type SelectOption } from '@salilvnair/dui';
 import { logUiEvent } from '../../store/ui-audit-store';
 
 interface TabContextMenuState {
@@ -150,7 +150,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
     el.scrollBy({ left: dir === 'left' ? -150 : 150, behavior: 'smooth' });
   };
   const customEnvs = environments.filter(e => e.id !== GLOBAL_ENV_ID);
-  const envOptions: DropdownOption[] = customEnvs.map(e => ({ value: e.id, label: e.name }));
+  const envOptions: SelectOption[] = customEnvs.map(e => ({ value: e.id, label: e.name }));
 
   const handleClose = (tabId: string) => {
     logUiEvent('tab.close', { tabId });
@@ -212,7 +212,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
     const items: ContextMenuItem[] = [];
     if (isRequest) items.push({ id: 'rename', label: 'Rename', shortcut: 'R', icon: <RenameIcon size={13} />, iconColor: 'var(--color-ctx-rename)' });
     items.push({ id: 'duplicate', label: 'Duplicate', shortcut: 'D', icon: <CopyIcon size={13} />, iconColor: 'var(--color-ctx-duplicate)' });
-    if (isRequest) items.push({ id: isPinned ? 'unpin' : 'pin', label: isPinned ? 'Unpin' : 'Pin', shortcut: isPinned ? 'U' : 'P', icon: <span className="text-[13px]">{isPinned ? '📍' : '📌'}</span>, iconColor: 'var(--color-ctx-pin)' });
+ if (isRequest) items.push({ id: isPinned ? 'unpin': 'pin', label: isPinned ? 'Unpin': 'Pin', shortcut: isPinned ? 'U': 'P', icon: isPinned ? <UnpinIcon size={13} /> : <PinIcon size={13} />, iconColor: 'var(--color-ctx-pin)'});
 
     if (hasRequestTabs && uniqueProtocols.length >= 1) {
       items.push({ id: 'sep-filter', label: '', separator: true });
@@ -438,8 +438,11 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
           const isDaakiaAi = tab.type === 'daakia-ai';
           const isStateMachine = tab.type === 'state-machine';
           const isWiki = tab.type === 'wiki';
+          const isDk8s = tab.type === 'dk8s';
+          const isDkgh = tab.type === 'dkgh';
+          const isWorkspace = tab.type === 'workspace';
           const SM_ACCENT = 'var(--color-sm-tab, #f59e0b)';
-          const tabAccent = isSettings ? 'var(--color-settings)' : isMockServer ? 'var(--color-mock-server)' : isDaakiaAi ? 'var(--color-protocol-ai)' : isStateMachine ? SM_ACCENT : isWiki ? 'var(--color-wiki)' : (tab.protocol ? getProtocolAccent(tab.protocol) : requestAccentColor);
+          const tabAccent = isSettings ? 'var(--color-settings)' : isMockServer ? 'var(--color-mock-server)' : isDaakiaAi ? 'var(--color-protocol-ai)' : isStateMachine ? SM_ACCENT : isWiki ? 'var(--color-wiki)' : isDk8s ? 'var(--color-dk8s)' : isDkgh ? 'var(--color-dkgh)' : isWorkspace ? 'var(--color-workspace)' : (tab.protocol ? getProtocolAccent(tab.protocol) : requestAccentColor);
           const isDragOver = dragOverIdx === idx && dragIdx !== idx;
           return (
             <div
@@ -477,6 +480,12 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
                 <GeneralAssistantIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-protocol-ai)' }} />
               ) : isWiki ? (
                 <BookOpenIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-wiki)' }} />
+              ) : isDk8s ? (
+                <Dk8sIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />
+              ) : isDkgh ? (
+                <IssueOpenedIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dkgh)' }} />
+              ) : isWorkspace ? (
+                <LayoutGridIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-workspace)' }} />
               ) : tab.protocol === 'graphql' ? (
                 <span className="inline-block font-mono font-bold text-[10px] leading-none text-[var(--color-protocol-graphql)] flex-shrink-0">GQL</span>
               ) : tab.protocol === 'websocket' ? (
@@ -525,7 +534,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
                 />
               )}
               {tab.pinned ? (
-                <span className="flex-shrink-0 text-[11px]">📌</span>
+                <span className="flex-shrink-0 text-[11px]"></span>
               ) : (
                 <button
                   type="button"
@@ -584,14 +593,14 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
           {customEnvs.length === 0 ? (
             <span className="text-[12px] text-[var(--color-text-muted)]">No Environment</span>
           ) : (
-            <StyledDropdown
+            <SelectInputView
               options={envOptions}
               value={(activeTab.envId && activeTab.envId !== GLOBAL_ENV_ID) ? activeTab.envId : envOptions[0]?.value || ''}
               onChange={(v) => {
                 updateTab(activeTab.id, { envId: v });
                 setActiveEnvironment(v);
               }}
-              size="sm"
+              size="md"
             />
           )}
         </div>

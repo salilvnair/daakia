@@ -4,6 +4,7 @@
  * and exposes logUiEvent() for firing events to the extension host.
  */
 import { postMsg } from '../vscode';
+import { buildAiAuditEvents, nameForStage, screenForStage } from './ai-audit-events';
 
 // ─── Event definition ──────────────────────────────────────────────────────────
 
@@ -15,9 +16,16 @@ export interface AuditEventDef {
   description: string;
   color: string;
   defaultEnabled: boolean;
+  /**
+   * Which screen the action belongs to.
+   *
+   * "Generate Body" alone does not tell you where to go back to; the AI
+   * events carry it, and the log shows it beside the name.
+   */
+  screen?: string;
 }
 
-export const AUDIT_EVENT_DEFS: AuditEventDef[] = [
+const BASE_AUDIT_EVENT_DEFS: AuditEventDef[] = [
   // ── REST ───────────────────────────────────────────────────────────────────
   { id: 'rest.send',            module: 'REST', button: 'Send',            action: 'click',  description: 'Execute REST request',                color: 'var(--color-protocol-rest)', defaultEnabled: true },
   { id: 'rest.save',            module: 'REST', button: 'Save',            action: 'click',  description: 'Save REST request to collection',     color: 'var(--color-protocol-rest)', defaultEnabled: true },
@@ -26,6 +34,10 @@ export const AUDIT_EVENT_DEFS: AuditEventDef[] = [
   { id: 'rest.show_code',       module: 'REST', button: 'Show Code',       action: 'click',  description: 'Open Generate Code modal',            color: 'var(--color-protocol-rest)', defaultEnabled: false },
   { id: 'rest.import_curl',     module: 'REST', button: 'Import cURL',     action: 'click',  description: 'Import request from cURL command',    color: 'var(--color-protocol-rest)', defaultEnabled: false },
   { id: 'rest.copy_response',   module: 'REST', button: 'Copy',            action: 'click',  description: 'Copy REST response body',             color: 'var(--color-protocol-rest)', defaultEnabled: false },
+  { id: 'rest.example_save',    module: 'REST', button: 'Save example',        action: 'create', description: 'Save the response on screen as a named example',            color: 'var(--color-protocol-rest)', defaultEnabled: true },
+  { id: 'rest.chain_apply',     module: 'REST', button: 'Apply to environment', action: 'update', description: 'Run the chaining rules against the response on screen',     color: 'var(--color-protocol-rest)', defaultEnabled: true },
+  { id: 'rest.chain_auto',      module: 'REST', button: 'Response chaining',    action: 'update', description: 'Chaining rules ran by themselves when a response arrived',  color: 'var(--color-protocol-rest)', defaultEnabled: false },
+  { id: 'rest.docs_generate',   module: 'REST', button: 'Write with AI',        action: 'create', description: 'Ask the model to write this request\u2019s documentation', color: 'var(--color-protocol-ai)',   defaultEnabled: true },
   { id: 'rest.download',        module: 'REST', button: 'Send & Download', action: 'click',  description: 'Send and download response as file',  color: 'var(--color-protocol-rest)', defaultEnabled: false },
 
   // ── GraphQL ────────────────────────────────────────────────────────────────
@@ -233,6 +245,93 @@ export const AUDIT_EVENT_DEFS: AuditEventDef[] = [
   { id: 'devtools.audit_config',     module: 'DevTools', button: 'Audit Config',      action: 'toggle', description: 'Toggle audit event enabled/disabled',  color: 'var(--color-settings)', defaultEnabled: false },
   { id: 'devtools.snapshot_dl',      module: 'DevTools', button: 'Download Snapshot', action: 'click',  description: 'Download debug snapshot JSON',         color: 'var(--color-settings)', defaultEnabled: false },
   { id: 'devtools.db_query',         module: 'DevTools', button: 'DB Query',          action: 'click',  description: 'Run DB Explorer query',                color: 'var(--color-settings)', defaultEnabled: false },
+  // ── AI ─────────────────────────────────────────────────────────────────────
+  /*
+    Every AI button in the app, from one place.
+
+    There are fifty-odd of them and they all reach the host the same way — a
+    posted `ai:send` carrying the stage that names the feature. Auditing that
+    one message covers every button, present and future, and says which one it
+    was in `stage`. A def per button would be fifty entries to keep in step
+    with fifty call sites, which is the shape of coupling that leaves events
+    declared and never fired.
+  */
+  /*
+    Only the two events that are not one feature. Every actual AI feature is
+    generated from the prompt library below — see `ai-audit-events.ts`, and
+    the note there about why they are not typed out by hand.
+  */
+  { id: 'ai.request',           module: 'AI', button: 'AI call (unnamed feature)', action: 'create', description: 'An AI call whose stage is not in the prompt library', color: 'var(--color-protocol-ai)', defaultEnabled: true },
+  { id: 'ai.failed',            module: 'AI', button: 'AI call failed',            action: 'error',  description: 'An AI call failed — no provider, a timeout, or a refusal', color: 'var(--color-error)', defaultEnabled: true },
+
+// ── dk8s ───────────────────────────────────────────────────────────────────
+  /*
+    What is auditable about a Kubernetes tool.
+
+    `defaultEnabled` here is not "is this interesting" — it is "would you want
+    a record of this afterwards". Everything that touches the cluster, writes a
+    file to disk, or sends data to a model is on by default; browsing is off.
+    That is the line that makes the log worth reading a week later, when the
+    question is what was actually DONE to a namespace rather than who looked
+    at it.
+  */
+  // Cluster
+  { id: 'dk8s.context_switch',   module: 'dk8s', button: 'Context',       action: 'update', description: 'Switch kubectl context',                    color: 'var(--color-dk8s)', defaultEnabled: true },
+  { id: 'dk8s.namespace_switch', module: 'dk8s', button: 'Namespace',     action: 'update', description: 'Change the watched namespaces',             color: 'var(--color-dk8s)', defaultEnabled: false },
+  { id: 'dk8s.watch_start',      module: 'dk8s', button: 'Watch',         action: 'toggle', description: 'Start watching pods',                       color: 'var(--color-dk8s)', defaultEnabled: false },
+  { id: 'dk8s.pod_open',         module: 'dk8s', button: 'Pod',           action: 'click',  description: 'Open a pod detail',                         color: 'var(--color-dk8s)', defaultEnabled: false },
+  { id: 'dk8s.pod_favorite',     module: 'dk8s', button: 'Star',          action: 'toggle', description: 'Star or unstar a workload',                 color: 'var(--color-dk8s)', defaultEnabled: false },
+  { id: 'dk8s.describe',         module: 'dk8s', button: 'Describe',      action: 'click',  description: 'Run kubectl describe on a pod',             color: 'var(--color-dk8s)', defaultEnabled: false },
+  // Exec is on by default and stays that way: a shell in a production pod is
+  // the single most sensitive thing this tool can do.
+  { id: 'dk8s.shell',            module: 'dk8s', button: 'Shell',         action: 'click',  description: 'Open an interactive shell in a container',  color: 'var(--color-dk8s)', defaultEnabled: true },
+
+  // Logs
+  { id: 'dk8s.logs_open',        module: 'dk8s', button: 'Logs',          action: 'click',  description: 'Stream logs from a pod',                    color: 'var(--color-dk8s)', defaultEnabled: false },
+  { id: 'dk8s.logs_search',      module: 'dk8s', button: 'Search logs',   action: 'click',  description: 'Search logs across selected pods',          color: 'var(--color-dk8s)', defaultEnabled: false },
+  { id: 'dk8s.logs_export',      module: 'dk8s', button: 'Export logs',   action: 'click',  description: 'Export pod logs to disk',                   color: 'var(--color-dk8s)', defaultEnabled: true },
+
+  // Collection — every one of these runs a command inside a live container
+  { id: 'dk8s.collect',          module: 'dk8s', button: 'Collect',       action: 'create', description: 'Collect a dump or recording from a pod',    color: 'var(--color-dk8s)', defaultEnabled: true },
+  { id: 'dk8s.collect_failed',   module: 'dk8s', button: 'Collect',       action: 'error',  description: 'A collection attempt failed',               color: 'var(--color-dk8s)', defaultEnabled: true },
+
+  // Artifacts
+  { id: 'dk8s.artifact_analyze', module: 'dk8s', button: 'Analyze',       action: 'click',  description: 'Open an artifact in an analyzer',           color: 'var(--color-dk8s)', defaultEnabled: false },
+  { id: 'dk8s.artifact_import',  module: 'dk8s', button: 'Open a file',   action: 'create', description: 'Import a dump or log from disk',            color: 'var(--color-dk8s)', defaultEnabled: true },
+  { id: 'dk8s.artifact_delete',  module: 'dk8s', button: 'Delete',        action: 'delete', description: 'Delete a collected artifact',               color: 'var(--color-dk8s)', defaultEnabled: true },
+  { id: 'dk8s.artifact_reveal',  module: 'dk8s', button: 'Show folder',   action: 'click',  description: 'Reveal the artifact folder',                color: 'var(--color-dk8s)', defaultEnabled: false },
+
+  // Analysis
+  { id: 'dk8s.heap_query',       module: 'dk8s', button: 'Heap query',    action: 'click',  description: 'Run a query against a parsed heap',         color: 'var(--color-dk8s)', defaultEnabled: false },
+  { id: 'dk8s.heap_drilldown',   module: 'dk8s', button: 'Drill down',    action: 'click',  description: 'Drill into a heap object or class',         color: 'var(--color-dk8s)', defaultEnabled: false },
+  { id: 'dk8s.heap_baseline',    module: 'dk8s', button: 'Set baseline',  action: 'update', description: 'Set a heap dump as the growth baseline',    color: 'var(--color-dk8s)', defaultEnabled: false },
+  { id: 'dk8s.open_source',      module: 'dk8s', button: 'Open source',   action: 'click',  description: 'Jump from a finding to a source file',      color: 'var(--color-dk8s)', defaultEnabled: false },
+
+  // AI — on by default because the evidence leaves the machine
+  { id: 'dk8s.ai_ask',           module: 'dk8s', button: 'Ask AI',        action: 'click',  description: 'Send evidence to a model for analysis',     color: 'var(--color-dk8s)', defaultEnabled: true },
+
+  // Configuration
+  { id: 'dk8s.pv_mapping_save',  module: 'dk8s', button: 'Save mapping',  action: 'update', description: 'Save a pod-name to log-path mapping',       color: 'var(--color-dk8s)', defaultEnabled: true },
+  { id: 'dk8s.pv_layout_add',    module: 'dk8s', button: 'Add layout',    action: 'create', description: 'Add a path layout for archived logs',       color: 'var(--color-dk8s)', defaultEnabled: true },
+  { id: 'dk8s.pv_layout_delete', module: 'dk8s', button: 'Delete layout', action: 'delete', description: 'Delete a path layout, and what it was finding', color: 'var(--color-dk8s)', defaultEnabled: true },
+  { id: 'dk8s.format_save',      module: 'dk8s', button: 'Save format',   action: 'update', description: 'Save a custom log format',                  color: 'var(--color-dk8s)', defaultEnabled: true },
+  { id: 'dk8s.kubectl_path',     module: 'dk8s', button: 'kubectl path',  action: 'update', description: 'Point dk8s at a different kubectl binary',  color: 'var(--color-dk8s)', defaultEnabled: true },
+  // On by default, unlike most of this list: a view that crashed is not a
+  // preference someone opted into recording, it is the one event you want
+  // already captured by the time you go looking for it.
+  { id: 'dk8s.analyzer_error',   module: 'dk8s', button: 'Analyzer',      action: 'error',  description: 'An analyzer view threw while rendering',    color: 'var(--color-error)', defaultEnabled: true },
+];
+
+/**
+ * The taxonomy: everything typed out above, plus one event per AI feature.
+ *
+ * The AI half is generated from the prompt library, so a feature added there
+ * is auditable the same day under the name the user already sees for it —
+ * there is no second list to forget.
+ */
+export const AUDIT_EVENT_DEFS: AuditEventDef[] = [
+  ...BASE_AUDIT_EVENT_DEFS,
+  ...buildAiAuditEvents(),
 ];
 
 // ─── Config (localStorage) ────────────────────────────────────────────────────
@@ -278,5 +377,26 @@ export function logUiEvent(eventTypeId: string, metadata?: Record<string, unknow
     button: def.button,
     action: def.action,
     metadata,
+  });
+}
+
+/**
+ * One AI call, filed under the feature that made it.
+ *
+ * The event id is the stage — `ai.rest.docs.generate` — so it has its own
+ * checkbox, its own name, and its own screen, rather than eighty features
+ * sharing one row called "Any AI action". A stage the prompt library does not
+ * know still records, under `ai.request`: an unnamed call is worth a row, and
+ * it is also the signal that a prompt key was never registered.
+ */
+export function logAiCall(stage: string | undefined, screen?: string): void {
+  const id = stage ? `ai.${stage}` : 'ai.request';
+  const known = AUDIT_EVENT_DEFS.some(d => d.id === id);
+  const eventId = known ? id : 'ai.request';
+  logUiEvent(eventId, {
+    stage: stage ?? 'DAAKIA_AI',
+    feature: stage ? nameForStage(stage) : 'Unnamed AI call',
+    screen: screen ?? (stage ? screenForStage(stage) : 'Daakia AI'),
+    ...(known ? {} : { unregistered: true }),
   });
 }

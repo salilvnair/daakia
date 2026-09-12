@@ -11,6 +11,8 @@ import { useSidebarDataStore } from '../../../store/sidebar-data-store';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
 import { postMsg } from '../../../vscode';
 import { AIButtonView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../../services/ai/ai-client';
+import { METHOD_COLORS } from '../../../colors/daakia-colors';
 
 const ACCENT = 'var(--color-protocol-ai)';
 const PROTOCOLS = ['rest', 'graphql', 'grpc', 'soap', 'websocket', 'sse', 'mqtt', 'socketio'];
@@ -100,30 +102,30 @@ export function AiInsightsTab() {
       ...mostUsed.slice(0, 5).map(e => `  ${e.method} ${e.url} — ${e.count} calls`),
     ].join('\n');
 
-    postMsg({
-      type: 'ai:send',
+    sendAiRequest({
       tabId: analysisId,
       provider: '',
       model: '',
       baseUrl: '',
       stage: 'ai.insights',
+      screen: 'Daakia AI',
       systemPrompts: [`You are an API intelligence analyst. Analyze the request history data and provide:
 
 ## AI API Intelligence Report
 
-### 🔴 Performance Issues
+### Performance Issues
 - Identify slow endpoints and likely root causes (payload size, server-side, network)
 
-### 🟡 Reliability Concerns
+### Reliability Concerns
 - Endpoints with high error rates and what error patterns suggest
 
-### 🟢 Usage Patterns
+### Usage Patterns
 - Heavily used endpoints, unusual usage spikes, underutilized APIs
 
-### 💡 Optimization Recommendations
+### Optimization Recommendations
 - Specific, actionable steps to improve performance and reliability (max 5 bullets)
 
-### 📊 Weekly Trend Estimate
+### Weekly Trend Estimate
 - Based on the patterns, briefly estimate what the trend looks like
 
 Keep the analysis concise and actionable. Use emoji bullets. Format in clear Markdown.`],
@@ -215,7 +217,16 @@ Keep the analysis concise and actionable. Use emoji bullets. Format in clear Mar
             <div className="flex items-center justify-center h-full text-[11px] text-[var(--color-text-muted)]">No data for this view</div>
           ) : displayList.map((stat, i) => (
             <div key={i} className="flex items-center gap-2 px-3 py-1.5 border-b border-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)]">
-              <span className="text-[9px] font-bold px-1 rounded bg-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] text-[var(--color-text-muted)] flex-shrink-0 uppercase">{stat.method}</span>
+              {/* The same method colours the rest of the app uses — a grey
+                  POST here read as a different kind of thing to the coloured
+                  POST two panels over. */}
+              <span
+                className="text-[9px] font-bold px-1 rounded flex-shrink-0 uppercase"
+                style={{
+                  color: METHOD_COLORS[stat.method?.toUpperCase()] ?? 'var(--color-text-muted)',
+                  backgroundColor: `color-mix(in srgb, ${METHOD_COLORS[stat.method?.toUpperCase()] ?? 'var(--color-text-muted)'} 12%, transparent)`,
+                }}
+              >{stat.method}</span>
               <span className="flex-1 min-w-0 text-[10px] text-[var(--color-text-primary)] truncate font-mono">{stat.url}</span>
               {view === 'slow' && (
                 <span className="text-[10px] font-mono tabular-nums flex-shrink-0" style={{ color: speedColor(stat.avgTime) }}>{formatMs(stat.avgTime)}</span>

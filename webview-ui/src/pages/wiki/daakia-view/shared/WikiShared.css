@@ -117,13 +117,15 @@
 /* Compact single-row header — was a tall multi-line hero banner; this is a
    pinned strip (see WikiScrollPage), so it eats into content space on every
    scroll position and needs to stay small. */
+/* The hero the dk8s pages use: the page's name given room, its one-line claim
+   under it, and the chips on their own row rather than squeezed to the right of
+   a title that then cannot wrap. */
 .dw-hero {
-  padding: 8px 16px;
+  padding: 16px 20px 14px;
   display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  column-gap: 10px;
-  row-gap: 3px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
   background: linear-gradient(135deg,
     color-mix(in srgb, var(--dw-accent) 10%, var(--dw-surface)),
     color-mix(in srgb, var(--dw-ai) 6%, var(--dw-surface))
@@ -133,34 +135,40 @@
   overflow: hidden;
 }
 .dw-hero-title {
-  font-size: 14px;
-  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 19px;
+  font-weight: 700;
   color: var(--dw-fg);
   margin: 0;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
+  letter-spacing: -0.018em;
+  text-wrap: balance;
 }
+.dw-hero-icon { color: var(--dw-accent); flex-shrink: 0; }
 .dw-hero-subtitle {
-  font-size: 10.5px;
+  font-size: 12.5px;
   color: var(--dw-fg);
-  opacity: 0.65;
+  opacity: 0.7;
   margin: 0;
-  line-height: 1.3;
+  line-height: 1.55;
+  max-width: 82ch;
 }
 .dw-hero-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-left: auto;
+  gap: 5px;
+  margin-top: 2px;
 }
 .dw-hero-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 1px 7px;
+  padding: 2px 9px;
   border-radius: 20px;
-  font-size: 9.5px;
-  font-weight: 500;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.015em;
   border: 1px solid;
 }
 
@@ -182,20 +190,29 @@ div:has(> .dw-section-title) {
   margin-bottom: 20px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.06);
 }
+/* A tinted header, not a saturated one.
+
+   This used to be the raw accent at full strength across the whole banner —
+   a wall of cyan behind white text, once per section, which shouted over the
+   prose it was introducing. The accent now shows as a wash over the card's
+   own surface plus a solid rule on the leading edge, so the eye still finds
+   the section boundary without the page turning into stripes. */
 .dw-section-title {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 16px;
-  font-weight: 700;
-  color: #fff;
+  font-size: 15.5px;
+  font-weight: 650;
+  color: var(--dw-text);
   margin: 0;
-  padding: 16px 20px;
+  padding: 13px 20px;
   letter-spacing: -0.01em;
   background: linear-gradient(135deg,
-    var(--dw-accent) 0%,
-    color-mix(in srgb, var(--dw-accent) 65%, #000 20%) 100%
+    color-mix(in srgb, var(--dw-accent) 16%, var(--dw-surface)) 0%,
+    color-mix(in srgb, var(--dw-accent) 6%, var(--dw-surface)) 100%
   );
+  border-bottom: 1px solid color-mix(in srgb, var(--dw-accent) 22%, transparent);
+  box-shadow: inset 3px 0 0 0 var(--dw-accent);
   /* Leaves room below the pinned TocBar when a jump-link scrolls this
      section's card into view — otherwise the sticky bar covers the title. */
   scroll-margin-top: 42px;
@@ -246,9 +263,20 @@ div:has(> .dw-section-title) > :first-of-type.dw-section-title + * {
 div:has(> .dw-section-title) > *:last-child {
   margin-bottom: 20px;
 }
+/* The icon sits in its own tinted tile. A stroked glyph dropped straight onto
+   the banner reads as a stray mark; boxed, it reads as the section's marker —
+   which is what the emoji it replaced was doing by being loud. */
 .dw-section-emoji {
-  font-size: 19px;
-  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.25));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 7px;
+  color: var(--dw-accent);
+  background: color-mix(in srgb, var(--dw-accent) 16%, var(--dw-surface));
+  border: 1px solid color-mix(in srgb, var(--dw-accent) 26%, transparent);
 }
 .dw-subsection-title {
   font-size: 11px;
@@ -272,6 +300,7 @@ div:has(> .dw-section-title) > *:last-child {
   display: flex;
   align-items: center;
   gap: 8px;
+  color: var(--dw-fg);
   padding: 10px 14px;
   border-bottom: 1px solid var(--dw-border);
   font-size: 12px;
@@ -303,8 +332,16 @@ div:has(> .dw-section-title) > *:last-child {
   box-shadow: 0 4px 14px color-mix(in srgb, var(--dw-accent) 12%, transparent);
 }
 .dw-feat-icon {
-  font-size: 20px;
-  margin-bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin-bottom: 9px;
+  border-radius: 8px;
+  color: var(--dw-accent);
+  background: color-mix(in srgb, var(--dw-accent) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--dw-accent) 22%, transparent);
 }
 .dw-feat-title {
   font-size: 12px;
@@ -369,7 +406,14 @@ div:has(> .dw-section-title) > *:last-child {
   font-size: 12.5px;
   line-height: 1.6;
 }
-.dw-callout-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+/* Inherits the callout's own colour, so info/warn/ok/tip stay distinguishable
+   without four separate icon rules. */
+.dw-callout-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
 .dw-callout-text { flex: 1; color: var(--dw-fg); }
 .dw-callout-text strong {
   font-weight: 700;

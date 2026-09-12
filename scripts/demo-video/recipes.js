@@ -1,331 +1,354 @@
 /**
- * Named Playwright "recipes" — each one drives the real running Daakia app
- * (webview-ui's Vite dev server, backed by local-server) through one live
- * action sequence. config.json's segments reference these by name. Add a
- * new recipe here, then reference its name from config.json to add a new
- * segment to the video — no other file needs to change.
+ * One live action sequence per segment, against the real running app.
+ *
+ * Every recipe is `{ run, verify }`. `run` drives the UI; `verify` looks at the
+ * screen afterwards and says whether the thing actually happened. A clip whose
+ * `verify` fails is not a clip — `record.js` refuses to compose it.
+ *
+ * That split is the point. Driving the UI only proves the clicks landed
+ * somewhere; it does not prove the app did anything, and the previous video
+ * shipped several clips where it plainly had not. If you add a recipe here and
+ * cannot think what its `verify` should look for, the segment does not yet know
+ * what it is demonstrating.
+ *
+ * See `drive.js` for the helpers, and for why every locator is visible-only.
  */
+const {
+  act, soft, expect, typeInto, btn, field, tab, css, text, byId, rail, urlBar, openRail, newTab,
+} = require('./drive');
+/* The five protocol recipes live next door — see protocols.js for why. */
+const { protocols } = require('./protocols');
+/* The assistant and its settings — see ai.js, and ai-mock.js for the provider. */
+const { ai } = require('./ai');
+/* The cluster console — see dk8s.js. */
+const { dk8s } = require('./dk8s');
+/* The issue board — see dkgh.js. */
+const { dkgh } = require('./dkgh');
+/* Collections, environments, history, mocks, devtools — see app.js. */
+const { app } = require('./app');
 
-const rail = (page, title) => page.locator(`button[title="${title}"]`).first();
+// ── Monaco ──────────────────────────────────────────────────────────────────
 
-async function typeSlow(page, locator, text, delay = 45) {
-  await locator.click({ timeout: 4000 });
-  await page.waitForTimeout(200);
-  await locator.pressSequentially(text, { delay });
-}
+/*
+  Monaco closes brackets, quotes and XML tags for you, and typing the closing
+  characters on top of that is what produced the malformed content in the last
+  video — `{"a": 1}}`, and a SOAP envelope with every tag doubled.
 
-// Monaco auto-closes brackets/quotes as you type — typing the literal
-// closing chars ourselves on top of that produces duplicated/malformed JSON
-// on screen. Disable ONLY that. Auto-indent stays on (its default) so
-// pressing Enter mid-object lands the cursor at the right indentation the
-// same way a real developer typing would see it — recipe JSON strings
-// below rely on this and never include manual leading-space indentation.
-async function disableMonacoAutoClose(page) {
+  Turning it off takes BOTH of these, which is the part that is easy to get
+  wrong: the editor option governs the generic behaviour, but JSON and XML
+  bring their own `autoClosingPairs` through the *language configuration*, and
+  that is what actually inserts the `}` and the `</Currency>`. Setting only the
+  editor option looks like it worked until you type a brace.
+
+  Auto-indent stays on — pressing Enter mid-object should land where a real
+  developer would see it land, which is why the strings below carry no leading
+  indentation of their own.
+*/
+/*
+  The two tab strips REST puts on screen both carry a "Headers", and the
+  response one renders a count beside several labels. `data-tab` is the id the
+  app gave the tab, which neither problem touches.
+*/
+/*
+  The control that picks the body type.
+
+  It reads "No Body" on a fresh request and the chosen type afterwards, so it
+  cannot be found by its text twice in a row — and asking for "the last dui
+  select on screen" found the *method* dropdown instead, so the recipe opened
+  GET/POST/PUT and then waited six seconds for an "XML" that was never coming.
+  `BodyEditor` names it.
+*/
+const bodyTypeMenu = (page) => byId(page, 'body-type');
+
+const reqTab = (page, id) => css(page, `[data-testid="rest-request-tabs"] [data-tab="${id}"]`).first();
+const resTab = (page, id) => css(page, `[data-testid="rest-response-tabs"] [data-tab="${id}"]`).first();
+
+async function calmMonaco(page) {
   await page.evaluate(() => {
     if (!window.monaco) return;
-    window.monaco.editor.getEditors().forEach((ed) =>
-      ed.updateOptions({
-        autoClosingBrackets: 'never',
-        autoClosingQuotes: 'never',
-        autoSurround: 'never',
-      })
-    );
+    window.monaco.editor.getEditors().forEach((ed) => ed.updateOptions({
+      autoClosingBrackets: 'never',
+      autoClosingQuotes: 'never',
+      autoClosingOvertype: 'never',
+      autoSurround: 'never',
+    }));
+    for (const lang of ['json', 'xml', 'html', 'graphql', 'plaintext', 'yaml', 'javascript']) {
+      try {
+        window.monaco.languages.setLanguageConfiguration(lang, {
+          autoClosingPairs: [], surroundingPairs: [], brackets: [],
+        });
+      } catch { /* that language is not registered in this build */ }
+    }
   });
 }
 
-async function typeIntoMonaco(page, text, { delay = 32, verifyAsJson = true } = {}) {
-  await disableMonacoAutoClose(page);
-  const editor = page.locator('.monaco-editor').first();
-  await editor.click({ timeout: 4000 });
-  await page.waitForTimeout(150);
-  // Some editors (e.g. WS Communication) start with default placeholder
-  // content already in them — clear it first, otherwise the typed text is
-  // just inserted at the cursor and produces malformed, duplicated content.
-  const isMac = process.platform === 'darwin';
-  await page.keyboard.press(isMac ? 'Meta+A' : 'Control+A');
-  await page.keyboard.press('Delete');
-  await page.waitForTimeout(100);
-  await page.keyboard.type(text, { delay });
-  await page.waitForTimeout(150);
+/** Which editor is on screen — there can be several mounted at once. */
+const editor = (page) => css(page, '.monaco-editor');
 
-  if (!verifyAsJson) return;
-  // Safety net: some Monaco language modes (JSON's included) auto-insert a
-  // closing bracket via their own onEnterRules/bracket logic independent of
-  // the `autoClosingBrackets` editor option above, which the option alone
-  // doesn't catch — verified live, typing `{...}` can still leave a stray
-  // trailing `}` even with auto-close "disabled". Compare semantically (not
-  // string-equal — auto-indent legitimately adds whitespace `text` doesn't
-  // have, that's fine and worth keeping); only overwrite when the on-screen
-  // content isn't actually the same JSON, which is exactly the "error
-  // visible in the video" bug this exists to catch.
-  const actual = await page.evaluate(() => window.monaco?.editor.getEditors()[0]?.getValue());
-  let matches = false;
-  try {
-    matches = actual !== undefined && JSON.stringify(JSON.parse(actual)) === JSON.stringify(JSON.parse(text));
-  } catch { /* actual isn't valid JSON at all — needs correction */ }
-  if (!matches) {
-    let corrected = text;
-    try { corrected = JSON.stringify(JSON.parse(text), null, 2); } catch { /* text itself isn't JSON; use as-is */ }
-    await page.evaluate((value) => {
-      window.monaco.editor.getEditors()[0].getModel().setValue(value);
-    }, corrected);
+async function typeCode(page, what, code, { delay = 30, json = true } = {}) {
+  await expect(page, `the ${what} editor`, editor(page));
+  await act(`focus the ${what} editor`, () => editor(page).first().click({ timeout: 6000 }));
+  await page.waitForTimeout(200);
+  /* After the click, not before: choosing a body type remounts the editor, and
+     options set on the instance that has gone do nothing at all. */
+  await calmMonaco(page);
+  await page.waitForTimeout(120);
+  await act('clear it', async () => {
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+    await page.keyboard.press('Delete');
+  });
+  await page.waitForTimeout(120);
+  await act(`type the ${what}`, () => page.keyboard.type(code, { delay }));
+  await page.waitForTimeout(250);
+
+  /*
+    What ended up on screen, compared with what we meant.
+
+    Not a string comparison: auto-indent legitimately adds whitespace the input
+    string does not have, and that is worth keeping — it is what makes the
+    typing look real. JSON is compared as JSON; anything else is compared with
+    whitespace collapsed. A mismatch is a hard failure rather than a silent
+    correction, because a silent correction is how the last video ended up
+    showing text nobody typed.
+  */
+  const seen = await page.evaluate(() => window.monaco?.editor.getEditors()
+    .map((e) => e.getValue()).find((v) => v && v.trim().length));
+  if (seen === undefined) throw new Error('the editor never received the text');
+
+  const same = json
+    ? (() => { try { return JSON.stringify(JSON.parse(seen)) === JSON.stringify(JSON.parse(code)); } catch { return false; } })()
+    : seen.replace(/\s+/g, ' ').trim() === code.replace(/\s+/g, ' ').trim();
+
+  if (!same) {
+    throw new Error(`the editor shows something other than what was typed:\n--- typed ---\n${code}\n--- on screen ---\n${seen}`);
   }
 }
 
-// Click a "Prettify"/"Prettify JSON" toolbar button if the panel has one
-// (REST's Body tab does; WS's Communication tab doesn't) — a nice finishing
-// beat after typing, and a safety net if auto-indent alone isn't perfectly
-// tidy. No-ops quietly if there's no such button in the current panel.
-async function clickPrettifyIfPresent(page) {
-  const btn = page.locator('button[title="Prettify"], button[title="Prettify JSON"]').first();
-  if (await btn.count()) {
-    await btn.click({ timeout: 2000 }).catch(() => {});
-  }
+// ── Shared beats ────────────────────────────────────────────────────────────
+
+/** A REST request, sent for real, with the response proved to have arrived. */
+async function sendRest(page, url, { typeDelay = 40 } = {}) {
+  await openRail(page, 'REST');
+  await newTab(page);
+  await typeInto(page, 'the URL bar', urlBar(page), url, typeDelay);
+  await page.waitForTimeout(400);
+  await act('press Send', () => btn(page, 'Send').first().click({ timeout: 8000 }));
+  /* The status pill is the proof. Without this the clip is "somebody typed a
+     URL", which is what the old REST segment actually was whenever the request
+     failed. */
+  await expect(page, 'a response status', css(page, '[class*="status"]:has-text("200"), :text("200 OK")'), { timeout: 15000 });
+  await page.waitForTimeout(900);
 }
 
 const recipes = {
-  async restRequest(page, opts = {}) {
-    const url = opts.url || 'https://jsonplaceholder.typicode.com/users/1';
-    await rail(page, 'REST').click();
-    await page.getByRole('button', { name: 'New Tab' }).click();
-    await page.waitForTimeout(400);
-    const urlBox = page.getByPlaceholder('Enter a URL or paste a cURL command').first();
-    await typeSlow(page, urlBox, url, opts.typeDelay || 45);
-    await page.waitForTimeout(500);
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
-    await page.waitForTimeout(opts.settleMs ?? 2200);
+  // ── Protocols ─────────────────────────────────────────────────────────────
+
+  /**
+   * The flagship segment: one request, end to end.
+   *
+   * It types a body minified on purpose so that formatting has visible work to
+   * do, then shows both ways to ask for it — the editor's own right-click menu
+   * and the toolbar button beside it — before sending and walking the two tab
+   * strips the response arrives in.
+   *
+   * Tabs are addressed by `data-tab`, not by their label: the response strip
+   * renders counts beside "Headers" and "Cookies", so the accessible name is
+   * "Headers 12" on one run and "Headers 9" on the next.
+   */
+  restRequest: {
+    async run(page, o = {}) {
+      const url = o.url || 'https://jsonplaceholder.typicode.com/posts';
+      /* One line, no spaces — the "before" that makes Format Document read as
+         something happening rather than as a no-op. */
+      const minified = o.json
+        || '{"title":"Daakia","body":"Every protocol in one window","userId":1,"tags":["rest","grpc","graphql"]}';
+      const delay = o.typeDelay || 30;
+
+      await openRail(page, 'REST');
+      await newTab(page);
+
+      /*
+        The method first, and through its own control.
+
+        Clicking the URL bar opens the suggestion list — history and mock
+        routes — and an earlier version of this recipe then clicked the first
+        thing reading "POST", which was a saved request. The URL bar ended up
+        holding somebody else's localhost URL and the segment recorded a
+        connection refused. The method sits in a dui select with its own
+        trigger; nothing else on screen is one.
+      */
+      await act('open the method menu', () => css(page, '.dui_select-text__trigger').first().click({ timeout: 6000 }));
+      await page.waitForTimeout(400);
+      await act('choose POST', () => css(page, '.dui_select-text__option:has-text("POST")').first().click({ timeout: 6000 }));
+      await page.waitForTimeout(500);
+
+      await typeInto(page, 'the URL bar', urlBar(page), url, delay);
+      /* Dismiss the suggestion list, so the next click lands on the tab strip
+         and not on whatever the list is covering. */
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(400);
+
+      await act('open the Body tab', () => reqTab(page, 'body').click({ timeout: 8000 }));
+      await page.waitForTimeout(400);
+      await act('open the body-type menu', () => text(page, 'No Body').first().click({ timeout: 8000 }));
+      await page.waitForTimeout(300);
+      await act('choose JSON', () => text(page, 'JSON').first().click({ timeout: 8000 }));
+      await page.waitForTimeout(500);
+      await typeCode(page, 'request body', minified, { delay });
+      await page.waitForTimeout(700);
+
+      /* One: the editor's own context menu, shortcut and all. */
+      await act('right-click the body', () => editor(page).first().click({ button: 'right', timeout: 6000 }));
+      await page.waitForTimeout(600);
+      await act('choose Format Document', () => text(page, 'Format Document').first().click({ timeout: 6000 }));
+      await page.waitForTimeout(1200);
+
+      /* Two: the same thing from the toolbar. Undo puts the one-liner back so
+         the button has the same work to do — Monaco formats as a single edit,
+         so one undo is exactly the format and not the typing. */
+      await act('undo the formatting', async () => {
+        await editor(page).first().click({ timeout: 6000 });
+        await page.keyboard.press('Control+Z');
+      });
+      await page.waitForTimeout(800);
+      await act('press Prettify', () => css(page, 'button[title="Prettify"], button[title="Prettify JSON"]').first().click({ timeout: 6000 }));
+      await page.waitForTimeout(1100);
+
+      await act('press Send', () => btn(page, 'Send').first().click({ timeout: 8000 }));
+      await expect(page, 'a response status', css(page, '[class*="status"]:has-text("201"), [class*="status"]:has-text("200"), :text("201 Created")'), { timeout: 20000 });
+      await page.waitForTimeout(1100);
+
+      /* The response, tab by tab, and back to the body it opened on. */
+      for (const [id, label] of [['headers', 'Headers'], ['timeline', 'Timeline'], ['raw', 'Raw'], ['json', 'JSON']]) {
+        await soft(`the response ${label} tab`, async () => {
+          await resTab(page, id).click({ timeout: 4000 });
+          await page.waitForTimeout(1100);
+        });
+      }
+
+      /* Then the request's own, ending on the two the segment is here for. */
+      for (const [id, label] of [['params', 'Params'], ['headers', 'Headers'], ['docs', 'Docs'], ['settings', 'Settings']]) {
+        await soft(`the request ${label} tab`, async () => {
+          await reqTab(page, id).click({ timeout: 4000 });
+          await page.waitForTimeout(1400);
+        });
+      }
+      await page.waitForTimeout(o.settleMs ?? 900);
+    },
+
+    async verify(page) {
+      /*
+        Three things, because this segment claims three.
+
+        The formatted body proves both Format paths ran — a one-line body means
+        the right-click did nothing and Prettify did nothing either. The status
+        proves the request left the machine. The Settings panel proves the last
+        tab click landed somewhere real rather than on a tab that exists but
+        renders nothing.
+      */
+      const body = await page.evaluate(() => window.monaco?.editor.getEditors()
+        .map((e) => e.getValue()).find((v) => v && v.includes('Daakia')));
+      if (!body) throw new Error('the body editor does not hold the typed JSON');
+      if (!body.includes('\n')) throw new Error(`the body was never formatted — it is still one line:\n${body}`);
+
+      /* The same selector `run` waited on. An earlier version looked only for
+         an element whose class contains "status"; the pill's class does not,
+         so `run` passed on the text match and `verify` then failed on a screen
+         that was entirely correct. */
+      await expect(page, 'a response status', css(page, ':text("201 Created"), :text("200 OK")'), { timeout: 8000 });
+      /* Something the Settings tab shows without scrolling. */
+      await expect(page, 'the request Settings panel', text(page, 'Follow Redirects', false), { timeout: 6000 });
+    },
   },
 
-  async jsonBodyType(page, opts = {}) {
-    const url = opts.url || 'https://jsonplaceholder.typicode.com/posts';
-    // No manual leading-space indentation here — Monaco auto-indents each
-    // new line as it's typed, same as a real developer would see.
-    const json = opts.json || '{\n"title": "Daakia is fast",\n"body": "Live JSON typing demo",\n"userId": 1\n}';
-    await rail(page, 'REST').click();
-    await page.getByRole('button', { name: 'New Tab' }).click();
-    await page.waitForTimeout(400);
-    const urlBox = page.getByPlaceholder('Enter a URL or paste a cURL command').first();
-    await urlBox.fill(url);
-    await page.waitForTimeout(300);
-    await page.getByRole('tab', { name: 'Body', exact: true }).click({ timeout: 4000 });
-    await page.waitForTimeout(500);
-    await page.getByText('None', { exact: true }).first().click({ timeout: 4000 });
-    await page.waitForTimeout(300);
-    await page.getByText('application/json', { exact: true }).first().click({ timeout: 4000 });
-    await page.waitForTimeout(500);
-    await typeIntoMonaco(page, json, { delay: opts.typeDelay || 35 });
-    await page.waitForTimeout(400);
-    await clickPrettifyIfPresent(page);
-    await page.waitForTimeout(opts.settleMs ?? 1000);
+  /**
+   * The body is not only JSON.
+   *
+   * REST already shows a JSON body being typed and formatted, so this one is
+   * about the menu beside it: the same request carrying XML, then YAML, then a
+   * form — each with the editor or the table the app swaps in for it.
+   */
+  bodyTypes: {
+    async run(page, o = {}) {
+      const delay = o.typeDelay || 26;
+      await openRail(page, 'REST');
+      await newTab(page);
+
+      await act('open the method menu', () => css(page, '.dui_select-text__trigger').first().click({ timeout: 6000 }));
+      await page.waitForTimeout(350);
+      await act('choose POST', () => css(page, '.dui_select-text__option:has-text("POST")').first().click({ timeout: 6000 }));
+      await page.waitForTimeout(400);
+
+      await typeInto(page, 'the URL bar', urlBar(page), o.url || 'https://httpbin.org/post', delay);
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(350);
+
+      await act('open the Body tab', () => reqTab(page, 'body').click({ timeout: 8000 }));
+      await page.waitForTimeout(500);
+
+      /* Held open a beat: the whole point of the segment is the list. */
+      await act('open the body-type menu', () => bodyTypeMenu(page).click({ timeout: 8000 }));
+      await page.waitForTimeout(1500);
+      await act('choose XML', () => text(page, 'XML').first().click({ timeout: 6000 }));
+      await page.waitForTimeout(600);
+      await typeCode(page, 'XML body', o.xml
+        || '<order>\n<item sku=\'DK-1\'>Daakia</item>\n<qty>2</qty>\n</order>',
+        { delay, json: false });
+      await page.waitForTimeout(1300);
+
+      await act('back to the body-type menu', () => bodyTypeMenu(page).click({ timeout: 8000 }));
+      await page.waitForTimeout(700);
+      await act('choose YAML', () => text(page, 'YAML').first().click({ timeout: 6000 }));
+      await page.waitForTimeout(600);
+      await typeCode(page, 'YAML body', o.yaml
+        || 'order:\nsku: DK-1\nqty: 2',
+        { delay, json: false });
+      await page.waitForTimeout(1300);
+
+      /* The two that are a table rather than an editor. */
+      await act('back to the body-type menu', () => bodyTypeMenu(page).click({ timeout: 8000 }));
+      await page.waitForTimeout(700);
+      await act('choose Form URL Encoded', () => text(page, 'Form URL Encoded').first().click({ timeout: 6000 }));
+      await page.waitForTimeout(1400);
+
+      await soft('type a form field', async () => {
+        const cell = css(page, 'input[placeholder="Key"], input[placeholder="key"]').first();
+        await cell.click({ timeout: 4000 });
+        await page.keyboard.type('sku', { delay });
+        await page.keyboard.press('Tab');
+        await page.keyboard.type('DK-1', { delay });
+        await page.waitForTimeout(900);
+      });
+
+      await act('back to the body-type menu', () => bodyTypeMenu(page).click({ timeout: 8000 }));
+      await page.waitForTimeout(700);
+      await act('choose Multipart Form', () => text(page, 'Multipart Form').first().click({ timeout: 6000 }));
+      await page.waitForTimeout(o.settleMs ?? 1600);
+    },
+
+    async verify(page) {
+      /* The trigger names whichever type the request is carrying now — the one
+         thing that is true at the end however the middle went. */
+      await expect(page, 'the Multipart Form body type', text(page, 'Multipart Form', false), { timeout: 6000 });
+    },
   },
 
-  async aiChatType(page, opts = {}) {
-    const message = opts.message || 'How do I generate a mock server from this collection?';
-    await page.locator('button[title="Daakia AI"]').first().click();
-    await page.waitForTimeout(600);
-    const chatInput = page.getByPlaceholder('Ask anything about APIs, REST, GraphQL, mocks, cURL, tests…');
-    await typeSlow(page, chatInput, message, opts.typeDelay || 40);
-    await page.waitForTimeout(opts.settleMs ?? 1200);
-  },
+  ...protocols,
 
-  async wsMessageType(page, opts = {}) {
-    // No manual indentation — see jsonBodyType's comment. WS's Communication
-    // tab has no Prettify button, so auto-indent-while-typing is the only pass.
-    const json = opts.json || '{\n"type": "subscribe",\n"channel": "orders"\n}';
-    await rail(page, 'Real time').click();
-    await page.getByRole('button', { name: 'New Tab' }).click();
-    await page.waitForTimeout(400);
-    await page.getByRole('button', { name: 'Connect', exact: true }).click({ timeout: 4000 }).catch(() => {});
-    await page.waitForTimeout(900);
-    await typeIntoMonaco(page, json, { delay: opts.typeDelay || 35 });
-    await page.waitForTimeout(opts.settleMs ?? 900);
-  },
+  ...ai,
 
-  async graphqlQueryType(page, opts = {}) {
-    const query = opts.query || '{\nusers {\nid\nname\n}\n}';
-    await rail(page, 'GraphQL').click();
-    await page.getByRole('button', { name: 'New Tab' }).click();
-    await page.waitForTimeout(500);
-    // GraphQL query syntax isn't valid JSON — skip the JSON-correctness
-    // safety net (it would misfire and overwrite good content).
-    await typeIntoMonaco(page, query, { delay: opts.typeDelay || 35, verifyAsJson: false });
-    await page.waitForTimeout(300);
-    // Running a query doesn't require Connect/introspection first — this
-    // still fires a real request; failures (unreachable endpoint) are caught
-    // so the clip keeps recording either way.
-    await page.locator('button[title="Run query"]').click({ timeout: 4000 }).catch(() => {});
-    await page.waitForTimeout(opts.settleMs ?? 1200);
-  },
+  // ── Mock server, end to end ───────────────────────────────────────────────
 
-  async grpcMessageType(page, opts = {}) {
-    const endpoint = opts.endpoint || 'localhost:50051';
-    const message = opts.message || '{\n"name": "Daakia"\n}';
-    await rail(page, 'gRPC').click();
-    await page.getByRole('button', { name: 'New Tab' }).click();
-    await page.waitForTimeout(400);
-    // gRPC's endpoint bar is DUI's HighlightedInputView — a contentEditable
-    // div with a decorative placeholder <span>, not a real <input>, so
-    // getByPlaceholder never matches it. Click + type into the editor div
-    // directly instead (same trick works for any HighlightedInputView).
-    const endpointBox = page.locator('.dui_highlighted-input__editor').first();
-    await typeSlow(page, endpointBox, endpoint, opts.typeDelay || 45);
-    await page.waitForTimeout(300);
-    await page.getByRole('tab', { name: 'Message', exact: true }).click({ timeout: 4000 }).catch(() => {});
-    await page.waitForTimeout(400);
-    // No real endpoint is reachable here, so this demonstrates the message
-    // editor rather than a live Invoke — Invoke also needs a method picked
-    // via reflection/proto upload first, which needs a real gRPC server.
-    await typeIntoMonaco(page, message, { delay: opts.typeDelay || 35 });
-    await page.waitForTimeout(opts.settleMs ?? 900);
-  },
+  ...app,
 
-  async soapEnvelopeType(page, opts = {}) {
-    const endpoint = opts.endpoint || 'http://localhost:8080/soap';
-    const envelope = opts.envelope
-      || '<?xml version="1.0"?>\n<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">\n<soap:Body>\n<GetData xmlns="http://example.com/">\n<id>1</id>\n</GetData>\n</soap:Body>\n</soap:Envelope>';
-    await rail(page, 'SOAP').click();
-    await page.getByRole('button', { name: 'New Tab' }).click();
-    await page.waitForTimeout(400);
-    const endpointBox = page.getByPlaceholder('http://localhost:8080/soap').first();
-    await typeSlow(page, endpointBox, endpoint, opts.typeDelay || 45);
-    await page.waitForTimeout(300);
-    // Envelope is the default-active sub-tab — no tab click needed.
-    await typeIntoMonaco(page, envelope, { delay: opts.typeDelay || 30, verifyAsJson: false });
-    await page.waitForTimeout(opts.settleMs ?? 900);
-  },
+  // ── dk8s ──────────────────────────────────────────────────────────────────
 
-  async mcpServerType(page, opts = {}) {
-    const command = opts.command || 'npx @modelcontextprotocol/server-filesystem /workspace';
-    await rail(page, 'MCP').click();
-    await page.getByRole('button', { name: 'New Tab' }).click();
-    await page.waitForTimeout(400);
-    // Whichever transport is default-selected (STDIO or HTTP/SSE) shows one
-    // of these two placeholders — match either rather than driving the
-    // transport dropdown, which is a fragile interaction to script.
-    const cmdBox = page.locator('input[placeholder^="npx"], input[placeholder^="http://localhost:3000"]').first();
-    await typeSlow(page, cmdBox, command, opts.typeDelay || 40);
-    await page.waitForTimeout(opts.settleMs ?? 900);
-  },
+  ...dk8s,
 
-  async mockServerRun(page, opts = {}) {
-    const name = opts.name || 'Demo Mock Server';
-    // Title is dynamic ("Mock Server" / "Mock Server (N running)") — match
-    // by prefix, not the exact-title `rail()` helper. When a server from a
-    // prior run is already running, this button carries a pulsing
-    // `mock-server-running` CSS animation class, which Playwright's
-    // actionability check reads as "element is not stable" forever — force
-    // the click to skip that check.
-    await page.locator('button[title^="Mock Server"]').first().click({ force: true });
-    await page.waitForTimeout(500);
-    await page.locator('button[title="New mock server"]').click({ timeout: 4000 }).catch(() => {});
-    await page.waitForTimeout(400);
-    const nameBox = page.getByPlaceholder('Mock server name').first();
-    await typeSlow(page, nameBox, name, opts.typeDelay || 45);
-    await page.waitForTimeout(300);
-    await page.getByRole('button', { name: 'Create', exact: true }).click({ timeout: 4000 }).catch(() => {});
-    await page.waitForTimeout(800);
-    // Button text is literally "▶ Start" / "⏹ Stop" — match by substring.
-    await page.getByRole('button', { name: /Start/ }).first().click({ timeout: 4000 }).catch(() => {});
-    await page.waitForTimeout(1200);
-    // "Try" is disabled until the server actually reports running.
-    await page.getByRole('button', { name: 'Try', exact: true }).click({ timeout: 4000 }).catch(() => {});
-    await page.waitForTimeout(opts.settleMs ?? 1500);
-  },
+  // ── dkgh ──────────────────────────────────────────────────────────────────
 
-  async devToolsShow(page, opts = {}) {
-    const url = opts.url || 'https://jsonplaceholder.typicode.com/users/1';
-    // Fire a real request first so the Network tab has something to show.
-    await rail(page, 'REST').click();
-    await page.getByRole('button', { name: 'New Tab' }).click();
-    await page.waitForTimeout(400);
-    const urlBox = page.getByPlaceholder('Enter a URL or paste a cURL command').first();
-    await typeSlow(page, urlBox, url, opts.typeDelay || 40);
-    await page.waitForTimeout(300);
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
-    await page.waitForTimeout(1500);
-    await page.locator('button[title="DevTools (Console / Timeline)"]').click({ timeout: 4000 }).catch(() => {});
-    await page.waitForTimeout(600);
-    await page.getByRole('button', { name: 'Network', exact: true }).first().click({ timeout: 3000 }).catch(() => {});
-    await page.waitForTimeout(opts.settleMs ?? 1200);
-  },
+  ...dkgh,
 
-  async collectionsCreate(page, opts = {}) {
-    const name = opts.name || 'Demo Collection';
-    await rail(page, 'REST').click();
-    await page.waitForTimeout(300);
-    await rail(page, 'Collections').click();
-    await page.waitForTimeout(700);
-    await page.getByRole('button', { name: 'New', exact: true }).first().click({ timeout: 6000 }).catch(() => {});
-    await page.waitForTimeout(600);
-    const nameBox = page.getByPlaceholder('Collection name').first();
-    await typeSlow(page, nameBox, name, opts.typeDelay || 45).catch(() => {});
-    await page.waitForTimeout(300);
-    await page.getByRole('button', { name: 'Save', exact: true }).click({ timeout: 4000 }).catch(() => {});
-    await page.waitForTimeout(opts.settleMs ?? 1200);
-  },
-
-  async historyShow(page, opts = {}) {
-    const url = opts.url || 'https://jsonplaceholder.typicode.com/todos/1';
-    // Fire a real request first so History has an entry to display — each
-    // recipe runs in a fresh browser context, nothing carries over between
-    // segments.
-    await rail(page, 'REST').click();
-    await page.getByRole('button', { name: 'New Tab' }).click();
-    await page.waitForTimeout(400);
-    const urlBox = page.getByPlaceholder('Enter a URL or paste a cURL command').first();
-    await typeSlow(page, urlBox, url, opts.typeDelay || 40);
-    await page.waitForTimeout(300);
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
-    await page.waitForTimeout(1800);
-    await rail(page, 'History').click();
-    await page.waitForTimeout(opts.settleMs ?? 1000);
-  },
-
-  async environmentCreate(page, opts = {}) {
-    const varKey = opts.varKey || 'baseUrl';
-    const varValue = opts.varValue || 'https://api.example.com';
-    await rail(page, 'REST').click();
-    await page.waitForTimeout(300);
-    await rail(page, 'Environments').click();
-    await page.waitForTimeout(500);
-    await page.getByRole('button', { name: 'New', exact: true }).first().click({ timeout: 4000 }).catch(() => {});
-    await page.waitForTimeout(500);
-    await page.locator('button[title="Add new row"]').first().click({ timeout: 4000 }).catch(() => {});
-    await page.waitForTimeout(300);
-    const keyBox = page.getByPlaceholder('Variable name').first();
-    await typeSlow(page, keyBox, varKey, opts.typeDelay || 40);
-    const valueBox = page.getByPlaceholder('Initial value').first();
-    await typeSlow(page, valueBox, varValue, opts.typeDelay || 40);
-    await page.waitForTimeout(300);
-    await page.getByRole('button', { name: 'Save', exact: true }).click({ timeout: 4000 }).catch(() => {});
-    await page.waitForTimeout(opts.settleMs ?? 900);
-  },
-
-  async mockServerShow(page) {
-    await rail(page, 'Mock Server').click();
-    await page.waitForTimeout(900);
-  },
-
-  async settingsShow(page) {
-    await page.locator('button[title="Settings"]').click();
-    await page.waitForTimeout(900);
-  },
-
-  async settingsProviderShow(page) {
-    await page.locator('button[title="Settings"]').click();
-    await page.waitForTimeout(700);
-    // Settings side-nav items are plain <div>s, not role="button" — match
-    // by text, not getByRole.
-    await page.getByText('LLM Provider', { exact: true }).first().click({ timeout: 4000 }).catch(() => {});
-    await page.waitForTimeout(900);
-  },
-
-  async settingsPromptShow(page) {
-    await page.locator('button[title="Settings"]').click();
-    await page.waitForTimeout(700);
-    await page.getByText('Prompt Library', { exact: true }).first().click({ timeout: 4000 }).catch(() => {});
-    await page.waitForTimeout(900);
-  },
 };
 
-module.exports = { recipes, rail, typeSlow, typeIntoMonaco, disableMonacoAutoClose, clickPrettifyIfPresent };
+module.exports = { recipes, typeCode, sendRest };

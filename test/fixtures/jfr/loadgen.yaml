@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: petclinic-load
+  namespace: dk8s-test
+  labels: { app: petclinic-load, dk8s-purpose: profiler-testbed }
+spec:
+  replicas: 3
+  selector: { matchLabels: { app: petclinic-load } }
+  template:
+    metadata:
+      labels: { app: petclinic-load }
+    spec:
+      containers:
+        - name: curl
+          image: curlimages/curl:latest
+          # Real traffic shape: list pages, searches and detail views, not one
+          # endpoint hammered — a profile of a single URL is a microbenchmark.
+          command: ["sh","-c"]
+          args:
+            - |
+              while true; do
+                curl -s -o /dev/null http://petclinic:8080/
+                curl -s -o /dev/null "http://petclinic:8080/owners?lastName="
+                curl -s -o /dev/null "http://petclinic:8080/owners?lastName=Davis"
+                curl -s -o /dev/null http://petclinic:8080/vets.html
+                curl -s -o /dev/null http://petclinic:8080/owners/1
+                curl -s -o /dev/null http://petclinic:8080/oups
+              done
+          resources:
+            requests: { cpu: "50m", memory: "32Mi" }
+            limits:   { cpu: "300m", memory: "64Mi" }

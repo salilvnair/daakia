@@ -3,9 +3,10 @@
  * Supports SOAP 1.1 (text/xml + SOAPAction header) and SOAP 1.2 (application/soap+xml).
  */
 import http from 'http';
-import https from 'https';
 import { URL } from 'url';
 import crypto from 'crypto';
+import type { ResolvedProxy } from '../services/proxy-config';
+import { requestOptions, transportFor } from '../services/http-transport';
 
 export interface SoapInvokeParams {
   tabId: string;
@@ -16,6 +17,20 @@ export interface SoapInvokeParams {
   headers: { key: string; value: string }[];
   attachments?: SoapAttachmentParam[]; // MTOM file attachments
   timeout?: number; // request timeout in ms (default 300000)
+  /**
+   * Routing decision from the shared proxy resolver.
+   *
+   * SOAP posts through the raw http/https modules rather than axios, so the
+   * proxy has to be applied here by hand. It was not, which meant a configured
+   * proxy silently did nothing for SOAP while it worked for REST.
+   */
+  proxy?: ResolvedProxy;
+  /**
+   * Certificate verification, resolved by the caller from settings.
+   * SOAP used to verify unconditionally, so turning verification off in
+   * settings worked for REST and quietly did nothing here.
+   */
+  rejectUnauthorized?: boolean;
 }
 
 export interface SoapAttachmentParam {
@@ -34,6 +49,8 @@ export interface SoapResponse {
   time: number;
   size: number;
   hasFault: boolean;
+  /** The headers actually put on the wire, including the ones built here. */
+  requestHeaders?: Record<string, string>;
 }
 
 // Track active requests for cancellation
@@ -55,8 +72,7 @@ export function executeSoapRequest(params: SoapInvokeParams): Promise<SoapRespon
       return;
     }
 
-    const isHttps = url.protocol === 'https:';
-    const transport = isHttps ? https : http;
+    const transport = transportFor(url);
 
     // Build request headers
     const reqHeaders: Record<string, string> = {};
@@ -99,14 +115,15 @@ export function executeSoapRequest(params: SoapInvokeParams): Promise<SoapRespon
 
     reqHeaders['Content-Length'] = String(body.length);
 
-    const options: http.RequestOptions = {
-      hostname: url.hostname,
-      port: url.port || (isHttps ? 443 : 80),
-      path: url.pathname + url.search,
-      method: 'POST',
-      headers: reqHeaders,
-      timeout: params.timeout ?? 300000,
-    };
+    const timeout = params.timeout ?? 300000;
+
+    // Proxy routing and certificate verification are shared with SSE, which
+    // drives the http module the same way. See services/http-transport.ts.
+    const options = requestOptions(url, 'POST', reqHeaders, {
+      proxy: params.proxy,
+      rejectUnauthorized: params.rejectUnauthorized,
+      timeout,
+    });
 
     const req = transport.request(options, (res) => {
       const chunks: Buffer[] = [];
@@ -142,6 +159,7 @@ export function executeSoapRequest(params: SoapInvokeParams): Promise<SoapRespon
           time: elapsed,
           size,
           hasFault,
+          requestHeaders: reqHeaders,
         });
       });
     });
@@ -154,7 +172,7 @@ export function executeSoapRequest(params: SoapInvokeParams): Promise<SoapRespon
     req.on('timeout', () => {
       req.destroy();
       activeRequests.delete(tabId);
-      const timeoutMs = params.timeout ?? 300000;
+      const timeoutMs = timeout;
       const timeoutSec = Math.round(timeoutMs / 1000);
       reject(new Error(`Request timed out after ${timeoutSec}s`));
     });

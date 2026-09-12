@@ -21,7 +21,8 @@ const BASE: CSSProperties = {
 // ─── SectionHeader ────────────────────────────────────────────────────────────
 
 interface SectionHeaderProps {
-  icon: string;
+  /** A leading glyph, where one earns its place. Most headers have none. */
+  icon?: string;
   label: string;
   accent?: string;
 }
@@ -41,7 +42,7 @@ export function SectionHeader({ icon, label, accent }: SectionHeaderProps) {
       paddingBottom: 5,
       borderBottom: `1px solid var(--vscode-widget-border, rgba(128,128,128,0.18))`,
     }}>
-      <span>{icon}</span>
+      {icon && <span>{icon}</span>}
       <span>{label}</span>
     </div>
   );
@@ -50,7 +51,7 @@ export function SectionHeader({ icon, label, accent }: SectionHeaderProps) {
 // ─── FeatureRow ───────────────────────────────────────────────────────────────
 
 interface FeatureRowProps {
-  icon: string;
+  icon?: string;
   title: string;
   desc: string;
   chips?: string[];
@@ -60,7 +61,7 @@ interface FeatureRowProps {
 export function FeatureRow({ icon, title, desc, chips, chipColor }: FeatureRowProps) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7, padding: '3.5px 0' }}>
-      <span style={{ fontSize: 12, flexShrink: 0, width: 16, lineHeight: '18px' }}>{icon}</span>
+      {icon && <span style={{ fontSize: 12, flexShrink: 0, width: 16, lineHeight: '18px' }}>{icon}</span>}
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--vscode-foreground)' }}>{title}</div>
         <div style={{ fontSize: 10, color: 'var(--vscode-descriptionForeground)', lineHeight: 1.35, marginTop: 1 }}>{desc}</div>

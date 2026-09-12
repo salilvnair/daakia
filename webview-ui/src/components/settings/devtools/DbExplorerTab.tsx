@@ -7,6 +7,7 @@ import { createPortal } from 'react-dom';
 import { postMsg } from '../../../vscode';
 import { CodeEditor } from '../../shared';
 import { RefreshIcon, TrashIcon, ChevronRightIcon, ServerIcon, CloseIcon } from '../../../icons';
+import { ModalView, ButtonView } from '@salilvnair/dui';
 import { logUiEvent } from '../../../store/ui-audit-store';
 
 interface TableInfo { name: string; rowCount: number; columns: string[]; }
@@ -164,9 +165,30 @@ export function DbExplorerTab() {
     loadRows(name);
   };
 
+  /*
+    A row delete is asked about first.
+
+    It went straight to the database on one click of a 11px icon sitting in
+    every row of a dense grid — no undo, no trash, nothing to recover from.
+    The rows here are the application's own state: prompts, audit entries,
+    saved requests. Misfiring on the wrong row is a data loss you find out
+    about later.
+  */
+  const [confirmRow, setConfirmRow] = useState<Record<string, unknown> | null>(null);
+
+  const pkColumn = () =>
+    columns.find(c => c.toLowerCase().includes('id') && c !== 'conversation_id') ?? columns[0];
+
   const handleDelete = (row: Record<string, unknown>) => {
     if (!activeTable) return;
-    const pkCol = columns.find(c => c.toLowerCase().includes('id') && c !== 'conversation_id') ?? columns[0];
+    setConfirmRow(row);
+  };
+
+  const reallyDelete = () => {
+    const row = confirmRow;
+    setConfirmRow(null);
+    if (!row || !activeTable) return;
+    const pkCol = pkColumn();
     postMsg({ type: 'dbExplorer:deleteRow', tableName: activeTable, pkCol, pkVal: row[pkCol] });
   };
 
@@ -174,6 +196,39 @@ export function DbExplorerTab() {
 
   return (
     <div className="flex h-full min-h-0">
+      <ModalView
+        open={!!confirmRow}
+        onClose={() => setConfirmRow(null)}
+        title="Delete this row?"
+        size="sm"
+        footerRight={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <ButtonView variant="secondary" size="sm" onClick={() => setConfirmRow(null)}>
+              Cancel
+            </ButtonView>
+            <ButtonView variant="primary" size="sm" accentColor="var(--color-error)"
+                        onClick={reallyDelete}>
+              Delete
+            </ButtonView>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-2 text-[12px]">
+          <span style={{ color: 'var(--color-text-secondary)' }}>
+            This removes one row from <code>{activeTable}</code> and cannot be undone.
+          </span>
+          {/* Which row, by its key — the grid scrolls, and a dialog that only
+              says "this row" leaves you checking behind it. */}
+          {confirmRow && (
+            <span className="font-mono text-[11px] px-2 py-1.5 rounded"
+                  style={{ background: 'var(--color-surface-hover)',
+                           color: 'var(--color-text-muted)', wordBreak: 'break-all' }}>
+              {pkColumn()}: {String(confirmRow[pkColumn()] ?? '—')}
+            </span>
+          )}
+        </div>
+      </ModalView>
+
       {/* ─── Left: table list ─── */}
       <div className="w-[190px] shrink-0 border-r border-[color-mix(in_srgb,var(--color-text-primary)_7%,transparent)] flex flex-col bg-[color-mix(in_srgb,var(--color-text-primary)_1%,transparent)]">
         <div className="flex items-center justify-between px-3 py-2.5 border-b border-[color-mix(in_srgb,var(--color-text-primary)_7%,transparent)]">

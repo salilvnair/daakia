@@ -4,6 +4,7 @@
  * response, headers, and metadata. Mirrors dmcr_copilot's AI Footprint panel.
  */
 import { useState, useEffect, useCallback } from 'react';
+import { nameForStage, screenForStage } from '../../store/ai-audit-events';
 import { postMsg } from '../../vscode';
 import { RefreshIcon, TrashIcon, CopyIcon, CheckIcon, ChevronLeftIcon, SparkleIcon } from '../../icons';
 
@@ -102,7 +103,20 @@ const STAGE_LABEL_MAP: Record<string, string> = {
   'mock.mqtt.generate':               'MQTT Mock',
 };
 
+/**
+ * The feature's name, from the one place features are named.
+ *
+ * This screen kept its own map, and the map had drifted: `dk8s.log.askWhy`,
+ * `dk8s.file.explain` and `dk8s.terminal.theme` all showed as raw keys
+ * because nobody added them here when the features were built. The prompt
+ * library names every feature already — it has to, those labels are what
+ * Settings shows — so that is the source now, and the local map is kept only
+ * for the handful of stages that are not prompt keys at all (`DAAKIA_AI`,
+ * `aiChat`).
+ */
 function prettifyStage(stage: string): string {
+  const fromLibrary = nameForStage(stage);
+  if (fromLibrary !== stage) return fromLibrary;
   return STAGE_LABEL_MAP[stage] ?? stage;
 }
 
@@ -162,11 +176,14 @@ function CopyIconBtn({ text }: { text: string }) {
           setTimeout(() => setCopied(false), 1500);
         });
       }}
-      className="flex items-center justify-center w-[24px] h-[24px] rounded transition-colors cursor-pointer"
+      /* No box. A row of bordered squares reads as a toolbar of buttons
+         competing with the data; the icon alone is enough, and hover says it
+         is clickable. */
+      className="flex items-center justify-center w-[22px] h-[22px] rounded transition-colors cursor-pointer hover:bg-[var(--color-item-hover-bg)]"
       style={{
         color: copied ? 'var(--color-success)' : 'var(--color-text-muted)',
-        border: `1px solid ${copied ? 'color-mix(in srgb, var(--color-success) 25%, transparent)' : 'var(--color-surface-border)'}`,
-        background: copied ? 'color-mix(in srgb, var(--color-success) 8%, transparent)' : 'transparent',
+        border: 'none',
+        background: 'transparent',
       }}
     >
       {copied ? <CheckIcon size={10} /> : <CopyIcon size={10} />}
@@ -493,7 +510,7 @@ export function AiAuditPanel() {
                     style={{ cursor: 'pointer', accentColor: 'var(--color-protocol-ai)' }}
                   />
                 </th>
-                {['#', 'Stage', 'Model', 'Duration', 'Created At', ''].map(h => (
+                {['#', 'Feature', 'Screen', 'Model', 'Duration', 'Created At', ''].map(h => (
                   <th
                     key={h}
                     className="px-2 py-2 text-left font-medium whitespace-nowrap"
@@ -553,6 +570,11 @@ export function AiAuditPanel() {
                         {prettifyStage(e.stage)}
                       </span>
                     </td>
+                    {/* Which screen asked — "Generate Body" alone does not
+                        tell you where to go back to. */}
+                    <td className="px-2 py-1.5 whitespace-nowrap" style={{ color: 'var(--color-text-secondary)' }}>
+                      {screenForStage(e.stage)}
+                    </td>
                     <td className="px-2 py-1.5 text-[var(--color-text-primary)]">
                       {e.model ?? '—'}
                     </td>
@@ -577,8 +599,8 @@ export function AiAuditPanel() {
                           type="button"
                           title="Delete this entry"
                           onClick={() => e.audit_id != null && handleDeleteOne(e.audit_id)}
-                          className="flex items-center justify-center w-[24px] h-[24px] rounded transition-colors cursor-pointer hover:bg-[rgba(239,68,68,0.1)]"
-                          style={{ color: 'var(--color-error)', border: '1px solid color-mix(in srgb, var(--color-error) 25%, transparent)' }}
+                          className="flex items-center justify-center w-[22px] h-[22px] rounded transition-colors cursor-pointer hover:bg-[rgba(239,68,68,0.1)]"
+                          style={{ color: 'var(--color-error)', border: 'none', background: 'transparent' }}
                         >
                           <TrashIcon size={10} />
                         </button>

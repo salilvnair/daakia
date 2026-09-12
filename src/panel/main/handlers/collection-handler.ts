@@ -1,6 +1,13 @@
 /**
  * Collection handlers — CRUD, tree operations, runner.
  */
+import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
+// The CLI's own parser, so a file that iterates fifty rows in a pipeline
+// iterates the same fifty rows here.
+// @ts-expect-error — plain ESM JavaScript shipped with the CLI; types in data.d.mts.
+import { parseDataFile } from '../../../../cli/lib/data.mjs';
 import {
   getCollectionTree, getCollectionChildren, getCollectionBreadcrumb,
   upsertCollection, moveCollection,
@@ -10,6 +17,8 @@ import {
 } from '../../../storage/db';
 import { runCollection as runCollectionService, type RunConfig } from '../../../services/collection-runner';
 import { archiveCollection, archiveCollectionRequest } from '../../../services/bin';
+import { searchTree, type SearchNode } from '../../../services/collection-search';
+import { importAnyCollection } from '../../../services/import-any';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -174,9 +183,71 @@ export function handleReorderRequests(msg: Record<string, unknown>, postMessage:
   handleGetCollections(postMessage, protocol);
 }
 
+// ────────────────── Search across every collection ──────────────────
+
+/**
+ * One search over every protocol's collections.
+ *
+ * Host-side because the answer needs the request blobs — headers, bodies,
+ * docs — and the webview holds only the tree it is showing. `getCollectionTree()`
+ * with no protocol is every collection there is, which is the point.
+ */
+export function handleSearchCollections(msg: Record<string, unknown>, postMessage: PostMessage) {
+  const query = String(msg.query ?? '');
+  const hits = searchTree(getCollectionTree() as unknown as SearchNode[], query, { limit: 300 });
+  postMessage({ type: 'collectionSearchResults', query, hits });
+}
+
 // ────────────────── Collection Runner ──────────────────
 
 let runAbortSignal: { aborted: boolean } = { aborted: false };
+
+/**
+ * Choose a CSV or JSON data file for a run.
+ *
+ * The host reads it, because the webview cannot: it parses with the same
+ * module `daakia-run` uses in CI, so a file that iterates fifty rows in a
+ * pipeline iterates the same fifty rows here.
+ */
+export async function handlePickRunData(_msg: Record<string, unknown>, postMessage: PostMessage) {
+  const picked = await vscode.window.showOpenDialog({
+    canSelectMany: false,
+    openLabel: 'Use as run data',
+    filters: { 'Data files': ['csv', 'json'], 'All Files': ['*'] },
+  });
+  const uri = picked?.[0];
+  if (!uri) return;
+
+  try {
+    const rows = parseDataFile(fs.readFileSync(uri.fsPath, 'utf8'), uri.fsPath);
+    if (rows.length === 0) {
+      postMessage({ type: 'toast', toastType: 'warning', message: 'That file has no rows.' });
+      return;
+    }
+    /*
+      Capped on the way in. A run is one HTTP request per row per request in
+      the collection, so a spreadsheet somebody exported with 40,000 rows is
+      not a run, it is an outage — and the number is worth saying out loud
+      rather than silently truncating.
+    */
+    const capped = rows.slice(0, MAX_RUN_ROWS);
+    postMessage({
+      type: 'runDataPicked',
+      fileName: path.basename(uri.fsPath),
+      rows: capped,
+      columns: Object.keys(capped[0] ?? {}),
+      truncated: rows.length > capped.length ? rows.length : undefined,
+    });
+  } catch (e) {
+    postMessage({
+      type: 'toast', toastType: 'error',
+      message: `Could not read that data file: ${e instanceof Error ? e.message : String(e)}`,
+    });
+  }
+}
+
+/** One pass per row, so the row count is a multiplier on the whole run. */
+const MAX_RUN_ROWS = 500;
 
 export async function handleRunCollection(msg: Record<string, unknown>, postMessage: PostMessage) {
   const config: RunConfig = {
@@ -185,6 +256,8 @@ export async function handleRunCollection(msg: Record<string, unknown>, postMess
     flow: (msg.flow as 'sandwich' | 'sequential') || 'sandwich',
     delay: (msg.delay as number) || 500,
     stopOnError: (msg.stopOnError as boolean) || false,
+    iterations: (msg.iterations as number) || 1,
+    dataRows: Array.isArray(msg.dataRows) ? msg.dataRows as Record<string, string>[] : undefined,
   };
 
   runAbortSignal = { aborted: false };
@@ -209,6 +282,7 @@ export async function handleRunCollection(msg: Record<string, unknown>, postMess
       passedTests: result.passedTests,
       failedTests: result.failedTests,
       duration: result.duration,
+      iterations: result.iterations ?? 1,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -218,4 +292,111 @@ export async function handleRunCollection(msg: Record<string, unknown>, postMess
 
 export function handleStopCollectionRun() {
   runAbortSignal.aborted = true;
+}
+
+// ── Import from a URL ────────────────────────────────────────────────────────
+
+/**
+ * Fetch a spec and import it.
+ *
+ * https only, and no redirects to anywhere else: an import URL is typed or
+ * pasted, so it is exactly the shape of thing that gets pasted from somewhere
+ * untrusted. A plain-http spec would travel in the clear, and following a
+ * redirect off the host you named is how a URL you checked becomes a URL you
+ * did not.
+ *
+ * The body is size-capped before it is parsed. A spec is a document; anything
+ * that keeps arriving past a few megabytes is not one, and parsing it would
+ * take the extension host down with it.
+ */
+const MAX_SPEC_BYTES = 8 * 1024 * 1024;
+
+/**
+ * A GitHub page URL points at a rendered page, not a document.
+ *
+ * Pasting the address bar is what people actually do, so a `blob` URL is
+ * rewritten to its raw form rather than fetched as HTML and failing to parse.
+ * `raw.githubusercontent.com` is left alone; it is already the document.
+ *
+ * A bare repository URL is deliberately not guessed at — a repo can hold any
+ * number of specs and picking one for you is how the wrong collection gets
+ * imported.
+ */
+export function toRawGitHubUrl(url: URL): { url: URL } | { error: string } {
+  if (url.hostname === 'raw.githubusercontent.com') return { url };
+  if (url.hostname !== 'github.com' && url.hostname !== 'www.github.com') return { url };
+
+  const parts = url.pathname.split('/').filter(Boolean);
+  const blobAt = parts.indexOf('blob');
+  if (blobAt === -1 || parts.length < blobAt + 3) {
+    return {
+      error: 'Point at a file on GitHub, not a repository — open the spec and copy that address.',
+    };
+  }
+  const [owner, repo] = parts;
+  const rest = parts.slice(blobAt + 1).join('/');
+  return { url: new URL(`https://raw.githubusercontent.com/${owner}/${repo}/${rest}`) };
+}
+
+export async function handleImportCollectionUrl(msg: Record<string, unknown>, postMessage: PostMessage) {
+  const raw = String(msg.url ?? '').trim();
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    postMessage({ type: 'toast', toastType: 'error', message: 'That is not a URL.' });
+    return;
+  }
+
+  const resolved = toRawGitHubUrl(url);
+  if ('error' in resolved) {
+    postMessage({ type: 'toast', toastType: 'error', message: resolved.error });
+    return;
+  }
+  url = resolved.url;
+  if (url.protocol !== 'https:') {
+    postMessage({
+      type: 'toast', toastType: 'error',
+      message: 'Only https URLs can be imported — a spec fetched over http travels in the clear.',
+    });
+    return;
+  }
+
+  try {
+    const res = await fetch(url.toString(), {
+      redirect: 'error',
+      headers: { accept: 'application/json, application/yaml, text/yaml, text/plain;q=0.9' },
+    });
+    if (!res.ok) {
+      postMessage({ type: 'toast', toastType: 'error', message: `The server answered ${res.status}.` });
+      return;
+    }
+
+    const length = Number(res.headers.get('content-length') ?? 0);
+    if (length > MAX_SPEC_BYTES) {
+      postMessage({ type: 'toast', toastType: 'error', message: 'That document is too large to import.' });
+      return;
+    }
+    const text = await res.text();
+    if (text.length > MAX_SPEC_BYTES) {
+      postMessage({ type: 'toast', toastType: 'error', message: 'That document is too large to import.' });
+      return;
+    }
+
+    const result = importAnyCollection(text);
+    if (!result.success) {
+      postMessage({ type: 'toast', toastType: 'error', message: `Import failed: ${result.error}` });
+      return;
+    }
+    postMessage({ type: 'collectionsData', protocol: 'rest', collections: getCollectionTree('rest') });
+    postMessage({
+      type: 'toast', toastType: 'success',
+      message: `Imported "${result.collectionName}" (${result.requestCount} requests)`,
+    });
+  } catch (err) {
+    postMessage({
+      type: 'toast', toastType: 'error',
+      message: err instanceof Error ? err.message : 'Could not fetch that URL.',
+    });
+  }
 }

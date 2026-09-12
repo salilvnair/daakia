@@ -3,3 +3,4 @@ export type { CollectionTreeNode, CollectionRequest } from './tree-helpers';
 export { openCollectionRequest, replayHistoryItem } from './request-opener';
 export { describeCollectionRequests } from './request-detail';
 export { normalizeCollectionProtocol, resolveCollectionProtocol, COLLECTION_PROTOCOLS, COLLECTION_PROTOCOL_LABELS } from './collection-protocol';
+export { useStarredIds, toggleStar, starFirst } from './starred';

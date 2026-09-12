@@ -22,11 +22,11 @@ import { PLATFORM_CAPTURES } from './captures';
 const SETTINGS_CONTENT_CROP = { x: 305, width: 975 };
 
 const TOC_ITEMS: TocItem[] = [
-  { id: 'st-general', emoji: '⚙️', label: 'General & Theme' },
-  { id: 'st-server', emoji: '🎭', label: 'Server' },
-  { id: 'st-ai', emoji: '🤖', label: 'AI' },
-  { id: 'st-advanced', emoji: '🛠️', label: 'Advanced' },
-  { id: 'st-storage', emoji: '💾', label: 'Storage' },
+  { id: 'st-general', icon: 'settings', label: 'General & Theme' },
+  { id: 'st-server', icon: 'mock', label: 'Server' },
+  { id: 'st-ai', icon: 'agent', label: 'AI' },
+  { id: 'st-advanced', icon: 'settings', label: 'Advanced' },
+  { id: 'st-storage', icon: 'save', label: 'Storage' },
 ];
 
 export function SettingsView() {
@@ -36,7 +36,7 @@ export function SettingsView() {
     <WikiScrollPage
       hero={
         <WikiHero
-          emoji="⚙️"
+          icon="settings"
           title="Settings"
           subtitle="Four real groups — General, Server, AI, Advanced — searchable, each item badged like Prompt Library."
           chips={chips(['General', 'Theme', 'LLM Provider', 'AI Features', 'Storage'])}
@@ -56,7 +56,7 @@ export function SettingsView() {
       <Divider />
 
       <div>
-        <SectionTitle id="st-general" emoji="⚙️">General & Theme</SectionTitle>
+        <SectionTitle id="st-general" icon="settings">General & Theme</SectionTitle>
         <WikiTable
           headers={['Section', 'Real fields']}
           rows={[
@@ -81,7 +81,7 @@ export function SettingsView() {
       <Divider />
 
       <div>
-        <SectionTitle id="st-server" emoji="🎭">Server</SectionTitle>
+        <SectionTitle id="st-server" icon="mock">Server</SectionTitle>
         <WikiTable
           headers={['Field', 'Default', 'Notes']}
           rows={[
@@ -90,7 +90,7 @@ export function SettingsView() {
           ]}
         />
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
-          Info text on this page also tells you where mock server configs actually live on disk (a JSON file under{' '}
+          Info text on this page also tells you where mock server configs actually live on disk (a JSON file under
           <Code>~/.salilvnair/daakia-vsce/</Code>) and confirms every running server stops automatically when the
           extension deactivates — there's no separate "auto-start on VS Code launch" toggle.
         </p>
@@ -101,7 +101,7 @@ export function SettingsView() {
       <Divider />
 
       <div>
-        <SectionTitle id="st-ai" emoji="🤖">AI</SectionTitle>
+        <SectionTitle id="st-ai" icon="agent">AI</SectionTitle>
         <WikiTable
           headers={['Section', 'What it really is']}
           rows={[
@@ -140,7 +140,7 @@ export function SettingsView() {
       <Divider />
 
       <div>
-        <SectionTitle id="st-advanced" emoji="🛠️">Advanced</SectionTitle>
+        <SectionTitle id="st-advanced" icon="settings">Advanced</SectionTitle>
         <WikiTable
           headers={['Section', 'Real sub-tabs / contents']}
           rows={[
@@ -170,8 +170,8 @@ export function SettingsView() {
       <Divider />
 
       <div>
-        <SectionTitle id="st-storage" emoji="💾">Storage</SectionTitle>
-        <WikiCard title="Where Daakia stores your data" icon="💾">
+        <SectionTitle id="st-storage" icon="save">Storage</SectionTitle>
+        <WikiCard title="Where Daakia stores your data" icon="save">
           <WikiTable
             headers={['Data', 'Location']}
             rows={[
@@ -197,14 +197,14 @@ export function SettingsView() {
       <div>
         <SubTitle>Tips & Best Practices</SubTitle>
         <FeatureGrid items={[
-          { emoji: '🌿', title: 'Use environments', desc: 'Never hardcode URLs — use {{baseUrl}} and switch environments instead of editing requests.' },
-          { emoji: '🔐', title: 'Mark secrets as Secret', desc: 'Tokens and passwords should always use the Secret variable type, not Default.' },
-          { emoji: '📁', title: 'Organize early', desc: 'Set up folder structure before you have 50 requests — much harder to reorganize later.' },
-          { emoji: '📝', title: 'Write assertions', desc: 'Add dk.test() scripts as you build requests, not after — catches regressions immediately.' },
-          { emoji: '🔄', title: 'Use Collection Runner', desc: 'Before shipping, run the full collection to catch broken requests across environments.' },
-          { emoji: '🎭', title: 'Mock before backend is ready', desc: 'Start frontend work immediately with a mock server matching the planned API shape.' },
-          { emoji: '🤖', title: 'Let AI scaffold, you refine', desc: 'Use an inline AI feature (✨ Suggest Headers, Generate Body) for the first draft, then tune by hand.' },
-          { emoji: '💾', title: 'Export collections regularly', desc: 'Right-click → Export as backup, especially before major SQLite/extension version changes.' },
+          { icon: 'git', title: 'Use environments', desc: 'Never hardcode URLs — use {{baseUrl}} and switch environments instead of editing requests.' },
+          { icon: 'shield', title: 'Mark secrets as Secret', desc: 'Tokens and passwords should always use the Secret variable type, not Default.' },
+          { icon: 'folder', title: 'Organize early', desc: 'Set up folder structure before you have 50 requests — much harder to reorganize later.' },
+          { icon: 'pencil', title: 'Write assertions', desc: 'Add dk.test() scripts as you build requests, not after — catches regressions immediately.' },
+          { icon: 'refresh', title: 'Use Collection Runner', desc: 'Before shipping, run the full collection to catch broken requests across environments.' },
+          { icon: 'mock', title: 'Mock before backend is ready', desc: 'Start frontend work immediately with a mock server matching the planned API shape.' },
+          { icon: 'agent', title: 'Let AI scaffold, you refine', desc: 'Use an inline AI feature (✨ Suggest Headers, Generate Body) for the first draft, then tune by hand.' },
+          { icon: 'save', title: 'Export collections regularly', desc: 'Right-click → Export as backup, especially before major SQLite/extension version changes.' },
         ]} />
       </div>
     </WikiScrollPage>

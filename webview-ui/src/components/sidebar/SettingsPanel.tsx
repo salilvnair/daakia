@@ -1,10 +1,26 @@
 import { useState, useEffect } from 'react';
-import { ButtonView, TextInputView, ToggleSwitchView, TabView, SideNavView, SplitPanelView, CopyButtonView, type SideNavItem } from '@salilvnair/dui';
+import { ButtonView, TextInputView, ToggleSwitchView, TabView, SideNavView, SplitPanelView, CopyButtonView, RadioGroupView, type SideNavItem } from '@salilvnair/dui';
 import { useDbStatusStore } from '../../store/db-status-store';
 import { useAppSettingsStore } from '../../store/app-settings-store';
 import type { TabItem } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
-import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, GitHubIcon, LockIcon, TrashIcon, KeyboardIcon } from '../../icons';
+import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, GitHubIcon, LockIcon, TrashIcon, KeyboardIcon, Dk8sIcon, TerminalIcon,
+         CookieIcon, NetworkIcon, ShieldIcon, UptimeIcon, FilterIcon, LayersIcon, BulkEditIcon, GaugeIcon,
+         DocumentIcon, ConnectIcon, ClipboardCompareIcon, FolderIcon, BugIcon, IssueOpenedIcon } from '../../icons';
+import { useAiFeaturesStore, type AiFeatureKey } from '../../store/ai-features-store';
+import { AiSchemaDiffModal } from '../ai/AiSchemaDiffModal';
+import { AiOpenApiGeneratorModal } from '../ai/AiOpenApiGeneratorModal';
+import { AiSecurityAuditModal } from '../ai/AiSecurityAuditModal';
+import { AiWebhookDebuggerModal } from '../ai/AiWebhookDebuggerModal';
+import { AiScriptTranslatorModal } from '../ai/AiScriptTranslatorModal';
+import { AiRequestClusteringModal } from '../ai/AiRequestClusteringModal';
+import { AiCrossProtocolOrchestratorModal } from '../ai/AiCrossProtocolOrchestratorModal';
+import { AiChaosEngineeringModal } from '../ai/AiChaosEngineeringModal';
+import { AiContractNegotiatorModal } from '../ai/AiContractNegotiatorModal';
+import { AiLiveTrafficMirrorModal } from '../ai/AiLiveTrafficMirrorModal';
+import { Dk8sClusterSettings } from '../settings/Dk8sSettings';
+import { TerminalSettings } from '../settings/dk8s/TerminalSettings';
+import { DkghSettings } from './DkghSettings';
 import { LlmProviderSettings } from './LlmProviderSettings';
 import { GitSyncSettings } from './GitSyncSettings';
 import { VaultSettings } from './VaultSettings';
@@ -15,7 +31,7 @@ import { AiFeatureSettings } from './AiFeatureSettings';
 import type { AiPromptTemplateKey } from '../../store/prompt-template';
 import { AiAuditPanel } from './AiAuditPanel';
 import { useMockStore } from '../../store/mock-store';
-import { useUiStateStore } from '../../store/ui-state-store';
+import { useUiStateStore, usePersistedPref } from '../../store/ui-state-store';
 import { CookieManager } from '../power/CookieManager';
 import { ProxySettings } from '../power/ProxySettings';
 import { ClientCertificates } from '../power/ClientCertificates';
@@ -29,10 +45,13 @@ import { AuditLogTab } from '../settings/devtools/AuditLogTab';
 import { DbExplorerTab } from '../settings/devtools/DbExplorerTab';
 import { DebugSnapshotTab } from '../settings/devtools/DebugSnapshotTab';
 import { AuditConfigTab } from '../settings/devtools/AuditConfigTab';
+import { setFixedPortEnabled, useFixedPortEnabled } from '../mock/fixed-port';
 
-type SettingsSection = 'general' | 'theme' | 'keymap' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features';
+type SettingsSection = 'general' | 'theme' | 'keymap' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-cluster' | 'dk8s-terminal' | 'dkgh';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
-type PowerSubtab = 'cookies' | 'proxy' | 'certs' | 'monitor' | 'interceptor' | 'diff' | 'bulk' | 'load';
+type PowerSubtab = 'cookies' | 'proxy' | 'certs' | 'monitor' | 'interceptor' | 'diff' | 'bulk' | 'load'
+  | 'schema-diff' | 'openapi' | 'security' | 'webhook' | 'postman' | 'clustering'
+  | 'orchestrate' | 'chaos' | 'contracts' | 'traffic';
 
 type ActiveNavId = SettingsSection;
 
@@ -49,6 +68,9 @@ const SETTINGS_SECTION_META: Record<SettingsSection, { label: string; icon: Reac
   'prompt-library':  { label: 'Prompt Library',  icon: <AgentIcon size={14} /> },
   'ai-audit':        { label: 'AI Audit',        icon: <SparkleIcon size={14} /> },
   'devtools':        { label: 'Developer Tools', icon: <CodeBracketsIcon size={14} /> },
+  'dk8s-cluster':    { label: 'Cluster',         icon: <Dk8sIcon size={14} /> },
+  'dk8s-terminal':   { label: 'Terminal',        icon: <TerminalIcon size={14} /> },
+  'dkgh':            { label: 'GitHub CLI',      icon: <IssueOpenedIcon size={14} /> },
   'power-features':  { label: 'Power Features',  icon: <CodeBracketsIcon size={14} /> },
 };
 
@@ -70,6 +92,22 @@ const SETTINGS_NAV_ITEMS: SideNavItem[] = [
     { id: 'prompt-library', label: SETTINGS_SECTION_META['prompt-library'].label, icon: SETTINGS_SECTION_META['prompt-library'].icon },
     { id: 'ai-audit', label: SETTINGS_SECTION_META['ai-audit'].label, icon: SETTINGS_SECTION_META['ai-audit'].icon },
   ] },
+  /*
+    Its own group, not an entry under Advanced.
+
+    dk8s has two settings screens that have nothing in common — what it
+    does to a cluster, and how a shell looks — and a single Advanced entry
+    could only ever lead to one of them with the other buried behind a tab.
+    A group puts both in the nav, where every other pair of screens in this
+    panel already is.
+  */
+  { id: 'g-dk8s', label: 'DK8S', isGroup: true, children: [
+    { id: 'dk8s-cluster', label: SETTINGS_SECTION_META['dk8s-cluster'].label, icon: SETTINGS_SECTION_META['dk8s-cluster'].icon },
+    { id: 'dk8s-terminal', label: SETTINGS_SECTION_META['dk8s-terminal'].label, icon: SETTINGS_SECTION_META['dk8s-terminal'].icon },
+  ] },
+  { id: 'g-dkgh', label: 'DKGH', isGroup: true, children: [
+    { id: 'dkgh', label: SETTINGS_SECTION_META['dkgh'].label, icon: SETTINGS_SECTION_META['dkgh'].icon },
+  ] },
   { id: 'g-advanced', label: 'Advanced', isGroup: true, children: [
     { id: 'devtools', label: SETTINGS_SECTION_META.devtools.label, icon: SETTINGS_SECTION_META.devtools.icon },
     { id: 'power-features', label: SETTINGS_SECTION_META['power-features'].label, icon: SETTINGS_SECTION_META['power-features'].icon },
@@ -79,25 +117,10 @@ const SETTINGS_NAV_ITEMS: SideNavItem[] = [
 const ALL_SECTION_IDS = new Set<string>(SETTINGS_NAV_ITEMS.flatMap(g => (g.children ?? []).map(c => c.id)));
 
 export function SettingsPanel() {
-  const storedSection = useUiStateStore(s => s.prefs['settings.section']) as ActiveNavId | undefined;
-  const validStored = storedSection && ALL_SECTION_IDS.has(storedSection) ? storedSection : 'general';
-  const [activeSection, setActiveSectionLocal] = useState<ActiveNavId>(validStored);
+  const [activeSection, setActiveSection] = usePersistedPref<ActiveNavId>(
+    'settings.section', 'general', [...ALL_SECTION_IDS] as ActiveNavId[],
+  );
   const [promptTarget, setPromptTarget] = useState<AiPromptTemplateKey | null>(null);
-
-  // Re-sync whenever the pref changes, not just on mount — lets an already-
-  // mounted Settings tab jump to a new section when something outside this
-  // component (e.g. the command palette) writes settings.section directly,
-  // instead of only picking it up the next time this component remounts.
-  useEffect(() => {
-    if (storedSection && ALL_SECTION_IDS.has(storedSection)) {
-      setActiveSectionLocal(storedSection);
-    }
-  }, [storedSection]);
-
-  const setActiveSection = (section: ActiveNavId) => {
-    setActiveSectionLocal(section);
-    useUiStateStore.getState().setPref('settings.section', section);
-  };
 
   const handleNavigateToPrompt = (key: AiPromptTemplateKey) => {
     setPromptTarget(key);
@@ -121,13 +144,15 @@ export function SettingsPanel() {
             items={SETTINGS_NAV_ITEMS}
             activeId={activeSection}
             onSelect={(id) => setActiveSection(id as ActiveNavId)}
-            defaultOpenIds={['g-general', 'g-server', 'g-ai', 'g-advanced']}
+            defaultOpenIds={['g-general', 'g-server', 'g-ai', 'g-dk8s', 'g-advanced']}
             fillContainer
             collapsible={false}
             accentColor="var(--color-settings)"
             searchable
             searchPlaceholder="Search settings..."
-            size="sm"
+            // md, not sm: this is the primary way around a fourteen-section
+            // page, and at sm the entries read as secondary chrome.
+            size="md"
             className="border-r border-[var(--color-surface-border)]"
           />
         }
@@ -155,6 +180,12 @@ export function SettingsPanel() {
               <AiAuditPanel />
             ) : activeSection === 'power-features' ? (
               <PowerFeaturesPanel />
+            ) : activeSection === 'dk8s-cluster' ? (
+              <Dk8sClusterSettings />
+            ) : activeSection === 'dk8s-terminal' ? (
+              <TerminalSettings />
+            ) : activeSection === 'dkgh' ? (
+              <DkghSettings />
             ) : activeSection === 'devtools' ? (
               <DevToolsSettingsPage />
             ) : activeSection === 'theme' ? (
@@ -170,12 +201,7 @@ export function SettingsPanel() {
 // ────────── General Settings with subtabs ──────────
 
 function GeneralSettings() {
-  const storedSubtab = useUiStateStore(s => s.prefs['settings.general.subtab']) as GeneralSubtab | undefined;
-  const [subtab, setSubtabLocal] = useState<GeneralSubtab>(storedSubtab || 'general');
-  const setSubtab = (tab: GeneralSubtab) => {
-    setSubtabLocal(tab);
-    useUiStateStore.getState().setPref('settings.general.subtab', tab);
-  };
+  const [subtab, setSubtab] = usePersistedPref<GeneralSubtab>('settings.general.subtab', 'general');
 
   return (
     <div className="flex flex-col h-full">
@@ -278,6 +304,28 @@ function GeneralGeneralContent() {
         />
       </div>
 
+      {/* dk8s AI follow-up history */}
+      <div>
+        <p className="text-[13px] font-medium text-[var(--color-text-primary)]">dk8s AI Conversation History</p>
+        <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-2">
+          How many previous question/answer pairs a dk8s follow-up carries. Higher keeps
+          more of the thread in view for the model; lower re-sends less on every turn,
+          which matters because the evidence is already the large part of the request.
+        </p>
+        <TextInputView
+          type="number"
+          value={String(settings.dk8sAiHistoryTurns)}
+          onChange={(e) => save({
+            // Clamped rather than validated: 0 makes a follow-up a question
+            // about nothing, and there is no useful reading of a negative one.
+            dk8sAiHistoryTurns: Math.min(20, Math.max(1, parseInt(e.target.value) || 5)),
+          })}
+          size="md"
+          accentColor="var(--color-settings)"
+          style={{ width: 120 }}
+        />
+      </div>
+
       {/* Database Location (read-only) */}
       <div>
         <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Database Location</p>
@@ -313,34 +361,19 @@ function EncodingContent() {
       <div>
         <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Query Parameters Encoding</p>
         <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-3">Configure encoding for query parameters in requests</p>
-        <div className="flex flex-col gap-2.5">
-          {([
+        {/* The radio circle, its fill, the hover tint and the hidden native
+            input were written out by hand here and again for proxy mode below.
+            RadioGroupView is that pair, once. */}
+        <RadioGroupView
+          value={encoding}
+          onChange={v => handleChange(v as typeof encoding)}
+          accentColor="var(--color-settings)"
+          options={[
             { value: 'enable', label: 'Enable' },
             { value: 'disable', label: 'Disable' },
             { value: 'auto', label: 'Auto' },
-          ] as const).map(opt => (
-            <label key={opt.value} className="flex items-center gap-2.5 cursor-pointer group">
-              <span className={`w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center transition-colors ${
-                encoding === opt.value
-                  ? 'border-[var(--color-settings)]'
-                  : 'border-[color-mix(in_srgb,var(--color-text-primary)_20%,transparent)] group-hover:border-[color-mix(in_srgb,var(--color-text-primary)_40%,transparent)]'
-              }`}>
-                {encoding === opt.value && (
-                  <span className="w-[8px] h-[8px] rounded-full bg-[var(--color-settings)]" />
-                )}
-              </span>
-              <input
-                type="radio"
-                name="encoding"
-                value={opt.value}
-                checked={encoding === opt.value}
-                onChange={() => handleChange(opt.value)}
-                className="hidden"
-              />
-              <span className="text-[13px] text-[var(--color-text-primary)]">{opt.label}</span>
-            </label>
-          ))}
-        </div>
+          ]}
+        />
       </div>
     </div>
   );
@@ -387,37 +420,18 @@ function ProxyContent() {
       <div>
         <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Proxy Configuration</p>
         <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-3">Route requests through a proxy server</p>
-        <div className="flex flex-col gap-2.5">
-          {([
-            { value: 'none', label: 'No Proxy', desc: 'Connect directly to the server' },
-            { value: 'system', label: 'System Proxy', desc: 'Use system proxy settings (HTTP_PROXY / HTTPS_PROXY env vars)' },
-            { value: 'manual', label: 'Manual Proxy', desc: 'Configure proxy host, port, and authentication' },
-          ] as const).map(opt => (
-            <label key={opt.value} className="flex items-start gap-2.5 cursor-pointer group">
-              <span className={`mt-0.5 w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                mode === opt.value
-                  ? 'border-[var(--color-settings)]'
-                  : 'border-[color-mix(in_srgb,var(--color-text-primary)_20%,transparent)] group-hover:border-[color-mix(in_srgb,var(--color-text-primary)_40%,transparent)]'
-              }`}>
-                {mode === opt.value && (
-                  <span className="w-[8px] h-[8px] rounded-full bg-[var(--color-settings)]" />
-                )}
-              </span>
-              <input
-                type="radio"
-                name="proxyMode"
-                value={opt.value}
-                checked={mode === opt.value}
-                onChange={() => { setMode(opt.value); save({ mode: opt.value }); }}
-                className="hidden"
-              />
-              <div>
-                <span className="text-[13px] text-[var(--color-text-primary)]">{opt.label}</span>
-                <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">{opt.desc}</p>
-              </div>
-            </label>
-          ))}
-        </div>
+        {/* `description` is a RadioOption field, so the sub-line under each
+            mode comes with the component rather than a div beside it. */}
+        <RadioGroupView
+          value={mode}
+          onChange={v => { const next = v as typeof mode; setMode(next); save({ mode: next }); }}
+          accentColor="var(--color-settings)"
+          options={[
+            { value: 'none', label: 'No Proxy', description: 'Connect directly to the server' },
+            { value: 'system', label: 'System Proxy', description: 'Use system proxy settings (HTTP_PROXY / HTTPS_PROXY env vars)' },
+            { value: 'manual', label: 'Manual Proxy', description: 'Configure proxy host, port, and authentication' },
+          ]}
+        />
       </div>
 
       {/* Manual Proxy Fields */}
@@ -519,6 +533,7 @@ function SettingToggle({ title, description, value, onChange }: { title: string;
 // ────────── Mock Server Settings ──────────
 
 function MockServerSettings() {
+  const fixedPort = useFixedPortEnabled();
   const [portMin, setPortMin] = useState(8000);
   const [portMax, setPortMax] = useState(9000);
   const mockIconGlow = useMockStore(s => s.mockIconGlow);
@@ -566,6 +581,7 @@ function MockServerSettings() {
             <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Port Range</p>
             <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-3">
               Mock servers will be assigned ports within this range. The extension auto-finds a free port.
+              {fixedPort && ' A server you have given a port of its own uses that instead, wherever it falls.'}
             </p>
             <div className="flex items-center gap-2">
               <TextInputView
@@ -596,6 +612,22 @@ function MockServerSettings() {
               {saved && <span className="text-[11px] text-[var(--color-success)]">Saved!</span>}
             </div>
           </div>
+
+          {/*
+            Choosing the port yourself.
+
+            Off by default and staying that way: the auto-found port is right
+            for almost everybody and never collides. This is for the case where
+            something else already decides the port — a client with a hard-coded
+            base URL, a compose file that maps 8080 — and for that case nothing
+            else will do.
+          */}
+          <SettingToggle
+            title="Let me choose the port"
+            description="Adds a port box when you create a mock server and when you open one. Leave it off and a free port is found for you."
+            value={fixedPort}
+            onChange={setFixedPortEnabled}
+          />
 
           {/* Mock Server Icon Glow */}
           <SettingToggle
@@ -631,28 +663,77 @@ function MockServerSettings() {
 
 // ────────── Power Features Panel ──────────
 
-const POWER_SUBTABS: { id: PowerSubtab; label: string; description: string; icon: string }[] = [
-  { id: 'cookies',     label: 'Cookie Manager',      description: 'View, edit, and delete cookies across all domains', icon: '🍪' },
-  { id: 'proxy',       label: 'Proxy Settings',       description: 'Configure HTTP/HTTPS/SOCKS proxy for all requests', icon: '🔀' },
-  { id: 'certs',       label: 'Client Certificates',  description: 'mTLS client certificate configuration per domain', icon: '🔐' },
-  { id: 'monitor',     label: 'API Monitor',          description: 'Schedule periodic health checks with VS Code alerts', icon: '📡' },
-  { id: 'interceptor', label: 'Request Interceptor',  description: 'Capture browser traffic via built-in proxy', icon: '🎯' },
-  { id: 'diff',        label: 'Response Diff',        description: 'Compare two responses side-by-side with highlighting', icon: '⚖️' },
-  { id: 'bulk',        label: 'Bulk URL Tester',      description: 'Test multiple URLs at once, get summary table', icon: '⚡' },
-  { id: 'load',        label: 'Load Tester',          description: 'Concurrent load testing with p50/p95/p99 metrics', icon: '📊' },
+/*
+  Icons, not emoji.
+
+  These eight cards carried emoji — glyphs that render as a different picture
+  on every platform, sit at a different baseline from every other icon in the
+  app, and cannot take the theme's colour. Every other row
+  and card here draws from the icon set; these do too now.
+*/
+/**
+ * A card per tool.
+ *
+ * `group` splits the grid in two. The AI half was a strip of chips on the
+ * Daakia Assistant, which is the wrong shelf: most of these have nothing to do
+ * with the conversation underneath them, and twelve chips in a row is where a
+ * feature goes to be un-findable. Each still opens the same modal, and the
+ * strip keeps its copy — two doors to one room is not duplication when the
+ * room is hard to find.
+ *
+ * `flag` gates the AI ones on the same feature switch the strip reads, so a
+ * tool turned off in AI Features does not appear here either.
+ */
+const POWER_SUBTABS: { id: PowerSubtab; label: string; description: string; icon: React.ReactNode; group?: 'ai'; flag?: AiFeatureKey }[] = [
+  { id: 'cookies',     label: 'Cookie Manager',      description: 'View, edit, and delete cookies across all domains',   icon: <CookieIcon size={15} /> },
+  { id: 'proxy',       label: 'Proxy Settings',      description: 'Configure HTTP/HTTPS/SOCKS proxy for all requests',   icon: <NetworkIcon size={15} /> },
+  { id: 'certs',       label: 'Client Certificates', description: 'mTLS client certificate configuration per domain',    icon: <ShieldIcon size={15} /> },
+  { id: 'monitor',     label: 'API Monitor',         description: 'Schedule periodic health checks with VS Code alerts', icon: <UptimeIcon size={15} /> },
+  { id: 'interceptor', label: 'Request Interceptor', description: 'Capture browser traffic via built-in proxy',          icon: <FilterIcon size={15} /> },
+  { id: 'diff',        label: 'Response Diff',       description: 'Compare two responses side-by-side with highlighting', icon: <LayersIcon size={15} /> },
+  { id: 'bulk',        label: 'Bulk URL Tester',     description: 'Test multiple URLs at once, get summary table',       icon: <BulkEditIcon size={15} /> },
+  { id: 'load',        label: 'Load Tester',         description: 'Concurrent load testing with p50/p95/p99 metrics',    icon: <GaugeIcon size={15} /> },
+
+  // ── AI tools ──────────────────────────────────────────────────────────────
+  { id: 'schema-diff', group: 'ai', flag: 'schemaDiff',
+    label: 'Schema Diff \u2726',        description: 'Compare two database schemas; anomalies, DDL diff and migration SQL', icon: <LayersIcon size={15} /> },
+  { id: 'openapi',     group: 'ai', flag: 'openApiGenerator',
+    label: 'OpenAPI Generator \u2726',  description: 'Generate an OpenAPI 3.1 spec from a collection',                     icon: <DocumentIcon size={15} /> },
+  { id: 'security',    group: 'ai', flag: 'securityAudit',
+    label: 'Security Audit \u2726',     description: 'Scan every open tab for auth gaps, secrets and PII',                 icon: <ShieldIcon size={15} /> },
+  { id: 'webhook',     group: 'ai', flag: 'webhookDebugger',
+    label: 'Webhook Debugger \u2726',   description: 'Explain a webhook payload and verify its HMAC signature',            icon: <ConnectIcon size={15} /> },
+  { id: 'postman',     group: 'ai', flag: 'postmanTranslator',
+    label: 'Anything → Daakia ✦',  description: 'Translate Postman, Bruno, Insomnia, Thunder Client, HTTPie or cURL into dk.*', icon: <ClipboardCompareIcon size={15} /> },
+  { id: 'clustering',  group: 'ai', flag: 'requestClustering',
+    label: 'Request Clustering \u2726', description: 'Group loose requests into collections automatically',                icon: <FolderIcon size={15} /> },
+  { id: 'orchestrate', group: 'ai', flag: 'crossProtocolOrchestrator',
+    label: 'Cross-Protocol Flow \u2726', description: 'Plan a flow that spans REST, GraphQL, gRPC and realtime',           icon: <NetworkIcon size={15} /> },
+  { id: 'chaos',       group: 'ai', flag: 'chaosEngineeringPlanner',
+    label: 'Chaos Planner \u2726',      description: 'Design failure experiments against your mock server',                icon: <BugIcon size={15} /> },
+  { id: 'contracts',   group: 'ai', flag: 'contractNegotiator',
+    label: 'Contract Negotiator \u2726', description: 'Reconcile a producer and consumer contract',                        icon: <ClipboardCompareIcon size={15} /> },
+  { id: 'traffic',     group: 'ai', flag: 'liveTrafficMirror',
+    label: 'Live Traffic Mirror \u2726', description: 'Replay captured traffic against another environment',               icon: <FilterIcon size={15} /> },
 ];
 
 function PowerFeaturesPanel() {
-  const [subtab, setSubtab] = useState<PowerSubtab>('cookies');
-  // Panel-open states for "panel-style" tools
+  const [subtab, setSubtab] = usePersistedPref<PowerSubtab>('settings.power.subtab', 'cookies');
+  // Which tool is *selected* persists above; whether its window is open does
+  // not. These are all modals, and launching Daakia into a dialog you opened
+  // days ago would be a worse greeting than the one it replaces.
   const [showCookies, setShowCookies] = useState(false);
   const [showProxy, setShowProxy] = useState(false);
   const [showCerts, setShowCerts] = useState(false);
   const [showMonitor, setShowMonitor] = useState(false);
   const [showInterceptor, setShowInterceptor] = useState(false);
-const [showDiff, setShowDiff] = useState(false);
+  const [showDiff, setShowDiff] = useState(false);
   const [showBulk, setShowBulk] = useState(false);
   const [showLoad, setShowLoad] = useState(false);
+  /* One slot for the AI tools rather than ten booleans: only one modal is ever
+     open, and ten flags that must all be false is ten chances to leak one. */
+  const [aiTool, setAiTool] = useState<PowerSubtab | null>(null);
+  const isEnabled = useAiFeaturesStore(s => s.isEnabled);
 
   const openTool = (id: PowerSubtab) => {
     setSubtab(id);
@@ -664,7 +745,11 @@ const [showDiff, setShowDiff] = useState(false);
     else if (id === 'diff') setShowDiff(true);
     else if (id === 'bulk') setShowBulk(true);
     else if (id === 'load') setShowLoad(true);
+    else setAiTool(id);
   };
+
+  const closeAi = () => setAiTool(null);
+  const tools = POWER_SUBTABS.filter(t => !t.flag || isEnabled(t.flag));
 
   return (
     <div className="px-5 py-4 flex flex-col gap-3">
@@ -672,23 +757,52 @@ const [showDiff, setShowDiff] = useState(false);
         <p className="text-[14px] font-semibold text-[var(--color-text-primary)]">Power Features</p>
         <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">Advanced tools — click any card to open</p>
       </div>
-      <div className="grid grid-cols-2 gap-2.5">
-        {POWER_SUBTABS.map(t => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => openTool(t.id)}
-            className="text-left p-3.5 rounded-xl border cursor-pointer transition-all hover:border-[var(--color-settings)] hover:brightness-105 flex flex-col gap-1.5 min-h-[80px]"
-            style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-surface)' }}
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-[15px] leading-none">{t.icon}</span>
-              <p className="text-[12px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>{t.label}</p>
+      {/* Two groups, one card design. The AI half is tinted with the AI
+          protocol colour rather than the settings accent, so which kind of tool
+          you are looking at reads before the label does. */}
+      {([
+        { key: 'core', heading: null, tint: 'var(--color-settings)' },
+        { key: 'ai', heading: 'AI tools', tint: 'var(--color-protocol-ai)' },
+      ] as const).map(section => {
+        const items = tools.filter(t => (section.key === 'ai' ? t.group === 'ai' : !t.group));
+        if (items.length === 0) return null;
+        return (
+          <div key={section.key} className="flex flex-col gap-2.5">
+            {section.heading && (
+              <div className="flex items-center gap-2 mt-1">
+                <SparkleIcon size={13} style={{ color: section.tint }} />
+                <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: section.tint }}>
+                  {section.heading}
+                </p>
+                <span className="flex-1 h-px" style={{ background: 'var(--color-surface-border)' }} />
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-2.5">
+              {items.map(t => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => openTool(t.id)}
+                  className="text-left p-3.5 rounded-xl border cursor-pointer transition-all hover:brightness-105 flex flex-col gap-1.5 min-h-[80px]"
+                  style={{
+                    borderColor: 'var(--color-surface-border)',
+                    backgroundColor: 'var(--color-surface)',
+                    ['--hover-tint' as string]: section.tint,
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = section.tint; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-surface-border)'; }}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="flex items-center leading-none" style={{ color: section.tint }}>{t.icon}</span>
+                    <p className="text-[12px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>{t.label}</p>
+                  </div>
+                  <p className="text-[10.5px] leading-snug" style={{ color: 'var(--color-text-muted)' }}>{t.description}</p>
+                </button>
+              ))}
             </div>
-            <p className="text-[10.5px] leading-snug" style={{ color: 'var(--color-text-muted)' }}>{t.description}</p>
-          </button>
-        ))}
-      </div>
+          </div>
+        );
+      })}
 
       {/* Modals */}
       {showCookies && <CookieManager onClose={() => setShowCookies(false)} />}
@@ -699,6 +813,18 @@ const [showDiff, setShowDiff] = useState(false);
       {showDiff && <ResponseDiffModal onClose={() => setShowDiff(false)} />}
       {showBulk && <BulkUrlTester onClose={() => setShowBulk(false)} />}
       {showLoad && <LoadTester onClose={() => setShowLoad(false)} />}
+
+      {/* The same modals the Daakia Assistant strip opens. */}
+      {aiTool === 'schema-diff' && <AiSchemaDiffModal onClose={closeAi} />}
+      {aiTool === 'openapi' && <AiOpenApiGeneratorModal onClose={closeAi} />}
+      {aiTool === 'security' && <AiSecurityAuditModal onClose={closeAi} />}
+      {aiTool === 'webhook' && <AiWebhookDebuggerModal onClose={closeAi} />}
+      {aiTool === 'postman' && <AiScriptTranslatorModal onClose={closeAi} />}
+      {aiTool === 'clustering' && <AiRequestClusteringModal onClose={closeAi} />}
+      {aiTool === 'orchestrate' && <AiCrossProtocolOrchestratorModal onClose={closeAi} />}
+      {aiTool === 'chaos' && <AiChaosEngineeringModal onClose={closeAi} />}
+      {aiTool === 'contracts' && <AiContractNegotiatorModal onClose={closeAi} />}
+      {aiTool === 'traffic' && <AiLiveTrafficMirrorModal onClose={closeAi} />}
     </div>
   );
 }
@@ -716,7 +842,7 @@ const DEVTOOLS_TABS: { id: DevToolsSubtab; label: string }[] = [
 ];
 
 function DevToolsSettingsPage() {
-  const [active, setActive] = useState<DevToolsSubtab>('memory');
+  const [active, setActive] = usePersistedPref<DevToolsSubtab>('settings.devtools.subtab', 'memory');
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Sub-tab bar */}

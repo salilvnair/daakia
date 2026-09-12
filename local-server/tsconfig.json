@@ -21,6 +21,7 @@
     "dist",
     "dist-tsc",
     "../webview-ui",
-    "../src/test"
+    "../src/test",
+    "../src/**/*.test.ts"
   ]
 }

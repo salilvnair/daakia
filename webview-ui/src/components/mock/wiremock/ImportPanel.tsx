@@ -303,7 +303,7 @@ function ContractResultView({ result }: { result: ContractResult }) {
   return (
     <div className="rounded-lg border overflow-hidden" style={{ borderColor: result.valid ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)' }}>
       <div className="px-3 py-2 flex items-center gap-2" style={{ background: result.valid ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)' }}>
-        <span className="text-[12px]">{result.valid ? '✅' : '❌'}</span>
+        <span className="text-[12px]">{result.valid ? '': ''}</span>
         <span className="text-[11px] font-medium" style={{ color: result.valid ? 'var(--color-success)' : 'var(--color-error)' }}>{result.summary}</span>
       </div>
       {result.violations.length > 0 && (
@@ -370,7 +370,7 @@ function ParseResultView({ result, protocol, accent, onImport }: { result: Impor
               </div>
             </div>
           )}
-          {result.warnings.map((w, i) => <div key={`w${i}`} className="px-3 py-1.5 text-[10px] text-[var(--color-warning)] opacity-80">⚠ {w}</div>)}
+          {result.warnings.map((w, i) =><div key={`w${i}`} className="px-3 py-1.5 text-[10px] text-[var(--color-warning)] opacity-80"> {w}</div>)}
           {result.errors.map((e, i) => <div key={`e${i}`} className="px-3 py-1.5 text-[10px] text-[var(--color-error)]">✖ {e}</div>)}
         </div>
       )}

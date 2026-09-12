@@ -35,6 +35,14 @@ export interface ScriptContext {
   globalVariables: Record<string, string>;
   /** Secret variables (masked in console output, session-only) */
   secretVariables?: Record<string, string>;
+  /**
+   * Schemas from the OpenAPI document this collection was imported from.
+   *
+   * Keyed by name, as `components.schemas` has them — so a script can say
+   * `toMatchSchema('#/components/schemas/User')` and mean the spec rather
+   * than an object it pasted in.
+   */
+  schemas?: Record<string, unknown>;
 }
 
 // ─── Script Execution Result ────────────────────────────────────────────────

@@ -7,7 +7,7 @@
  *   EventSource /api/v1/conversation/stream/{conversationId} → SSE events
  *
  * Daakia uses:
- *   postMessage({ type: 'ai:send', tabId, ... }) → sends request to extension
+ *   sendAiRequest({ stage, screen, tabId, ... }) → sends request to extension
  *   window.message({ type: 'ai:chunk', tabId, text }) → streaming token
  *   window.message({ type: 'ai:complete', tabId, message }) → final response
  *   window.message({ type: 'ai:error', tabId, message }) → error
@@ -20,6 +20,7 @@ import { getVsCodeApi } from '../vscode';
 import { useTabsStore } from '../store/tabs-store';
 import { useAiProvidersStore } from '../store/ai-providers-store';
 import { useAiConversationStore } from '../store/ai-conversation-store';
+import { sendAiRequest } from '../services/ai/ai-client';
 
 const CE_MESSAGE_PATH = '/api/v1/conversation/message';
 const CE_STREAM_PATH = '/api/v1/conversation/stream/';
@@ -261,21 +262,22 @@ export function installDaakiaBridges() {
         || providerStore.providers.find(p => p.id === resolvedProvider)?.models.find(m => m.enabled)?.id
         || '';
 
-      // Send to extension via Daakia protocol
-      getVsCodeApi().postMessage({
-        type: 'ai:send',
+      // Send through the one AI client, so this call is named and audited like
+      // every other. No authType/authData — the extension injects the real LLM
+      // credentials from the OS keychain, and baseUrl is resolved there too.
+      sendAiRequest({
         tabId,
+        stage: 'ai.chat',
+        screen: 'Daakia AI',
         provider: resolvedProvider,
         model: resolvedModel,
-        baseUrl: '',           // extension resolves base URL from provider registry + user settings
         systemPrompts: tab.aiSystemPrompts ?? [],
         userPrompt: message,
         conversation: currentHistory,  // history BEFORE the current message
         tools: tab.aiTools ?? [],
         settings: tab.aiSettings ?? {},
         mcpServerConfigs: tab.mcpServerConfigs ?? [],
-        // NO authType / authData — extension injects from OS keychain
-        envId: tab.envId,
+        context: { envId: tab.envId },
       });
     });
   };

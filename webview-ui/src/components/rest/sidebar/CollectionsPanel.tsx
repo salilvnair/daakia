@@ -1,15 +1,19 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { TagChips } from '../../shared/tags/TagChips';
+import { tagsFromData } from '../../shared/tags/request-tags';
 import { postMsg } from '../../../vscode';
 import { useTabsStore } from '../../../store/tabs-store';
+import type { Protocol, RequestTab } from '../../../store/tabs-store';
+import { getDisplayMethod } from '../../../services/request/request-service';
 import { useScrollRestore } from '../../../hooks/useScrollRestore';
 import { useSidebarDataStore } from '../../../store/sidebar-data-store';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import { useAiPromptTemplatesStore } from '../../../store/prompt-template';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
 import { NewItemModal, ConfirmDialog, RunCollectionModal, CollectionPropertiesModal, ExportResponseOptionModal, ImportExportIcon, type CollectionProperties } from '../../shared';
-import { findNodeById, findParentOfRequest, findRequestById, filterTree, collectAllIds, hasAnyRequests, openCollectionRequest, type CollectionTreeNode, type CollectionRequest } from '../../../services/collections';
+import { findNodeById, findParentOfRequest, findRequestById, filterTree, collectAllIds, hasAnyRequests, openCollectionRequest, useStarredIds, toggleStar, starFirst, type CollectionTreeNode, type CollectionRequest } from '../../../services/collections';
 import { METHOD_COLORS, getProtocolAccent } from '../../../colors';
-import { PlusIcon, FolderIcon, FolderOpenIcon, PlayIcon, DocumentIcon, ServerIcon, RenameIcon, CopyIcon, SettingsIcon, TrashIcon, ExternalLinkIcon, PlusSquareIcon, ChevronRightIcon, MoreVerticalIcon, FilePlusIcon, FolderPlusIcon, FolderImportIcon, FolderExportIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, SparkleIcon, CloseCircleIcon, SearchIcon, HelpCircleIcon, SortIcon, CheckIcon } from '../../../icons';
+import { PlusIcon, FolderIcon, FolderOpenIcon, PlayIcon, DocumentIcon, ServerIcon, RenameIcon, CopyIcon, SettingsIcon, TrashIcon, ExternalLinkIcon, PlusSquareIcon, ChevronRightIcon, MoreVerticalIcon, FilePlusIcon, FolderPlusIcon, FolderImportIcon, FolderExportIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, SparkleIcon, CloseCircleIcon, SearchIcon, HelpCircleIcon, SortIcon, CheckIcon, ExpandAllIcon, CollapseAllIcon, StarIcon } from '../../../icons';
 import { SidebarSkeleton } from '../../shared/display/SidebarSkeleton';
 import { AiEnvExtractModal } from '../../ai/AiEnvExtractModal';
 import { AiCollectionOrganizerModal } from '../../ai/AiCollectionOrganizerModal';
@@ -35,6 +39,7 @@ import { AiSmartTestSuiteModal } from '../../ai/AiSmartTestSuiteModal';
 import { InsomniaImportModal } from '../../power/InsomniaImportModal';
 import { IconButtonView, ContextMenuView, TextInputView, InfoPopupView, ModalView, ButtonView, UptimeMonitorIcon, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
 import { logUiEvent } from '../../../store/ui-audit-store';
+import { sendAiRequest } from '../../../services/ai/ai-client';
 
 // ────────────── Main Component ──────────────
 
@@ -49,6 +54,9 @@ function sortTreeAlpha(nodes: CollectionTreeNode[]): CollectionTreeNode[] {
     }));
 }
 
+/** Realtime transports, which get a tree each but share one Protocol. */
+const RT_TRANSPORTS = ['websocket', 'sse', 'socketio', 'mqtt'];
+
 function ProtocolHeaderIcon({ protocol }: { protocol: string }) {
   const size = 20;
   if (protocol === 'graphql') return <ProtocolGraphQLBadge size={size} />;
@@ -60,7 +68,18 @@ function ProtocolHeaderIcon({ protocol }: { protocol: string }) {
   return <ProtocolRestBadge size={size} />;
 }
 
-export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
+export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
+  protocol?: string;
+  /**
+   * Bump this to open the create dialog from outside.
+   *
+   * A counter rather than a window message: more than one of these panels is
+   * mounted at a time — the sidebar's and the workspace tab's — so a broadcast
+   * is heard by both and opens two dialogs. A prop can only reach the instance
+   * it was handed to.
+   */
+  createSignal?: number;
+}) {
   const cachedTree = useSidebarDataStore(s => s.getCollections(protocol));
   const isLoaded = useSidebarDataStore(s => s.isCollectionsLoaded(protocol));
   const setStoreCollections = useSidebarDataStore(s => s.setCollections);
@@ -114,6 +133,8 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
   const [contextMenu, setContextMenu] = useState<{ position: { x: number; y: number }; items: DuiContextMenuItem[] } | null>(null);
   // Request row context menu — DUI ContextMenuView
   const [reqContextMenu, setReqContextMenu] = useState<{ position: { x: number; y: number }; req: CollectionRequest } | null>(null);
+  /** Per-person, persisted with the other UI prefs — never exported, never synced. */
+  const starredIds = useStarredIds();
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
 
   // Sidebar-view-only sort mode (Postman-style "Folders first, Default / A to Z") —
@@ -179,9 +200,18 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
         if (!propertiesRequestedRef.current) return;
         propertiesRequestedRef.current = false;
         const props = msg.properties ?? {};
-        setPropertiesTarget({
+        /*
+          Functional, so the name survives.
+
+          `propertiesTarget` here came from the closure this listener was
+          registered in — null on first open — so the name the context menu
+          had just put there was overwritten with an empty string every time,
+          and the dialog said "Untitled collection" for a collection that
+          plainly had one.
+        */
+        setPropertiesTarget(prev => ({
           id: msg.id,
-          name: propertiesTarget?.name || '',
+          name: prev?.name || '',
           properties: {
             headers: props.headers ?? [],
             authType: props.authType ?? 'none',
@@ -189,8 +219,11 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
             variables: props.variables ?? [],
             preRequestScript: props.preRequestScript ?? '',
             postResponseScript: props.postResponseScript ?? (props.testScript as string) ?? '',
+            // Absent on every collection saved before execution overrides
+            // existed, which is the common case.
+            settings: props.settings ?? {},
           },
-        });
+        }));
       }
     };
     window.addEventListener('message', handler);
@@ -284,11 +317,11 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
     const systemPrompt = resolveTemplate('rest.collection.search.system');
     const userPrompt = resolveTemplate('rest.collection.search', { query, requests: requestsText });
 
-    postMsg({
-      type: 'ai:send',
+    sendAiRequest({
       tabId: pid,
       provider: '', model: '', baseUrl: '',
       stage: 'rest.collection.search',
+      screen: 'Collections',
       systemPrompts: [systemPrompt],
       userPrompt,
       conversation: [],
@@ -324,6 +357,30 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
     setModalOpen(true);
   };
 
+  /* The caller asks for this panel's own New dialog rather than reimplementing
+     the create flow, so there is one of them.
+
+     Only a *change* counts. `> 0` fires on mount as well, and the value is
+     already above zero once the button has been used, so a tab switch reopened
+     the dialog with nobody having asked. */
+  const seenCreate = useRef(createSignal);
+  useEffect(() => {
+    if (createSignal === seenCreate.current) return;
+    seenCreate.current = createSignal;
+    openNewCollection();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createSignal]);
+
+  /* The workspace tab asks for this panel's own New dialog rather than
+     reimplementing the create flow, so there is one of them. */
+  useEffect(() => {
+    const onAsk = (e: MessageEvent) => {
+      if ((e.data as { type?: string })?.type === 'collections:new') openNewCollection();
+    };
+    window.addEventListener('message', onAsk);
+    return () => window.removeEventListener('message', onAsk);
+  }, []);
+
   const handleDeleteAllCollections = () => {
     postCollMsg({ type: 'clearCollections' });
     setShowDeleteAllConfirm(false);
@@ -346,6 +403,21 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
   const handleModalSave = (name: string) => {
     const id = crypto.randomUUID();
     if (modalMode === 'request') {
+      /*
+        The label this protocol's requests carry — GQL, GRPC, SOAP, AI, MCP,
+        WS/SSE/SIO/MQTT, or the HTTP verb for REST. Derived by the same
+        function Save Request uses, so a request created from the tree and one
+        saved from a tab cannot disagree about what they are.
+
+        The realtime family needs the extra step: its trees are keyed per
+        transport, and 'sse' is not a Protocol — the tab is a websocket tab
+        that carries the transport in authData, which is where getDisplayMethod
+        reads it from.
+      */
+      const rt = RT_TRANSPORTS.includes(protocol) ? protocol : undefined;
+      const tabProtocol = (rt ? 'websocket' : protocol) as Protocol;
+      const authData: Record<string, string> = rt ? { rt_protocol: rt } : {};
+      const method = getDisplayMethod({ protocol: tabProtocol, method: 'GET', authData } as RequestTab);
       logUiEvent('collection.open', { name, collectionId: modalParentId });
       postCollMsg({
         type: 'saveRequestToCollection',
@@ -353,7 +425,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
         request: {
           id,
           name,
-          method: 'GET',
+          method,
           url: '',
           data: JSON.stringify({
             headers: [],
@@ -369,7 +441,11 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
       });
       // Also open in a tab
       const { addTab } = useTabsStore.getState();
-      addTab({ name, method: 'GET', url: '', collectionId: modalParentId ?? undefined, requestId: id });
+      /* Told, not inherited: addTab falls back to activeProtocol, which is
+         the protocol of whichever tab is in front rather than of the tree the
+         request was created in. */
+      addTab({ name, protocol: tabProtocol, authData, method: 'GET', url: '',
+               collectionId: modalParentId ?? undefined, requestId: id });
     } else {
       logUiEvent('collection.create', { name, parentId: modalParentId });
       postCollMsg({ type: 'createCollection', id, name, parentId: modalParentId });
@@ -592,8 +668,9 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
           { id: 'export-insomnia',label: 'Insomnia',            shortcut: 'I', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-info)' }} />,    onClick: () => { postMsg({ type: 'exportCollectionInsomnia', collectionId: targetId }); close(); } },
           { id: 'export-bruno',   label: 'Bruno (.bru)',        shortcut: 'B', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-warning)' }} />, onClick: () => { postMsg({ type: 'exportCollectionBruno',    collectionId: targetId }); close(); } },
           { id: 'export-httpie',  label: 'HTTPie',              shortcut: 'H', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'exportCollectionHttpie',   collectionId: targetId }); close(); } },
-          { id: 'export-openapi', label: 'OpenAPI 3.0',         shortcut: 'O', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'exportCollectionOpenApi',  collectionId: targetId }); close(); } },
+          { id: 'export-openapi', label: 'OpenAPI 3.1',         shortcut: 'O', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'exportCollectionOpenApi',  collectionId: targetId }); close(); } },
           { id: 'export-docs',    label: 'API Docs (Markdown)', shortcut: 'D', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-info)' }} />,    onClick: () => { postMsg({ type: 'exportCollectionDocs',     collectionId: targetId }); close(); } },
+          { id: 'export-docs-html', label: 'API Docs (HTML page)', shortcut: 'W', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-info)' }} />,    onClick: () => { postMsg({ type: 'exportCollectionDocsHtml',     collectionId: targetId }); close(); } },
         ],
       },
       {
@@ -628,6 +705,27 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
   };
 
   // When AI search is active, filter tree to show only matched request IDs
+  /*
+    What a collection holds, by method, counted down the whole subtree.
+
+    Folders nest, and a count that stopped at the top level would report a
+    number nobody recognises for any collection organised into folders — which
+    is most of them.
+  */
+  const countMethods = useCallback((collectionId: string): Record<string, number> => {
+    const node = findNodeById(tree, collectionId);
+    const out: Record<string, number> = {};
+    const walk = (n: CollectionTreeNode) => {
+      for (const r of n.requests ?? []) {
+        const m = (r.method ?? 'GET').toUpperCase();
+        out[m] = (out[m] ?? 0) + 1;
+      }
+      for (const child of n.children ?? []) walk(child);
+    };
+    if (node) walk(node);
+    return out;
+  }, [tree]);
+
   const filteredTree = aiSearchActive && aiSearchResultIds.length > 0
     ? (() => {
         const matchSet = new Set(aiSearchResultIds);
@@ -644,7 +742,49 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
       })()
     : filterTree(tree, search);
 
-  const sortedTree = sortMode === 'alpha' ? sortTreeAlpha(filteredTree) : filteredTree;
+  /*
+    Starred requests ride at the top of their own folder, after whichever
+    sort is in force — so "Folders first, A to Z" still holds within the
+    starred and within the rest.
+  */
+  const sortedTree = starFirst(
+    sortMode === 'alpha' ? sortTreeAlpha(filteredTree) : filteredTree,
+    starredIds,
+  );
+
+  /*
+    Expand and collapse, whole or by subtree.
+
+    A collection of any size is unreadable fully expanded and useless fully
+    collapsed, and reaching either state meant clicking every folder. History
+    had these; collections, which nest deeper, did not.
+
+    Expansion is stored as the set of open ids, so "expand" is a union and
+    "collapse" is a difference — a subtree can be opened without disturbing
+    anything outside it, which is what makes the per-row buttons worth having
+    rather than only the two at the top.
+  */
+  const expandAll = useCallback(() => {
+    setExpandedIds(collectAllIds(sortedTree));
+  }, [sortedTree]);
+
+  const collapseAll = useCallback(() => setExpandedIds(new Set()), []);
+
+  const expandSubtree = useCallback((node: CollectionTreeNode) => {
+    const ids = collectAllIds([node]);
+    setExpandedIds(prev => new Set([...prev, ...ids]));
+  }, []);
+
+  const collapseSubtree = useCallback((node: CollectionTreeNode) => {
+    const ids = collectAllIds([node]);
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      // The node itself included: collapsing a folder's contents while
+      // leaving the folder open shows an empty folder, not a closed one.
+      for (const id of ids) next.delete(id);
+      return next;
+    });
+  }, []);
 
   // Auto-expand when searching
   useEffect(() => {
@@ -718,14 +858,15 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
 
       <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-surface-border)]">
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
+          <ButtonView
+            variant="ghost"
+            size="sm"
+            iconLeft={<PlusIcon size={14} />}
             onClick={openNewCollection}
-            className="flex items-center gap-2 text-[13px] text-[var(--color-text-primary)] hover:text-white cursor-pointer"
+            accentColor={getProtocolAccent(protocol as any)}
           >
-            <PlusIcon size={14} />
-            <span>New</span>
-          </button>
+            New
+          </ButtonView>
           {aiEnabled('autoDiscovery') && (
             <IconButtonView
               icon={<SparkleIcon size={12} />}
@@ -738,6 +879,20 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
         </div>
 
         <div className="flex items-center gap-1.5 relative">
+          {/* Before the help and import controls: these act on what is on
+              screen, and those are about the panel itself. */}
+          <IconButtonView
+            icon={<ExpandAllIcon size={13} className="text-[var(--color-info)]" />}
+            size="sm"
+            tooltip="Expand all"
+            onClick={expandAll}
+          />
+          <IconButtonView
+            icon={<CollapseAllIcon size={13} className="text-[var(--color-warning)]" />}
+            size="sm"
+            tooltip="Collapse all"
+            onClick={collapseAll}
+          />
           <div ref={infoAnchorRef} style={{ display: 'inline-flex' }}>
             <IconButtonView
               icon={<HelpCircleIcon size={14} />}
@@ -761,6 +916,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
               { code: 'Run', description: 'Execute all requests in order' },
             ]}
             footer="Tip: Group related endpoints into folders for easy navigation."
+            onWikiOpen={() => useTabsStore.getState().openDaakiaWikiTab('collections-env')}
           />
           <IconButtonView
             icon={<ImportExportIcon size="1.1em" />}
@@ -817,8 +973,9 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
                   { id: 'export-insomnia',label: 'Insomnia',            shortcut: 'I', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-info)' }} />,    onClick: () => { postMsg({ type: 'exportCollectionInsomnia' }); setHeaderMenu(null); } },
                   { id: 'export-bruno',   label: 'Bruno (.bru)',        shortcut: 'B', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { postMsg({ type: 'exportCollectionBruno' }); setHeaderMenu(null); } },
                   { id: 'export-httpie',  label: 'HTTPie',              shortcut: 'H', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'exportCollectionHttpie' }); setHeaderMenu(null); } },
-                  { id: 'export-openapi', label: 'OpenAPI 3.0',         shortcut: 'O', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'exportCollectionOpenApi' }); setHeaderMenu(null); } },
+                  { id: 'export-openapi', label: 'OpenAPI 3.1',         shortcut: 'O', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'exportCollectionOpenApi' }); setHeaderMenu(null); } },
                   { id: 'export-docs',    label: 'API Docs (Markdown)', shortcut: 'D', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-info)' }} />,    onClick: () => { postMsg({ type: 'exportCollectionDocs' }); setHeaderMenu(null); } },
+                  { id: 'export-docs-html', label: 'API Docs (HTML page)', shortcut: 'W', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-info)' }} />, onClick: () => { postMsg({ type: 'exportCollectionDocsHtml' }); setHeaderMenu(null); } },
                 ],
               },
             ] as DuiContextMenuItem[]}
@@ -843,14 +1000,17 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
           <div className="flex flex-col items-center justify-center h-full px-4 text-center">
             <FolderIcon size={40} strokeWidth={1} className="text-[var(--color-text-muted)] opacity-40 mb-3" />
             <p className="text-[12px] text-[var(--color-text-muted)] mb-3">No collections yet</p>
-            <button
-              type="button"
+            {/* `text-white` was hardcoded here, which is wrong on a light
+                theme; ButtonView reads the token that follows the theme. */}
+            <ButtonView
+              variant="primary"
+              size="sm"
+              iconLeft={<PlusIcon size={13} />}
               onClick={openNewCollection}
-              className="h-[30px] px-3 text-[12px] rounded-md text-white hover:opacity-90 cursor-pointer"
-              style={{ backgroundColor: getProtocolAccent(protocol as any) }}
+              accentColor={getProtocolAccent(protocol as any)}
             >
-              + New Collection
-            </button>
+              New Collection
+            </ButtonView>
           </div>
         ) : (
           sortedTree.map(node => (
@@ -873,8 +1033,11 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
               onNewRequest={openNewRequest}
               onOpenRequest={handleOpenRequest}
               onRunCollection={(id, name) => { setRunnerCollectionId(id); setRunnerCollectionName(name); }}
+              onExpandSubtree={expandSubtree}
+              onCollapseSubtree={collapseSubtree}
               onCollectionContextMenu={openCollectionContextMenu}
               onRequestContextMenu={openRequestContextMenu}
+              starredIds={starredIds}
               dragItem={dragItem}
               dropTarget={dropTarget}
               onDragStart={handleDragStart}
@@ -973,6 +1136,14 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
           position={reqContextMenu.position}
           onClose={() => setReqContextMenu(null)}
           items={[
+            {
+              id: 'star',
+              label: starredIds.has(reqContextMenu.req.id) ? 'Unstar' : 'Star',
+              shortcut: 'S',
+              icon: <StarIcon size={13} filled={starredIds.has(reqContextMenu.req.id)} style={{ color: 'var(--color-warning)' }} />,
+              onClick: () => { toggleStar(reqContextMenu.req.id); setReqContextMenu(null); },
+            },
+            { id: 'sep-star', label: '', separator: true },
             { id: 'open', label: 'Open', shortcut: 'O', icon: <ExternalLinkIcon size={13} style={{ color: 'var(--color-info)' }} />, onClick: () => { handleOpenRequest(reqContextMenu.req); setReqContextMenu(null); } },
             { id: 'open-new-tab', label: 'Open in New Tab', shortcut: 'T', icon: <PlusSquareIcon size={13} style={{ color: 'var(--color-info)' }} />, onClick: () => { handleOpenRequest(reqContextMenu.req, true); setReqContextMenu(null); } },
             { id: 'rename', label: 'Rename', shortcut: 'N', icon: <RenameIcon size={13} style={{ color: 'var(--color-ctx-rename)' }} />, onClick: () => { setRenamingId(reqContextMenu.req.id); setRenameValue(reqContextMenu.req.name); setRenamingType('request'); setReqContextMenu(null); } },
@@ -1004,7 +1175,9 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
       {propertiesTarget && (
         <CollectionPropertiesModal
           open={true}
+          collectionId={propertiesTarget.id}
           collectionName={propertiesTarget.name}
+          methodCounts={countMethods(propertiesTarget.id)}
           properties={propertiesTarget.properties}
           onSave={(props) => {
             postMsg({ type: 'updateCollectionProperties', id: propertiesTarget.id, properties: props });
@@ -1226,8 +1399,12 @@ interface TreeNodeProps {
   onNewRequest: (parentId: string) => void;
   onOpenRequest: (req: CollectionRequest) => void;
   onRunCollection: (id: string, name: string) => void;
+  onExpandSubtree: (node: CollectionTreeNode) => void;
+  onCollapseSubtree: (node: CollectionTreeNode) => void;
   onCollectionContextMenu: (e: React.MouseEvent, node: CollectionTreeNode) => void;
   onRequestContextMenu: (e: React.MouseEvent, req: CollectionRequest) => void;
+  /** Starred request ids — the rows already float, this is what marks them. */
+  starredIds: Set<string>;
   // DnD props
   dragItem: { id: string; type: 'collection' | 'request'; parentId: string | null } | null;
   dropTarget: { id: string; position: 'before' | 'inside' | 'after' } | null;
@@ -1242,7 +1419,8 @@ function TreeNode({
   node, depth, expandedIds, toggleExpand,
   renamingId, renameValue, setRenameValue, renameRef, handleRename, startRename, setRenamingId,
   onDelete, onDeleteRequest, onNewFolder, onNewRequest, onOpenRequest, onRunCollection,
-  onCollectionContextMenu, onRequestContextMenu,
+  onExpandSubtree, onCollapseSubtree,
+  onCollectionContextMenu, onRequestContextMenu, starredIds,
   dragItem, dropTarget, onDragStart, onDragOver, onDragLeave, onDrop, onDragEnd,
 }: TreeNodeProps) {
   const isExpanded = expandedIds.has(node.id);
@@ -1297,11 +1475,12 @@ function TreeNode({
         ) : (
           <span className="text-[12px] text-[var(--color-text-primary)] truncate flex-1">{node.name}</span>
         )}
-        {/* Item count */}
-        {totalItems > 0 && (
-          <span className="text-[10px] text-[var(--color-text-muted)] opacity-60">{totalItems}</span>
-        )}
-        {/* Hover actions */}
+        {/* Hover actions.
+            Before the count, not after it. They are hidden with `opacity-0`
+            rather than `display: none` — so that the count does not jump
+            sideways when the row is hovered — which means they hold their
+            width all the time. With the count to their left it floated a
+            hundred pixels short of the row's edge, against a blank strip. */}
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <ActionBtn title="Add Request" onClick={(e) => { e.stopPropagation(); onNewRequest(node.id); }}>
             <FilePlusIcon size={13} />
@@ -1312,10 +1491,33 @@ function TreeNode({
           <ActionBtn title="Run Collection" onClick={(e) => { e.stopPropagation(); onRunCollection(node.id, node.name); }} disabled={!hasAnyRequests(node)}>
             <PlayIcon size={13} />
           </ActionBtn>
+          {/* Only on a folder that contains folders. A leaf folder's chevron
+              already does the whole job, and a second control that does the
+              same thing reads as a different one. */}
+          {node.children.length > 0 && (
+            isExpanded ? (
+              <ActionBtn title="Collapse this folder and everything in it"
+                         onClick={(e) => { e.stopPropagation(); onCollapseSubtree(node); }}>
+                <CollapseAllIcon size={13} />
+              </ActionBtn>
+            ) : (
+              <ActionBtn title="Expand this folder and everything in it"
+                         onClick={(e) => { e.stopPropagation(); onExpandSubtree(node); }}>
+                <ExpandAllIcon size={13} />
+              </ActionBtn>
+            )
+          )}
           <ActionBtn title="More Options" onClick={(e) => onCollectionContextMenu(e, node)}>
             <MoreVerticalIcon size={13} />
           </ActionBtn>
         </div>
+
+        {/* Item count, at the row's edge. */}
+        {totalItems > 0 && (
+          <span className="text-[10px] text-[var(--color-text-muted)] opacity-60 tabular-nums">
+            {totalItems}
+          </span>
+        )}
       </div>
 
       {/* Drop indicator - after */}
@@ -1348,8 +1550,11 @@ function TreeNode({
               onNewRequest={onNewRequest}
               onOpenRequest={onOpenRequest}
               onRunCollection={onRunCollection}
+              onExpandSubtree={onExpandSubtree}
+              onCollapseSubtree={onCollapseSubtree}
               onCollectionContextMenu={onCollectionContextMenu}
               onRequestContextMenu={onRequestContextMenu}
+              starredIds={starredIds}
               dragItem={dragItem}
               dropTarget={dropTarget}
               onDragStart={onDragStart}
@@ -1387,6 +1592,11 @@ function TreeNode({
                   >
                     {req.method}
                   </span>
+                  {/* Why this row is first in its folder, said on the row —
+                      an order with no visible cause reads as a bug. */}
+                  {starredIds.has(req.id) && (
+                    <StarIcon size={10} filled className="shrink-0" style={{ color: 'var(--color-warning)' }} />
+                  )}
                   {renamingId === req.id ? (
                     <input
                       ref={renameRef}
@@ -1402,6 +1612,9 @@ function TreeNode({
                       {req.name || req.url || 'Untitled'}
                     </span>
                   )}
+                  {/* Two at most: a row is one line, and a wrapping strip of
+                      chips pushes every request under it down the list. */}
+                  <RequestTags data={req.data} />
                   <span className="opacity-0 group-hover/req:opacity-100">
                     <IconButtonView
                       icon={<MoreVerticalIcon size={11} />}
@@ -1439,4 +1652,20 @@ function ActionBtn({ title, onClick, disabled, children }: { title: string; onCl
       onClick={onClick}
     />
   );
+}
+
+/**
+ * The tags on a saved request, read out of its data blob.
+ *
+ * Parsed here rather than at load: the blob is already in memory and a tag is
+ * only ever wanted when a row is drawn, so widening the tree's shape to carry
+ * a parsed copy would cost every consumer for one row's benefit.
+ */
+function RequestTags({ data }: { data?: string }) {
+  const tags = useMemo(() => {
+    if (!data) return [];
+    try { return tagsFromData(JSON.parse(data)); } catch { return []; }
+  }, [data]);
+  if (!tags.length) return null;
+  return <TagChips tags={tags} max={2} size="xs" />;
 }

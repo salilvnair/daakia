@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react';
 import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { ModalView, AIButtonView, EditorView, CopyButtonView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface Props {
   onClose: () => void;
@@ -66,9 +67,10 @@ export function AiOpenApiEnrichmentModal({ onClose }: Props) {
     const pid = `ai-openapi-${Date.now()}`;
     reqIdRef.current = pid;
 
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'import.openapi.enrich',
+      screen: 'Import',
       systemPrompts: [SYSTEM_PROMPT],
       userPrompt: `Enrich this OpenAPI spec:\n\n${spec.slice(0, 8000)}`,
       conversation: [], tools: [],

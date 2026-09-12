@@ -210,9 +210,22 @@ Available dk.* API:
 - dk.expect(actual).toContain(value)      — string/array contains
 - dk.expect(actual).toBeGreaterThan(n)    — numeric comparison
 - dk.expect(actual).toBeLessThan(n)
-- dk.expect(actual).toBeNull()
-- dk.expect(actual).toBeDefined()
+- dk.expect(actual).toBeGreaterThanOrEqual(n)
+- dk.expect(actual).toBeLessThanOrEqual(n)
+- dk.expect(actual).toBeWithin(min, max)  — inclusive range, e.g. status 200-299
+- dk.expect(actual).toBeOneOf([a, b, c])
+- dk.expect(actual).toBeTruthy() / .toBeFalsy()
+- dk.expect(actual).toBeNull() / .toBeDefined() / .toBeUndefined()
+- dk.expect(actual).toBeType("string" | "number" | "object" | "array" | "boolean")
+- dk.expect(actual).toHaveProperty("key")
+- dk.expect(actual).toHaveLength(n)
 - dk.expect(actual).toMatch(/regex/)
+- dk.expect(response).toHaveStatus(200)
+- dk.expect(actual).toMatchSchema({ ... })  — JSON Schema
+- dk.expect(actual).not.<any matcher above>(...)  — negation
+
+There is no Chai chain: .to.be.*, .to.have.* and .to.equal(...) are not part
+of this API and throw at runtime. Use the matchers above directly.
 - dk.response.status                      — HTTP status code (number)
 - dk.response.body                        — parsed response body (object)
 - dk.response.headers["header-name"]      — response header value
@@ -334,35 +347,35 @@ Keep responses practical and concise.
 
 export const FOLLOWUPS: Record<string, vscode.ChatFollowup[]> = {
   request: [
-    { prompt: '/test Write assertions for this response', label: '🧪 Generate test script' },
-    { prompt: '/mock Create a mock for this endpoint', label: '🔧 Create mock endpoint' },
-    { prompt: 'Add Bearer token auth to this request', label: '🔐 Add authentication' },
+    { prompt: '/test Write assertions for this response', label: 'Generate test script' },
+    { prompt: '/mock Create a mock for this endpoint', label: 'Create mock endpoint' },
+    { prompt: 'Add Bearer token auth to this request', label: 'Add authentication' },
   ],
   mock: [
-    { prompt: 'Add 404 and 500 error responses to this mock', label: '⚠️ Add error responses' },
-    { prompt: 'Make the response body use random data with Faker helpers', label: '🎲 Make it dynamic' },
-    { prompt: '/test Write tests for this mock endpoint', label: '🧪 Generate tests' },
+    { prompt: 'Add 404 and 500 error responses to this mock', label: 'Add error responses' },
+    { prompt: 'Make the response body use random data with Faker helpers', label: 'Make it dynamic' },
+    { prompt: '/test Write tests for this mock endpoint', label: 'Generate tests' },
   ],
   test: [
-    { prompt: 'Add a performance assertion: response time must be under 500ms', label: '⚡ Add performance check' },
-    { prompt: 'Extract the auth token from the response and save to env var', label: '🔑 Extract token to env' },
-    { prompt: 'Add negative test cases for 400 and 401 responses', label: '❌ Add negative tests' },
+    { prompt: 'Add a performance assertion: response time must be under 500ms', label: 'Add performance check' },
+    { prompt: 'Extract the auth token from the response and save to env var', label: 'Extract token to env' },
+    { prompt: 'Add negative test cases for 400 and 401 responses', label: 'Add negative tests' },
   ],
   curl: [
-    { prompt: '/test Write test scripts for this request', label: '🧪 Generate tests' },
-    { prompt: 'Convert this to axios JavaScript code', label: '📦 Get axios JS code' },
-    { prompt: '/mock Create a mock for this endpoint', label: '🔧 Mock this endpoint' },
+    { prompt: '/test Write test scripts for this request', label: 'Generate tests' },
+    { prompt: 'Convert this to axios JavaScript code', label: 'Get axios JS code' },
+    { prompt: '/mock Create a mock for this endpoint', label: 'Mock this endpoint' },
   ],
   explain: [
-    { prompt: 'Show me a practical code example', label: '💡 Show code example' },
-    { prompt: 'What are the most common mistakes with this?', label: '⚠️ Common mistakes' },
-    { prompt: 'How does Daakia handle this?', label: '🔧 How Daakia handles it' },
+    { prompt: 'Show me a practical code example', label: 'Show code example' },
+    { prompt: 'What are the most common mistakes with this?', label: 'Common mistakes' },
+    { prompt: 'How does Daakia handle this?', label: 'How Daakia handles it' },
   ],
   general: [
-    { prompt: '/request Build a GET request to https://jsonplaceholder.typicode.com/users', label: '📡 Try a request' },
-    { prompt: '/mock Create a mock POST /api/users endpoint', label: '🔧 Try a mock' },
-    { prompt: '/test Generate tests for a 200 response with a users array', label: '🧪 Try test generation' },
-    { prompt: '/explain What is OAuth2 and how do I use it?', label: '❓ Learn OAuth2' },
+    { prompt: '/request Build a GET request to https://jsonplaceholder.typicode.com/users', label: 'Try a request' },
+    { prompt: '/mock Create a mock POST /api/users endpoint', label: 'Try a mock' },
+    { prompt: '/test Generate tests for a 200 response with a users array', label: 'Try test generation' },
+    { prompt: '/explain What is OAuth2 and how do I use it?', label: 'Learn OAuth2' },
   ],
 };
 
@@ -372,7 +385,7 @@ export const FOLLOWUPS: Record<string, vscode.ChatFollowup[]> = {
 
 export function buildHelpText(): string {
   return [
-    '# Daakia Assistant 🚀',
+    '# Daakia Assistant',
     '',
     'I\'m your AI-powered API development companion. Here\'s what I can do:',
     '',
@@ -637,10 +650,10 @@ A letter grade (A–F) with a one-sentence justification.
 
 ## Findings
 A prioritized list of issues:
-- 🔴 **Critical** — exploitable immediately (exposed credentials, no auth)
-- 🟠 **High** — significant risk (missing HTTPS, permissive CORS with auth)
-- 🟡 **Medium** — notable risk (missing security headers, verbose errors)
-- 🟢 **Low / Info** — best-practice improvements
+- **Critical** — exploitable immediately (exposed credentials, no auth)
+- **High** — significant risk (missing HTTPS, permissive CORS with auth)
+- **Medium** — notable risk (missing security headers, verbose errors)
+- **Low / Info** — best-practice improvements
 
 For each finding: what it is, why it matters, and how to fix it.
 
@@ -674,28 +687,28 @@ export const AGENT_SYSTEM_PROMPTS: Record<string, string> = {
 // Phase 2 follow-up suggestions (inlined from former prompt-template-p2.ts)
 Object.assign(FOLLOWUPS, {
   soap: [
-    { prompt: 'Add WS-Security UsernameToken to this SOAP request', label: '🔐 Add WS-Security' },
-    { prompt: '/test Write assertions for this SOAP response', label: '🧪 Generate tests' },
-    { prompt: 'Convert this SOAP operation to a REST equivalent', label: '🔄 Compare to REST' },
+    { prompt: 'Add WS-Security UsernameToken to this SOAP request', label: 'Add WS-Security' },
+    { prompt: '/test Write assertions for this SOAP response', label: 'Generate tests' },
+    { prompt: 'Convert this SOAP operation to a REST equivalent', label: 'Compare to REST' },
   ],
   xsd: [
-    { prompt: 'Validate this sample against the schema and list any issues', label: '✅ Validate sample' },
-    { prompt: 'Show optional fields I can add to this request', label: '➕ Show optional fields' },
-    { prompt: '/test Generate assertions to validate the response schema', label: '🧪 Validate response schema' },
+    { prompt: 'Validate this sample against the schema and list any issues', label: 'Validate sample' },
+    { prompt: 'Show optional fields I can add to this request', label: 'Show optional fields' },
+    { prompt: '/test Generate assertions to validate the response schema', label: 'Validate response schema' },
   ],
   graphql: [
-    { prompt: 'Add pagination (first/after cursor) to this query', label: '📄 Add pagination' },
-    { prompt: '/test Write assertions for this GraphQL response', label: '🧪 Generate tests' },
-    { prompt: 'Convert this GraphQL query to a REST equivalent', label: '🔄 Compare to REST' },
+    { prompt: 'Add pagination (first/after cursor) to this query', label: 'Add pagination' },
+    { prompt: '/test Write assertions for this GraphQL response', label: 'Generate tests' },
+    { prompt: 'Convert this GraphQL query to a REST equivalent', label: 'Compare to REST' },
   ],
   docs: [
-    { prompt: 'Generate an OpenAPI 3.0 YAML stub for this endpoint', label: '📋 Generate OpenAPI YAML' },
-    { prompt: 'Write a developer quickstart guide for this API', label: '🚀 Write quickstart guide' },
-    { prompt: 'Generate a Postman-compatible collection description', label: '📦 Postman description' },
+    { prompt: 'Generate an OpenAPI 3.0 YAML stub for this endpoint', label: 'Generate OpenAPI YAML' },
+    { prompt: 'Write a developer quickstart guide for this API', label: 'Write quickstart guide' },
+    { prompt: 'Generate a Postman-compatible collection description', label: 'Postman description' },
   ],
   security: [
-    { prompt: 'Show me how to fix the most critical security issue', label: '🔧 Fix critical issue' },
-    { prompt: 'Add all recommended security headers to this response', label: '🛡️ Add security headers' },
-    { prompt: 'Check if this endpoint is vulnerable to CORS attacks', label: '🌐 Check CORS policy' },
+    { prompt: 'Show me how to fix the most critical security issue', label: 'Fix critical issue' },
+    { prompt: 'Add all recommended security headers to this response', label: 'Add security headers' },
+    { prompt: 'Check if this endpoint is vulnerable to CORS attacks', label: 'Check CORS policy' },
   ],
 });

@@ -1,6 +1,7 @@
+import { SelectInputView, type SelectOption } from '@salilvnair/dui';
 import { useState, useRef } from 'react';
 import { type KeyValueRow, InsertRowDivider } from './KeyValueTable';
-import { StyledDropdown } from './StyledDropdown';
+
 import { ConfirmDialog } from '../modals/ConfirmDialog';
 import { CheckCircleFilledIcon, TrashIcon, DownloadIcon } from '../../../icons';
 import { postMsg } from '../../../vscode';
@@ -160,11 +161,14 @@ export function FormDataTable({ rows, onChange, hideToolbar = false }: Props) {
             />
 
             {/* Type dropdown */}
-            <StyledDropdown
+            {/* `md`, the height of the key and value fields it sits between —
+                a 24px control in a row of 28px ones reads as misaligned even
+                when it is centred. */}
+            <SelectInputView
               options={TYPE_OPTIONS}
               value={row.type || 'text'}
               onChange={(v) => updateRow(idx, { type: v as 'text' | 'file', value: v === 'file' ? '' : row.value, files: v === 'file' ? [] : undefined })}
-              size="sm"
+              size="md"
             />
 
             {/* Value: text input or file chooser */}
@@ -188,7 +192,7 @@ export function FormDataTable({ rows, onChange, hideToolbar = false }: Props) {
                 {row.files && row.files.length > 0 ? (
                   <span className="text-[12px] truncate flex-1 flex items-center gap-1.5">
                     {row.fileExists && row.fileExists.some(e => !e) ? (
-                      <span className="text-[var(--color-error)]" title="File moved or deleted — re-select to fix">⚠ {row.files.join(', ')}</span>
+                      <span className="text-[var(--color-error)]"title="File moved or deleted — re-select to fix"> {row.files.join(', ')}</span>
                     ) : (
                       <span className="text-[var(--color-text-muted)]">{row.files.join(', ')}</span>
                     )}

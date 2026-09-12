@@ -1,16 +1,25 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useTabsStore } from '../../../store/tabs-store';
+import { useTabsStore, type RequestTab } from '../../../store/tabs-store';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import { useScrollRestore } from '../../../hooks/useScrollRestore';
 import { useToastStore } from '../../../store/toast-store';
 import { useDebugStore } from '../../../store/debug-store';
 import { KeyValueTable, AuthEditor, ScriptsEditor } from '../../shared';
-import { TabView, type TabItem, KeyValueTableView, type KeyValueTableRow } from '@salilvnair/dui';
+import { useSurfaceMenu } from '../../shared/menu/SurfaceMenu';
+import { requestMenuItems, type KvRow } from '../../shared/menu/requestMenus';
+import { TabView, type TabItem, KeyValueTableView, type KeyValueTableRow, MarkdownView, ButtonView } from '@salilvnair/dui';
 import { postMsg } from '../../../vscode';
 import { computeAuthRows } from './requestUtils';
 import { HeadersTab } from './HeadersTab';
 import { BodyEditor } from './BodyEditor';
 import { RequestAiToolbar } from './RequestAiToolbar';
+import { RequestChaining } from '../../power/RequestChaining';
+import { AiDocsGenerate } from '../../ai/AiDocsGenerate';
+import { EyeIcon, PencilIcon } from '../../../icons';
+import { ExecutionSettingsEditor } from '../../shared/settings/ExecutionSettingsEditor';
+import { MarkdownEditorView } from '@salilvnair/dui';
+import { useEffectiveSettings } from '../../shared/settings/use-effective-settings';
+import { countOverrides } from '../../shared/settings/execution-settings';
 
 const CONFIG_TABS: TabItem[] = [
   { id: 'params', label: 'Params' },
@@ -19,7 +28,104 @@ const CONFIG_TABS: TabItem[] = [
   { id: 'auth', label: 'Authorization' },
   { id: 'scripts', label: 'Scripts' },
   { id: 'variables', label: 'Variables' },
+  /*
+    Things this request DOES around a send, as opposed to values it carries.
+
+    Response chaining lived under Variables, which is about the request's own
+    variables — reading a value out of a response and writing it to the
+    environment is a different kind of thing, and the tab is where the rest of
+    that kind will go.
+  */
+  { id: 'action', label: 'Action' },
+  // Markdown describing the request — the thing that makes an exported
+  // collection useful to somebody who did not write it.
+  { id: 'docs', label: 'Docs' },
+  // Per-request execution overrides — timeout, redirects, SSL, encoding, proxy.
+  { id: 'settings', label: 'Settings' },
 ];
+
+/**
+ * The Settings tab's body.
+ *
+ * Its own component so the inherited-values hook is not called from inside a
+ * conditional branch of the panel — and so it only asks the host for them when
+ * the tab is actually open.
+ */
+function RequestSettingsTab({ tab }: { tab: RequestTab }) {
+  const updateTab = useTabsStore(s => s.updateTab);
+  const { values, from } = useEffectiveSettings(
+    'request', { tabId: tab.id, collectionId: tab.collectionId },
+  );
+  return (
+    <div className="flex-1 min-h-0 -mx-3 -my-2">
+      <ExecutionSettingsEditor
+        tags={tab.tags ?? []}
+        onTagsChange={next => updateTab(tab.id, { tags: next })}
+        scope="request"
+        value={tab.settings ?? {}}
+        onChange={next => updateTab(tab.id, { settings: next })}
+        inherited={values}
+        inheritedFrom={from}
+        accentColor="var(--color-protocol-rest, var(--color-accent))"
+      />
+    </div>
+  );
+}
+
+/**
+ * The Docs tab: markdown in, rendered markdown out.
+ *
+ * Edit and Preview rather than a live split, because the pane is narrow and a
+ * request's documentation is written once and read many times — so it opens
+ * in Preview when there is something to read, and in Edit when there is not.
+ */
+function RequestDocsTab({ tab }: { tab: RequestTab }) {
+  const updateTab = useTabsStore(s => s.updateTab);
+  const docs = tab.docs ?? '';
+
+  /*
+    No Edit/Preview toggle any more. With a rich surface there is nothing to
+    preview — what you are typing into is the rendered document, and the
+    editor's own Markdown view covers wanting the source. Two toggles that mean
+    almost the same thing is one too many.
+  */
+  return (
+    <div className="flex flex-col h-full min-h-0 -mx-3 -my-2">
+      <MarkdownEditorView
+        value={docs}
+        onChange={md => updateTab(tab.id, { docs: md })}
+        accentColor="var(--color-protocol-rest, var(--color-accent))"
+        placeholder="Why this request exists, what it needs, what it returns."
+        toolbarRight={
+          /*
+            The request describes itself: method, URL, headers, body and the
+            responses saved from it are the whole brief, so there is nothing to
+            type first. It replaces the text rather than appending — a second
+            press is a rewrite, not a duplicate.
+          */
+          <AiDocsGenerate tab={tab} onApply={md => updateTab(tab.id, { docs: md })} />
+        }
+      />
+    </div>
+  );
+}
+
+/**
+ * Which field on the tab each `data-table` mark names.
+ *
+ * The mark in the markup is the reader's own word for the table — `params`,
+ * `headers` — and this is the only place that has to know one of them is
+ * stored as `bodyFormData`. A new table gets a right-click menu by appearing
+ * here and carrying the attribute.
+ */
+const TABLES: Record<string, 'params' | 'headers' | 'variables'
+  | 'bodyFormData' | 'bodyUrlEncoded'> = {
+  params: 'params',
+  headers: 'headers',
+  variables: 'variables',
+  formData: 'bodyFormData',
+  urlEncoded: 'bodyUrlEncoded',
+};
 
 export function RequestPanel() {
   const { tabs, activeTabId, updateTab } = useTabsStore();
@@ -138,6 +244,14 @@ export function RequestPanel() {
       case 'params':    return { ...t, badge: tab.params.filter(p => p.enabled && p.key).length };
       case 'headers':   return { ...t, badge: tab.headers.filter(h => h.enabled && h.key).length + hiddenHeadersCount };
       case 'variables': return { ...t, badge: tab.variables?.filter((v: any) => v.enabled && v.key).length || 0 };
+      // How many rules this request runs after a send — the same reading as
+      // every other count on this row: what is configured, not what exists.
+      case 'action':    return { ...t, badge: tab.chainExtractions?.filter(e => e.enabled && e.path && e.variableName).length || 0 };
+      // The Docs tab is a dot, not a count: markdown has no natural number.
+      case 'docs':      return { ...t, dot: !!tab.docs?.trim() };
+      // The count is how many fields this request pins, not how many exist —
+      // an untouched Settings tab inherits everything and shows nothing.
+      case 'settings':  return { ...t, badge: countOverrides(tab.settings) };
       case 'body':      return { ...t, dot: !!(tab.bodyRaw?.trim()) || !!(tab.bodyFormData?.some((f: any) => f.key)) };
       case 'auth':      return { ...t, dot: tab.authType !== 'none' };
       case 'scripts':   return { ...t, dot: !!(tab.preRequestScript?.trim()) || !!(tab.postResponseScript?.trim()) };
@@ -145,8 +259,35 @@ export function RequestPanel() {
     }
   });
 
+  /*
+    Right-click, and get a menu about what is under the pointer rather than the
+    browser's Copy and Select All. One handler on the root; the parts below say
+    what they are with `data-menu`, and the shared builder decides what each
+    one offers. See `shared/menu/SurfaceMenu`.
+  */
+  const menu = useSurfaceMenu(surface => requestMenuItems(surface, {
+    protocol: tab.protocol,
+    method: tab.method,
+    url: tab.url,
+    headers: tab.headers as KvRow[],
+    params: tab.params as KvRow[],
+    body: tab.bodyRaw,
+    rowsOf: name => {
+      const field = TABLES[name];
+      return field ? (tab[field] as KvRow[]) : undefined;
+    },
+    setRows: (name, rows) => {
+      const field = TABLES[name];
+      if (field) updateTab(tab.id, { [field]: rows });
+    },
+    setUrl: url => updateTab(tab.id, { url }),
+    setBody: bodyRaw => updateTab(tab.id, { bodyRaw }),
+  }));
+
   return (
-    <div className="flex flex-col flex-1 min-h-0 bg-[var(--color-surface)]">
+    <div className="flex flex-col flex-1 min-h-0 bg-[var(--color-surface)]"
+         data-menu="panel" onContextMenu={menu.onContextMenu}>
+      {menu.node}
       <div className="flex items-center px-3 pt-2.5 pb-0 border-b border-[var(--color-surface-border)]">
         <div className="flex-1">
           <TabView
@@ -155,6 +296,10 @@ export function RequestPanel() {
             onChange={setActiveSection}
             size="md"
             variant="underline"
+            /* Request and response both offer a "Headers" tab, so a test that
+               asks for one by name gets two. Named strips give it a way to say
+               which half of the screen it means. */
+            testId="rest-request-tabs"
           />
         </div>
         <RequestAiToolbar tab={tab} activeSection={activeSection} onOpenFuzzer={() => setShowFuzzer(true)} />
@@ -162,20 +307,27 @@ export function RequestPanel() {
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto [scrollbar-gutter:stable] px-3 py-2 flex flex-col min-h-0">
         {activeSection === 'params' && (
-          <KeyValueTable
-            rows={tab.params}
-            onChange={(rows) => updateTab(tab.id, { params: rows })}
-            placeholder={{ key: 'Parameter', value: 'Value' }}
-            label="Query Parameters"
-          />
+          <div data-menu="kv" data-table="params" data-label="the query parameters">
+            <KeyValueTable
+              rows={tab.params}
+              onChange={(rows) => updateTab(tab.id, { params: rows })}
+              placeholder={{ key: 'Parameter', value: 'Value' }}
+              label="Query Parameters"
+            />
+          </div>
         )}
 
         {activeSection === 'headers' && (
-          <HeadersTab tab={tab} cookieJarRows={cookieJarRows} />
+          <div data-menu="kv" data-table="headers" data-label="the headers">
+            <HeadersTab tab={tab} cookieJarRows={cookieJarRows} />
+          </div>
         )}
 
         {activeSection === 'body' && (
-          <BodyEditor tab={tab} showFuzzer={showFuzzer} onCloseFuzzer={() => setShowFuzzer(false)} />
+          <div data-menu="body" className="flex flex-col flex-1 min-h-0">
+            <BodyEditor tab={tab} showFuzzer={showFuzzer}
+                        onCloseFuzzer={() => setShowFuzzer(false)} />
+          </div>
         )}
 
         {activeSection === 'auth' && (
@@ -206,6 +358,26 @@ export function RequestPanel() {
             showDescription
             label="Request Variables"
           />
+        )}
+
+        {activeSection === 'action' && (
+          <div className="flex flex-col gap-3">
+            <RequestChaining
+              tabId={tab.id}
+              extractions={tab.chainExtractions ?? []}
+              onExtractionsChange={(next) => updateTab(tab.id, { chainExtractions: next })}
+              responseBody={tab.response?.body}
+              responseHeaders={tab.response?.headers}
+            />
+          </div>
+        )}
+
+        {activeSection === 'docs' && (
+          <RequestDocsTab tab={tab} />
+        )}
+
+        {activeSection === 'settings' && (
+          <RequestSettingsTab tab={tab} />
         )}
       </div>
     </div>

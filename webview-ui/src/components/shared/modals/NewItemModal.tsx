@@ -56,6 +56,10 @@ export function NewItemModal({ open, title, placeholder = '', onSave, onCancel, 
         placeholder={placeholder || 'Enter name'}
         size="md"
         width="fw"
+        /* The header and the Save button already wear the caller's accent; the
+           focus ring was left on the default and came out indigo inside a pink
+           GraphQL dialog. One accent per dialog, or it reads as two. */
+        accentColor={accentColor}
       />
     </ModalView>
   );

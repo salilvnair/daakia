@@ -3,6 +3,7 @@
  * Positioned at the bottom of the main content area, below response/graphql/websocket panels.
  */
 import { useRef, useCallback, useState, useEffect } from 'react';
+import { TabView, IconButtonView, type TabItem } from '@salilvnair/dui';
 import { useDevToolsStore } from '../../../store/devtools-store';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import { TerminalIcon, NetworkIcon, DevToolsIcon, CloseIcon, TrashIcon, GaugeIcon } from '../../../icons';
@@ -75,11 +76,18 @@ export function DevToolsPanel() {
 
   if (!isOpen) return null;
 
-  const tabs: { key: typeof activeTab; label: string; icon: React.ReactNode }[] = [
-    { key: 'console', label: 'Console', icon: <TerminalIcon size={13} /> },
-    { key: 'network', label: 'Network', icon: <NetworkIcon size={13} /> },
-    { key: 'performance', label: 'Performance', icon: <GaugeIcon size={13} /> },
-    ...(intelligenceDashboardEnabled ? [{ key: 'ai-insights' as const, label: 'AI Insights', icon: <SparkleIcon size={13} /> }] : []),
+  /* Counts ride on the tabs themselves rather than being discoverable only by
+     opening one — the whole reason to glance at this strip is to see whether
+     anything landed while you were looking elsewhere. */
+  const tabs: TabItem[] = [
+    { id: 'console', label: 'Console', icon: <TerminalIcon size={13} />,
+      badge: logs.length || undefined },
+    { id: 'network', label: 'Network', icon: <NetworkIcon size={13} />,
+      badge: networkEntries.length || undefined },
+    { id: 'performance', label: 'Performance', icon: <GaugeIcon size={13} /> },
+    ...(intelligenceDashboardEnabled
+      ? [{ id: 'ai-insights', label: 'AI Insights', icon: <SparkleIcon size={13} /> }]
+      : []),
   ];
 
   return (
@@ -114,47 +122,37 @@ export function DevToolsPanel() {
         </div>
 
         {/* Tabs */}
-        {tabs.map(tab => (
-          <button
-            key={tab.key}
-            className={`flex items-center gap-1 px-2 h-[24px] text-[11px] rounded transition-colors cursor-pointer ${
-              activeTab === tab.key
-                ? 'text-[var(--color-text-primary)] font-medium'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
-            }`}
-            style={activeTab === tab.key ? { backgroundColor: `color-mix(in srgb, ${accent} 12%, transparent)` } : undefined}
-            onClick={() => setActiveTab(tab.key)}
-          >
-            {tab.icon}
-            {tab.label}
-          </button>
-        ))}
+        <TabView
+          tabs={tabs}
+          activeTab={activeTab}
+          onChange={id => setActiveTab(id as typeof activeTab)}
+          variant="underline"
+          size="sm"
+          accentColor={accent}
+        />
 
         {/* Spacer */}
         <div className="flex-1" />
 
         {/* Actions */}
         {activeTab !== 'performance' && activeTab !== 'ai-insights' && (
-          <button
-            className={`flex items-center justify-center w-[22px] h-[22px] rounded transition-colors ${
-              (activeTab === 'console' ? logs.length > 0 : networkEntries.length > 0)
-                ? 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-input-bg)] cursor-pointer'
-                : 'text-[var(--color-text-muted)] opacity-40 cursor-not-allowed'
-            }`}
+          <IconButtonView
+            icon={<TrashIcon size={13} />}
+            size="sm"
             onClick={handleClear}
             disabled={activeTab === 'console' ? logs.length === 0 : networkEntries.length === 0}
-            title={`Clear ${activeTab}`}
-          >
-            <TrashIcon size={13} />
-          </button>
+            tooltip={`Clear ${activeTab}`}
+          />
         )}
-        <button
-          className="flex items-center justify-center w-[22px] h-[22px] rounded text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-input-bg)] transition-colors cursor-pointer"
+        {/* Red on hover, like every other dismiss in the app. IconButtonView has
+            no danger variant; the hover colour is a CSS variable it reads. */}
+        <IconButtonView
+          icon={<CloseIcon size={13} />}
+          size="sm"
           onClick={close}
-          title="Close DevTools"
-        >
-          <CloseIcon size={13} />
-        </button>
+          tooltip="Close DevTools"
+          style={{ '--dui-hover-color': 'var(--color-error)' } as React.CSSProperties}
+        />
       </div>
 
       {/* Tab content */}

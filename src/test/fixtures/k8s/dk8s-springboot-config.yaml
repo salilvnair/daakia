@@ -1,0 +1,117 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: zp-config-app
+  namespace: dk8s-test
+data:
+  application.properties: |
+    spring.application.name=zp-config
+    server.port=8080
+
+    # Datasource. The password is rotated weekly by the platform team.
+    spring.datasource.url=jdbc:postgresql://postgres.dk8s-test:5432/zp
+    spring.datasource.username=zpuser
+    spring.datasource.password=Hunter2-Prod-Xy9
+    spring.datasource.hikari.maximum-pool-size=20
+
+    spring.mail.host=email-server.dk8s-test
+    spring.mail.username=noreply@zp.local
+    spring.mail.password=
+
+    app.api-key=AKIAQ7F2L9ZZTESTONLY
+    app.jwt.secret=b3JhbmdlLXNsaWNlLW5vdC1hLXJlYWwtc2VjcmV0
+    app.oauth.client-id=zp-web
+    app.oauth.client-secret=vT8s-notreal-9QwE
+    app.password-rotation-days=30
+
+    management.endpoints.web.exposure.include=health,metrics
+    logging.level.org.springframework=INFO
+  application.yml: |
+    spring:
+      datasource:
+        url: jdbc:postgresql://postgres.dk8s-test:5432/zp
+        username: zpuser
+        password: Hunter2-Prod-Xy9
+      redis:
+        host: redis.dk8s-test
+        token: rdis-notreal-4471
+    app:
+      credential: svc-account-notreal
+      timeout: 30s
+---
+# A real claim, so the Explorer has a PVC to name. docker-desktop's default
+# StorageClass binds this immediately.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zp-config-data
+  namespace: dk8s-test
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 64Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zp-config
+  namespace: dk8s-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zp-config
+  template:
+    metadata:
+      labels:
+        app: zp-config
+    spec:
+      # Runs as 1000, like most Spring Boot images actually do. This is what
+      # makes a root-owned 0600 file unreadable rather than merely unusual, and
+      # it is the case the Explorer's permission marking exists for.
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      initContainers:
+        # Root, so it can leave behind something the app container cannot read.
+        - name: seed
+          image: busybox:1.36
+          securityContext:
+            runAsUser: 0
+          command:
+            - sh
+            - -c
+            - |
+              echo 'not a real key' > /data/.keystore
+              chmod 600 /data/.keystore
+              chown 0:0 /data/.keystore
+              echo 'readable by anyone' > /data/readme.txt
+              chmod 644 /data/readme.txt
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      containers:
+        - name: app
+          image: eclipse-temurin:21-jre
+          command: ["sleep", "infinity"]
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+      volumes:
+        - name: config
+          configMap:
+            name: zp-config-app
+        - name: data
+          persistentVolumeClaim:
+            claimName: zp-config-data

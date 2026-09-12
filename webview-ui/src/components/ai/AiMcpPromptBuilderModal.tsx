@@ -59,7 +59,9 @@ Format your response with:
 ## Recommended Prompt
 ## Example Usage`;
 
-    postMsg({ type: 'aiStream', payload: { userMessage, templateKey: 'mcp.prompt.build' } });
+    // `mcp.prompt.builder`, not `.build` — the registry has only the former, and
+    // a key that resolves to nothing takes the button down with it.
+    postMsg({ type: 'aiStream', payload: { userMessage, templateKey: 'mcp.prompt.builder' } });
   };
 
   return (

@@ -7,6 +7,8 @@ import { SparkleIcon, PlayIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { ModalView, ButtonView, TextInputView, MultilineInputView } from '@salilvnair/dui';
 import { METHOD_COLORS } from '../../colors';
+import { sendAiRequest } from '../../services/ai/ai-client';
+import { importRequestsAsCollection } from '../../services/collections/import-to-collection';
 
 interface VariableExtraction { variable: string; path: string; description: string; }
 
@@ -64,9 +66,10 @@ export function AiApiFlowBuilderModal({ protocol = 'rest', onClose }: Props) {
     setLoading(true); setFlow(null); setError(''); setCreated(false); accRef.current = '';
     const pid = `ai-flow-${Date.now()}`;
     reqIdRef.current = pid;
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'rest.api.flow',
+      screen: 'REST · Request',
       systemPrompts: [resolve('rest.api.flow.system')],
       userPrompt: resolve('rest.api.flow', { description: description.trim(), baseUrl: baseUrl.trim() || 'https://api.example.com' }),
       conversation: [], tools: [],
@@ -78,42 +81,26 @@ export function AiApiFlowBuilderModal({ protocol = 'rest', onClose }: Props) {
   const handleCreateCollection = async () => {
     if (!flow) return;
     setCreating(true);
-    const collectionId = crypto.randomUUID();
-    postMsg({ type: 'createCollection', id: collectionId, name: flow.name || 'AI Flow', protocol });
-    await new Promise(r => setTimeout(r, 120));
-    for (let i = 0; i < flow.steps.length; i++) {
-      const step = flow.steps[i];
-      const requestId = crypto.randomUUID();
-      const headerRows = step.headers?.length > 0
-        ? [...step.headers.map(h => ({ ...h, id: crypto.randomUUID() })), { id: crypto.randomUUID(), key: '', value: '', enabled: true }]
-        : [{ id: crypto.randomUUID(), key: '', value: '', enabled: true }];
-      // Was 'createRequest' — a message type NO handler in the extension listens for, so
-      // every request this built was silently dropped and the flow produced an empty
-      // collection. The real one is 'saveRequestToCollection', whose request is flat with
-      // the rest packed into a `data` JSON string.
-      postMsg({
-        type: 'saveRequestToCollection', collectionId, protocol,
-        request: {
-          id: requestId, name: `${i + 1}. ${step.name}`, method: (step.method || 'GET').toUpperCase(),
-          url: step.url || '',
-          data: JSON.stringify({
-            headers: headerRows,
-            params: [{ id: crypto.randomUUID(), key: '', value: '', enabled: true }],
-            bodyMode: step.bodyMode || 'none', bodyRaw: step.bodyRaw || '',
-            bodyFormData: [{ id: crypto.randomUUID(), key: '', value: '', type: 'text', enabled: true }],
-            bodyUrlEncoded: [{ id: crypto.randomUUID(), key: '', value: '', enabled: true }],
-            authType: 'none', authData: {},
-            preRequestScript: '',
-            postResponseScript: step.variableExtractions?.length > 0
-              ? step.variableExtractions.map(v => `// Extract: ${v.description}\n// dk.env.set('${v.variable}', dk.response.json()${v.path.replace(/^\$/, '')});`).join('\n\n')
-              : '',
-          }),
-        },
-      });
-      await new Promise(r => setTimeout(r, 60));
-    }
-    await new Promise(r => setTimeout(r, 200));
-    postMsg({ type: 'getCollections' });
+    /* The saving lives in `import-to-collection` — this modal and three others
+       each owned a copy, and two of those copies never saved anything. The
+       variable extractions are the one part that is this flow's own: a step
+       that hands a value to the next one becomes a post-response script. */
+    await importRequestsAsCollection({
+      name: flow.name || 'AI Flow',
+      protocol,
+      requests: flow.steps.map((step, i) => ({
+        ...step,
+        name: `${i + 1}. ${step.name}`,
+        postResponseScript: step.variableExtractions?.length > 0
+          ? step.variableExtractions
+              .map(v => [
+                `// Extract: ${v.description}`,
+                `// dk.env.set('${v.variable}', dk.response.json()${v.path.replace(/^\$/, '')});`,
+              ].join('\n'))
+              .join('\n\n')
+          : '',
+      })),
+    });
     setCreating(false); setCreated(true);
   };
 

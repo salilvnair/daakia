@@ -12,6 +12,7 @@ import { AiSmartRetryAdvisor } from '../ai/AiSmartRetryAdvisor';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 import { WandIcon } from '../../icons';
 import { EditorView, CopyButtonView, TabView, IconButtonView, AIButtonView, type TabItem } from '@salilvnair/dui';
+import { useComparable } from '../../services/compare/comparable-registry';
 
 const ACCENT = 'var(--color-protocol-soap)';
 
@@ -38,6 +39,10 @@ const responseTabs: TabItem[] = [
 
 export function SoapResponsePanel() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
+  /* Right-click → Compare with clipboard. */
+  const comparableRef = useRef<HTMLDivElement>(null);
+  useComparable(comparableRef, 'SOAP response', () => activeTab?.response?.body ?? '');
+
   const activeTabId = useTabsStore(s => s.activeTabId);
   const storedSubTab = useUiStateStore(s => s.prefs[`soap.response.subtab.${activeTabId}`]);
   const [activeSubTab, setActiveSubTabLocal] = useState(storedSubTab || 'body');
@@ -222,7 +227,7 @@ export function SoapResponsePanel() {
                 <CopyButtonView text={response.body || ''} accentColor="var(--color-success)" />
               </div>
             </div>
-            <div className="flex-1 min-h-0">
+            <div ref={comparableRef} className="flex-1 min-h-0">
               <EditorView
                 value={displayBody}
                 onChange={setDisplayBody}

@@ -139,7 +139,7 @@ export function ChaosPanel({ server, onUpdate, protocol = 'rest' }: Props) {
 
         {chaos.enabled && probability >= 50 && (
           <div className="flex items-start gap-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-            <span className="text-[12px] flex-shrink-0">⚠️</span>
+            <span className="text-[12px] flex-shrink-0"></span>
             <div>
               <p className="text-[10px] font-medium text-[var(--color-error)]">High chaos level active</p>
               <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">

@@ -1,5 +1,7 @@
 import { create } from 'zustand';
+import type { ExecutionSettings } from '../components/shared/settings/execution-settings';
 import type { KeyValueRow } from '../components/shared';
+import type { ResponseExample } from '../services/request/examples';
 import { useEnvStore, GLOBAL_ENV_ID } from './env-store';
 
 // ────────────── Daakia Assistant system prompt ──────────────────────────────
@@ -48,7 +50,7 @@ export type BodyMode = 'none' | 'json' | 'raw' | 'form-data' | 'x-www-form-urlen
 
 export type AuthType = 'none' | 'bearer' | 'basic' | 'api-key' | 'oauth2';
 
-export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki';
+export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki' | 'dk8s' | 'dkgh' | 'workspace';
 
 export type Protocol = 'rest' | 'graphql' | 'websocket' | 'grpc' | 'soap' | 'ai' | 'mcp';
 
@@ -71,6 +73,45 @@ export interface RequestTab {
   preRequestScript: string;
   postResponseScript: string;
   variables: KeyValueRow[];
+  /**
+   * Per-request execution overrides — timeout, redirects, SSL, encoding,
+   * proxy. Every field is optional and undefined means inherit, so a tab that
+   * has never opened its Settings tab pins nothing and keeps following the
+   * collection and the global settings as those change.
+   */
+  settings?: ExecutionSettings;
+  /**
+   * Response values to lift into environment variables after each send.
+   *
+   * Bruno's Vars tab and Insomnia's response chaining: `data.token` into
+   * `{{token}}` without writing a script. Applied automatically when a
+   * response arrives — see `services/request/chaining.ts`.
+   */
+  chainExtractions?: ChainExtraction[];
+  /**
+   * Markdown describing what this request is for.
+   *
+   * There was nowhere to write it down — no description on a request, a
+   * folder or a collection — which is most of what makes an exported
+   * collection useful to somebody else, and the reason the doc generator had
+   * to infer intent from URLs and payloads.
+   *
+   * Stored in the request's `data` blob rather than a new column, so it
+   * round-trips through save, git sync and the Daakia export with no
+   * migration.
+   */
+  docs?: string;
+  /** Labels for finding and grouping this request. See shared/tags. */
+  tags?: string[];
+  /**
+   * Saved responses, newest first.
+   *
+   * A request stored exactly one response — the last one — so "what does this
+   * look like when the token has expired" had nowhere to live. Capped and
+   * trimmed by `services/request/examples.ts`, because this rides in the same
+   * `data` blob every collection load reads whole.
+   */
+  examples?: ResponseExample[];
   // Response state
   response: ResponseData | null;
   loading: boolean;
@@ -215,6 +256,23 @@ export interface ResponseCookie {
   httpOnly?: boolean;
   secure?: boolean;
   sameSite?: string;
+}
+
+/**
+ * One value lifted out of a response and into a variable.
+ *
+ * Declared here rather than beside the editor that edits it: it is tab state
+ * that outlives the panel, and the chaining service reads it without wanting
+ * a component import.
+ */
+export interface ChainExtraction {
+  id: string;
+  source: 'body' | 'header' | 'status';
+  /** Dot path into the JSON body (`data.users[0].id`), or a header name. */
+  path: string;
+  /** The name to bind, without braces. */
+  variableName: string;
+  enabled: boolean;
 }
 
 export interface ResponseData {
@@ -405,6 +463,31 @@ export interface McpAuth {
 
 // ────────────── Defaults ──────────────
 
+/**
+ * Is this patch value the same as what the tab already holds?
+ *
+ * Identity first, because most no-op writes hand back the very array or
+ * object they were given. Structural comparison second, for the panels that
+ * rebuild a value each render — a fresh `[]` every mount is not a change, and
+ * treating it as one is what put an unsaved dot on an untouched tab.
+ *
+ * JSON rather than a deep walk: these are request fields — headers, params,
+ * body text, small config objects — and a stringify of one of those is cheap
+ * beside the React render it is about to cause. Anything it cannot serialise
+ * is reported as changed, which is the safe direction: a spurious dot is
+ * recoverable, a missing one loses work.
+ */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== typeof b) return false;
+  if (a === null || b === null || typeof a !== 'object') return false;
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
+
 function createDefaultTab(partial?: Partial<RequestTab>): RequestTab {
   return {
     type: 'request',
@@ -424,6 +507,7 @@ function createDefaultTab(partial?: Partial<RequestTab>): RequestTab {
     preRequestScript: '',
     postResponseScript: '',
     variables: [],
+    chainExtractions: [],
     response: null,
     loading: false,
     dirty: false,
@@ -445,8 +529,19 @@ interface TabsState {
   addTab: (partial?: Partial<RequestTab>) => void;
   openSettingsTab: () => void;
   openMockServerTab: () => void;
+  openDk8sTab: () => void;
+  openDkghTab: () => void;
+  openWorkspaceTab: () => void;
   openDaakiaAiTab: () => void;
-  openDaakiaWikiTab: () => void;
+  /**
+   * @param page  A wiki page id to land on. The wiki keeps its own
+   *              selection, so a deep link has to say where to go; it is
+   *              parked in `wikiTarget` and cleared by the page once read.
+   */
+  openDaakiaWikiTab: (page?: string) => void;
+  /** Set by a deep link, consumed by the wiki page, then cleared. */
+  wikiTarget?: string;
+  clearWikiTarget: () => void;
   openStateMachineTab: (serverId?: string) => void;
   switchProtocol: (protocol: Protocol) => void;
   closeTab: (id: string) => void;
@@ -512,6 +607,55 @@ export const useTabsStore = create<TabsState>((set, get) => {
       }
     },
 
+    // dk8s — one tab only. It holds a live watch on a namespace, so a second
+    // tab would mean a second watch on the same cluster for no benefit.
+    /* One workspace tab, reused. It is the overview of where you are working,
+       not a document — a second copy of it would be two views of one fact. */
+    openWorkspaceTab: () => {
+      const { tabs, activeTabId } = get();
+      const existing = tabs.find(t => t.type === 'workspace');
+      if (existing) {
+        set({ activeTabId: existing.id, previousTabId: activeTabId });
+        return;
+      }
+      const tab = createDefaultTab({ type: 'workspace', name: 'Workspace' });
+      set(s => ({
+        tabs: [...s.tabs, tab],
+        activeTabId: tab.id,
+        previousTabId: activeTabId,
+      }));
+    },
+
+    openDk8sTab: () => {
+      const { tabs, activeTabId } = get();
+      const existing = tabs.find(t => t.type === 'dk8s');
+      if (existing) {
+        set({ activeTabId: existing.id, previousTabId: activeTabId });
+      } else {
+        const tab = createDefaultTab({ type: 'dk8s', name: 'Dk8s' });
+        set(s => ({
+          tabs: [...s.tabs, tab],
+          activeTabId: tab.id,
+          previousTabId: activeTabId,
+        }));
+      }
+    },
+
+    openDkghTab: () => {
+      const { tabs, activeTabId } = get();
+      const existing = tabs.find(t => t.type === 'dkgh');
+      if (existing) {
+        set({ activeTabId: existing.id, previousTabId: activeTabId });
+      } else {
+        const tab = createDefaultTab({ type: 'dkgh', name: 'DkGH' });
+        set(s => ({
+          tabs: [...s.tabs, tab],
+          activeTabId: tab.id,
+          previousTabId: activeTabId,
+        }));
+      }
+    },
+
     openDaakiaAiTab: () => {
       const { tabs, activeTabId } = get();
       const existing = tabs.find(t => t.type === 'daakia-ai');
@@ -529,8 +673,11 @@ export const useTabsStore = create<TabsState>((set, get) => {
       }
     },
 
-    openDaakiaWikiTab: () => {
+    clearWikiTarget: () => set({ wikiTarget: undefined }),
+
+    openDaakiaWikiTab: (page?: string) => {
       const { tabs, activeTabId } = get();
+      if (page) set({ wikiTarget: page });
       const existing = tabs.find(t => t.type === 'wiki');
       if (existing) {
         set({ activeTabId: existing.id, previousTabId: activeTabId });
@@ -631,13 +778,28 @@ export const useTabsStore = create<TabsState>((set, get) => {
         'aiConversation', 'aiStreaming', 'aiSystemPrompts', 'aiProvider', 'aiModel',
       ]);
       const hasDirtyField = 'dirty' in patch;
-      const hasContentChange = Object.keys(patch).some(k => !NON_DIRTY_FIELDS.has(k));
       set(s => ({
         tabs: s.tabs.map(t => {
           if (t.id !== id) return t;
           // daakia-ai tabs are never "dirty" — they have no save flow
           if (t.type === 'daakia-ai') return { ...t, ...patch, dirty: false };
-          const newDirty = hasDirtyField ? (patch.dirty ?? true) : (hasContentChange ? true : t.dirty);
+
+          /*
+            Dirty means changed, not written.
+
+            A panel that writes its own default back on mount — the same value
+            the tab already holds — used to flip the unsaved dot on a tab
+            nobody had touched, because any key outside the exempt list counted
+            as a change. Comparing against what is there makes a no-op write a
+            no-op, which fixes the class rather than whichever panel was found
+            doing it.
+          */
+          const changed = (Object.keys(patch) as (keyof RequestTab)[]).some(k => {
+            if (NON_DIRTY_FIELDS.has(k as string)) return false;
+            return !sameValue(t[k], patch[k]);
+          });
+
+          const newDirty = hasDirtyField ? (patch.dirty ?? true) : (changed ? true : t.dirty);
           return { ...t, ...patch, dirty: newDirty };
         }),
       }));
@@ -735,7 +897,9 @@ export const useTabsStore = create<TabsState>((set, get) => {
     hydrateSnapshot: (tabs, activeTabId, activeProtocol) => {
       // Restore tabs without response data (response is too large to persist).
       // Strip GQL connection state — the socket is gone after a reload, so always start fresh.
-      const restored = tabs.map(t => {
+      // A Doctor tab saved before the analyzers moved into dk8s would restore
+      // as a tab type nothing renders — a blank pane you cannot explain.
+      const restored = tabs.filter(t => (t.type as string) !== 'doctor').map(t => {
         const base = createDefaultTab({ ...t, response: null, loading: false });
         if (base.protocol === 'graphql' && base.authData?.gql_connected) {
           const { gql_connected, gql_schema, gql_schema_sdl, ...restAuth } = base.authData as Record<string, string>;
@@ -743,7 +907,12 @@ export const useTabsStore = create<TabsState>((set, get) => {
         }
         return base;
       });
-      set({ tabs: restored, activeTabId, activeProtocol });
+      set({
+        tabs: restored,
+        // The dropped tab may have been the active one.
+        activeTabId: restored.some(t => t.id === activeTabId) ? activeTabId : (restored[0]?.id ?? ''),
+        activeProtocol,
+      });
     },
   };
 });

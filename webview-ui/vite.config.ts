@@ -2,12 +2,14 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'node:path';
+import { SHARED_ALIASES } from './shared-aliases';
 
 export default defineConfig({
   root: resolve(__dirname),
   base: './',
   resolve: {
     dedupe: ['react', 'react-dom', 'monaco-editor', '@monaco-editor/react'],
+    alias: SHARED_ALIASES,
   },
   optimizeDeps: {
     // monaco-setup.js uses Vite-specific `?worker&inline` import suffixes —

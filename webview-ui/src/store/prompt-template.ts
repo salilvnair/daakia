@@ -10,6 +10,7 @@
  */
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
+import { DK8S_PROMPTS, DK8S_USER_PROMPTS, DK8S_USER_VARIABLES } from '@daakia/dk8s-prompts';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SECTION 1 — Agent Prompts
@@ -117,7 +118,7 @@ export const AGENT_CATEGORIES: { id: string; label: string; scenarios: AgentScen
 export const SCENARIO_GATES: Record<AgentScenario, string> = {
   request: 'Daakia AI chat → "Build Request" intent · triggered when asking AI to create or modify an HTTP request',
   curl:    'Daakia AI chat → "Convert cURL" intent · triggered when pasting a cURL command into the AI chat',
-  mock:    '"✨ Generate with AI" button in Mock Server endpoint configuration',
+ mock:    '"Generate with AI"button in Mock Server endpoint configuration',
   test:    '"Tests ✦" button in Scripts tab toolbar (post-response mode)',
   explain: 'Daakia AI chat → knowledge and explanation questions about HTTP, APIs, and Daakia features',
   general: 'Fallback agent — handles all conversational requests in Daakia AI chat not matched by a specialist',
@@ -181,6 +182,11 @@ export type AiPromptTemplateKey =
   // ── REST — Body Generate ──
   | 'rest.body.generate'
   | 'rest.body.generate.system'
+  | 'rest.docs.generate'
+  | 'workspace.docs.generate'
+  | 'workspace.docs.generate.system'
+  | 'rest.request.name.system'
+  | 'rest.docs.generate.system'
   // ── REST — Environment Extractor ──
   | 'rest.env.extract'
   | 'rest.env.extract.system'
@@ -243,6 +249,8 @@ export type AiPromptTemplateKey =
   // ── Request Fuzzer ────────────────────────────────────────────────────────
   | 'rest.request.fuzz'
   | 'rest.request.fuzz.system'
+  | 'rest.fuzz.analyze'
+  | 'rest.fuzz.analyze.system'
   // ── Pre-flight Check ──────────────────────────────────────────────────────
   | 'rest.preflight'
   | 'rest.preflight.system'
@@ -288,6 +296,8 @@ export type AiPromptTemplateKey =
   // ── Reverse Engineer ──────────────────────────────────────────────────────
   | 'import.reverse.engineer'
   | 'import.reverse.engineer.system'
+  | 'import.api.discovery'
+  | 'import.api.discovery.system'
   // ── AI Scenario Manager ───────────────────────────────────────────────────
   | 'mock.scenario.manager'
   | 'mock.scenario.manager.system'
@@ -327,6 +337,11 @@ export type AiPromptTemplateKey =
   | 'platform.openapi.generator.system'
   | 'platform.security.audit'
   | 'platform.security.audit.system'
+  // ── Schema Diff & Anomaly Detection ──────────────────────────────────────
+  | 'platform.schema.diff'
+  | 'platform.schema.diff.system'
+  | 'platform.schema.migration'
+  | 'platform.schema.migration.system'
   | 'platform.mock.intelligence'
   | 'platform.mock.intelligence.system'
   | 'platform.postman.translator'
@@ -341,11 +356,171 @@ export type AiPromptTemplateKey =
   | 'platform.request.clustering.system'
   // ── AI Enrich Captured Traffic ────────────────────────────────────────────
   | 'mock.traffic.enrich'
-  | 'mock.traffic.enrich.system';
+  | 'mock.traffic.enrich.system'
+  // ── dkgh ────────────────────────────────────────────────────────────────
+  | 'dkgh.compose'
+  | 'dkgh.compose.system'
+  // ── dk8s ──────────────────────────────────────────────────────────────────
+  // The text for these lives in the extension host's own prompt registry and
+  // is imported, not copied. See the alias in vite.config.ts.
+  //
+  // Both halves are registered, the same as every other entry: `<key>` is the
+  // user turn that carries the evidence, `<key>.system` is the instruction
+  // block. Registering only one produced a library that showed the system
+  // prompt in the User tab and left the System tab empty — a listing that did
+  // not describe what was actually being sent.
+  | 'dk8s.log.askWhy'
+  | 'dk8s.log.askWhy.system'
+  | 'dk8s.log.explainError'
+  | 'dk8s.log.explainError.system'
+  | 'dk8s.log.summarise'
+  | 'dk8s.log.summarise.system'
+  | 'dk8s.log.explainShape'
+  | 'dk8s.log.explainShape.system'
+  | 'dk8s.pod.crashloop'
+  | 'dk8s.pod.crashloop.system'
+  | 'dk8s.threads.explain'
+  | 'dk8s.threads.explain.system'
+  | 'dk8s.threads.explainOne'
+  | 'dk8s.threads.explainOne.system'
+  | 'dk8s.threads.explainLock'
+  | 'dk8s.threads.explainLock.system'
+  | 'dk8s.heap.explain'
+  | 'dk8s.heap.explain.system'
+  | 'dk8s.heap.explainOne'
+  | 'dk8s.heap.explainOne.system'
+  | 'dk8s.heap.investigate'
+  | 'dk8s.heap.investigate.system'
+  | 'dk8s.describe.explain'
+  | 'dk8s.describe.explain.system'
+  | 'dk8s.file.explain'
+  | 'dk8s.file.explain.system'
+  | 'dk8s.format.detect'
+  | 'dk8s.format.detect.system'
+  | 'dk8s.terminal.theme'
+  | 'dk8s.terminal.theme.system';
 
 // ─── Default templates ────────────────────────────────────────────────────────
 
+/**
+ * The dk8s prompts, taken from the host's registry rather than restated here.
+ *
+ * `DK8S_PROMPTS` is keyed by the same strings the webview sends on `dk8s:ask`,
+ * so the library shows exactly the text that will be used. The cast is the
+ * price of that: the registry is a plain `Record<string, string>` on the host
+ * side, and narrowing it here would mean maintaining the key list twice — the
+ * guard test in prompt-keys.test.ts is what actually keeps the two in step.
+ */
+const DK8S_SYSTEM = DK8S_PROMPTS as Record<string, string>;
+const DK8S_USER = DK8S_USER_PROMPTS as Record<string, string>;
+
+/**
+ * The system prompt that goes with a user prompt.
+ *
+ * Two naming conventions are in use and both are load-bearing: most `.generate`
+ * keys pair with `<prefix>.system` (mock.rest.generate -> mock.rest.system),
+ * and a handful pair with `<key>.system` (rest.body.generate ->
+ * rest.body.generate.system) because that is the name their call sites send.
+ *
+ * Guessing one of them left nine entries showing an empty System tab in the
+ * Prompt Library while the right prompt was going to the model — a listing that
+ * does not describe what is actually sent, which invites editing a prompt that
+ * is not the one running. This answers with the name that exists.
+ *
+ * Renaming the odd ones out was the alternative and is worse: edited prompts
+ * are stored against these keys, so a rename orphans a user's edits.
+ */
+export function systemKeyFor(key: AiPromptTemplateKey): AiPromptTemplateKey | undefined {
+  const candidates = key.includes('.generate')
+    ? [key.replace('.generate', '.system'), `${key}.system`]
+    : [`${key}.system`];
+  return candidates.find(c => c in AI_PROMPT_TEMPLATE_DEFAULTS) as AiPromptTemplateKey | undefined;
+}
+
+/**
+ * dkgh's composer prompt — screen 11.
+ *
+ * The fields are the repository's own, read from its `ISSUE_TEMPLATE` YAML
+ * and passed in; nothing here knows what a Module is. That is what makes a
+ * repository which adds a field get asked about it without dkgh changing.
+ *
+ * The instruction that matters is the first one: a value it cannot find is
+ * unanswered, never guessed. A confident wrong Module costs somebody a
+ * mis-filed issue and costs the next reader their trust in every other value
+ * on the board — see screen 11B.
+ */
+const DKGH_COMPOSE_SYSTEM = `You fill in a GitHub issue form from what a tester wrote.
+
+You are given the repository's own issue-form fields, read from its YAML, and a
+description somebody typed. Your job is to work out which of the fields the
+description already answers, and to say which ones it does not.
+
+Rules, in order of importance:
+
+1. Never invent a value. If the description does not say which module was
+   involved, the module is unanswered. A confident wrong answer costs somebody
+   a mis-filed issue and costs the next reader their trust in every other value
+   on the board.
+2. For a dropdown, answer only with one of the options given, spelled exactly
+   as given. If none of them fits, leave it unanswered and say why.
+3. Quote, do not paraphrase. When a field's answer is in the description, use
+   the reporter's own words for it.
+4. A short title, in the reporter's register: what broke, where. Not a summary
+   of your reasoning.
+
+Answer with JSON and nothing else:
+
+{
+  "title": "one line",
+  "answers": { "<field label>": "<value>" },
+  "unanswered": [ { "label": "<field label>", "why": "<what is missing>" } ],
+  "notes": "one sentence, or empty"
+}
+`;
+
+const DKGH_COMPOSE_USER = `Repository: {{repo}}
+Template: {{template}}
+
+Fields:
+{{fields}}
+
+What the reporter wrote:
+{{description}}
+`;
+
 export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = {
+  'dkgh.compose': DKGH_COMPOSE_USER,
+  'dkgh.compose.system': DKGH_COMPOSE_SYSTEM,
+  'dk8s.log.askWhy': DK8S_USER['dk8s.log.askWhy'] ?? '',
+  'dk8s.log.askWhy.system': DK8S_SYSTEM['dk8s.log.askWhy'] ?? '',
+  'dk8s.log.explainError': DK8S_USER['dk8s.log.explainError'] ?? '',
+  'dk8s.log.explainError.system': DK8S_SYSTEM['dk8s.log.explainError'] ?? '',
+  'dk8s.log.summarise': DK8S_USER['dk8s.log.summarise'] ?? '',
+  'dk8s.log.summarise.system': DK8S_SYSTEM['dk8s.log.summarise'] ?? '',
+  'dk8s.log.explainShape': DK8S_USER['dk8s.log.explainShape'] ?? '',
+  'dk8s.log.explainShape.system': DK8S_SYSTEM['dk8s.log.explainShape'] ?? '',
+  'dk8s.pod.crashloop': DK8S_USER['dk8s.pod.crashloop'] ?? '',
+  'dk8s.pod.crashloop.system': DK8S_SYSTEM['dk8s.pod.crashloop'] ?? '',
+  'dk8s.threads.explain': DK8S_USER['dk8s.threads.explain'] ?? '',
+  'dk8s.threads.explain.system': DK8S_SYSTEM['dk8s.threads.explain'] ?? '',
+  'dk8s.threads.explainOne': DK8S_USER['dk8s.threads.explainOne'] ?? '',
+  'dk8s.threads.explainOne.system': DK8S_SYSTEM['dk8s.threads.explainOne'] ?? '',
+  'dk8s.threads.explainLock': DK8S_USER['dk8s.threads.explainLock'] ?? '',
+  'dk8s.threads.explainLock.system': DK8S_SYSTEM['dk8s.threads.explainLock'] ?? '',
+  'dk8s.heap.explain': DK8S_USER['dk8s.heap.explain'] ?? '',
+  'dk8s.heap.explain.system': DK8S_SYSTEM['dk8s.heap.explain'] ?? '',
+  'dk8s.heap.explainOne': DK8S_USER['dk8s.heap.explainOne'] ?? '',
+  'dk8s.heap.explainOne.system': DK8S_SYSTEM['dk8s.heap.explainOne'] ?? '',
+  'dk8s.heap.investigate': DK8S_USER['dk8s.heap.investigate'] ?? '',
+  'dk8s.heap.investigate.system': DK8S_SYSTEM['dk8s.heap.investigate'] ?? '',
+  'dk8s.describe.explain': DK8S_USER['dk8s.describe.explain'] ?? '',
+  'dk8s.describe.explain.system': DK8S_SYSTEM['dk8s.describe.explain'] ?? '',
+  'dk8s.file.explain': DK8S_USER['dk8s.file.explain'] ?? '',
+  'dk8s.file.explain.system': DK8S_SYSTEM['dk8s.file.explain'] ?? '',
+  'dk8s.format.detect': DK8S_USER['dk8s.format.detect'] ?? '',
+  'dk8s.format.detect.system': DK8S_SYSTEM['dk8s.format.detect'] ?? '',
+  'dk8s.terminal.theme': DK8S_USER['dk8s.terminal.theme'] ?? '',
+  'dk8s.terminal.theme.system': DK8S_SYSTEM['dk8s.terminal.theme'] ?? '',
   // ── Response & Diagnostics — system prompts ───────────────────────────────
   'askAiWhy.system':
     `You are a precise HTTP error diagnosis assistant. Analyze the status code, response body, and request context to identify the root cause and provide actionable fix steps. Be concise and technical. Format with numbered steps.`,
@@ -404,6 +579,53 @@ export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = 
     `Generate a realistic HTTP request body for this API call.\n\nRequest context:\n- Method: {method}\n- URL: {url}\n- Content-Type: {contentType}\n- User description: {description}\n\nReturn ONLY the raw request body. No explanation, no markdown fences, no preamble.\n\nFormat rules by Content-Type:\n- application/json or json: Return a valid JSON object with realistic field names and values\n- application/xml or text/xml: Return a valid XML document\n- application/x-www-form-urlencoded: Return URL-encoded key=value pairs (e.g. name=Alice&age=30)\n- text/plain: Return plain text matching the description\n- Default (unknown): Return a JSON object\n\nField values must be realistic — use real-looking names, emails, UUIDs, timestamps, amounts. Never use "string", "number", "value" as values.`,
   'rest.body.generate.system':
     `You are a precise HTTP request body generator. Return only the raw body content — no explanation, no markdown code fences, no preamble text. Output must be valid and directly usable as a request body. Generate realistic, production-looking values.`,
+  // ── Workspace — Documentation ─────────────────────────────────────────────
+  'workspace.docs.generate':
+    `Write the README for an API workspace called "{workspace}", in Markdown.
+
+What is in it:
+- Collections and folders: {collections}
+- Hosts its requests call: {hosts}
+- Environment variables that must be set (names only, values deliberately withheld): {variableNames}
+
+Cover what the project appears to be, how someone would set it up, and the
+workflows the collections suggest. Where something is not implied by the list
+above, say it is unknown rather than filling it in.`,
+
+  'workspace.docs.generate.system':
+    `You write project READMEs for API workspaces. Be concrete and brief. You are given names only — never values — so never invent an endpoint, a credential, a payload or a behaviour that the names do not imply. A short accurate README beats a long speculative one.`,
+
+  // ── REST — Docs Generate ──────────────────────────────────────────────────
+  'rest.request.name.system':
+    `You name HTTP requests. Reply with the name only — no quotes, no explanation, no trailing full stop. Three or four words at most, describing what the request does rather than how it is built: "Create user", not "POST to /users". Match the casing of the names already in the collection when any are given.`,
+
+  'rest.docs.generate':
+    `Write the documentation for this API request, in Markdown.
+
+Request:
+- Method: {method}
+- URL: {url}
+- Headers: {headers}
+- Body: {body}
+
+Saved responses (status — name — body):
+{examples}
+
+Return ONLY Markdown. No preamble, no code fences around the whole answer.
+
+Structure:
+- One short paragraph saying what the endpoint does and when to call it
+- \`## Request\` — what it needs: path and query parameters, required headers, and the body's shape as a bullet list of field: meaning
+- \`## Responses\` — one bullet per status you can see in the saved responses, saying what it means
+- \`## Notes\` — auth, idempotency, rate limits or pagination, ONLY where the request itself shows evidence of them
+
+Rules:
+- Describe what is there. Never invent a parameter, a status or a limit that the request and its saved responses do not show
+- Where something is unclear, say what it appears to do rather than inventing a certainty
+- No H1 heading — the request already has a name
+- Keep it under 250 words`,
+  'rest.docs.generate.system':
+    `You are a precise API documentation writer. You are given one HTTP request and whatever responses have been saved from it, and you write the Markdown documentation for it. Return only Markdown. Document what the evidence shows and nothing beyond it: no invented parameters, no invented status codes, no invented rate limits. Prefer "appears to" over a confident wrong claim.`,
   // ── Collection Organizer ──────────────────────────────────────────────────
   'rest.collection.organize':
     `Suggest a folder structure for this API collection.\n\nCollection: {collectionName}\n\nRequests (id | method | name | url):\n{requests}\n\nReturn ONLY a JSON object. No markdown, no explanation, no code fences.\n\nFormat:\n{"folders":[{"name":"FolderName","requestIds":["id1","id2"]}],"uncategorized":["id3"]}\n\nRules:\n- Group requests by REST resource (e.g. /users → "Users", /auth → "Auth", /products → "Products")\n- Each folder name should be a short noun phrase (2-3 words max), Title Case\n- Do NOT create a folder with only 1 request unless it's a well-known resource (Auth, Health, etc.)\n- Put requests that don't fit any group in "uncategorized" array\n- Use the exact request IDs provided — do not invent or modify them\n- Return at least 2 folders, at most 10 folders\n- All request IDs must appear exactly once (either in a folder or uncategorized)`,
@@ -471,7 +693,7 @@ export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = 
   'rest.curl.explain':
     `Explain this cURL command in plain English. Break it down component by component.\n\n\`\`\`\n{curlCommand}\n\`\`\`\n\nFor each part of the command (URL, method, headers, body, flags), write a short bullet point explaining what it does and why it matters. Use simple, non-technical language where possible. Start with a one-line summary of what the whole command does.`,
   'rest.curl.explain.system':
-    `You are a cURL expert and API educator. When given a cURL command, return a clear, concise breakdown:\n1. One-line summary of what the command does\n2. Bullet list — one bullet per meaningful component (--request, --url, --header, --data, --user, --cert, etc.)\n3. For each bullet: component name in backticks, then a plain-English explanation\n4. Keep each explanation to 1-2 sentences max\n5. If you spot potential issues (missing auth, insecure flags, etc.) add a brief ⚠️ note at the end\nNever use jargon without explaining it. Format in plain text or minimal markdown.`,
+    `You are a cURL expert and API educator. When given a cURL command, return a clear, concise breakdown:\n1. One-line summary of what the command does\n2. Bullet list — one bullet per meaningful component (--request, --url, --header, --data, --user, --cert, etc.)\n3. For each bullet: component name in backticks, then a plain-English explanation\n4. Keep each explanation to 1-2 sentences max\n5. If you spot potential issues (missing auth, insecure flags, etc.) add a brief note at the end\nNever use jargon without explaining it. Format in plain text or minimal markdown.`,
   // ── REST — Environment Extractor ─────────────────────────────────────────
   'rest.env.extract':
     `Analyze these API collection requests and identify hardcoded values that should be environment variables.\n\nCollection: {collectionName}\nRequests:\n{requests}\n\nReturn ONLY a JSON array. No markdown, no explanation, no code fences. Each object has:\n- name: short camelCase variable name (e.g. baseUrl, apiKey, userId)\n- value: the actual hardcoded value found in the requests\n- reason: one sentence explaining what it is and why it should be a variable\n- occurrences: number of requests where this value appears\n\nExample:\n[{"name":"baseUrl","value":"https://api.example.com","reason":"Base URL repeated in every request endpoint","occurrences":8},{"name":"apiKey","value":"sk-abc123","reason":"API key hardcoded in Authorization header","occurrences":3}]\n\nRules:\n- Only suggest values that appear in multiple requests OR are sensitive (keys, tokens, passwords)\n- Base URL / hostname: always suggest if repeated\n- API keys, tokens, passwords: always suggest even if seen once\n- IDs or resource-specific values that appear only once: skip\n- Keep name concise — max 3 words camelCase\n- Keep reason to one short sentence`,
@@ -504,9 +726,14 @@ export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = 
     `You are an API baseline recorder. Analyze and summarize API responses for drift detection. Return ONLY valid JSON. Be specific about what changes should trigger alerts — avoid generic advice.`,
   // ── Request Fuzzer ────────────────────────────────────────────────────────
   'rest.request.fuzz':
-    `Generate {count} edge-case request bodies for fuzz testing this API endpoint.\n\nRequest: {method} {url}\nCurrent body:\n{currentBody}\n\nGenerate payloads that test:\n1. Boundary values (max length strings, max int, min int, zero, -1)\n2. Empty/null/missing required fields\n3. Wrong types (string where int expected, array where object expected)\n4. Special characters (SQL injection strings, XSS payloads, unicode, emojis)\n5. Oversized values (very long strings, deeply nested objects)\n\nReturn ONLY a JSON array of {count} payloads. No explanation, no fences.\n[{"_fuzzCase":"empty required field","body":{...}},{"_fuzzCase":"max length string","body":{...}}]`,
+    `Generate {count} edge-case request bodies for fuzz testing this API endpoint.\n\nRequest: {method} {url}\nCurrent body:\n{currentBody}\n\nCover these categories, using exactly these ids:\n- sql-injection — SQL injection strings in text fields\n- xss — script payloads in text fields\n- empty-fields — empty strings where a value is required\n- huge-values — very large numbers and very long strings\n- type-mismatch — a number where a string belongs, an array where an object belongs\n- unicode — null bytes, RTL text, zero-width characters\n- null-values — null where a value is required\n- boundary — 0, -1, and maximum integers\n\nReturn ONLY a JSON array. No explanation, no fences. Each item:\n{"category":"one of the ids above","name":"short name","description":"what this tests","body":"the complete request body as a JSON string"}`,
   'rest.request.fuzz.system':
-    `You are an API fuzzing expert. Generate edge-case request payloads that probe security, validation, and error handling. Return ONLY valid JSON arrays — no explanation, no fences. Include a "_fuzzCase" field in each object describing the test scenario. Generate realistic-looking but boundary-pushing values.`,
+    `You are an API fuzzing expert. Generate edge-case request payloads that probe security, validation, and error handling. Return ONLY a valid JSON array — no explanation, no fences. Every item carries "category" (from the ids the request lists), "name", "description", and "body" as a JSON string. Keep the payloads realistic in shape and boundary-pushing in value.`,
+  // ── Fuzz Result Analysis ──────────────────────────────────────────────────
+  'rest.fuzz.analyze':
+    `Analyse the results of a fuzz run against this endpoint.\n\nRequest: {method} {url}\nPayloads sent: {total}\nResponses flagged as anomalous: {anomalies}\n\nResults:\n{results}\n\nAnswer, briefly and in this order:\n1. Which responses indicate a real vulnerability, and why\n2. Which are unexpected but not exploitable, and what to check\n3. What to fix first\n4. An overall robustness rating out of 10, with one sentence of justification\n\nJudge only what the results show. A payload that was rejected cleanly is the endpoint working, not a finding.`,
+  'rest.fuzz.analyze.system':
+    `You are a security engineer reading the output of an API fuzz run. Distinguish a genuine vulnerability from a server correctly rejecting bad input, and say which is which. Be concise and concrete: name the payload, the status, and the fix. Never invent a finding to fill a section.`,
   // ── Pre-flight Check ──────────────────────────────────────────────────────
   'rest.preflight':
     `Check this API request for common issues before sending.\n\nMethod: {method}\nURL: {url}\nHeaders: {headers}\nAuth: {authType}\nBody: {body}\n\nCheck for:\n1. Auth issues (missing token, expired format, wrong scheme for endpoint)\n2. URL problems (localhost in prod URL, typos in path, missing path segments)\n3. Header issues (missing Content-Type for POST/PUT, duplicate headers)\n4. Body issues (malformed JSON, missing required fields visible from URL pattern)\n5. Environment issues ({{variables}} left unresolved)\n\nFor each issue found:\n- Severity: ERROR (will definitely fail) | WARNING (may fail) | INFO (best practice)\n- Field: what's affected\n- Issue: one sentence description\n- Fix: concrete corrective action\n\nReturn ONLY a JSON array. Return [] if no issues found.`,
@@ -579,9 +806,14 @@ export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = 
     `You are an API test scenario designer. Generate complete, runnable end-to-end test scenarios from use case descriptions. Each step should include assertions and variable extractions. Return ONLY valid JSON — never markdown or explanation. Steps must be in logical order, with auth before protected endpoints.`,
   // ── Reverse Engineer ──────────────────────────────────────────────────────
   'import.reverse.engineer':
-    `Reverse engineer an API collection from this HAR file, logs, or documentation.\n\nInput type: {inputType}\nContent:\n{content}\n\nExtract and structure all API requests found in the input.\n\nReturn ONLY a JSON object:\n{\n  "collectionName": "Reverse Engineered — {source}",\n  "baseUrl": "detected base URL",\n  "requests": [\n    {\n      "name": "Action-oriented name",\n      "method": "GET|POST|PUT|PATCH|DELETE",\n      "url": "path with :param placeholders",\n      "headers": [{"key":"...","value":"...","enabled":true}],\n      "bodyMode": "raw|form-data|urlencoded|none",\n      "bodyRaw": ""\n    }\n  ]\n}\n\nRules:\n- Deduplicate requests with the same method + path pattern\n- Replace dynamic IDs with :param (e.g. /users/123 → /users/:id)\n- Group similar endpoints (CRUD on the same resource)\n- Extract the common base URL\n- Ignore non-API requests (static assets, tracking pixels)`,
+    `Read this captured traffic and explain the API behind it.\n\nInput type: {inputType}\nCaptured requests:\n{content}\n\nAnswer, briefly and in this order:\n1. The endpoints grouped by the feature they serve (auth, users, products, and so on)\n2. What each endpoint does, from its method, path and payload\n3. The authentication pattern in use, and the evidence for it\n4. A collection folder structure that matches those groups\n5. Any conventions worth knowing: pagination, versioning, id formats, error shapes\n\nDescribe what the capture shows. Where the traffic is ambiguous, say so rather than filling the gap with a guess.`,
   'import.reverse.engineer.system':
-    `You are an API reverse engineering specialist. Extract structured API requests from HAR files, server logs, or API documentation. Deduplicate and normalize path parameters. Return ONLY valid JSON — never markdown or explanation. Infer missing information (auth headers, content-type) from context.`,
+    `You are a senior API developer reading traffic captured from a running application. Group endpoints by feature, name the authentication pattern from the evidence, and point out the conventions a newcomer would need. Prefer "appears to" over a confident wrong claim. No preamble.`,
+  // ── API Discovery Analysis ────────────────────────────────────────────────
+  'import.api.discovery':
+    `These paths were probed against {baseUrl}. Say what the API looks like.\n\nProbe results:\n{results}\n\nAnswer, briefly and in this order:\n1. Which paths are real API endpoints, and which are static or infrastructure\n2. What each real endpoint probably does, from its path and its response\n3. Which common endpoints for this kind of API appear to be missing\n4. One paragraph on the overall design quality\n\nGo on the evidence in the probe results. Where a path is ambiguous, say so rather than guessing confidently.`,
+  'import.api.discovery.system':
+    `You are an API developer reading the output of a path prober. Separate real endpoints from static assets and infrastructure routes, and describe what each one does from its path and status code. Prefer "appears to" over a confident wrong claim. No preamble.`,
   // ── AI Scenario Manager ───────────────────────────────────────────────────
   'mock.scenario.manager':
     `Manage AI-generated response scenarios for the mock server named "{serverName}".\n\nExisting scenarios:\n{scenarios}\n\nUser request: {userRequest}\n\nAvailable actions:\n- ADD: add a new scenario with specific conditions and response\n- EDIT: modify an existing scenario's conditions or response\n- REMOVE: remove a scenario by name\n- LIST: describe all current scenarios\n- GENERATE: create a set of scenarios for a use case\n\nReturn ONLY a JSON object describing the action taken:\n{\n  "action": "add|edit|remove|list|generate",\n  "scenarios": [\n    {\n      "name": "Scenario name",\n      "condition": "request condition (e.g. method=POST AND body.role=admin)",\n      "statusCode": 200,\n      "response": {"key": "value"},\n      "description": "When this scenario fires"\n    }\n  ],\n  "message": "Human-readable summary of what was done"\n}`,
@@ -645,6 +877,15 @@ export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = 
     `Generate an OpenAPI 3.1 specification from this API collection:\n\n{collectionName}: {requests}\n\nBase URL: {baseUrl}\n\nInclude:\n1. Info section with title, version, and description\n2. All endpoints with accurate operation summaries and descriptions\n3. Request body schemas (JSON Schema format) with examples\n4. Response schemas for all status codes returned\n5. Security schemes (Bearer, API key, Basic Auth as appropriate)\n6. Reusable components for shared schemas\n\nOutput valid OpenAPI 3.1 YAML.`,
   'platform.openapi.generator.system':
     `You are an OpenAPI 3.1 specification expert. Generate complete, standards-compliant OpenAPI 3.1 specs from API collections. Include realistic schemas, examples, security definitions, and response types. Output valid YAML. Follow the OpenAPI 3.1.0 specification exactly.`,
+  // ── Schema Diff & Anomaly Detection ────────────────────────────────────
+  'platform.schema.diff':
+    `Two database schemas have been compared. The comparison is already done — do not re-rank it, and do not invent objects that are not listed.\n\nSource: {sourceLabel}\nTarget: {targetLabel}\n\n{digest}\n\nFor each object listed, write one short paragraph answering:\n1. What breaks, or what changes, for something reading the target?\n2. Is this drift expected (a migration part-applied) or unexpected (a manual change)?\n3. The single next action — the specific statement or check, not \"investigate\".\n\nThen close with **Overall** — two or three sentences on whether the target is safe to deploy against, and what to do first.\n\nBe concrete about column and constraint names. Say plainly when a difference is harmless.`,
+  'platform.schema.diff.system':
+    `You are a database schema reviewer. You are given the RESULT of a schema comparison, not the schemas themselves, and your job is to explain what each difference means for the systems that read these databases.\n\nRules:\n- Never restate the diff back. The reader can see it.\n- Never re-rank severity. It was derived from the diff and is not yours to change.\n- An object missing from the target breaks readers NOW; say what kind of failure.\n- A removed column or constraint is a breaking change even when the table still exists.\n- An added object or column is usually safe; say so rather than padding.\n- If a difference looks like a migration applied to one side only, say that — it is the most common cause and the most actionable finding.\n- Markdown. No preamble, no summary of your instructions.`,
+  'platform.schema.migration':
+    `Write the SQL that brings the target schema in line with the source.\n\nSource: {sourceLabel}\nTarget: {targetLabel}\n\n{digest}\n\nDefinitions of the objects that differ:\n{objects}\n\nReturn exactly three fenced sql blocks, each preceded by a heading:\n\n### deploy\n\`\`\`sql\n-- statements that move the target towards the source\n\`\`\`\n\n### verify\n\`\`\`sql\n-- SELECTs that return zero rows if, and only if, deploy worked\n\`\`\`\n\n### revert\n\`\`\`sql\n-- statements that undo deploy\n\`\`\`\n\nRules:\n- Use IF EXISTS / IF NOT EXISTS so the scripts can be re-run.\n- Never write a destructive statement without a comment saying what is lost.\n- If a change cannot be reverted (a dropped column's data), say so in a comment in revert rather than pretending it can.\n- Order deploy so dependencies exist before what needs them.`,
+  'platform.schema.migration.system':
+    `You are a database migration author. You write SQL that a reviewer will read before running it against a real database, so it is commented, ordered and reversible.\n\nRules:\n- Exactly three fenced sql blocks: deploy, verify, revert, under those headings.\n- Idempotent: IF EXISTS / IF NOT EXISTS throughout.\n- verify returns ZERO rows when the deploy succeeded — a query that returns rows is a failure report, which is what a pipeline can act on.\n- Never DROP anything without a comment naming what is lost.\n- Where data cannot be restored by revert, say so in a comment instead of writing SQL that implies it can.\n- No prose outside the three blocks and their headings.`,
   'platform.security.audit':
     `Perform a security audit on these API requests and configurations:\n\n{requests}\n\nCheck for:\n1. Missing or weak authentication (no auth, Basic over HTTP, long-lived tokens)\n2. Secrets in headers, query params, or request bodies (API keys, passwords, tokens)\n3. Non-HTTPS endpoints transmitting sensitive data\n4. Exposed PII (email, SSN, credit card numbers in request/response)\n5. Missing security headers (CORS, CSP, HSTS)\n6. Overly permissive scopes or permissions\n\nFor each issue: severity (critical/high/medium/low), what was found, and exact fix.`,
   'platform.security.audit.system':
@@ -653,10 +894,36 @@ export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = 
     `Learn from these real API responses and generate mock rules:\n\n{responses}\n\nGenerate mock rules that:\n1. Capture the exact data structure of each response\n2. Use realistic values (not "string1", "value2" — actual domain-appropriate data)\n3. Include error cases: 404 when resource not found, 401 when auth fails, 422 for validation errors\n4. Match query parameters and path variables to appropriate responses\n5. Capture data relationships (IDs that reference other resources)\n\nOutput as Daakia mock route config JSON with method, path, statusCode, body, and condition matchers.`,
   'platform.mock.intelligence.system':
     `You are a mock server intelligence expert. Analyze real API responses to generate realistic, production-quality mock rules that capture data structure, value patterns, edge cases, and status code distributions. Return ONLY valid JSON — no explanation, no fences.`,
+  // ── Anything → Daakia ─────────────────────────────────────────────────────
+  // The key still says 'postman' because renaming it would orphan every
+  // customised copy already saved. It translates from five source tools now,
+  // and the mapping table for whichever one was detected arrives as {mappings}.
   'platform.postman.translator':
-    `Translate this Postman test script to Daakia dk.* format:\n\n\`\`\`javascript\n{postmanScript}\n\`\`\`\n\nDaakia API equivalents:\n- pm.test("name", fn) → dk.test("name", fn)\n- pm.expect(val).to.equal(x) → dk.expect(val).toBe(x)\n- pm.expect(val).to.include(x) → dk.expect(val).toContain(x)\n- pm.response.json() → JSON.parse(dk.response.body)\n- pm.response.code → dk.response.status\n- pm.environment.set(k,v) → dk.env.set(k,v)\n- pm.environment.get(k) → dk.env.get(k)\n\nOutput only the translated Daakia script. Add a comment above any line where the translation is non-obvious.`,
+    `Translate this {dialect} script or command into Daakia's dk.* API.
+
+Source:
+\`\`\`
+{source}
+\`\`\`
+
+Known equivalents:
+{mappings}
+
+Rules:
+- Keep the original variable names, test names and control flow.
+- Where there is no equivalent, write the same behaviour out with what Daakia has, and put a short comment above it saying what was replaced.
+- Do not invent dk.* functions. If something genuinely cannot be expressed, leave a // TODO comment saying so rather than a call that will fail at run time.
+- For a command line, produce the request as a Daakia pre-request script that sets the method, URL, headers and body.
+
+Respond with a single javascript code fence and nothing else.`,
   'platform.postman.translator.system':
-    `You are a Postman to Daakia migration expert. Translate Postman pm.* test scripts into equivalent Daakia dk.* assertions. You know all Postman test APIs and their Daakia equivalents. When there's no direct equivalent, implement the same behavior using Daakia's available APIs. Return ONLY the translated JavaScript — no markdown fences, no explanation outside of inline comments.`,
+    `You migrate API-client scripts into Daakia. You know Postman's pm.*, Bruno's bru/req/res, Insomnia's insomnia.* and template tags, Thunder Client's tc.* and its declarative tests JSON, and the HTTPie and cURL command lines.
+
+Rules:
+- Translate, do not rewrite. The result should do what the original did, in the same order, under the same names.
+- Never invent a dk.* API. A // TODO admitting something has no equivalent is worth more than a call that throws.
+- Comment only where a translation is non-obvious. A line-by-line commentary on an obvious mapping is noise.
+- Return ONLY a javascript code fence — no preamble, no explanation outside it.`,
   'platform.soap.to.rest':
     `Convert these SOAP operations to REST endpoints:\n\nWSDL:\n{wsdlContent}\n\nFor each SOAP operation:\n1. Map to the appropriate HTTP method (GET for reads, POST for creates/actions, PUT/PATCH for updates, DELETE for deletes)\n2. Design a RESTful path (noun-based resources, not verb-based like SOAP actions)\n3. Convert XML request/response types to JSON schema\n4. Map SOAPFault error codes to HTTP status codes and JSON error bodies\n5. Document the original SOAPAction for reference\n\nOutput as OpenAPI 3.1 YAML paths section.`,
   'platform.soap.to.rest.system':
@@ -704,6 +971,41 @@ Return ONLY a JSON array of stub objects — no explanation, no markdown fences.
 // ─── Labels for UI ────────────────────────────────────────────────────────────
 
 export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: string; description: string }> = {
+  'dkgh.compose': { label: 'Generate with AI (dkgh)',
+    description: 'A description and the repository\u2019s own form fields \u2014 which of them it '
+      + 'already answers, and which it does not' },
+  'dkgh.compose.system': { label: 'Generate with AI (dkgh) \u2014 system',
+    description: 'Instruction block: answer only from the description, never invent a value' },
+  'dk8s.log.askWhy': { label: 'Ask AI why (logs)', description: 'A highlighted stretch of pod log — what it means and why it is happening' },
+  'dk8s.log.askWhy.system': { label: 'Ask AI why (logs) — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.log.explainError': { label: 'Explain this error', description: 'An exception in a log: what it means and whether it matters' },
+  'dk8s.log.explainError.system': { label: 'Explain this error — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.log.summarise': { label: 'Summarise logs', description: 'A timeline of what a log run actually shows' },
+  'dk8s.log.summarise.system': { label: 'Summarise logs — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.log.explainShape': { label: 'Explain a log shape', description: 'A repeating pattern the log analyzer detected' },
+  'dk8s.log.explainShape.system': { label: 'Explain a log shape — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.pod.crashloop': { label: 'Explain a CrashLoopBackOff', description: 'Why a pod keeps restarting, from its events and exit codes' },
+  'dk8s.pod.crashloop.system': { label: 'Explain a CrashLoopBackOff — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.threads.explain': { label: 'Explain a thread dump', description: 'Deadlocks, contention and what the threads are collectively doing' },
+  'dk8s.threads.explain.system': { label: 'Explain a thread dump — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.threads.explainOne': { label: 'Explain one thread', description: 'A single stack: what it is blocked on and what that costs' },
+  'dk8s.threads.explainOne.system': { label: 'Explain one thread — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.threads.explainLock': { label: 'Explain a contended lock', description: 'One monitor, its owner and its queue: whether the lock is hot or the owner is stuck' },
+  'dk8s.threads.explainLock.system': { label: 'Explain a contended lock — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.heap.explain': { label: 'Explain a heap dump', description: 'Retained sizes and leak suspects, read as a whole' },
+  'dk8s.heap.explain.system': { label: 'Explain a heap dump — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.heap.explainOne': { label: 'Explain one leak suspect', description: 'A single class: what it accumulates and what holds it' },
+  'dk8s.heap.explainOne.system': { label: 'Explain one leak suspect — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.heap.investigate': { label: 'Investigate the heap', description: 'Drill-down loop — the model asks the heap its own questions' },
+  'dk8s.heap.investigate.system': { label: 'Investigate the heap — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.describe.explain': { label: 'Explain kubectl describe', description: 'A pod description, in terms of what is actually wrong' },
+  'dk8s.describe.explain.system': { label: 'Explain kubectl describe — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.file.explain': { label: 'Explain a file from a pod', description: 'What a config file configures, and what looks wrong in it' },
+  'dk8s.file.explain.system': { label: 'Explain a file from a pod — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.format.detect': { label: 'Detect a log format', description: 'Infer a parser from sample lines' },
+  'dk8s.format.detect.system': { label: 'Detect a log format — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.terminal.theme': { label: 'Design a terminal theme', description: 'Fill in a palette from a description of the look wanted' },
+  'dk8s.terminal.theme.system': { label: 'Design a terminal theme — system', description: 'Instruction block: who the model is and how it must answer' },
   askAiWhy:               { label: 'Ask AI Why (Error Diagnosis)', description: 'Prompt used when "Ask AI why" is clicked on a failed HTTP response' },
   explainWithAi:          { label: 'Explain with AI',              description: 'Prompt used when "Explain" is clicked on a successful HTTP response' },
   followupWithAi:         { label: 'Follow-up with AI',            description: 'Prompt used when "Follow-up Requests" is clicked to suggest next API calls' },
@@ -720,8 +1022,13 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   'mock.mqtt.generate':      { label: 'MQTT',      description: 'System + user prompts for MQTT topic generation' },
   'rest.headers.suggest.generate': { label: 'Suggest Headers',          description: 'User prompt sent when "Suggest headers" AI button is clicked on the Headers tab' },
   'rest.headers.suggest.system':   { label: 'Suggest Headers — System', description: 'Behavioral rules for the AI header suggestion assistant (format: JSON array only)' },
-  'rest.body.generate':        { label: 'Generate Body',          description: 'User prompt sent when the ✨ AI body generate button is clicked in the Body tab' },
+  'rest.body.generate':        { label: 'Generate Body', description: 'User prompt sent when the AI body generate button is clicked in the Body tab'},
   'rest.body.generate.system': { label: 'Generate Body — System', description: 'Behavioral rules for the AI body generator (format: raw body only, no fences)' },
+  'workspace.docs.generate':   { label: 'Workspace Documentation', description: 'User prompt sent when "Generate with AI" drafts the workspace README from its collections, hosts and environment variable names' },
+  'rest.docs.generate':        { label: 'Generate Docs',          description: 'User prompt sent when the sparkle in the Docs tab writes a request’s documentation' },
+  'rest.request.name.system': { label: 'Name a Request — System', description: 'Behavioural rules for the request namer: a name only, three or four words, what it does rather than how it is built' },
+  'workspace.docs.generate.system': { label: 'Workspace Documentation — System', description: 'Behavioural rules for the workspace README writer: names only, never invent an endpoint or a credential the names do not imply' },
+  'rest.docs.generate.system': { label: 'Generate Docs — System', description: 'Behavioral rules for the docs writer (Markdown only, document only what the request shows)' },
   'rest.env.extract':          { label: 'Extract Variables',          description: 'User prompt sent when "Extract Variables with AI" is chosen in the collection context menu' },
   'rest.env.extract.system':   { label: 'Extract Variables — System', description: 'Behavioral rules for the AI environment extractor (format: JSON array only)' },
   'data.generate':        { label: 'Generate Test Data',          description: 'User prompt sent when generating test data fixtures with AI' },
@@ -763,6 +1070,8 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   'rest.record.baseline.system': { label: 'Record Baseline — System',       description: 'Behavioral rules for baseline recorder (JSON only)' },
   'rest.request.fuzz':        { label: 'Request Fuzzer',                    description: 'Generates edge-case payloads for fuzz-testing request bodies' },
   'rest.request.fuzz.system': { label: 'Request Fuzzer — System',           description: 'Behavioral rules for request fuzzer (JSON array only)' },
+  'rest.fuzz.analyze':        { label: 'Fuzz Result Analysis',              description: 'Reads a completed fuzz run and separates real findings from clean rejections' },
+  'rest.fuzz.analyze.system': { label: 'Fuzz Result Analysis — System',     description: 'Behavioral rules for the fuzz result analyst' },
   'rest.preflight':        { label: 'Pre-flight Check',                     description: 'Checks for auth, URL, header, and body issues before sending the request' },
   'rest.preflight.system': { label: 'Pre-flight Check — System',            description: 'Behavioral rules for pre-flight checker (JSON array only)' },
   'rest.smart.retry':        { label: 'Smart Retry Advisor',                description: 'Analyzes failed responses and recommends an intelligent retry strategy' },
@@ -791,8 +1100,10 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   'import.describe.workflow.system': { label: 'Describe Workflow — System',   description: 'Behavioral rules for workflow importer (JSON only)' },
   'import.scenario.generate':        { label: 'Generate Scenario',           description: 'Generates a complete end-to-end test scenario from a use case description' },
   'import.scenario.generate.system': { label: 'Generate Scenario — System',  description: 'Behavioral rules for scenario generator (JSON only)' },
-  'import.reverse.engineer':        { label: 'Reverse Engineer',             description: 'Extracts a structured collection from HAR files, logs, or API documentation' },
-  'import.reverse.engineer.system': { label: 'Reverse Engineer — System',    description: 'Behavioral rules for reverse engineer (JSON only)' },
+  'import.reverse.engineer':        { label: 'Reverse Engineer',             description: 'Explains the API behind captured traffic — endpoints, auth pattern and conventions' },
+  'import.reverse.engineer.system': { label: 'Reverse Engineer — System',    description: 'Behavioral rules for the reverse engineer' },
+  'import.api.discovery':        { label: 'API Discovery Analysis',         description: 'Reads probe results and describes which paths are real endpoints' },
+  'import.api.discovery.system': { label: 'API Discovery Analysis — System', description: 'Behavioral rules for the discovery analyst' },
   'mock.scenario.manager':        { label: 'AI Scenario Manager',            description: 'Manages conditional response scenarios in the Mock Server' },
   'mock.scenario.manager.system': { label: 'AI Scenario Manager — System',   description: 'Behavioral rules for the mock scenario manager' },
   'agent.master':        { label: 'Master Agent (Auto-Route)',               description: 'Routes user messages to the correct specialized AI agent' },
@@ -836,12 +1147,16 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   // ── Platform AI — Sprint 10 ───────────────────────────────────────────────
   'platform.openapi.generator':        { label: 'OpenAPI Generator',             description: 'Daakia AI tab → platform tools → "OpenAPI ✦" button: generates full OpenAPI 3.1 spec from collection' },
   'platform.openapi.generator.system': { label: 'OpenAPI Generator — System',    description: 'Behavioral rules for the OpenAPI 3.1 generator (valid YAML, all schemas, security)' },
+  'platform.schema.diff':             { label: 'Schema Diff Analyst',           description: 'Explains what each schema difference means for the systems reading the target' },
+  'platform.schema.diff.system':      { label: 'Schema Diff Analyst — System',  description: 'Behavioural rules: explain, never re-rank, never restate the diff' },
+  'platform.schema.migration':        { label: 'Schema Migration Author',       description: 'Writes deploy / verify / revert SQL from a schema comparison' },
+  'platform.schema.migration.system': { label: 'Schema Migration — System',     description: 'Behavioural rules: three blocks, idempotent, reversible, commented' },
   'platform.security.audit':        { label: 'Security Audit',                   description: 'Daakia AI tab → platform tools → "Security Audit ✦" button: scans for auth gaps, secrets, PII' },
   'platform.security.audit.system': { label: 'Security Audit — System',         description: 'Behavioral rules for the API security auditor (severity levels, specific fixes)' },
   'platform.mock.intelligence':        { label: 'Mock Intelligence',             description: 'Mock Server tab → AI config panel → "Mock Intelligence ✦": learns from real responses, generates mock rules' },
   'platform.mock.intelligence.system': { label: 'Mock Intelligence — System',    description: 'Behavioral rules for mock intelligence (JSON only, realistic values, condition matchers)' },
-  'platform.postman.translator':        { label: 'Postman Translator',           description: 'Daakia AI tab → platform tools → "pm→dk ✦" button: translates Postman pm.* scripts to dk.*' },
-  'platform.postman.translator.system': { label: 'Postman Translator — System',  description: 'Behavioral rules for the Postman script translator (code only, inline comments for non-obvious mappings)' },
+  'platform.postman.translator':        { label: 'Anything → Daakia Translator', description: 'Settings → Power Features → "Anything → Daakia": translates Postman, Bruno, Insomnia, Thunder Client, HTTPie and cURL into dk.*' },
+  'platform.postman.translator.system': { label: 'Anything → Daakia — System',   description: 'Behavioural rules for the translator: translate rather than rewrite, never invent a dk.* API, code only' },
   'platform.soap.to.rest':        { label: 'SOAP → REST Migrator',               description: 'SOAP tab → URL bar ⋮ AI Tools menu → "SOAP→REST ✦": converts WSDL ops to OpenAPI 3.1 REST design' },
   'platform.soap.to.rest.system': { label: 'SOAP → REST Migrator — System',      description: 'Behavioral rules for the SOAP to REST migrator (OpenAPI 3.1 YAML paths section)' },
   'platform.gql.federation':        { label: 'GraphQL Federation Explorer',      description: 'GraphQL tab → URL bar ⋮ AI Tools menu → "Federation ✦": explains cross-subgraph queries, @key directives' },
@@ -857,6 +1172,40 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
 // ─── Variables available per template ────────────────────────────────────────
 
 export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]> = {
+  // The user halves interpolate; the system halves are instructions and take
+  // no variables, the same as every other `.system` entry here.
+  'dkgh.compose': ['repo', 'template', 'fields', 'description'],
+  'dkgh.compose.system': [],
+  'dk8s.log.askWhy': [...DK8S_USER_VARIABLES],
+  'dk8s.log.askWhy.system': [],
+  'dk8s.log.explainError': [...DK8S_USER_VARIABLES],
+  'dk8s.log.explainError.system': [],
+  'dk8s.log.summarise': [...DK8S_USER_VARIABLES],
+  'dk8s.log.summarise.system': [],
+  'dk8s.log.explainShape': [...DK8S_USER_VARIABLES],
+  'dk8s.log.explainShape.system': [],
+  'dk8s.pod.crashloop': [...DK8S_USER_VARIABLES],
+  'dk8s.pod.crashloop.system': [],
+  'dk8s.threads.explain': [...DK8S_USER_VARIABLES],
+  'dk8s.threads.explain.system': [],
+  'dk8s.threads.explainOne': [...DK8S_USER_VARIABLES],
+  'dk8s.threads.explainOne.system': [],
+  'dk8s.threads.explainLock': [...DK8S_USER_VARIABLES],
+  'dk8s.threads.explainLock.system': [],
+  'dk8s.heap.explain': [...DK8S_USER_VARIABLES],
+  'dk8s.heap.explain.system': [],
+  'dk8s.heap.explainOne': [...DK8S_USER_VARIABLES],
+  'dk8s.heap.explainOne.system': [],
+  'dk8s.heap.investigate': [...DK8S_USER_VARIABLES],
+  'dk8s.heap.investigate.system': [],
+  'dk8s.describe.explain': [...DK8S_USER_VARIABLES],
+  'dk8s.describe.explain.system': [],
+  'dk8s.file.explain': [...DK8S_USER_VARIABLES],
+  'dk8s.file.explain.system': [],
+  'dk8s.format.detect': [...DK8S_USER_VARIABLES],
+  'dk8s.terminal.theme': [...DK8S_USER_VARIABLES],
+  'dk8s.terminal.theme.system': [],
+  'dk8s.format.detect.system': [],
   askAiWhy:               ['{method}', '{url}', '{status}', '{statusText}', '{body}'],
   explainWithAi:          ['{method}', '{url}', '{status}', '{statusText}', '{body}'],
   followupWithAi:         ['{method}', '{url}', '{body}'],
@@ -875,6 +1224,11 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'rest.headers.suggest.system':   [],
   'rest.body.generate':        ['{method}', '{url}', '{contentType}', '{description}'],
   'rest.body.generate.system': [],
+  'workspace.docs.generate':   ['{workspace}', '{collections}', '{hosts}', '{variableNames}'],
+  'rest.docs.generate':        ['{method}', '{url}', '{headers}', '{body}', '{examples}'],
+  'rest.request.name.system': [],
+  'workspace.docs.generate.system': [],
+  'rest.docs.generate.system': [],
   'rest.env.extract':          ['{collectionName}', '{requests}'],
   'rest.env.extract.system':   [],
   'data.generate':        ['{dataType}', '{count}', '{format}', '{customDescription}'],
@@ -916,6 +1270,8 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'rest.record.baseline.system': [],
   'rest.request.fuzz':        ['{method}', '{url}', '{currentBody}', '{count}'],
   'rest.request.fuzz.system': [],
+  'rest.fuzz.analyze':        ['{method}', '{url}', '{total}', '{anomalies}', '{results}'],
+  'rest.fuzz.analyze.system': [],
   'rest.preflight':        ['{method}', '{url}', '{headers}', '{authType}', '{body}'],
   'rest.preflight.system': [],
   'rest.smart.retry':        ['{method}', '{url}', '{status}', '{statusText}', '{body}', '{attempt}', '{maxAttempts}'],
@@ -946,6 +1302,8 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'import.scenario.generate.system': [],
   'import.reverse.engineer':        ['{inputType}', '{content}'],
   'import.reverse.engineer.system': [],
+  'import.api.discovery':        ['{baseUrl}', '{results}'],
+  'import.api.discovery.system': [],
   'mock.scenario.manager':        ['{serverName}', '{scenarios}', '{userRequest}'],
   'mock.scenario.manager.system': [],
   'agent.master':        ['{userMessage}', '{context}'],
@@ -980,11 +1338,15 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'mcp.prompt.builder.system':     [],
   'platform.openapi.generator':        ['{collectionName}', '{requests}', '{baseUrl}'],
   'platform.openapi.generator.system': [],
+  'platform.schema.diff':             ['{sourceLabel}', '{targetLabel}', '{digest}'],
+  'platform.schema.diff.system':      [],
+  'platform.schema.migration':        ['{sourceLabel}', '{targetLabel}', '{digest}', '{objects}'],
+  'platform.schema.migration.system': [],
   'platform.security.audit':        ['{requests}'],
   'platform.security.audit.system': [],
   'platform.mock.intelligence':        ['{responses}'],
   'platform.mock.intelligence.system': [],
-  'platform.postman.translator':        ['{postmanScript}'],
+  'platform.postman.translator':        ['{dialect}', '{source}', '{mappings}'],
   'platform.postman.translator.system': [],
   'platform.soap.to.rest':        ['{wsdlContent}'],
   'platform.soap.to.rest.system': [],
@@ -1024,8 +1386,8 @@ export const AI_TEMPLATE_CATEGORIES: {
     label: 'REST Toolkit',
     kind: 'mock',
     keys: [
-      'rest.headers.suggest.generate', 'rest.body.generate', 'rest.env.extract',
-      'rest.assert.generate', 'rest.preflight', 'rest.request.fuzz',
+      'rest.headers.suggest.generate', 'rest.body.generate', 'rest.docs.generate', 'rest.env.extract',
+      'rest.assert.generate', 'rest.preflight', 'rest.request.fuzz', 'rest.fuzz.analyze',
       'rest.code.import', 'rest.response.transform', 'rest.script.autocomplete',
       'rest.pattern.baseline', 'rest.record.baseline', 'rest.curl.explain',
     ],
@@ -1054,7 +1416,7 @@ export const AI_TEMPLATE_CATEGORIES: {
     id: 'import-reverse',
     label: 'Import & Reverse Engineer',
     kind: 'mock',
-    keys: ['import.screenshot', 'import.logs', 'import.describe.workflow', 'import.scenario.generate', 'import.reverse.engineer'],
+    keys: ['import.screenshot', 'import.logs', 'import.describe.workflow', 'import.scenario.generate', 'import.reverse.engineer', 'import.api.discovery'],
   },
   // ── Mock Generation ────────────────────────────────────────────────────────
   {
@@ -1095,6 +1457,35 @@ export const AI_TEMPLATE_CATEGORIES: {
     kind: 'mock',
     keys: ['ws.traffic.analyzer', 'sse.traffic.analyzer', 'sse.event.suggester', 'mqtt.topic.suggester', 'sio.traffic.analyzer'],
   },
+  // ── dk8s ──────────────────────────────────────────────────────────────────
+  {
+    id: 'dkgh',
+    label: 'dkgh',
+    kind: 'mock',
+    keys: ['dkgh.compose'],
+  },
+  {
+    id: 'dk8s',
+    label: 'dk8s',
+    kind: 'mock',
+    keys: [
+      'dk8s.log.askWhy',
+      'dk8s.log.explainError',
+      'dk8s.log.summarise',
+      'dk8s.log.explainShape',
+      'dk8s.pod.crashloop',
+      'dk8s.threads.explain',
+      'dk8s.threads.explainOne',
+      'dk8s.threads.explainLock',
+      'dk8s.heap.explain',
+      'dk8s.heap.explainOne',
+      'dk8s.heap.investigate',
+      'dk8s.describe.explain',
+      'dk8s.file.explain',
+      'dk8s.format.detect',
+      'dk8s.terminal.theme',
+    ],
+  },
   // ── MCP & Platform AI ─────────────────────────────────────────────────────
   {
     id: 'mcp-platform',
@@ -1103,6 +1494,7 @@ export const AI_TEMPLATE_CATEGORIES: {
     keys: [
       'mcp.prompt.builder', 'agent.master',
       'platform.openapi.generator', 'platform.security.audit', 'platform.mock.intelligence',
+      'platform.schema.diff', 'platform.schema.migration',
       'platform.postman.translator', 'platform.soap.to.rest', 'platform.gql.federation',
       'platform.webhook.debugger', 'platform.request.clustering',
       'mock.traffic.enrich',
@@ -1111,6 +1503,38 @@ export const AI_TEMPLATE_CATEGORIES: {
 ];
 
 export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
+  'dkgh.compose': '#de7356',
+  'dkgh.compose.system': '#de7356',
+  'dk8s.log.askWhy': '#22d3ee',
+  'dk8s.log.askWhy.system': '#22d3ee',
+  'dk8s.log.explainError': '#ef4444',
+  'dk8s.log.explainError.system': '#ef4444',
+  'dk8s.log.summarise': '#f59e0b',
+  'dk8s.log.summarise.system': '#f59e0b',
+  'dk8s.log.explainShape': '#a78bfa',
+  'dk8s.log.explainShape.system': '#a78bfa',
+  'dk8s.pod.crashloop': '#ef4444',
+  'dk8s.pod.crashloop.system': '#ef4444',
+  'dk8s.threads.explain': '#22d3ee',
+  'dk8s.threads.explain.system': '#22d3ee',
+  'dk8s.threads.explainOne': '#22d3ee',
+  'dk8s.threads.explainLock': '#22d3ee',
+  'dk8s.threads.explainOne.system': '#22d3ee',
+  'dk8s.threads.explainLock.system': '#22d3ee',
+  'dk8s.heap.explain': '#ec4899',
+  'dk8s.heap.explain.system': '#ec4899',
+  'dk8s.heap.explainOne': '#ec4899',
+  'dk8s.heap.explainOne.system': '#ec4899',
+  'dk8s.heap.investigate': '#ec4899',
+  'dk8s.heap.investigate.system': '#ec4899',
+  'dk8s.describe.explain': '#22d3ee',
+  'dk8s.file.explain': '#22d3ee',
+  'dk8s.describe.explain.system': '#22d3ee',
+  'dk8s.file.explain.system': '#22d3ee',
+  'dk8s.format.detect': '#10b981',
+  'dk8s.terminal.theme': '#a78bfa',
+  'dk8s.format.detect.system': '#10b981',
+  'dk8s.terminal.theme.system': '#a78bfa',
   askAiWhy:               '#ef4444',
   explainWithAi:          '#06b6d4',
   followupWithAi:         '#10b981',
@@ -1129,6 +1553,11 @@ export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
   'rest.headers.suggest.system':   '#a855f7',
   'rest.body.generate':        '#f59e0b',
   'rest.body.generate.system': '#f59e0b',
+  'rest.docs.generate':        '#f59e0b',
+  'workspace.docs.generate': '#2dd4bf',
+  'rest.request.name.system': '#6366f1',
+  'workspace.docs.generate.system': '#2dd4bf',
+  'rest.docs.generate.system': '#f59e0b',
   'rest.env.extract':          '#22c55e',
   'rest.env.extract.system':   '#22c55e',
   'data.generate':        '#0ea5e9',
@@ -1170,6 +1599,8 @@ export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
   'rest.record.baseline.system': '#22c55e',
   'rest.request.fuzz':        '#ef4444',
   'rest.request.fuzz.system': '#ef4444',
+  'rest.fuzz.analyze':        '#ef4444',
+  'rest.fuzz.analyze.system': '#ef4444',
   'rest.preflight':        '#f59e0b',
   'rest.preflight.system': '#f59e0b',
   'rest.smart.retry':        '#3b82f6',
@@ -1200,6 +1631,8 @@ export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
   'import.scenario.generate.system': '#10b981',
   'import.reverse.engineer':        '#f97316',
   'import.reverse.engineer.system': '#f97316',
+  'import.api.discovery':        '#f97316',
+  'import.api.discovery.system': '#f97316',
   'mock.scenario.manager':        '#ec4899',
   'mock.scenario.manager.system': '#ec4899',
   'agent.master':        '#a78bfa',
@@ -1235,6 +1668,10 @@ export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
   'mcp.prompt.builder.system':     '#a855f7',
   'platform.openapi.generator':        '#0ea5e9',
   'platform.openapi.generator.system': '#0ea5e9',
+  'platform.schema.diff':             '#0ea5e9',
+  'platform.schema.diff.system':      '#0ea5e9',
+  'platform.schema.migration':        '#10b981',
+  'platform.schema.migration.system': '#10b981',
   'platform.security.audit':        '#ef4444',
   'platform.security.audit.system': '#ef4444',
   'platform.mock.intelligence':        '#8b5cf6',

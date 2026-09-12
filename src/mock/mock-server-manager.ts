@@ -72,6 +72,23 @@ export function setLogCallback(cb: (entry: MockLogEntry) => void) {
 
 // ---------- Port Finding ----------
 
+/**
+ * The port a config is asking for, or nothing.
+ *
+ * Anything that is not a real, bindable port number is treated as no request
+ * at all rather than as an error: the field is typed into by hand, it is empty
+ * for most of the time somebody is typing in it, and a half-typed `80` should
+ * not stop a server starting. What it must never do is reach `listen()` — a
+ * `NaN` there binds a random port and reports success.
+ */
+export function wantedPort(value: unknown): number | undefined {
+  const n = typeof value === 'string' ? Number(value.trim()) : value;
+  if (typeof n !== 'number' || !Number.isInteger(n)) return undefined;
+  /* Below 1024 needs root on every platform this runs on, and 0 means "any",
+     which is the opposite of asking for one. */
+  return n >= 1024 && n <= 65535 ? n : undefined;
+}
+
 async function findFreePort(): Promise<number> {
   for (let port = _portMin; port <= _portMax; port++) {
     const free = await isPortFree(port);
@@ -109,6 +126,24 @@ export async function startMockServer(config: MockServerConfig): Promise<{ port:
     await stopMockServer(config.id);
   }
 
+  // A port the user asked for is not a port we may quietly swap.
+  //
+  // The retry below exists because *picking* a port is racy; retrying a port
+  // somebody typed would just bind the same busy port five times and then
+  // report EADDRINUSE, which reads as a bug rather than as "8080 is taken".
+  // So a fixed port fails once, by name, with the thing to do about it.
+  if (config.requestedPort !== undefined) {
+    try {
+      return await attemptStartMockServer(config);
+    } catch (err) {
+      if (!isAddrInUseError(err)) throw err;
+      throw new Error(
+        `Port ${config.requestedPort} is already in use. Stop whatever is on it, `
+        + 'choose another port, or turn the fixed-port setting off to have one found for you.',
+      );
+    }
+  }
+
   // findFreePort()'s check-then-bind is inherently racy against a just-stopped
   // server whose port the OS hasn't fully released yet (worse for gRPC, which
   // binds 0.0.0.0 via its own bindAsync rather than Node's http.Server.listen).
@@ -136,7 +171,9 @@ async function attemptStartMockServer(config: MockServerConfig): Promise<{ port:
     await preloadStateMachineEngine();
   }
 
-  const port = await findFreePort();
+  // The user's port when they gave one, otherwise the first free one in the
+  // range. `requestedPort` is validated before it gets here — see `wantedPort`.
+  const port = config.requestedPort ?? await findFreePort();
   const protocol = config.protocol || 'rest';
 
   // Helper to get latest config for hot-reload

@@ -16,6 +16,8 @@ import { postMsg } from '../../vscode';
 import { SparkleIcon, CloseCircleIcon, FolderImportIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { ModalView, AIButtonView, EditorView, ButtonView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
+import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 
 // ─── HAR types (minimal) ──────────────────────────────────────────────────────
 
@@ -107,6 +109,7 @@ export function AiReverseEngineerModal({ onClose }: Props) {
   const [parseError, setParseError] = useState('');
   const [analysis, setAnalysis] = useState('');
 
+  const resolve = useAiPromptTemplatesStore(s => s.resolve);
   const reqIdRef = useRef(`rev-${Date.now()}`);
   const accRef = useRef('');
 
@@ -117,21 +120,26 @@ export function AiReverseEngineerModal({ onClose }: Props) {
     const handler = (event: MessageEvent) => {
       const msg = event.data as Record<string, unknown>;
       if (!msg || typeof msg !== 'object') return;
-      const reqId = msg.reqId as string | undefined;
-      if (reqId && reqId !== reqIdRef.current) return;
+      /* `tabId` and `delta` are what the host sends. This matched on `reqId`
+         and `chunk`, so the analysis stayed empty however long you waited. */
+      if (msg.tabId !== reqIdRef.current) return;
 
       switch (msg.type) {
         case 'ai:chunk': {
-          const chunk = msg.chunk as { delta?: { content?: string } } | string;
-          const delta = typeof chunk === 'string' ? chunk : (chunk?.delta?.content ?? '');
-          accRef.current += delta;
+          accRef.current += (msg.delta as string) || (msg.text as string) || '';
           setAnalysis(accRef.current);
           break;
         }
-        case 'ai:complete':
+        case 'ai:complete': {
+          if (!accRef.current) {
+            const payload = msg.message as { content?: string } | undefined;
+            setAnalysis(payload?.content ?? '');
+          }
           setPhase('analyzed');
           break;
+        }
         case 'ai:error':
+          setAnalysis((msg.message as string) || 'The AI call failed — check the AI provider settings.');
           setPhase('parsed');
           break;
       }
@@ -190,15 +198,14 @@ export function AiReverseEngineerModal({ onClose }: Props) {
     accRef.current = '';
     setAnalysis('');
     setPhase('analyzing');
-    reqIdRef.current = `rev-${Date.now()}`;
-    postMsg({
-      type: 'ai:send',
-      reqId: reqIdRef.current,
-      systemPrompt: 'You are a senior API developer. Analyze these network requests captured from a website and help the user understand and document the API.',
-      messages: [{ role: 'user', content: `I captured these API calls from a website:\n\n${summary}\n\nPlease:\n1. Group them by feature/domain (auth, users, products, etc.)\n2. Describe what each endpoint does\n3. Identify the authentication pattern (JWT, cookie session, API key, etc.)\n4. Suggest collection folder structure\n5. Note any interesting patterns (pagination, versioning, etc.)` }],
-      stream: true,
+    reqIdRef.current = sendAiRequest({
+      stage: 'import.reverse.engineer',
+      screen: 'Import',
+      systemPrompts: [resolve('import.reverse.engineer.system')],
+      userPrompt: resolve('import.reverse.engineer', { inputType: 'HAR export', content: summary }),
+      settings: { temperature: 0.3, maxTokens: 1600 },
     });
-  }, [parsedEntries]);
+  }, [parsedEntries, resolve]);
 
   const handleCreateCollection = useCallback(() => {
     if (parsedEntries.length === 0) return;

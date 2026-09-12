@@ -29,24 +29,6 @@ export function ProtocolIcon({ active, open, accentColor, onClick, title, childr
   );
 }
 
-// ─── Protocol Placeholder ───
-
-export function ProtocolPlaceholder({ name, icon }: { name: string; icon: string }) {
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-4 text-[var(--color-text-muted)]">
-      {icon === 'graphql' ? (
-        <ProtocolGraphQLBadge size={56} className="opacity-30" />
-      ) : (
-        <ProtocolRealtimeBadge size={56} className="opacity-30" />
-      )}
-      <div className="text-center">
-        <h3 className="text-[16px] font-semibold text-[var(--color-text-primary)] mb-1">{name}</h3>
-        <p className="text-[13px]">Coming soon in upcoming sprint</p>
-      </div>
-    </div>
-  );
-}
-
 // ─── Empty State (no tabs open) ───
 
 export function EmptyState({ onNewTab, protocol }: { onNewTab: () => void; protocol: 'rest' | 'graphql' | 'websocket' | 'grpc' | 'soap' | 'ai' | 'mcp' }) {

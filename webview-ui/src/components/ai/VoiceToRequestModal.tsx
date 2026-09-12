@@ -11,6 +11,7 @@ import { postMsg } from '../../vscode';
 import { useTabsStore } from '../../store/tabs-store';
 import { useToastStore } from '../../store/toast-store';
 import { ModalView, AIButtonView, MultilineInputView, ButtonView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 // ─── Minimal Web Speech API typings (not in lib.dom) ─────────────────────────
 interface SpeechRecognitionResultLite { 0: { transcript: string }; length: number }
@@ -140,9 +141,10 @@ export function VoiceToRequestModal({ onClose }: Props) {
     const pid = `ai-voice-${Date.now()}`;
     reqIdRef.current = pid;
 
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'import.voice',
+      screen: 'Import',
       systemPrompts: [SYSTEM_PROMPT],
       userPrompt: transcript,
       conversation: [], tools: [],
@@ -224,7 +226,7 @@ export function VoiceToRequestModal({ onClose }: Props) {
                 border: `2px solid ${listening ? 'var(--color-error)' : ACCENT}`,
                 boxShadow: listening ? '0 0 0 8px color-mix(in srgb, var(--color-error) 15%, transparent)' : 'none',
               }}>
-              <span style={{ fontSize: '24px' }}>{listening ? '■' : '🎤'}</span>
+              <span style={{ fontSize: '24px'}}>{listening ? '■': ''}</span>
             </button>
             <p className="text-[11px]" style={{ color: listening ? 'var(--color-error)' : 'var(--color-text-muted)' }}>
               {listening ? 'Listening… speak now' : 'Click to speak'}

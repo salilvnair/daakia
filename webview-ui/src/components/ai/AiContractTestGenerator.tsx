@@ -11,6 +11,7 @@ import { useTabsStore } from '../../store/tabs-store';
 import { SparkleIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { ModalView, ButtonView, EditorView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 // ─── Handle ───────────────────────────────────────────────────────────────────
 export interface AiContractTestHandle {
@@ -109,11 +110,11 @@ export const AiContractTestGenerator = forwardRef<AiContractTestHandle, Props>(
         schemaContext,
       });
 
-      postMsg({
-        type: 'ai:send',
+      sendAiRequest({
         tabId: pid,
         provider: '', model: '', baseUrl: '',
         stage: 'rest.contract.test',
+        screen: 'REST · Response',
         systemPrompts: [systemPrompt],
         userPrompt,
         conversation: [],
@@ -200,7 +201,7 @@ export const AiContractTestGenerator = forwardRef<AiContractTestHandle, Props>(
           {/* No response warning */}
           {!hasResponse && (
             <p style={{ fontSize: '11px', fontStyle: 'italic', color: 'var(--color-text-muted)', margin: 0 }}>
-              ⚠️ No response loaded yet — send the request first to generate tests against real data.
+ No response loaded yet — send the request first to generate tests against real data.
             </p>
           )}
 

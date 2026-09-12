@@ -1,0 +1,25 @@
+Process 50: python /tmp/th.py
+Python v3.11.16 (/usr/local/bin/python3.11)
+
+Thread 50 (idle): "MainThread"
+    <module> (th.py:13)
+Thread 52 (active+gil): "cruncher-0"
+    spin (th.py:5)
+    run (threading.py:982)
+    _bootstrap_inner (threading.py:1045)
+    _bootstrap (threading.py:1002)
+Thread 53 (idle): "cruncher-1"
+    spin (th.py:5)
+    run (threading.py:982)
+    _bootstrap_inner (threading.py:1045)
+    _bootstrap (threading.py:1002)
+Thread 54 (idle): "idler-0"
+    waiter (th.py:8)
+    run (threading.py:982)
+    _bootstrap_inner (threading.py:1045)
+    _bootstrap (threading.py:1002)
+Thread 55 (idle): "idler-1"
+    waiter (th.py:8)
+    run (threading.py:982)
+    _bootstrap_inner (threading.py:1045)
+    _bootstrap (threading.py:1002)

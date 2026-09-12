@@ -45,16 +45,16 @@ export function AiPerfAnomalyModal({ url, currentTime, avgTime, maxTime, count, 
 
 ## Performance Anomaly Analysis
 
-### 🔴 Anomaly Summary
+### Anomaly Summary
 - How severe the degradation is (compared to baseline)
 
-### 🔍 Likely Root Causes (ranked by probability)
+### Likely Root Causes (ranked by probability)
 - Briefly explain each possible cause
 
-### 🛠️ Diagnostic Steps
+### Diagnostic Steps
 - Specific steps to investigate (in order)
 
-### 💡 Immediate Actions
+### Immediate Actions
 - Quick fixes to try right now (max 3 bullets)
 
 Keep it concise and actionable. Use Markdown formatting.`,

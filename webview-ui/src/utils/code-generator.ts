@@ -1,3 +1,5 @@
+import type { ExecutionSettings } from '../components/shared/settings/execution-settings';
+
 export interface CodeGenInput {
   method: string;
   url: string;
@@ -9,6 +11,17 @@ export interface CodeGenInput {
   bodyUrlEncoded: { key: string; value: string }[];
   authType: string;
   authData: Record<string, string>;
+  /**
+   * The settings this request would actually run with — global, then its
+   * collection, then its own overrides, already resolved.
+   *
+   * A snippet that ignored these was a quiet lie: a request that only
+   * works through the corporate proxy generated a curl that goes direct,
+   * and one with verification turned off generated a curl that verifies.
+   * The command is meant to reproduce the request, so it carries the same
+   * timeout, redirect, certificate and proxy decisions.
+   */
+  settings?: ExecutionSettings;
 }
 
 export interface LanguageOption {
@@ -20,6 +33,8 @@ export interface LanguageOption {
 export const LANGUAGES: LanguageOption[] = [
   { id: 'shell-curl', label: 'Shell - cURL', extension: 'sh' },
   { id: 'shell-wget', label: 'Shell - wget', extension: 'sh' },
+  { id: 'powershell', label: 'PowerShell', extension: 'ps1' },
+  { id: 'windows-cmd', label: 'Windows - cmd', extension: 'cmd' },
   { id: 'javascript-fetch', label: 'JavaScript - Fetch', extension: 'js' },
   { id: 'javascript-axios', label: 'JavaScript - Axios', extension: 'js' },
   { id: 'javascript-xhr', label: 'JavaScript - XHR', extension: 'js' },
@@ -69,7 +84,9 @@ export function generateCode(input: CodeGenInput, language: string): string {
 
   switch (language) {
     case 'shell-curl': return genCurl(input.method, fullUrl, allHeaders, body, input);
-    case 'shell-wget': return genWget(input.method, fullUrl, allHeaders, body);
+    case 'shell-wget': return genWget(input.method, fullUrl, allHeaders, body, input);
+    case 'powershell': return genPowerShell(input.method, fullUrl, allHeaders, body, input);
+    case 'windows-cmd': return genCmd(input.method, fullUrl, allHeaders, body, input);
     case 'javascript-fetch': return genFetch(input.method, fullUrl, allHeaders, body);
     case 'javascript-axios': return genAxios(input.method, fullUrl, allHeaders, body);
     case 'javascript-xhr': return genXhr(input.method, fullUrl, allHeaders, body);
@@ -90,6 +107,7 @@ function genCurl(method: string, url: string, headers: { key: string; value: str
   for (const h of headers) {
     lines.push(`  --header '${h.key}: ${h.value}' \\`);
   }
+  for (const flag of curlFlags(input.settings)) lines.push(`  ${flag} \\`);
   if (input.bodyMode === 'form-data' && input.bodyFormData.length) {
     for (const f of input.bodyFormData) {
       lines.push(`  --form '${f.key}=${f.value}' \\`);
@@ -104,8 +122,9 @@ function genCurl(method: string, url: string, headers: { key: string; value: str
   return lines.join('\n');
 }
 
-function genWget(method: string, url: string, headers: { key: string; value: string }[], body: string | null): string {
+function genWget(method: string, url: string, headers: { key: string; value: string }[], body: string | null, input: CodeGenInput): string {
   const lines: string[] = [`wget --method=${method} \\`];
+  for (const flag of wgetFlags(input.settings)) lines.push(`  ${flag} \\`);
   for (const h of headers) {
     lines.push(`  --header='${h.key}: ${h.value}' \\`);
   }
@@ -307,4 +326,176 @@ function genRuby(method: string, url: string, headers: { key: string; value: str
   }
   lines.push(``, `response = http.request(request)`, `puts response.body`);
   return lines.join('\n');
+}
+
+// ────────────────────── execution settings in a snippet ──────────────────────
+
+/**
+ * A proxy URL from the resolved settings, or nothing.
+ *
+ * `system` deliberately produces nothing: what it resolves to depends on the
+ * machine — a registry entry, an auto-config script, an environment variable —
+ * and every one of these tools already follows the system proxy on its own.
+ * Baking in whatever this machine resolved today would produce a command that
+ * stops being true the moment it is run somewhere else.
+ */
+function proxyUrl(s: ExecutionSettings | undefined): string | undefined {
+  const p = s?.proxy;
+  if (!p || p.mode !== 'manual' || !p.host) return undefined;
+  const scheme = p.type === 'socks5' ? 'socks5' : p.type;
+  return `${scheme}://${p.host}:${p.port}`;
+}
+
+/** Milliseconds to whole seconds, which is what these tools take. 0 = none. */
+function timeoutSeconds(s: ExecutionSettings | undefined): number | undefined {
+  const ms = s?.timeout;
+  if (ms === undefined || ms <= 0) return undefined;
+  return Math.max(1, Math.round(ms / 1000));
+}
+
+function curlFlags(s: ExecutionSettings | undefined): string[] {
+  const out: string[] = [];
+  if (!s) return out;
+  const px = proxyUrl(s);
+  if (px) {
+    out.push(`--proxy '${px}'`);
+    if (s.proxy?.username) {
+      out.push(`--proxy-user '${s.proxy.username}:${s.proxy.password ?? ''}'`);
+    }
+    if (s.proxy?.bypass?.length) out.push(`--noproxy '${s.proxy.bypass.join(',')}'`);
+  } else if (s.proxy?.mode === 'none') {
+    // Explicitly opted out, so the command must not pick up the environment's.
+    out.push('--noproxy \'*\'');
+  }
+  const t = timeoutSeconds(s);
+  if (t) out.push(`--max-time ${t}`);
+  if (s.followRedirects) out.push('--location');
+  if (s.sslVerification === false) out.push('--insecure');
+  return out;
+}
+
+function wgetFlags(s: ExecutionSettings | undefined): string[] {
+  const out: string[] = [];
+  if (!s) return out;
+  const t = timeoutSeconds(s);
+  if (t) out.push(`--timeout=${t}`);
+  if (s.followRedirects === false) out.push('--max-redirect=0');
+  if (s.sslVerification === false) out.push('--no-check-certificate');
+  const px = proxyUrl(s);
+  // wget takes the proxy from the environment, not a flag, so the command
+  // carries the assignment rather than pretending a flag exists.
+  if (px) out.push(`-e use_proxy=yes -e http_proxy=${px} -e https_proxy=${px}`);
+  else if (s.proxy?.mode === 'none') out.push('--no-proxy');
+  return out;
+}
+
+// ────────────────────── PowerShell ──────────────────────
+
+/** Single-quoted PowerShell string: the only escape is a doubled quote. */
+function psq(v: string): string {
+  return `'${String(v).replace(/'/g, "''")}'`;
+}
+
+function genPowerShell(
+  method: string, url: string, headers: { key: string; value: string }[],
+  body: string | null, input: CodeGenInput,
+): string {
+  const s = input.settings;
+  const lines: string[] = [];
+
+  if (headers.length) {
+    lines.push('$headers = @{');
+    for (const h of headers) lines.push(`    ${psq(h.key)} = ${psq(h.value)}`);
+    lines.push('}');
+    lines.push('');
+  }
+
+  if (input.bodyMode === 'form-data' && input.bodyFormData.length) {
+    lines.push('$form = @{');
+    for (const f of input.bodyFormData) lines.push(`    ${psq(f.key)} = ${psq(f.value)}`);
+    lines.push('}');
+    lines.push('');
+  } else if (body) {
+    // A here-string keeps JSON readable and needs no escaping of its own.
+    lines.push("$body = @'");
+    lines.push(body);
+    lines.push("'@");
+    lines.push('');
+  }
+
+  const args: string[] = [`-Method ${method}`, `-Uri ${psq(url)}`];
+  if (headers.length) args.push('-Headers $headers');
+  if (input.bodyMode === 'form-data' && input.bodyFormData.length) args.push('-Form $form');
+  else if (body) args.push('-Body $body');
+
+  const px = proxyUrl(s);
+  if (px) {
+    args.push(`-Proxy ${psq(px)}`);
+    if (s?.proxy?.username) args.push('-ProxyCredential $proxyCred');
+  }
+  const t = timeoutSeconds(s);
+  if (t) args.push(`-TimeoutSec ${t}`);
+  if (s?.followRedirects === false) args.push('-MaximumRedirection 0');
+  if (s?.sslVerification === false) args.push('-SkipCertificateCheck');
+
+  if (px && s?.proxy?.username) {
+    lines.push('# Proxy credentials. Prompted for rather than written down —');
+    lines.push('# a generated snippet is the last place a password should live.');
+    lines.push(`$proxyCred = Get-Credential -UserName ${psq(s.proxy.username)} -Message 'Proxy'`);
+    lines.push('');
+  }
+  if (s?.sslVerification === false) {
+    lines.push('# -SkipCertificateCheck needs PowerShell 6+. On Windows PowerShell 5.1,');
+    lines.push('# set [System.Net.ServicePointManager]::ServerCertificateValidationCallback instead.');
+  }
+
+  // Wrapped with backticks, which is PowerShell's line continuation.
+  lines.push('Invoke-RestMethod `');
+  args.forEach((a, i) => lines.push(`    ${a}${i === args.length - 1 ? '' : ' `'}`));
+  return lines.join('\n');
+}
+
+// ────────────────────── Windows cmd ──────────────────────
+
+/**
+ * Double-quoted for cmd, since single quotes are not quoting there at all.
+ * Inner double quotes are backslash-escaped, which is what curl.exe expects —
+ * this is the part that makes a hand-written JSON body on Windows painful.
+ */
+function cmdq(v: string): string {
+  return `"${String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+function genCmd(
+  method: string, url: string, headers: { key: string; value: string }[],
+  body: string | null, input: CodeGenInput,
+): string {
+  // curl.exe, not curl: in PowerShell `curl` is an alias for Invoke-WebRequest,
+  // and a file pasted between the two shells should behave the same in both.
+  const parts: string[] = [`curl.exe --request ${method}`, `--url ${cmdq(url)}`];
+  for (const h of headers) parts.push(`--header ${cmdq(`${h.key}: ${h.value}`)}`);
+
+  const s = input.settings;
+  const px = proxyUrl(s);
+  if (px) {
+    parts.push(`--proxy ${cmdq(px)}`);
+    if (s?.proxy?.username) parts.push(`--proxy-user ${cmdq(`${s.proxy.username}:${s.proxy.password ?? ''}`)}`);
+    if (s?.proxy?.bypass?.length) parts.push(`--noproxy ${cmdq(s.proxy.bypass.join(','))}`);
+  } else if (s?.proxy?.mode === 'none') {
+    parts.push(`--noproxy ${cmdq('*')}`);
+  }
+  const t = timeoutSeconds(s);
+  if (t) parts.push(`--max-time ${t}`);
+  if (s?.followRedirects) parts.push('--location');
+  if (s?.sslVerification === false) parts.push('--insecure');
+
+  if (input.bodyMode === 'form-data' && input.bodyFormData.length) {
+    for (const f of input.bodyFormData) parts.push(`--form ${cmdq(`${f.key}=${f.value}`)}`);
+  } else if (body) {
+    parts.push(`--data ${cmdq(body)}`);
+  }
+
+  // `^` is cmd's line continuation, and it must be the last character.
+  return parts.map((x, i) => (i === 0 ? x : '  ' + x))
+    .join(' ^\n');
 }

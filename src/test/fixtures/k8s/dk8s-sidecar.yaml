@@ -1,0 +1,43 @@
+# A pod with two containers, because the Explorer's container picker cannot be
+# exercised without one — every other fixture has exactly one, so the control
+# that only appears when there is a choice never appeared at all.
+#
+# The two filesystems are deliberately different: `app` owns /app/data and the
+# sidecar owns /var/log/shipped, and each README says which container it is in.
+# Picking the wrong one should look obviously wrong, which is the point.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zp-sidecar
+  namespace: dk8s-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zp-sidecar
+  template:
+    metadata:
+      labels:
+        app: zp-sidecar
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              mkdir -p /app/data
+              echo 'this is the app container' > /app/data/README
+              echo 'port=8080' > /app/data/app.properties
+              while true; do echo "app: tick $(date +%s)"; sleep 30; done
+        - name: log-shipper
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              mkdir -p /var/log/shipped
+              echo 'this is the SIDECAR container' > /var/log/shipped/README
+              echo 'destination=elastic' > /var/log/shipped/shipper.conf
+              while true; do echo "shipper: flushed $(date +%s)"; sleep 45; done

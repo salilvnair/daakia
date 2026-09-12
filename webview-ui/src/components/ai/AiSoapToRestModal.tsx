@@ -223,7 +223,7 @@ openapi: "3.1.0"
         </ResizablePanelView>
 
         {error && (
-          <p style={{ fontSize: 11, color: 'var(--color-error)', margin: 0 }}>⚠️ {error}</p>
+          <p style={{ fontSize: 11, color: 'var(--color-error)', margin: 0 }}> {error}</p>
         )}
       </div>
     </ModalView>

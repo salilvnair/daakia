@@ -3,6 +3,9 @@
  * Uses axios for HTTP requests with socket-level timing instrumentation.
  */
 import axios, { AxiosRequestConfig, AxiosError } from 'axios';
+import { type ProxyConfig, type ResolvedProxy } from '../services/proxy-config';
+import { resolveProxyFor } from '../services/proxy-resolve';
+import { applyQueryEncoding, type QueryEncoding } from '../services/execution-settings';
 import * as fs from 'fs';
 import {
   createTimedHttpAgent, createTimedHttpsAgent,
@@ -26,7 +29,13 @@ export interface ExecuteRequestParams {
   // Settings (injected by MainPanel from app_settings)
   timeout?: number;
   followRedirects?: boolean;
+  /** How many hops before we stop. A redirect loop is otherwise a hang. */
+  maxRedirects?: number;
+  /** Whether Authorization survives a redirect to a different origin. */
+  forwardAuthOnRedirect?: boolean;
   sslVerification?: boolean;
+  /** How query parameters are encoded. See services/execution-settings.ts. */
+  encoding?: QueryEncoding;
   /** Trusted SSL hostnames — skip verification for these even when sslVerification is true */
   trustedHosts?: string[];
   /** Proxy configuration */
@@ -51,8 +60,20 @@ export interface ResponseCookie {
   sameSite?: string;
 }
 
+/** Trim the resolver's result down to what a log entry needs. */
+function proxyInfo(r: ResolvedProxy): { used: boolean; description: string; warning?: string } {
+  return { used: r.used, description: r.description, warning: r.warning };
+}
+
 export interface ExecuteResult {
   tabId: string;
+  /**
+   * How this request was routed. Reported on every result so the DevTools
+   * network log and the audit trail can show it — a proxy that is configured
+   * but not applied is invisible otherwise, which is exactly how the bug this
+   * fixes went unnoticed.
+   */
+  proxy?: { used: boolean; description: string; warning?: string };
   /** The actual headers sent in the request (including auto-added Content-Type, Authorization, etc.) */
   requestHeaders?: Record<string, string>;
   response: {
@@ -92,6 +113,11 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
   const controller = new AbortController();
   activeControllers.set(params.tabId, controller);
 
+  // Declared out here so the catch block can report how the request was routed.
+  // A connection failure is exactly when someone needs to know whether it went
+  // through a proxy.
+  let resolvedProxy: ResolvedProxy = { axiosProxy: false, used: false, description: 'direct (not yet resolved)' };
+
   try {
   // Build headers
   const headers: Record<string, string> = {};
@@ -117,8 +143,38 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
     url = 'http://' + url;
   }
   const urlObj = new URL(url);
-  for (const p of params.params) {
-    if (p.key) urlObj.searchParams.append(p.key, p.value);
+
+  /**
+   * The URL that actually goes on the wire.
+   *
+   * `enable` keeps the original URLSearchParams path exactly as it was. It is
+   * the default, so taking the new path here would quietly change the encoding
+   * of every request in the app for a feature nobody opted into — `+` for a
+   * space becoming `%20`, and so on.
+   *
+   * `disable` and `auto` assemble the query from the raw text instead, because
+   * URLSearchParams cannot express "leave this alone": it re-encodes on the way
+   * out, which is the thing those two modes exist to avoid.
+   */
+  const encoding = params.encoding ?? 'enable';
+  let requestUrl: string;
+  if (encoding === 'enable') {
+    for (const p of params.params) {
+      if (p.key) urlObj.searchParams.append(p.key, p.value);
+    }
+    requestUrl = urlObj.toString();
+  } else {
+    // Split the raw string rather than reading it back off `urlObj`, whose
+    // getters have already normalised the query.
+    const hashAt = url.indexOf('#');
+    const hash = hashAt === -1 ? '' : url.slice(hashAt);
+    const head = hashAt === -1 ? url : url.slice(0, hashAt);
+    const qAt = head.indexOf('?');
+    const base = qAt === -1 ? head : head.slice(0, qAt);
+    const typed = qAt === -1 ? '' : head.slice(qAt + 1);
+    const rows = params.params.filter(p => p.key).map(p => `${p.key}=${p.value}`).join('&');
+    const query = [typed, rows].filter(Boolean).join('&');
+    requestUrl = applyQueryEncoding(query ? `${base}?${query}${hash}` : `${base}${hash}`, encoding);
   }
 
   // Build body
@@ -198,39 +254,46 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
     ? createTimedHttpsAgent(rejectUnauthorized)
     : createTimedHttpAgent();
 
-  // Build proxy config
-  let proxyConfig: AxiosRequestConfig['proxy'] = false; // Default: bypass VS Code proxy agent
-  if (params.proxy && params.proxy.mode === 'manual' && params.proxy.host) {
-    // Check if this host is in the bypass list
-    const bypassList = params.proxy.bypass || [];
-    const shouldBypass = bypassList.some(b => {
-      const pattern = b.trim().toLowerCase();
-      if (!pattern) return false;
-      if (pattern.startsWith('*')) return hostname.endsWith(pattern.slice(1));
-      return hostname === pattern || hostname.endsWith('.' + pattern);
-    });
-    if (!shouldBypass) {
-      proxyConfig = {
-        host: params.proxy.host,
-        port: params.proxy.port || 8080,
-        ...(params.proxy.username ? { auth: { username: params.proxy.username, password: params.proxy.password || '' } } : {}),
-        protocol: isHttps ? 'https' : 'http',
-      };
-    }
-  } else if (params.proxy && params.proxy.mode === 'system') {
-    proxyConfig = undefined; // Let axios use system proxy (env vars HTTP_PROXY, HTTPS_PROXY)
-  }
+  // One resolver for every protocol — see src/services/proxy-config.ts for why
+  // this is not inlined here any more.
+  // Async because "system" may mean reading the OS configuration and running
+  // an auto-config script; explicit settings still resolve synchronously inside.
+  resolvedProxy = await resolveProxyFor(params.proxy as ProxyConfig | undefined, requestUrl);
+
+  // Where the request started, so a redirect can be recognised as crossing away
+  // from it rather than merely being a redirect.
+  let origin = '';
+  try { const u = new URL(requestUrl); origin = `${u.protocol}//${u.host}`; } catch { /* not a URL we can parse */ }
 
   const config: AxiosRequestConfig = {
     method: params.method.toLowerCase() as AxiosRequestConfig['method'],
-    url: urlObj.toString(),
+    url: requestUrl,
     headers,
     data,
     validateStatus: () => true, // Don't throw on non-2xx
     timeout: params.timeout || 0,
-    maxRedirects: params.followRedirects === false ? 0 : 10,
+    maxRedirects: params.followRedirects === false ? 0 : (params.maxRedirects ?? 5),
+    /*
+      Do not hand the token to wherever the redirect pointed.
+
+      Axios re-sends every header on a redirect, including Authorization, so a
+      302 to another origin forwards your credentials to a host you never chose
+      to talk to. This strips it at the hop unless the request explicitly opted
+      in, which is what forwardAuthOnRedirect is for.
+    */
+    beforeRedirect: params.forwardAuthOnRedirect
+      ? undefined
+      : (options: { headers?: Record<string, unknown>; host?: string; protocol?: string }) => {
+          const to = `${options.protocol}//${options.host}`;
+          if (to === origin) return;
+          for (const key of Object.keys(options.headers ?? {})) {
+            if (/^(authorization|proxy-authorization|cookie)$/i.test(key)) {
+              delete options.headers![key];
+            }
+          }
+        },
     responseType: 'arraybuffer',
-    proxy: proxyConfig as any,
+    proxy: resolvedProxy.axiosProxy as AxiosRequestConfig['proxy'],
     signal: controller.signal,
     ...(isHttps
       ? { httpsAgent: timedAgent.agent }
@@ -290,6 +353,7 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
 
     return {
       tabId: params.tabId,
+      proxy: proxyInfo(resolvedProxy),
       requestHeaders: headers,
       response: {
         status: res.status,
@@ -313,6 +377,7 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
       activeControllers.delete(params.tabId);
       return {
         tabId: params.tabId,
+        proxy: proxyInfo(resolvedProxy),
         response: {
           status: 0,
           statusText: 'Request cancelled',
@@ -337,6 +402,7 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
 
     return {
       tabId: params.tabId,
+      proxy: proxyInfo(resolvedProxy),
       response: {
         status: 0,
         statusText: errorCode,

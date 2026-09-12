@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: petclinic
+  namespace: dk8s-test
+  labels: { app: petclinic, dk8s-purpose: profiler-testbed }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: petclinic } }
+  template:
+    metadata:
+      labels: { app: petclinic }
+    spec:
+      containers:
+        - name: app
+          image: springcommunity/spring-framework-petclinic
+          env:
+            # Flight Recorder on from the start, so a recording exists without
+            # needing jcmd in an image we do not control.
+            - name: JAVA_OPTS
+              value: "-XX:StartFlightRecording=name=dk8s,settings=profile,disk=true,maxsize=96m,filename=/tmp/petclinic.jfr"
+          ports: [{ containerPort: 8080 }]
+          resources:
+            requests: { cpu: "200m", memory: "384Mi" }
+            limits:   { cpu: "1500m", memory: "1Gi" }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: petclinic, namespace: dk8s-test }
+spec:
+  selector: { app: petclinic }
+  ports: [{ port: 8080, targetPort: 8080 }]

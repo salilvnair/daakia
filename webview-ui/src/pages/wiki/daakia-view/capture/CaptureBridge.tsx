@@ -4,7 +4,7 @@
  * sequence of real DOM actions (click, type, setPref, wait, waitForMessage)
  * against the already-rendered app, then captures `document.getElementById(
  * 'root').outerHTML` — the exact same technique as CopyRootHtmlButton's manual
- * 🧢 capture, just triggered programmatically by an e2e test/orchestrator
+ *  capture, just triggered programmatically by an e2e test/orchestrator
  * instead of a human click, so we can drive and capture every wiki screen
  * headlessly via @vscode/test-electron.
  *
@@ -25,10 +25,12 @@ import { useDevToolsStore, type ConsoleLogEntry, type NetworkEntry, type DevTool
 import type { MockServer } from '../../../../components/mock/mock-types';
 import { installSMRestWorkflow } from '../../../../components/mock/samples/sm-rest-workflows';
 import { useSMWorkspaceStore, useSMTabsStore } from '@salilvnair/state-machine';
+import { useK8sStore } from '../../../../store/k8s-store';
+import { useWorkspaceStore } from '../../../../store/workspace-store';
 import { getVsCodeApi } from '../../../../vscode';
 
 export interface CaptureDirective {
-  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow';
+  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow' | 'openWikiTab' | 'openDk8sTab' | 'seedDk8sState' | 'openWorkspaceTab' | 'seedWorkspaces' | 'openDaakiaAiTab' | 'seedSchemaDiff';
   selector?: string;       // CSS selector — click, type
   text?: string;           // type
   ms?: number;             // wait
@@ -92,6 +94,29 @@ export interface CaptureDirective {
   // does. Both stores live inside @salilvnair/state-machine, entirely
   // outside useTabsStore/useMockStore, so there's no other way to seed them.
   sampleId?: string;
+  /**
+   * seedDk8sState — a partial of the dk8s store, merged in.
+   *
+   * dk8s's screens are a live cluster: pods, logs, files, a terminal. A
+   * capture run has no cluster and must not need one, so the fixture goes
+   * in as store state and every view renders from it exactly as it would
+   * from a real watch.
+   */
+  dk8sPatch?: Record<string, unknown>;
+  // seedWorkspaces — the list, which one is active, and the Overview
+  // counts. Same reasoning as dk8sPatch: both come from the host, and a
+  // capture run's database is empty.
+  workspaces?: Record<string, unknown>[];
+  activeWorkspaceId?: string;
+  workspaceStats?: Record<string, number>;
+  /** seedSchemaDiff — two DDL dumps; the modal runs the real comparison. */
+  schemaDiffSource?: string;
+  schemaDiffTarget?: string;
+  schemaDiffView?: 'report' | 'graph' | 'migration';
+  /** Anomaly keys to open the DDL pane for, e.g. ["table:users"]. */
+  schemaDiffOpen?: string[];
+  /** Stands in for the model’s write-up, which a capture run cannot produce. */
+  schemaDiffAnalysis?: string;
 }
 
 function setReactControlledValue(el: HTMLInputElement | HTMLTextAreaElement, value: string) {
@@ -247,8 +272,69 @@ async function runDirective(d: CaptureDirective): Promise<void> {
       useUiStateStore.getState().setPref('mock.activeServerId', d.server.id);
       return;
     }
+    case 'openDk8sTab': {
+      useTabsStore.getState().openDk8sTab();
+      return;
+    }
+    /* dk8s is the one surface whose screens are a live cluster. A capture run
+       has no cluster and must not need one, so the fixture goes in as store
+       state and every view renders from it as it would from a real watch. */
+    case 'seedDk8sState': {
+      if (d.dk8sPatch) useK8sStore.setState(d.dk8sPatch as never);
+      return;
+    }
     case 'openSettingsTab': {
       useTabsStore.getState().openSettingsTab();
+      return;
+    }
+    case 'openWorkspaceTab': {
+      useTabsStore.getState().openWorkspaceTab();
+      return;
+    }
+    case 'openDaakiaAiTab': {
+      useTabsStore.getState().openDaakiaAiTab();
+      return;
+    }
+    /* The modal has no database to point at in a capture run, and Monaco
+       cannot be typed into by a selector. The DDL goes in directly and the
+       modal runs its own comparison over it. */
+    case 'seedSchemaDiff': {
+      const seed = (window as unknown as Record<string, unknown>).__schemaDiffCaptureSeed as
+        undefined | ((s: Record<string, unknown>) => void);
+      if (!seed) throw new Error('seedSchemaDiff: the Schema Diff modal is not open yet');
+      seed({
+        source: d.schemaDiffSource ?? '',
+        target: d.schemaDiffTarget ?? '',
+        view: d.schemaDiffView,
+        open: d.schemaDiffOpen,
+        analysis: d.schemaDiffAnalysis,
+      });
+      return;
+    }
+    /* The list and the counts both come from the host, and a capture run
+       has no database worth reading — so without this the Overview is four
+       zeros. Seeded in the shape the host sends. */
+    case 'seedWorkspaces': {
+      useWorkspaceStore.setState({
+        workspaces: (d.workspaces ?? []) as never,
+        activeId: d.activeWorkspaceId ?? null,
+        stats: (d.workspaceStats ?? { collections: 0, environments: 0, requests: 0, history: 0 }) as never,
+        loaded: true,
+        error: null,
+      });
+      return;
+    }
+    /*
+      The wiki is its own tab, not a section of Settings.
+
+      Two captures reached it through Settings, which nested the wiki's nav
+      under a "Wiki" group and prefixed every id with `wiki:`. That group is
+      gone — the wiki opens from the sidebar now — so those captures were
+      clicking `[data-nav-id="wiki:quick-start"]` at a nav that has never
+      rendered it and timing out on a selector that cannot appear.
+    */
+    case 'openWikiTab': {
+      useTabsStore.getState().openDaakiaWikiTab();
       return;
     }
     case 'closeAllTabs': {

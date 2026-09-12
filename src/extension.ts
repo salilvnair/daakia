@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { initDb, closeDb, getSqliteStatus, getCollectionTree, getDbPath } from './storage/db';
 import { MainPanel } from './panel/main/MainPanel';
+import { importAnyCollection } from './services/import-any';
 import { initMockServerManager, stopAllMockServers } from './mock/mock-server-manager';
 import { importPostmanCollection } from './services/postman-importer';
 import { importOpenAPISpec, isOpenAPISpec } from './services/openapi-importer';
@@ -17,12 +18,19 @@ import { initSecretStore } from './services/secret-store';
 import { exportCollectionsToWorkspace, importCollectionsFromWorkspace, initGitSyncWatcher } from './services/git-sync';
 import { tryAutoUnlockFromKeychain } from './services/vault';
 import { purgeExpiredTrash } from './services/bin';
+import { setDk8sStorageRoot } from './panel/main/handlers/k8s-handler';
 
 export async function activate(context: vscode.ExtensionContext) {
   console.log('[daakia] Activating...');
 
   // Initialize OS keychain secret store (macOS Keychain / Windows Credential Manager / libsecret)
   initSecretStore(context.secrets);
+
+  // dk8s writes heap dumps, thread dumps and recordings here. Global storage
+  // rather than the OS temp directory: a 200MB heap dump that the system
+  // cleans up overnight is worse than useless — you go looking for it the next
+  // morning, which is exactly when you need it.
+  setDk8sStorageRoot(context.globalStorageUri.fsPath);
 
   // Initialize SQLite (async — sql.js WASM) — non-blocking
   // Auto-open panel once DB is ready
@@ -158,21 +166,16 @@ export async function activate(context: vscode.ExtensionContext) {
         filters: {
           'API Files': ['json', 'yaml', 'yml', 'har'],
         },
-        title: 'Import Collection (Postman/OpenAPI/Swagger/HAR)',
+        title: 'Import a collection — Daakia, Postman, Insomnia, OpenAPI, Swagger, HAR, HTTPie or Thunder Client',
       });
       if (uri?.[0]) {
         try {
           const content = fs.readFileSync(uri[0].fsPath, 'utf-8');
-          // Auto-detect format
-          const result = isHarFile(content)
-            ? importHarFile(content)
-            : isOpenAPISpec(content)
-              ? importOpenAPISpec(content)
-              : isThunderClientCollection(content)
-                ? importThunderClientCollection(content)
-                : isHttpieFile(content)
-                  ? importHttpieCollection(content)
-                  : importPostmanCollection(content);
+          /* One detector, shared with the URL import. This used to be an
+             inline chain that predated it and knew about five formats rather
+             than seven — so Daakia could not read its own exports from the one
+             import path people actually use. */
+          const result = importAnyCollection(content);
           MainPanel.createOrShow(context.extensionUri);
           if (result.success) {
             // Postman/OpenAPI/HAR/Thunder/HTTPie collections are always REST-shaped —

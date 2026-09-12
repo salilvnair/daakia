@@ -97,8 +97,9 @@ export function GraphQLUrlBar() {
 
       {/* Endpoint input — shrinks down to minWidth; past that the bar scrolls horizontally
           instead of squeezing/overlapping. */}
-      <div className="flex-1 min-w-0" style={{ minWidth: 160 }}>
+      <div className="flex-1 min-w-0" style={{ minWidth: 160 }} data-menu="url">
         <HighlightedInputView
+          testId="url-bar"
           value={activeTab.url}
           onChange={(v) => updateTab(activeTab.id, { url: v })}
           onKeyDown={(e) => { if (e.key === 'Enter') isConnected ? handleDisconnect() : handleConnect(); }}

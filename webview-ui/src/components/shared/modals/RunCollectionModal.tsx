@@ -30,10 +30,17 @@ export function RunCollectionModal({ open, collectionId, collectionName, onClose
   const [stopOnError, setStopOnError] = useState(false);
   const [persistResponses, setPersistResponses] = useState(true);
   const [keepVariables, setKeepVariables] = useState(true);
+  const [iterations, setIterations] = useState(1);
+  /*
+    A data file is picked by the host, because the webview cannot read one.
+    Rows are held here and sent with the run rather than by a path: the host
+    parses once, and what the run iterates is what the picker showed.
+  */
+  const [data, setData] = useState<{ fileName: string; rows: Record<string, string>[]; columns: string[] } | null>(null);
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<RequestResult[]>([]);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
-  const [summary, setSummary] = useState<{ total: number; passed: number; failed: number; duration: number } | null>(null);
+  const [summary, setSummary] = useState<{ total: number; passed: number; failed: number; duration: number; iterations?: number } | null>(null);
   const [showInsights, setShowInsights] = useState(false);
 
   useEffect(() => {
@@ -49,9 +56,12 @@ export function RunCollectionModal({ open, collectionId, collectionName, onClose
         setResults(prev => [...prev, msg.result]);
         setProgress({ current: msg.index + 1, total: msg.total });
       }
+      if (msg.type === 'runDataPicked') {
+        setData({ fileName: msg.fileName, rows: msg.rows, columns: msg.columns });
+      }
       if (msg.type === 'runCollectionComplete') {
         setRunning(false);
-        setSummary({ total: msg.total, passed: msg.passed, failed: msg.failed, duration: msg.duration });
+        setSummary({ total: msg.total, passed: msg.passed, failed: msg.failed, duration: msg.duration, iterations: msg.iterations });
       }
     };
 
@@ -70,7 +80,12 @@ export function RunCollectionModal({ open, collectionId, collectionName, onClose
     setProgress(null);
     setSummary(null);
     setRunning(true);
-    postMsg({ type: 'runCollection', collectionId, delay, stopOnError, persistResponses, keepVariables });
+    postMsg({
+      type: 'runCollection', collectionId, delay, stopOnError, persistResponses, keepVariables,
+      // The rows decide the count when there are rows; `iterations` only
+      // applies without a file, so the two can never disagree.
+      iterations, dataRows: data?.rows,
+    });
   };
 
   const handleStop = () => {
@@ -78,7 +93,10 @@ export function RunCollectionModal({ open, collectionId, collectionName, onClose
     setRunning(false);
   };
 
-  const cliCommand = `daakia run --collection "${collectionName}" --delay ${delay}${stopOnError ? ' --stop-on-error' : ''}${persistResponses ? ' --persist-responses' : ''}`;
+  const cliCommand = `daakia run --collection "${collectionName}" --delay ${delay}`
+    + (data ? ` --data "${data.fileName}"` : iterations > 1 ? ` --iterations ${iterations}` : '')
+    + (stopOnError ? ' --bail' : '')
+    + (persistResponses ? ' --persist-responses' : '');
 
   const footerRight = running ? (
     <ButtonView variant="danger" size="sm" iconLeft={<StopSquareIcon size={12} />} onClick={handleStop}>
@@ -96,17 +114,26 @@ export function RunCollectionModal({ open, collectionId, collectionName, onClose
         open={open}
         onClose={() => { if (!running) onClose(); }}
         title="Run collection"
-        size="md"
+        size="lg"
+        noPadding
         footerRight={footerRight}
       >
-        {/* Tab bar — negative margin to flush against modal header */}
-        <div style={{ margin: '-18px -18px 16px', borderBottom: '1px solid var(--color-surface-border)', display: 'flex', alignItems: 'center', padding: '0 18px' }}>
+        {/*
+          `noPadding`, and the padding is ours.
+
+          The tab bar used to reach the modal edges with `margin: -18px`, which
+          made it 36px wider than the body it sat in. The body scrolls
+          vertically, and a box with `overflow-y: auto` gets `overflow-x: auto`
+          too — so those 36px produced a horizontal scrollbar under content
+          that had nothing to scroll to.
+        */}
+        <div style={{ borderBottom: '1px solid var(--color-surface-border)', display: 'flex', alignItems: 'center', padding: '0 18px' }}>
           <TabBtn label="Runner" active={activeTab === 'runner'} onClick={() => setActiveTab('runner')} />
           <TabBtn label="CLI" active={activeTab === 'cli'} onClick={() => setActiveTab('cli')} />
         </div>
 
         {/* Content */}
-        <div className="space-y-4">
+        <div className="space-y-4" style={{ padding: 18 }}>
           {activeTab === 'runner' ? (
             <>
               <div className="space-y-3">
@@ -120,6 +147,50 @@ export function RunCollectionModal({ open, collectionId, collectionName, onClose
                     size="md"
                     width="fw"
                   />
+                </div>
+
+                {/*
+                  Iterations, and the data file that overrides them.
+
+                  "Run this login flow against fifty accounts from a CSV" was
+                  the one thing the runner could not express: it took a
+                  collection and an environment and ran each request once.
+                */}
+                <div className="space-y-1.5">
+                  <label className="block text-[12px] text-[var(--color-text-secondary)]">
+                    Iterations
+                  </label>
+                  <TextInputView
+                    type="number"
+                    value={String(iterations)}
+                    onChange={(e) => setIterations(Math.max(1, parseInt(e.target.value) || 1))}
+                    size="md"
+                    width="fw"
+                    disabled={!!data}
+                  />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <ButtonView size="xs" variant="secondary" onClick={() => postMsg({ type: 'pickRunData' })}>
+                      {data ? 'Change data file' : 'Use a data file (CSV or JSON)'}
+                    </ButtonView>
+                    {data && (
+                      <>
+                        <span className="text-[11px] text-[var(--color-text-secondary)]">
+                          {data.fileName} — {data.rows.length} row{data.rows.length === 1 ? '' : 's'}
+                          {data.columns.length > 0 && ` · ${data.columns.slice(0, 4).join(', ')}`}
+                          {data.columns.length > 4 && ` +${data.columns.length - 4}`}
+                        </span>
+                        <ButtonView size="xs" variant="secondary" onClick={() => setData(null)}>
+                          Clear
+                        </ButtonView>
+                      </>
+                    )}
+                  </div>
+                  {data && (
+                    <p className="text-[10.5px] text-[var(--color-text-muted)]">
+                      One pass per row — each column is bound as a variable, so a request saying{' '}
+                      <code>{'{{'}{data.columns[0] ?? 'email'}{'}}'}</code> gets that row&rsquo;s value.
+                    </p>
+                  )}
                 </div>
 
                 <h3 className="text-[13px] font-medium text-[var(--color-text-primary)] pt-2">Advanced Settings</h3>
@@ -158,6 +229,9 @@ export function RunCollectionModal({ open, collectionId, collectionName, onClose
                       <span className="text-[var(--color-success)]">Passed: {summary.passed}</span>
                       <span className="text-[var(--color-error)]">Failed: {summary.failed}</span>
                       <span className="text-[var(--color-text-muted)]">{summary.duration}ms</span>
+                      {(summary.iterations ?? 1) > 1 && (
+                        <span className="text-[var(--color-text-muted)]">{summary.iterations} iterations</span>
+                      )}
                       {results.length > 0 && (
                         <div className="ml-auto">
                           <AIButtonView

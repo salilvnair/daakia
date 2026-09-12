@@ -19,13 +19,23 @@
  */
 import * as assert from 'assert';
 import * as path from 'path';
+import { pathToFileURL } from 'url';
 
 const ALL_AI_TRIGGER_TYPES = ['ai:send', 'ai:discovery:start', 'aiChat', 'aiStream', 'aiStreamRequest'];
 
 suite('Daakia AI — Message Contract Audit', () => {
   test('every AI-trigger message type has a real MainPanel.ts handler', async () => {
     const scriptPath = path.resolve(__dirname, '../../../scripts/audit-ai-message-contracts.mjs');
-    const { runAudit } = await import(scriptPath);
+    /*
+      A file URL, not a path.
+
+      Node's ESM loader takes URLs, and on Windows an absolute path starts
+      with a drive letter — which it reads as a scheme and rejects with
+      "Only URLs with a scheme in: file, data, node, and electron are
+      supported ... Received protocol 'c:'". The test never reached its
+      assertion; it died deciding how to load the thing it was auditing.
+    */
+    const { runAudit } = await import(pathToFileURL(scriptPath).href);
     const { report } = runAudit() as { report: Array<{ type: string; handled: boolean; fileCount: number }> };
 
     for (const type of ALL_AI_TRIGGER_TYPES) {

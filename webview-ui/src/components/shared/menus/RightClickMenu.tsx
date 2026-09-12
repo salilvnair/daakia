@@ -10,7 +10,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ContextMenu, type ContextMenuItem } from './ContextMenu';
-import { UndoIcon, RedoIcon, CutIcon, CopyIcon, PasteIcon, SelectAllIcon, SearchIcon, WrapLinesIcon, ChevronRightIcon } from '../../../icons';
+import { UndoIcon, RedoIcon, CutIcon, CopyIcon, PasteIcon, SelectAllIcon, SearchIcon, WrapLinesIcon, ChevronRightIcon, ChevronDownIcon, SparkleIcon, HelpCircleIcon, FilterIcon, FilterClearIcon, BracesIcon, XmlTagIcon, ClipboardCompareIcon } from '../../../icons';
+import { candidatesFrom, pickComparable, type Comparable } from '../../../services/compare/comparable-text';
+import { openCompareWithClipboard } from '../../../services/compare/open-compare';
+import { getFilterMenu, type FilterMenu } from './filter-provider';
+import { jsonPathLevels, xPathLevels } from '@salilvnair/dui';
+import { readClipboard } from '../../../services/compare/read-clipboard';
 
 type MenuContext = 'monaco' | 'input' | 'selection';
 
@@ -19,7 +24,37 @@ interface MenuState {
   y: number;
   context: MenuContext;
   target: HTMLElement | null;
+  /**
+   * The selected text, captured when the menu opened.
+   *
+   * Not read again at click time: moving through a submenu can collapse the
+   * selection, and an action that silently does nothing because the selection
+   * went away is worse than no action.
+   */
+  selection: string;
+  /**
+   * What "Compare with clipboard" would act on, decided when the menu opened.
+   *
+   * Captured here for the same reason as the selection: by the time the entry
+   * is clicked the pointer has moved and, in Monaco's case, the editor may
+   * have scrolled away from what was under it.
+   */
+  comparable: Comparable | null;
 }
+
+/**
+ * Diff whatever is under the pointer against the clipboard.
+ *
+ * The pair of texts is what a comparison needs and the clipboard is where the
+ * other one nearly always is — a colleague's payload, the previous run's
+ * response, the version from the ticket.
+ */
+const COMPARE_ITEM: ContextMenuItem = {
+  id: 'compareClipboard',
+  label: 'Compare with clipboard',
+  icon: <ClipboardCompareIcon size={14} />,
+  iconColor: 'var(--color-settings)',
+};
 
 const INPUT_ITEMS: ContextMenuItem[] = [
   { id: 'undo', label: 'Undo', icon: <UndoIcon size={14} />, iconColor: 'var(--color-ctx-rename)', shortcut: 'Ctrl+Z' },
@@ -34,6 +69,136 @@ const INPUT_ITEMS: ContextMenuItem[] = [
 
 const SELECTION_ITEMS: ContextMenuItem[] = [
   { id: 'copy', label: 'Copy', icon: <CopyIcon size={14} />, iconColor: 'var(--color-ctx-duplicate)', shortcut: 'Ctrl+C' },
+];
+
+/**
+ * Extra entries a surface can contribute to the selection menu.
+ *
+ * A log view wants Search on a selection; a response body does not. Rather
+ * than teaching this menu about dk8s, a surface marks itself with
+ * `data-selection-actions` and answers a custom event with what it can do —
+ * so the menu stays generic and the log-specific behaviour stays in the log
+ * view that implements it.
+ */
+const AI_COLOR = 'var(--color-protocol-ai)';
+
+/**
+ * The two model calls, for a surface that opts into `ai`.
+ *
+ * These lived on a floating strip that appeared over the selection. The strip
+ * was a second panel competing with this menu for the same gesture, so it had
+ * to suppress itself on right-click and this menu had to stay out of its way —
+ * two things arguing over one selection. One menu, and the strip is gone.
+ *
+ * The heading carries what the strip's only real content was: how much is
+ * selected. "Ask AI why" on its own does not say why about what.
+ */
+function aiItems(lineCount: number, hasSelection: boolean): ContextMenuItem[] {
+  return [
+    { id: 'ai-sep', label: '', separator: true },
+    {
+      id: 'ai-count',
+      // The heading carries what the strip's only real content was: how much
+      // is selected. With nothing selected it says so, which is the reason the
+      // two entries under it are greyed out.
+      label: hasSelection
+        ? `${lineCount} line${lineCount === 1 ? '' : 's'} selected`
+        : 'Nothing selected',
+      heading: true,
+    },
+    {
+      id: 'ai:askWhy', label: 'Ask AI why',
+      icon: <SparkleIcon size={14} />, iconColor: AI_COLOR,
+    },
+    {
+      id: 'ai:explain', label: 'Explain',
+      icon: <HelpCircleIcon size={14} />, iconColor: AI_COLOR,
+    },
+    { id: 'ai-sep-2', label: '', separator: true },
+  ];
+}
+
+/*
+  Filter By, built from whatever the surface knows about its own content.
+
+  The colour is the one thing hard-coded here: amber, because filtering is the
+  only entry in this menu that changes what you are looking at rather than
+  acting on what you selected, and it should not read as another neutral verb
+  beside Copy.
+
+  The actions come back as closures, so this renders a list of labels and calls
+  one — it never learns what a thread is.
+*/
+const FILTER_COLOR = 'var(--color-warning)';
+
+function filterItems(menu: FilterMenu): ContextMenuItem[] {
+  const submenu: ContextMenuItem[] = [];
+
+  if (menu.selection) {
+    submenu.push({
+      id: 'filter:selection',
+      label: menu.selection.label,
+      icon: <FilterIcon size={13} />,
+      iconColor: FILTER_COLOR,
+    });
+    if (menu.groups.length) submenu.push({ id: 'filter:sel-sep', label: '', separator: true });
+  }
+
+  for (const g of menu.groups) {
+    submenu.push({
+      id: `filter:group:${g.id}`,
+      label: g.label,
+      icon: <FilterIcon size={13} />,
+      iconColor: FILTER_COLOR,
+      submenu: [
+        // Said once, at the top, rather than on every row — see FilterGroup.note.
+        ...(g.note ? [{ id: `filter:${g.id}:note`, label: g.note, heading: true }] : []),
+        ...g.options.map((o, i) => ({
+          id: `filter:${g.id}:${i}`,
+          label: o.label,
+          shortcut: o.hint,
+        })),
+      ],
+    });
+  }
+
+  if (menu.clear) {
+    if (submenu.length) submenu.push({ id: 'filter:clear-sep', label: '', separator: true });
+    submenu.push({
+      id: 'filter:clear',
+      label: 'Clear filter',
+      // The funnel says what is being cleared; the cross inside it is red on
+      // its own, so no iconColor here — see FilterClearIcon.
+      icon: <FilterClearIcon size={13} />,
+      iconColor: 'var(--color-text-secondary)',
+    });
+  }
+
+  if (!submenu.length) return [];
+
+  return [
+    { id: 'filter-sep', label: '', separator: true },
+    {
+      id: 'filter',
+      label: 'Filter By',
+      icon: <FilterIcon size={14} />,
+      iconColor: FILTER_COLOR,
+      submenu,
+    },
+  ];
+}
+
+const SEARCH_ITEMS: ContextMenuItem[] = [
+  {
+    id: 'search',
+    label: 'Search',
+    icon: <SearchIcon size={14} />,
+    iconColor: 'var(--color-dk8s, #22d3ee)',
+    submenu: [
+      { id: 'search:here', label: 'Search Here', icon: <SearchIcon size={13} />, iconColor: 'var(--color-dk8s, #22d3ee)' },
+      { id: 'search:everywhere', label: 'Search Everywhere', icon: <SearchIcon size={13} />, iconColor: 'var(--color-dk8s, #22d3ee)' },
+    ],
+  },
 ];
 
 function isMonacoEditor(el: HTMLElement | null): boolean {
@@ -72,6 +237,19 @@ function getMonacoEditorInstance(el: HTMLElement): any | null {
 
 // --- Monaco Context Menu (custom layout with compact clipboard row + submenu) ---
 
+/**
+ * Diff a Monaco editor's contents against the clipboard.
+ *
+ * A selection wins over the whole document, on the same reasoning as the plain
+ * menu: highlighting a block and asking to compare it means that block.
+ */
+function compareWithClipboard(editor: any, target: HTMLElement | null): Promise<void> {
+  return openCompareWithClipboard(pickComparable(candidatesFrom(target, {
+    selection: window.getSelection()?.toString() ?? '',
+    editorValue: editor?.getModel?.()?.getValue?.() ?? undefined,
+  })));
+}
+
 interface MonacoMenuItem {
   id: string;
   label: string;
@@ -80,6 +258,15 @@ interface MonacoMenuItem {
   iconColor?: string;
   submenu?: MonacoMenuItem[];
 }
+
+const COMPARE_GROUP: MonacoMenuItem[] = [
+  {
+    id: 'compareClipboard',
+    label: 'Compare with clipboard',
+    icon: <ClipboardCompareIcon size={14} />,
+    iconColor: 'var(--color-settings)',
+  },
+];
 
 const GOTO_SUBMENU: MonacoMenuItem[] = [
   { id: 'goToDefinition', label: 'Go to Definition', shortcut: 'F12' },
@@ -93,6 +280,20 @@ const PEEK_SUBMENU: MonacoMenuItem[] = [
 ];
 
 // Full menu for JS/TS editors (supports Go to Definition, Peek, etc.)
+/*
+  Folding, which every structured body wants and neither menu offered.
+
+  A view operation, not an edit — collapsing a response to its top level is as
+  useful in a read-only viewer as in a body being written, so these survive the
+  read-only filter that strips Format and Change All Occurrences.
+*/
+const FOLD_ITEMS: MonacoMenuItem[] = [
+  { id: 'foldAll', label: 'Fold all', shortcut: 'Ctrl+K Ctrl+0',
+    icon: <ChevronRightIcon size={14} />, iconColor: 'var(--color-ctx-close-batch)' },
+  { id: 'unfoldAll', label: 'Unfold all', shortcut: 'Ctrl+K Ctrl+J',
+    icon: <ChevronDownIcon size={14} />, iconColor: 'var(--color-ctx-close-batch)' },
+];
+
 const MONACO_MENU_GROUPS_FULL: MonacoMenuItem[][] = [
   // Group 1: Edit actions
   [
@@ -109,6 +310,7 @@ const MONACO_MENU_GROUPS_FULL: MonacoMenuItem[][] = [
     { id: 'comment', label: 'Toggle Comment', shortcut: 'Ctrl+/' },
     { id: 'format', label: 'Format Document', shortcut: 'Shift+Alt+F', icon: <WrapLinesIcon size={14} />, iconColor: 'var(--color-ctx-close-saved)' },
   ],
+  FOLD_ITEMS,
   // Group 4: Navigation
   [
     { id: 'goto', label: 'Go to...', submenu: GOTO_SUBMENU },
@@ -127,6 +329,7 @@ const MONACO_MENU_GROUPS_BASIC: MonacoMenuItem[][] = [
   [
     { id: 'goToSymbol', label: 'Go to Symbol...', shortcut: 'Ctrl+Shift+O' },
   ],
+  FOLD_ITEMS,
   [
     { id: 'changeAll', label: 'Change All Occurrences', shortcut: 'Ctrl+F2' },
     { id: 'format', label: 'Format Document', shortcut: 'Shift+Alt+F', icon: <WrapLinesIcon size={14} />, iconColor: 'var(--color-ctx-close-saved)' },
@@ -139,6 +342,122 @@ const MONACO_MENU_GROUPS_BASIC: MonacoMenuItem[][] = [
 
 /** Languages that support Go to Definition, Peek, Rename */
 const TS_LANGUAGES = new Set(['javascript', 'typescript']);
+
+/**
+ * Whether the editor refuses edits.
+ *
+ * `getRawOptions()` reports what was passed in, which for this option comes
+ * back false even on an editor Monaco is treating as read-only — the resolved
+ * value is the one that decides behaviour, and it lives behind a numeric enum
+ * id. Read through the enum where it is available, with the raw options as a
+ * fallback for hosts that expose no monaco global.
+ */
+function isReadOnly(editor: any): boolean {
+  const id = (window as any).monaco?.editor?.EditorOption?.readOnly;
+  if (typeof id === 'number' && editor?.getOption) return !!editor.getOption(id);
+  return !!editor?.getRawOptions?.().readOnly;
+}
+
+/** Carries the path in the id, since actions are dispatched by id alone. */
+const COPY_PATH = 'copyPath:';
+
+/*
+  How far up the submenu goes.
+
+  A path is as deep as the document, and a deeply nested body would hand you
+  twenty rows to read past — the menu stops being a shortcut somewhere around
+  the sixth. The near ancestors are the ones worth offering: the root and the
+  couple below it are short enough to type, and nobody scrolls a context menu
+  to find them.
+*/
+const MAX_LEVELS = 6;
+
+/** Past this a single row stretches the menu wider than the text it sits in. */
+const MAX_LABEL = 46;
+
+/*
+  Trimmed from the front, not the back.
+
+  The end of a path is what distinguishes it — `…items[1].id` says which one,
+  `$.data.orders.items…` says nothing the row above it did not. Only the label
+  is shortened; the id still carries the whole path, so what gets copied is
+  never what was displayed.
+*/
+function shortLabel(path: string): string {
+  return path.length <= MAX_LABEL ? path : '…' + path.slice(-(MAX_LABEL - 1));
+}
+
+/*
+  The path to whatever was right-clicked, as a submenu of every level.
+
+  Reading a value out of a response and then writing the expression that
+  selects it is a transcription job: you can see `id` on screen and still have
+  to count array indices and retype four ancestor names to say where it lives.
+
+  Every enclosing level is offered, innermost first — the thing you clicked is
+  the thing you asked about, and its ancestors follow outward. An assertion is
+  as often written against the array or the object above a leaf as against the
+  leaf itself, and each of those is a different path to derive by hand.
+
+  Built here rather than registered on the editor because this menu is the one
+  that opens: Daakia intercepts `contextmenu` globally and draws its own, so a
+  Monaco action — however correctly registered — is never rendered.
+*/
+function pathGroup(editor: any, at: { x: number; y: number }): MonacoMenuItem[][] {
+  const model = editor?.getModel?.();
+  if (!model) return [];
+
+  const language = model.getLanguageId?.();
+  if (language !== 'json' && language !== 'xml') return [];
+  const isJson = language === 'json';
+
+  // Which key or tag is under the pointer — the coordinates are the question,
+  // so the cursor position is no use here; it is wherever it was left.
+  const position = editor.getTargetAtClientPoint?.(at.x, at.y)?.position;
+  if (!position) return [];
+
+  const text = model.getValue();
+  const offset = model.getOffsetAt(position);
+  const levels = isJson ? jsonPathLevels(text, offset) : xPathLevels(text, offset);
+  if (!levels.length) return [];
+
+  const deepest = levels[levels.length - 1]!;
+  const inner = [...levels].reverse();
+  const shownLevels = inner.slice(0, MAX_LEVELS);
+  const hiddenLevels = inner.length - shownLevels.length;
+  return [[{
+    id: `${COPY_PATH}${deepest}`,
+    label: isJson ? 'Copy JSON path' : 'Copy XPath',
+    /*
+      The notation, not the verb.
+
+      A copy icon here would be the third one in the menu and say nothing
+      about which of the two entries this is. Braces and a tag say it at a
+      glance, in the colours the app already uses for those formats.
+    */
+    icon: isJson ? <BracesIcon size={14} /> : <XmlTagIcon size={14} />,
+    iconColor: isJson ? 'var(--color-warning)' : 'var(--color-protocol-soap)',
+    /*
+      The parent copies the innermost path on its own, so the common case is
+      one click; the submenu is there for the ancestors. Reversed, so what you
+      clicked is first rather than last.
+    */
+    submenu: shownLevels.map((path, i) => ({
+      id: `${COPY_PATH}${path}`,
+      label: shortLabel(path),
+      /*
+        The cap admits itself on the last row it kept.
+
+        A list that stops at six and says nothing reads as the whole ancestry,
+        and someone looking for a level that is not there would conclude the
+        path was wrong rather than that the menu was short.
+      */
+      shortcut: i === shownLevels.length - 1 && hiddenLevels > 0
+        ? `+${hiddenLevels} above`
+        : undefined,
+    })),
+  }]];
+}
 
 function MonacoContextMenu({ position, target, onClose }: { position: { x: number; y: number }; target: HTMLElement; onClose: () => void }) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -168,17 +487,41 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose();
     };
     const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    // The menu is placed at fixed coordinates against content that can move.
+    // Capture phase because the scroller is usually an inner element, and
+    // scroll does not bubble.
+    const handleScroll = () => onClose();
     document.addEventListener('mousedown', handleClick);
     document.addEventListener('keydown', handleKey);
+    document.addEventListener('scroll', handleScroll, true);
     return () => {
       document.removeEventListener('mousedown', handleClick);
       document.removeEventListener('keydown', handleKey);
+      document.removeEventListener('scroll', handleScroll, true);
     };
   }, [onClose]);
 
   const executeAction = useCallback((id: string) => {
     const editor = editorInstanceRef.current;
     onClose();
+    /*
+      Handled before the editor is touched. Every other entry acts on the
+      editor and needs it focused first; a path is already a string by the
+      time it reaches the menu, and focusing to copy it would move the cursor
+      for no reason.
+    */
+    if (id.startsWith(COPY_PATH)) {
+      void navigator.clipboard?.writeText(id.slice(COPY_PATH.length));
+      return;
+    }
+    /* Before the `!editor` guard, and for the same reason as Copy Path: this
+       reads the registry rather than the editor. `editor` is null in practice
+       — `window.monaco` is a different copy of the module from the one the
+       editor bundles — so anything below that guard never runs. */
+    if (id === 'compareClipboard') {
+      void compareWithClipboard(editor, target);
+      return;
+    }
     if (!editor) return;
     // Use requestAnimationFrame to ensure DOM is updated (menu removed) before refocusing
     requestAnimationFrame(() => {
@@ -210,17 +553,42 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
             break;
           }
           case 'paste': {
+            /*
+              Three ways in, because the obvious one is often not allowed.
+
+              `navigator.clipboard.readText()` needs the `clipboard-read`
+              permission, which a webview frequently denies outright — and the
+              failure landed in an empty catch, so Paste did nothing and said
+              nothing, indistinguishable from an empty clipboard. The extension
+              host has no such restriction, so `readClipboard` asks it first
+              and falls back to the browser API.
+
+              Monaco's own paste action is the last resort: it goes through the
+              browser's native clipboard path, permitted by the click that
+              opened this menu.
+            */
+            let pasted = false;
             try {
-              const text = await navigator.clipboard.readText();
-              if (text) {
-                const sel = editor.getSelection();
-                if (sel) editor.executeEdits('contextmenu', [{ range: sel, text, forceMoveMarkers: true }]);
+              const { text } = await readClipboard();
+              const sel = editor.getSelection();
+              if (text && sel) {
+                editor.executeEdits('contextmenu', [{ range: sel, text, forceMoveMarkers: true }]);
+                pasted = true;
               }
-            } catch { /* clipboard denied */ }
+            } catch { /* fall through to the editor's own paste */ }
+            if (!pasted) {
+              editor.trigger('contextmenu', 'editor.action.clipboardPasteAction', null);
+            }
             break;
           }
           case 'selectAll':
             editor.trigger('contextmenu', 'editor.action.selectAll', null);
+            break;
+          case 'foldAll':
+            editor.trigger('contextmenu', 'editor.foldAll', null);
+            break;
+          case 'unfoldAll':
+            editor.trigger('contextmenu', 'editor.unfoldAll', null);
             break;
           case 'format':
             editor.trigger('contextmenu', 'editor.action.formatDocument', null);
@@ -258,7 +626,7 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
         }
       });
     });
-  }, [onClose]);
+  }, [onClose, target]);
 
   // Check if there's a selection for disabling cut/copy
   const editor = editorInstanceRef.current;
@@ -266,7 +634,44 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
 
   // Determine menu items based on editor language
   const editorLang = editor?.getModel()?.getLanguageId?.() || '';
-  const menuGroups = TS_LANGUAGES.has(editorLang) ? MONACO_MENU_GROUPS_FULL : MONACO_MENU_GROUPS_BASIC;
+  /*
+    A read-only editor is offered only what it can do.
+
+    Change All Occurrences puts a cursor on every match so that typing rewrites
+    them all — which in a response viewer looks like it merely highlighted
+    them, because there is nothing you can type. Format Document and Toggle
+    Comment are edits too, and equally inert. An entry that cannot work is
+    worse than a missing one: it reads as broken rather than absent.
+  */
+  const readOnly = isReadOnly(editor);
+  const EDITS = new Set(['changeAll', 'format', 'comment', 'rename']);
+  const baseGroups = (TS_LANGUAGES.has(editorLang) ? MONACO_MENU_GROUPS_FULL : MONACO_MENU_GROUPS_BASIC)
+    .map(group => (readOnly ? group.filter(i => !EDITS.has(i.id)) : group))
+    .filter(group => group.length > 0);
+  // First, because it is the only entry that depends on where you clicked —
+  // everything below acts on the document or the selection and is the same
+  // wherever the pointer was.
+  /*
+    Compare with clipboard, offered when this editor holds enough to diff.
+
+    Monaco is where the data actually is — response bodies, request bodies,
+    scripts, docs — so the entry has to exist in this menu and not only in the
+    plain one. Last in the list: the entries above are what people reach for
+    without looking, and this must not move them.
+  */
+  /* `editor` is usually null here: `window.monaco` is a different copy of the
+     module from the one the editor component bundles, so `getEditors()` finds
+     nothing. The registry is what actually answers — see
+     `services/compare/comparable-registry`. */
+  const comparable = pickComparable(candidatesFrom(target, {
+    selection: window.getSelection()?.toString() ?? '',
+    editorValue: editor?.getModel?.()?.getValue?.() ?? undefined,
+  }));
+  const menuGroups = [
+    ...pathGroup(editor, position),
+    ...baseGroups,
+    ...(comparable ? [COMPARE_GROUP] : []),
+  ];
 
   return createPortal(
     <div
@@ -278,7 +683,7 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
       <div className="flex items-center gap-0.5 px-2 py-1">
         <button
           type="button"
-          disabled={!hasSelection}
+          disabled={!hasSelection || readOnly}
           onClick={() => executeAction('cut')}
           className="w-8 h-7 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[var(--color-item-hover-bg)] disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ color: 'var(--color-ctx-close)' }}
@@ -298,10 +703,11 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
         </button>
         <button
           type="button"
+          disabled={readOnly}
           onClick={() => executeAction('paste')}
-          className="w-8 h-7 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[var(--color-item-hover-bg)]"
+          className="w-8 h-7 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[var(--color-item-hover-bg)] disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ color: 'var(--color-ctx-pin)' }}
-          title="Paste (Ctrl+V)"
+          title={readOnly ? 'This view is read-only' : 'Paste (Ctrl+V)'}
         >
           <PasteIcon size={15} />
         </button>
@@ -326,7 +732,17 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
                 type="button"
                 className="w-full flex items-center gap-2.5 px-3.5 py-[6px] text-[12.5px] text-left cursor-pointer transition-colors text-[var(--color-text-primary)] hover:bg-[var(--color-item-hover-bg)]"
               >
-                <span className="w-4 shrink-0" />
+                {/* A row with a submenu drew a blank spacer where its icon
+                    goes, so an icon set on it was silently dropped — every
+                    other row in this menu shows one. */}
+                {item.icon
+                  ? (
+                    <span className="w-4 shrink-0 flex items-center justify-center"
+                          style={{ color: item.iconColor ?? 'var(--color-text-muted)' }}>
+                      {item.icon}
+                    </span>
+                  )
+                  : <span className="w-4 shrink-0" />}
                 <span className="flex-1">{item.label}</span>
                 <ChevronRightIcon size={12} className="text-[var(--color-text-muted)]" />
               </button>
@@ -391,26 +807,49 @@ export function RightClickMenu() {
     // Don't intercept Monaco glyph margin (breakpoint gutter has own handler)
     if (target.closest('[data-daakia-bp-gutter]')) return;
 
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
-
     let context: MenuContext;
     if (isMonacoEditor(target)) {
       context = 'monaco';
     } else if (isTextInput(target)) {
       context = 'input';
     } else {
-      // Only show selection context menu if there's actual text selected
-      const selection = window.getSelection();
-      if (!selection || !selection.toString().trim()) {
-        // No text selected — don't show any menu
-        return;
-      }
+      const selected = window.getSelection()?.toString().trim() ?? '';
+      /*
+        No selection is still worth a menu — on a surface that has something to
+        offer without one.
+
+        Right-clicking a log line to filter by its thread never needed a
+        selection, and requiring one meant right-click did nothing at all
+        there. A surface says whether it has anything by opting in with
+        `data-selection-actions`; anywhere else, an empty right-click falls
+        through untouched.
+      */
+      const opted = !!target.closest('[data-selection-actions]');
+      if (!selected && !opted) return;
       context = 'selection';
     }
 
-    setMenu({ x: e.clientX, y: e.clientY, context, target });
+    /*
+      Suppressed only once a menu is actually going to appear.
+
+      This used to run before the check above, so every right-click in the app
+      with nothing selected swallowed the event and then showed nothing —
+      leaving no menu of ours and no native one either.
+    */
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    const selectionText = window.getSelection()?.toString() ?? '';
+    const editorValue = context === 'monaco'
+      ? getMonacoEditorInstance(target)?.getModel?.()?.getValue?.()
+      : undefined;
+
+    setMenu({
+      x: e.clientX, y: e.clientY, context, target,
+      selection: selectionText,
+      comparable: pickComparable(candidatesFrom(target, { selection: selectionText, editorValue })),
+    });
   }, []);
 
   useEffect(() => {
@@ -421,10 +860,45 @@ export function RightClickMenu() {
 
   const handleClose = useCallback(() => setMenu(null), []);
 
-  const handleInputSelect = useCallback(async (id: string) => {
+  const handleInputSelect = useCallback(async (id: string, subId?: string) => {
     if (!menu) return;
-    const { target, context } = menu;
+    const { target, context, selection: selectedText } = menu;
+    // A submenu reports the parent's id first and the chosen child second, so
+    // the child is the action whenever there is one. Reading only the first
+    // argument is why Search Here and Search Everywhere did nothing.
+    const action = subId ?? id;
     setMenu(null);
+
+    if (action === 'compareClipboard') {
+      /* Read the clipboard at click time — it is the one input genuinely
+         allowed to change between opening the menu and choosing. */
+      await openCompareWithClipboard(menu.comparable);
+      return;
+    }
+
+    /*
+      Filter actions, dispatched by id.
+
+      Three levels deep — Filter By, a field, a value — and the menu reports a
+      parent and a child rather than a full path. So the id encodes everything
+      needed to act on it, and the more specific of the two arguments wins:
+      `filter:thread:4` beats `filter:group:thread` regardless of which slot
+      each arrived in.
+    */
+    const filterId = [subId, id]
+      .filter((x): x is string => !!x && x.startsWith('filter:') && !x.startsWith('filter:group:'))
+      .sort((a, b) => b.split(':').length - a.split(':').length)[0];
+
+    if (filterId) {
+      const fm = getFilterMenu();
+      if (!fm) return;
+      if (filterId === 'filter:clear') { fm.clear?.(); return; }
+      if (filterId === 'filter:selection') { fm.selection?.apply(); return; }
+      const [, groupId, index] = filterId.split(':');
+      const group = fm.groups.find(g => g.id === groupId);
+      group?.options[Number(index)]?.apply();
+      return;
+    }
 
     // Native input/textarea actions
     if (context === 'input' && target) {
@@ -445,7 +919,7 @@ export function RightClickMenu() {
           break;
         case 'paste':
           try {
-            const text = await navigator.clipboard.readText();
+            const { text } = await readClipboard();
             document.execCommand('insertText', false, text);
           } catch {
             document.execCommand('paste');
@@ -459,11 +933,19 @@ export function RightClickMenu() {
     }
 
     // General text selection — copy
-    if (id === 'copy') {
-      const selection = window.getSelection();
-      if (selection && selection.toString()) {
-        await navigator.clipboard.writeText(selection.toString());
-      }
+    if (action === 'copy') {
+      if (selectedText) await navigator.clipboard.writeText(selectedText);
+      return;
+    }
+
+    // Handed to whichever surface contributed the entry.
+    // Both groups leave the same way: the menu names an action and the surface
+    // that opted in decides what it means. Nothing here knows about logs.
+    if (action.startsWith('search:') || action.startsWith('ai:')) {
+      target?.dispatchEvent(new CustomEvent('daakia:selection-action', {
+        bubbles: true,
+        detail: { action, text: selectedText },
+      }));
     }
   }, [menu]);
 
@@ -475,14 +957,67 @@ export function RightClickMenu() {
   }
 
   // Input & selection contexts use the standard ContextMenu
-  const items = menu.context === 'input' ? INPUT_ITEMS : SELECTION_ITEMS;
+  /*
+    Copy first, then whatever the surface opted into.
+
+    The order is the order of certainty: Copy always does the same thing, the
+    AI entries act on what is selected, and Search leaves for somewhere else.
+    Each opted-in group brings its own separators so the menu reads as sections
+    rather than a list.
+  */
+  const wantsAi = !!menu.target?.closest('[data-selection-actions~="ai"]');
+  const wantsSearch = !!menu.target?.closest('[data-selection-actions~="search"]');
+  const wantsFilter = !!menu.target?.closest('[data-selection-actions~="filter"]');
+  // Read once, when the menu opens. Calling the provider again at click time
+  // would rebuild the facets from a buffer that has moved on, and the closure
+  // chosen would belong to a different list than the one on screen.
+  const filterMenu = wantsFilter ? getFilterMenu() : null;
+  // Trailing newline from a line-wise selection would otherwise count as a line.
+  const lineCount = menu.selection.replace(/\n+$/, '').split('\n').length;
+
+  /*
+    The same menu with or without a selection.
+
+    Stripping the selection-dependent entries left a single "Filter By" row
+    with a submenu hanging off it, which reads as a broken menu rather than a
+    small one — and it moved every remaining entry to a different place
+    depending on whether text happened to be selected. So the list is always
+    the same shape and the entries that need a selection are disabled without
+    one: what is unavailable stays visible, in its usual position, and the
+    reason is legible from the greyed-out row.
+  */
+  const hasSelection = !!menu.selection.trim();
+
+  /* Offered wherever there is enough data to be worth diffing — a response
+     body, a request body, a script, a docs draft — and nowhere else. */
+  const compareItems: ContextMenuItem[] = menu.comparable
+    ? [{ id: 'compare-sep', label: '', separator: true }, COMPARE_ITEM]
+    : [];
+
+  const items = menu.context === 'input'
+    ? [...INPUT_ITEMS, ...compareItems]
+    : [
+        ...SELECTION_ITEMS,
+        ...(wantsAi ? aiItems(lineCount, hasSelection) : []),
+        ...(wantsSearch ? (wantsAi ? SEARCH_ITEMS : [{ id: 'search-sep', label: '', separator: true }, ...SEARCH_ITEMS]) : []),
+        ...(filterMenu ? filterItems(filterMenu) : []),
+        ...compareItems,
+      ];
+  /*
+    One rule: an entry that acts on the selection needs one.
+
+    Copy, Cut, the two AI actions and both Search entries all take the
+    highlighted text as their input. Filter By does not — it reads the view —
+    so it stays live, which is what makes an empty right-click worth opening.
+  */
+  const NEEDS_SELECTION = new Set([
+    'cut', 'copy', 'ai:askWhy', 'ai:explain', 'search', 'search:here', 'search:everywhere',
+  ]);
+
   const adjustedItems = items.map(item => {
-    if (item.separator) return item;
-    if (item.id === 'cut' || item.id === 'copy') {
-      const selection = window.getSelection();
-      return { ...item, disabled: !selection || !selection.toString().trim() };
-    }
-    return item;
+    if (item.separator || item.heading) return item;
+    if (!NEEDS_SELECTION.has(item.id)) return item;
+    return { ...item, disabled: !hasSelection };
   });
 
   return (

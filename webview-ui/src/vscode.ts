@@ -67,7 +67,7 @@ function auditToDevTools(msg: Record<string, unknown>) {
       storeModule.getState().addLog({
         level: 'info' as const,
         args: [
-          `⚙️ [Settings Audit] ${msg.type}`,
+          `[Settings Audit] ${msg.type}`,
           sanitize({ ...msg, type: undefined }),
           `at ${new Date().toISOString()}`,
         ].filter(Boolean),
@@ -84,11 +84,30 @@ function auditToDevTools(msg: Record<string, unknown>) {
 export function postMsg(msg: unknown) {
   getVsCodeApi().postMessage(msg);
 
-  // Audit settings changes to DevTools
   if (msg && typeof msg === 'object' && !Array.isArray(msg)) {
     const typed = msg as Record<string, unknown>;
+
+    // Audit settings changes to DevTools
     if (SETTINGS_AUDIT_TYPES.has(typed.type as string)) {
       auditToDevTools(typed);
+    }
+
+    /*
+      Every AI button, from the one message they all send.
+
+      There are fifty-odd sparkles in this app and each posts its own
+      `ai:send`; auditing here covers all of them, including the ones written
+      after this line, and carries which feature it was in `stage`. The
+      alternative — a call in every component — is how a taxonomy ends up
+      with entries nothing fires.
+
+      Loaded lazily: `ui-audit-store` imports this module for `postMsg`, and
+      a static import back would be a cycle resolved at evaluation time.
+    */
+    if (typed.type === 'ai:send') {
+      void import('./store/ui-audit-store')
+        .then(m => m.logAiCall(typed.stage as string | undefined, typed.screen as string | undefined))
+        .catch(() => { /* auditing must never break a send */ });
     }
   }
 }

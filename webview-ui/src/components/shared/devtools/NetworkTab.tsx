@@ -401,6 +401,30 @@ function NetworkLogsView({ entry }: { entry: NetworkEntry }) {
       >
         <div className="flex flex-col gap-1.5">
           <div className="text-[11px] font-mono text-[var(--color-text-primary)] break-all">{entry.url}</div>
+          {/* How it was routed. Shown on every entry, direct included — the proxy
+              setting was silently doing nothing and nothing on screen said so. */}
+          {entry.proxy && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[9px] uppercase tracking-wider text-[var(--color-text-muted)] font-medium">Route</span>
+              <span className="text-[9px] px-1.5 py-[1px] rounded-full font-mono font-semibold"
+                    style={{
+                      background: entry.proxy.used
+                        ? 'color-mix(in srgb, var(--color-warning) 18%, transparent)'
+                        : 'color-mix(in srgb, var(--color-text-muted) 15%, transparent)',
+                      color: entry.proxy.used ? 'var(--color-warning)' : 'var(--color-text-muted)',
+                    }}>
+                {entry.proxy.used ? 'PROXIED' : 'DIRECT'}
+              </span>
+              <span className="text-[10.5px] font-mono text-[var(--color-text-secondary)] break-all">
+                {entry.proxy.description}
+              </span>
+              {entry.proxy.warning && (
+                <span className="text-[10.5px]" style={{ color: 'var(--color-warning)' }}>
+                  {entry.proxy.warning}
+                </span>
+              )}
+            </div>
+          )}
           {Object.keys(entry.requestHeaders).length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-1">

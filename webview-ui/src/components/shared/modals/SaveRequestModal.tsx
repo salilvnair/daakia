@@ -6,6 +6,7 @@ import { useAiPromptTemplatesStore } from '../../../store/prompt-template';
 import { SparkleIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon, TrashIcon, MoreVerticalIcon, RenameIcon, CopyIcon, ChevronRightIcon, CheckCircleFilledIcon } from '../../../icons';
 import { ConfirmDialog } from '../index';
 import { ModalView, ButtonView, IconButtonView, TextInputView, ContextMenuView, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
+import { sendAiRequest } from '../../../services/ai/ai-client';
 
 const PROTOCOL_ACCENT: Record<string, string> = {
   rest: 'var(--color-primary)',
@@ -96,6 +97,31 @@ function nameFromUrl(method: string, url: string): string {
   } catch {
     return `${method} request`;
   }
+}
+
+/**
+ * The parts of a response worth keeping with a saved request.
+ *
+ * Headers and cookies included — a saved request that comes back without its
+ * `set-cookie` or its `content-type` is not the response that was received.
+ * The body is capped because a collection lives in SQLite and a 200MB export
+ * helps nobody; when it is cut, the record says so rather than pretending the
+ * server returned a truncated payload.
+ */
+const MAX_SAVED_BODY = 250_000;
+
+function saveableResponse(res: {
+  headers?: Record<string, string>; body?: string; contentType?: string; cookies?: unknown[];
+}): Record<string, unknown> {
+  const body = res.body ?? '';
+  const truncated = body.length > MAX_SAVED_BODY;
+  return {
+    headers: res.headers ?? {},
+    cookies: res.cookies ?? [],
+    contentType: res.contentType ?? '',
+    body: truncated ? body.slice(0, MAX_SAVED_BODY) : body,
+    ...(truncated ? { truncated: true, originalLength: body.length } : {}),
+  };
 }
 
 export function SaveRequestModal({ open, tab, onClose, bulkItems, bulkProtocol }: SaveRequestModalProps) {
@@ -375,6 +401,8 @@ export function SaveRequestModal({ open, tab, onClose, bulkItems, bulkProtocol }
       variables: tab.variables,
       preRequestScript: tab.preRequestScript,
       postResponseScript: tab.postResponseScript,
+      docs: tab.docs,
+      tags: tab.tags,
     };
 
     if (tab.protocol === 'ai') {
@@ -404,9 +432,7 @@ export function SaveRequestModal({ open, tab, onClose, bulkItems, bulkProtocol }
         statusText: tab.response?.statusText,
         responseTime: tab.response?.time,
         responseSize: tab.response?.size,
-        responseData: tab.response
-          ? JSON.stringify({ headers: tab.response.headers, body: tab.response.body.slice(0, 50000), contentType: tab.response.contentType })
-          : undefined,
+        responseData: tab.response ? JSON.stringify(saveableResponse(tab.response)) : undefined,
       },
     });
 
@@ -486,11 +512,11 @@ export function SaveRequestModal({ open, tab, onClose, bulkItems, bulkProtocol }
                     bodyPreview: bodyPreview || '(empty)',
                   });
 
-                  postMsg({
-                    type: 'ai:send',
+                  sendAiRequest({
                     tabId: pid,
                     provider: '', model: '', baseUrl: '',
                     stage: 'rest.request.name',
+                    screen: 'REST · Request',
                     systemPrompts: ['You are a concise HTTP request naming assistant. Return only the name — nothing else.'],
                     userPrompt,
                     conversation: [],

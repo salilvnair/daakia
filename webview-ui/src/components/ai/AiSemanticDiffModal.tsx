@@ -10,6 +10,7 @@ import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
 import { ModalView, AIButtonView, EditorView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface Props {
   responseBodyA?: string;
@@ -22,12 +23,12 @@ const ACCENT = 'var(--color-protocol-ai)';
 const SYSTEM_PROMPT = `You are a semantic API diff analyzer. Given two API responses, provide an intelligent diff that understands intent — not just structural differences.
 
 For each difference, classify it as:
-- 🔄 **Rename**: field was renamed (userName → username — same data, different key)
+-  **Rename**: field was renamed (userName → username — same data, different key)
 - ➕ **Added**: genuinely new field
 - ➖ **Removed**: field no longer present
-- 🔀 **Type changed**: field exists but type changed (string → number)
-- 📦 **Restructured**: data moved (user.address → user.location.address)
-- ⚠️ **Breaking change**: will cause clients to break
+-  **Type changed**: field exists but type changed (string → number)
+-  **Restructured**: data moved (user.address → user.location.address)
+-  **Breaking change**: will cause clients to break
 
 Format:
 ## Semantic Diff Analysis
@@ -75,9 +76,10 @@ export function AiSemanticDiffModal({ responseBodyA = '', responseBodyB = '', on
     const pid = `ai-diff-${Date.now()}`;
     reqIdRef.current = pid;
 
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'rest.semantic.diff',
+      screen: 'REST · Response',
       systemPrompts: [SYSTEM_PROMPT],
       userPrompt: `Response A (before/old):\n${bodyA.slice(0, 3000)}\n\nResponse B (after/new):\n${bodyB.slice(0, 3000)}`,
       conversation: [], tools: [],
@@ -93,6 +95,12 @@ export function AiSemanticDiffModal({ responseBodyA = '', responseBodyB = '', on
       title="Semantic API Diff"
       subtitle="AI understands intent — renames vs removals, breaking vs non-breaking"
       size="xl"
+      // Full-bleed on purpose: the panes run edge to edge with a divider between
+      // them. This was faked with a `-mx-4` negative margin, but the body's padding
+      // is ASYMMETRIC (18px left, 12px right) — so -16px overhung the right edge by
+      // 4px, and because the body sets overflow-y:auto the browser is forced to make
+      // overflow-x auto too, which is where the horizontal scrollbar came from.
+      noPadding
       headerColor={ACCENT}
       headerIcon={
         <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
@@ -110,7 +118,7 @@ export function AiSemanticDiffModal({ responseBodyA = '', responseBodyB = '', on
         />
       }
     >
-      <div className="flex flex-1 min-h-0 gap-0 -mx-4" style={{ minHeight: 360 }}>
+      <div className="flex flex-1 min-h-0 gap-0 min-w-0" style={{ minHeight: 360 }}>
         {/* Response A */}
         <div className="flex flex-col w-1/3 border-r" style={{ borderColor: 'var(--color-surface-border)' }}>
           <div className="px-3 py-2 border-b text-[11px] font-medium" style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)', backgroundColor: 'var(--color-surface-hover)' }}>

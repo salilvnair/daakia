@@ -234,7 +234,7 @@ export function AgentPromptEditor({ entry, onSave, onResetRequest }: AgentPrompt
               className="px-3 py-2 text-[11px] cursor-pointer transition-colors border-b-2"
               style={{ borderColor: promptRole === role ? ACCENT : 'transparent', color: promptRole === role ? ACCENT : 'var(--color-text-muted)' }}
             >
-              {role === 'system' ? '⚙ System' : '💬 User'}
+              {role === 'system'? 'System': 'User'}
             </button>
           ))}
         </div>
@@ -247,7 +247,7 @@ export function AgentPromptEditor({ entry, onSave, onResetRequest }: AgentPrompt
               className="px-3 py-2 text-[11px] cursor-pointer transition-colors border-b-2"
               style={{ borderColor: viewMode === mode ? ACCENT : 'transparent', color: viewMode === mode ? ACCENT : 'var(--color-text-muted)' }}
             >
-              {mode === 'preview' ? '👁 Preview' : '✏ Edit'}
+              {mode === 'preview'? 'Preview': '✏ Edit'}
             </button>
           ))}
         </div>

@@ -1,0 +1,164 @@
+/*
+ * dkgh's own stylesheet, taken from `plan/daakia_wiki/dkgh-mock.html`.
+ *
+ * The mock is not a sketch — it is a rendered design with exact paddings, type
+ * sizes, icon sizes and colours, and the agreement was that what is drawn there
+ * is what gets built. So the rules below are the mock's rules, values unchanged,
+ * with every selector scoped under `.dkgh` so nothing leaks into the rest of the
+ * app.
+ *
+ * **`.dkgh` is the mock's `.body`.** The mock draws a whole editor — a rail down
+ * the left and a tab bar across the top — because it has to show where the tab
+ * lives. Daakia already has both, so only what is inside `.body` is ported, and
+ * `.body` itself becomes this file's root.
+ *
+ * The mock's `--dk-*` tokens are declared here rather than globally, for the
+ * same reason: they are dkgh's palette, not the app's. Their dark values are the
+ * mock's own; the light ones are the app's, so a light-themed editor does not
+ * get a dark panel.
+ *
+ * **One number is changed, and it is changed everywhere.** The mock is a figure
+ * in a document, drawn a few hundred pixels wide, and at that size 12px type and
+ * 12px glyphs read fine. The tab is a whole panel, and the same numbers read
+ * small in it. So every px length in this file — type, glyph, padding, gap,
+ * radius — is the mock's number times 1.2. Multiplying all of them by the same
+ * factor is the point: every proportion the mock chose survives exactly, and the
+ * result is the mock, larger. Hairlines are left at 1px, because a 1.2px border
+ * is a blurry 1px border, and `999px` is left alone because it is not a length,
+ * it is how CSS spells "a pill".
+ *
+ * The order of the three parts is load-bearing. The rules that adapt the mock to
+ * a live app come **last**: they mostly tie on specificity with the rule they are
+ * adapting, and a tie is decided by which came later. When they were first, an
+ * override like `.compose .right { width: auto }` lost silently to the mock's
+ * `238px` and the metadata column would not stretch with its split.
+ *
+ * When the mock changes, this file is regenerated from it rather than edited by
+ * hand. A stylesheet that has drifted from the design it was taken from is worse
+ * than no design.
+ */
+
+/*
+  `.ghsheet` is here for one reason: a `SheetView` portals to `document.body`,
+  so a panel of dkgh's content has no `.dkgh` ancestor to read the palette
+  from. It cannot simply *be* `.dkgh` — that carries `flex: 1` and the sheet
+  fills the window — so it takes the variables and leaves the layout. The
+  content inside it is wrapped in `Dk` as usual.
+*/
+.dkgh,
+.ghsheet {
+  /* The mock's palette, verbatim. */
+  --dk-panel: #1e1e1e;
+  --dk-surface: #252526;
+  --dk-raised: #2d2d30;
+  --dk-hover: #37373a;
+  --dk-border: #3c3c3c;
+  --dk-text: #cccccc;
+  --dk-muted: #858585;
+  --dk-faint: #6a6a6a;
+
+  --dk-gh: #DE7356;
+  --dk-gh-deep: #c05a3e;
+
+  --dk-cyan: #22d3ee;
+  --dk-green: #3fb950;
+  --dk-red: #f85149;
+  --dk-amber: #d29922;
+  --dk-orange: #db6d28;
+  --dk-blue: #58a6ff;
+  --dk-pink: #e535ab;
+  --dk-ws: #2dd4bf;
+
+  /* The app already ships Inter and JetBrains Mono, which is what the mock
+     was drawn in — so the type is identical without loading anything. */
+  --sans: var(--font-sans);
+  --mono: var(--font-mono);
+
+  /* From the mock's `.app`: the frame's own type scale, which everything
+     inside it is sized against. The border, radius and shadow are not here —
+     they belong to a floating card in a document, and this fills a panel. */
+  font-family: var(--sans);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--dk-text);
+  background: var(--dk-panel);
+}
+
+/*
+  Light theme.
+
+  Only the greys move. The accents stay where they are apart from dkgh's own,
+  which the app already deepens for a light ground.
+*/
+[data-theme="light"] .dkgh,
+[data-theme="light"] .ghsheet,
+.vscode-light .dkgh,
+.vscode-light .ghsheet {
+  --dk-panel: #ffffff;
+  --dk-surface: #f6f6f6;
+  --dk-raised: #ececec;
+  --dk-hover: #e0e0e0;
+  --dk-border: #d8d8d8;
+  --dk-text: #1f2328;
+  --dk-muted: #57606a;
+  --dk-faint: #8c959f;
+  --dk-gh: #c0543a;
+  --dk-gh-deep: #9c422d;
+}
+
+.dkgh * { box-sizing: border-box; }
+
+/*
+  A floor under every icon.
+  
+  The mock sizes its glyphs in CSS, per place — 15px in the repository line,
+  12px in the sub-tabs, 11px on a chip, all scaled with everything else — and an
+  icon in a spot it never drew has no rule at all. A `<svg>` with no width fills its container, so one
+  missing rule turns a chevron into a wall. This is the least specific rule in
+  the file, so every one of the mock's own sizes still wins.
+*/
+.dkgh svg { width: 12px; height: 12px; flex-shrink: 0; }
+
+/*
+  ── The button reset, and why it is in a layer ──
+
+  A button in the mock is a span; here it is a real button, so it needs the
+  browser's chrome taken off it.
+
+  The trouble is that `.dkgh button` is (0,1,1), which outranks the single-class
+  rules every component library styles its own buttons with — `.dui_button--primary`,
+  `.dui_mde__ask button` — and dkgh's stylesheet loads after theirs. So this
+  reset silently won inside components that are not ours: dui's Save came out as
+  a ghost that only filled on hover, and the editor's Apply and Cancel lost their
+  padding and their hit area.
+
+  Two attempts to fix that with `:not()` both made it worse. `:not()` takes the
+  specificity of its argument, so `.dkgh button:not(.dui_mde *)` is (0,2,1) —
+  which outranks `.dkgh .btn` at (0,2,0) and every other class the mock styles
+  its buttons with, and stripped the padding from every button in the tab.
+
+  A cascade layer is the actual answer, because the problem was never
+  specificity — it was reach. **Anything unlayered beats anything layered,
+  whatever its specificity.** So this reset now loses to dui's rules and to the
+  mock's own `.btn`, and still wins where nothing else has an opinion, which is
+  exactly the job it was written for. Nothing has to be restated to out-specify
+  it, and there is nothing left for a future `:not()` to be tempted by.
+
+  The order is pinned rather than left to import order: `dkgh-reset` last means
+  it still beats Tailwind's preflight `button`, which lives in `base`. Those
+  four names are Tailwind's own, in Tailwind's own order — re-declaring them
+  here only fixes where ours sits relative to them.
+*/
+@layer theme, base, components, utilities, dkgh-reset;
+
+@layer dkgh-reset {
+  .dkgh button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+  }
+}
+

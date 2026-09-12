@@ -9,6 +9,8 @@
  *   - HTTPie (5.4.12)      — named request objects JSON
  */
 import * as vscode from 'vscode';
+import { splitUrl, schemeFor, buildOpenApiDoc, responsesFrom, schemaFromBody, type OAContext, type OAOperation } from './openapi-doc';
+import { buildDocsHtml, type DocsNode } from './docs-bundle';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getCollectionTree, getCollectionSubtree, getAllCollectionTrees, type CollectionTreeNode, type CollectionRequestRow } from '../storage/db';
@@ -509,18 +511,12 @@ export async function handleExportCollectionHttpie(
 
 interface OAParam { name: string; in: string; schema: { type: string }; required?: boolean; }
 interface OARequestBody { content: Record<string, { schema: { type: string } }>; required: boolean; }
-interface OAOperation { summary: string; operationId: string; tags: string[]; parameters?: OAParam[]; requestBody?: OARequestBody; responses: Record<string, { description: string }>; }
-
-function buildOpenApiPaths(node: CollectionTreeNode, tag: string, paths: Record<string, Record<string, OAOperation>>) {
+function buildOpenApiPaths(node: CollectionTreeNode, tag: string, ctx: OAContext) {
+  const paths = ctx.paths;
   for (const req of node.requests) {
     const d = parseRequestData(req);
-    // Build path — replace query param literals with path template params where {} not already present
-    let urlPath = req.url || '/';
-    try {
-      const u = new URL(urlPath.startsWith('http') ? urlPath : `http://placeholder${urlPath}`);
-      urlPath = u.pathname || '/';
-    } catch { urlPath = '/'; }
-    if (!urlPath) urlPath = '/';
+    const { path: urlPath, server } = splitUrl(req.url || '/');
+    if (server) ctx.servers.add(server);
 
     const method = (req.method || 'GET').toLowerCase();
     const parameters: OAParam[] = [];
@@ -541,23 +537,45 @@ function buildOpenApiPaths(node: CollectionTreeNode, tag: string, paths: Record<
 
     const op: OAOperation = {
       summary: req.name,
+      // OpenAPI's `description` is markdown, which is exactly what the Docs
+      // tab holds — so it travels into the spec unchanged.
+      ...(typeof d.docs === 'string' && d.docs.trim() ? { description: d.docs.trim() } : {}),
       operationId: req.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, ''),
       tags: [tag],
-      responses: { '200': { description: 'Successful response' }, '400': { description: 'Bad request' }, '500': { description: 'Server error' } },
+      // What this request has actually returned, when anyone saved one.
+      responses: responsesFrom(d.examples),
     };
     if (parameters.length) op.parameters = parameters;
+
+    // The credential this request carries, named in the document rather than
+    // dropped on the floor.
+    const auth = schemeFor(d);
+    if (auth) {
+      ctx.schemes.set(auth.name, auth.scheme);
+      op.security = [{ [auth.name]: [] }];
+    }
 
     const bodyMode = d.bodyMode as string;
     if (['raw', 'form-data', 'urlencoded'].includes(bodyMode) && ['post', 'put', 'patch'].includes(method)) {
       const ct = bodyMode === 'raw' ? 'application/json' : bodyMode === 'form-data' ? 'multipart/form-data' : 'application/x-www-form-urlencoded';
-      op.requestBody = { content: { [ct]: { schema: { type: 'object' } } }, required: true };
+      /*
+        Inferred from the body that is right there.
+
+        Every request body used to export as `schema: { type: 'object' }` —
+        true of every JSON payload ever written, and useful for nothing.
+      */
+      const bodySchema = schemaFromBody(d.bodyRaw as string | undefined);
+      op.requestBody = {
+        content: { [ct]: { schema: bodySchema ?? { type: 'object' } } },
+        required: true,
+      };
     }
 
     if (!paths[urlPath]) paths[urlPath] = {};
     paths[urlPath][method] = op;
   }
   for (const child of node.children) {
-    buildOpenApiPaths(child, tag, paths);
+    buildOpenApiPaths(child, tag, ctx);
   }
 }
 
@@ -569,32 +587,36 @@ export async function handleExportCollectionOpenApi(
   const tree = getCollectionTree();
   const node = collectionId ? findNode(tree, collectionId) : null;
 
-  const paths: Record<string, Record<string, OAOperation>> = {};
+  const ctx: OAContext = { paths: {}, servers: new Set(), schemes: new Map() };
   const toExport = node ? [node] : tree;
   for (const n of toExport) {
-    buildOpenApiPaths(n as CollectionTreeNode, n.name, paths);
+    buildOpenApiPaths(n as CollectionTreeNode, n.name, ctx);
   }
 
   const collectionName = node?.name || 'Daakia API';
-  const doc = {
-    openapi: '3.0.3',
-    info: { title: collectionName, version: '1.0.0', description: `OpenAPI 3.0 spec generated from Daakia collection — ${collectionName}` },
-    paths,
-  };
+  const doc = buildOpenApiDoc(collectionName, ctx);
 
   const defaultName = node ? `${node.name}.openapi.json` : 'daakia-openapi.json';
   const uri = await vscode.window.showSaveDialog({
-    saveLabel: 'Export as OpenAPI 3.0 spec',
+    saveLabel: 'Export as OpenAPI spec',
     defaultUri: vscode.Uri.file(defaultName),
     filters: { 'JSON Files': ['json'] },
   });
   if (!uri) return;
 
   fs.writeFileSync(uri.fsPath, JSON.stringify(doc, null, 2), 'utf8');
-  postMessage({ type: 'toast', toastType: 'success', message: `Exported OpenAPI 3.0 spec to ${path.basename(uri.fsPath)}` });
+  postMessage({ type: 'toast', toastType: 'success', message: `Exported OpenAPI 3.1 spec to ${path.basename(uri.fsPath)}` });
 }
 
 // ─── 5.4.8 — API Documentation (Markdown) ────────────────────────────────────
+
+/**
+ * How many saved examples a request contributes to the document.
+ *
+ * All of them would turn a twenty-request collection into a hundred pages of
+ * response bodies; the first few are the ones anybody reads.
+ */
+const MAX_DOC_EXAMPLES = 3;
 
 function buildMarkdownDocs(node: CollectionTreeNode, depth: number, lines: string[]) {
   const heading = '#'.repeat(Math.min(depth + 1, 6));
@@ -604,6 +626,17 @@ function buildMarkdownDocs(node: CollectionTreeNode, depth: number, lines: strin
     lines.push(`${'#'.repeat(Math.min(depth + 2, 6))} ${req.name}`, '');
     lines.push(`**Method:** \`${req.method || 'GET'}\`  `);
     lines.push(`**URL:** \`${req.url || ''}\``, '');
+
+    /*
+      The author's own words, above the mechanics.
+
+      Until requests could carry documentation this generator had nothing but
+      URLs and payloads to work from, which is why its output read as a
+      transcript rather than a document. When someone has written the Docs
+      tab, that is the part of the page worth reading first.
+    */
+    const docs = typeof d.docs === 'string' ? d.docs.trim() : '';
+    if (docs) lines.push(docs, '');
 
     const headers = d.headers as { key: string; value: string; enabled?: boolean }[] || [];
     const enabledHeaders = headers.filter(h => h.enabled !== false && h.key);
@@ -631,11 +664,61 @@ function buildMarkdownDocs(node: CollectionTreeNode, depth: number, lines: strin
       lines.push(`\`\`\`${lang}`, bodyRaw.trim(), '```', '');
     }
 
+    /*
+      Saved responses, which is the half of the documentation a URL and a
+      payload cannot give you: what it looks like when it works, and what it
+      looks like when the token has expired.
+    */
+    const examples = Array.isArray(d.examples) ? d.examples as Record<string, unknown>[] : [];
+    for (const ex of examples.slice(0, MAX_DOC_EXAMPLES)) {
+      const name = typeof ex.name === 'string' ? ex.name : 'Example';
+      const status = typeof ex.status === 'number' ? ex.status : '';
+      const statusText = typeof ex.statusText === 'string' ? ex.statusText : '';
+      lines.push(`**Example — ${name}** \`${status} ${statusText}\`  `.trimEnd(), '');
+      const body = typeof ex.body === 'string' ? ex.body.trim() : '';
+      if (body) {
+        const ct = typeof ex.contentType === 'string' ? ex.contentType : '';
+        lines.push(`\`\`\`${ct.includes('json') ? 'json' : ct.includes('xml') ? 'xml' : ''}`, body, '```', '');
+      }
+      if (ex.truncated === true) lines.push('_(body truncated when the example was saved)_', '');
+    }
+
     lines.push('---', '');
   }
   for (const child of node.children) {
     buildMarkdownDocs(child, depth + 1, lines);
   }
+}
+
+/**
+ * The collection as one HTML page you can commit.
+ *
+ * The Markdown export is for a diff; this is for reading. One file, no CDN,
+ * no fonts, no scripts fetched at open time — it gets opened from a file://
+ * URL on a laptop with no network, which is exactly when someone is
+ * debugging.
+ */
+export async function handleExportCollectionDocsHtml(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+) {
+  const collectionId = msg.collectionId as string;
+  const tree = getCollectionTree();
+  const node = collectionId ? findNode(tree, collectionId) : null;
+  const roots = (node ? [node] : tree) as unknown as DocsNode[];
+  const title = node?.name || 'Daakia API Documentation';
+
+  const html = buildDocsHtml(roots, title);
+  const defaultName = node ? `${node.name}.docs.html` : 'daakia-api-docs.html';
+  const uri = await vscode.window.showSaveDialog({
+    saveLabel: 'Export as API Documentation (HTML)',
+    defaultUri: vscode.Uri.file(defaultName),
+    filters: { 'HTML Files': ['html'], 'All Files': ['*'] },
+  });
+  if (!uri) return;
+
+  fs.writeFileSync(uri.fsPath, html, 'utf8');
+  postMessage({ type: 'toast', toastType: 'success', message: `API documentation exported to ${path.basename(uri.fsPath)}` });
 }
 
 export async function handleExportCollectionDocs(

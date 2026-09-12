@@ -213,7 +213,7 @@ export function AiPromptTab() {
                   ) : img.type === 'url' && img.url ? (
                     <img src={img.url} alt="image" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[16px]">🖼️</div>
+                    <div className="w-full h-full flex items-center justify-center text-[16px]"></div>
                   )}
                 </div>
                 <div className="flex-1 min-w-0">

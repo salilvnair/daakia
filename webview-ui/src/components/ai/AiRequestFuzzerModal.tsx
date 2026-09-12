@@ -10,6 +10,8 @@ import { postMsg } from '../../vscode';
 import { SparkleIcon, PlayIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { ModalView, ButtonView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
+import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,47 +28,41 @@ interface FuzzResult {
   statusText: string;
   duration: number;
   body: string;
-  anomaly?: string;
+  anomaly?: Anomaly;
 }
 
 type Phase = 'idle' | 'generating' | 'generated' | 'running' | 'done' | 'analyzing' | 'analyzed';
 
-// ─── Fuzz categories ──────────────────────────────────────────────────────────
-
-const FUZZ_SYSTEM_PROMPT = `You are a security-focused API testing expert.
-Given an API request body template, generate edge-case test payloads to find bugs.
-
-Generate a JSON array of test cases. Each case must be:
-{
-  "category": "sql-injection" | "xss" | "empty-fields" | "huge-values" | "type-mismatch" | "unicode" | "null-values" | "boundary",
-  "name": "short name",
-  "description": "what this tests",
-  "body": "the complete JSON body as a string (valid JSON)"
-}
-
-Generate 8-12 diverse cases covering:
-1. SQL injection strings in text fields
-2. XSS payloads in text fields
-3. Empty strings for required fields
-4. Extremely large numbers (Integer.MAX_VALUE, huge floats)
-5. Wrong types (number where string expected, etc.)
-6. Unicode edge cases (null bytes, emoji, RTL text, zero-width chars)
-7. Null values for required fields
-8. Boundary values (0, -1, MAX_INT for numbers; very long strings for text)
-
-Output ONLY valid JSON array, no markdown or explanation.`;
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function detectAnomaly(status: number, body: string): string | undefined {
-  if (status === 500) return '⚠️ Server error — possible crash or unhandled exception';
-  if (status === 200 && body.toLowerCase().includes('error')) return '⚠️ 200 response contains "error" text — possible silent failure';
-  if (body.toLowerCase().includes('exception') || body.toLowerCase().includes('stacktrace')) return '⚠️ Stack trace leaked in response';
-  if (body.toLowerCase().includes('syntax error') || body.toLowerCase().includes('sql error')) return '⚠️ SQL error leaked — possible injection vulnerability';
-  if (body.includes('<script>') || body.includes('javascript:')) return '⚠️ XSS payload reflected in response';
-  if (status === 413) return 'Payload too large (expected)';
-  if (status === 422 || status === 400) return 'Validation rejected (expected)';
-  if (status === 200 || status === 201) return '✓ Accepted — may need manual review';
+/*
+  What the fuzzer made of one response.
+
+  `severity` is a field rather than a mark on the front of the text: the row's
+  colour used to be decided by reading the first character of `anomaly`, so
+  that mark was load-bearing, and removing it would have quietly turned every
+  warning green.
+*/
+interface Anomaly { severity: 'warn' | 'ok'; text: string }
+
+/** Fences around the whole answer, which the model adds despite being asked not to. */
+function stripFence(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('```')) return trimmed;
+  return trimmed.replace(/^```(?:\w+)?\s*/, '').replace(/\s*```$/, '').trim();
+}
+
+function detectAnomaly(status: number, body: string): Anomaly | undefined {
+  const warn = (text: string): Anomaly => ({ severity: 'warn', text });
+  const ok = (text: string): Anomaly => ({ severity: 'ok', text });
+  if (status === 500) return warn('Server error — possible crash or unhandled exception');
+  if (status === 200 && body.toLowerCase().includes('error')) return warn('200 response contains "error" text — possible silent failure');
+  if (body.toLowerCase().includes('exception') || body.toLowerCase().includes('stacktrace')) return warn('Stack trace leaked in response');
+  if (body.toLowerCase().includes('syntax error') || body.toLowerCase().includes('sql error')) return warn('SQL error leaked — possible injection vulnerability');
+  if (body.includes('<script>') || body.includes('javascript:')) return warn('XSS payload reflected in response');
+  if (status === 413) return ok('Payload too large (expected)');
+  if (status === 422 || status === 400) return ok('Validation rejected (expected)');
+  if (status === 200 || status === 201) return ok('Accepted — may need manual review');
   return undefined;
 }
 
@@ -89,6 +85,7 @@ export function AiRequestFuzzerModal({ onClose }: Props) {
     new Set(['sql-injection', 'xss', 'empty-fields', 'huge-values', 'type-mismatch', 'unicode', 'null-values', 'boundary']),
   );
 
+  const resolve = useAiPromptTemplatesStore(s => s.resolve);
   const reqIdRef = useRef(`fuzz-${Date.now()}`);
   const accRef = useRef('');
   const currentRunRef = useRef<number>(0);
@@ -118,23 +115,26 @@ export function AiRequestFuzzerModal({ onClose }: Props) {
           if ((msg.done as boolean)) setPhase('done');
           break;
         }
+        /* Keyed on `tabId` and read from `delta` — the names the host sends.
+           This listened for `reqId` and `chunk`, so nothing ever arrived and
+           both buttons spun until the modal was closed. */
         case 'ai:chunk': {
-          const reqId = msg.reqId as string | undefined;
-          if (reqId !== reqIdRef.current) return;
-          const chunk = msg.chunk as { delta?: { content?: string } } | string;
-          const delta = typeof chunk === 'string' ? chunk : (chunk?.delta?.content ?? '');
-          accRef.current += delta;
+          if (msg.tabId !== reqIdRef.current) return;
+          accRef.current += (msg.delta as string) || (msg.text as string) || '';
           if (phase === 'analyzing') {
             setAnalysis(accRef.current);
           }
           break;
         }
         case 'ai:complete': {
-          const reqId = msg.reqId as string | undefined;
-          if (reqId !== reqIdRef.current) return;
+          if (msg.tabId !== reqIdRef.current) return;
+          if (!accRef.current) {
+            const payload = msg.message as { content?: string } | undefined;
+            accRef.current = payload?.content ?? '';
+          }
           if (phase === 'generating') {
             try {
-              const generated = JSON.parse(accRef.current.trim()) as FuzzPayload[];
+              const generated = JSON.parse(stripFence(accRef.current)) as FuzzPayload[];
               const filtered = generated.filter(p => selectedCategories.has(p.category));
               setPayloads(filtered);
               setPhase('generated');
@@ -149,8 +149,8 @@ export function AiRequestFuzzerModal({ onClose }: Props) {
           break;
         }
         case 'ai:error': {
-          const reqId = msg.reqId as string | undefined;
-          if (reqId !== reqIdRef.current) return;
+          if (msg.tabId !== reqIdRef.current) return;
+          setParseError((msg.message as string) || 'The AI call failed — check the AI provider settings.');
           setPhase(phase === 'generating' ? 'idle' : 'done');
           break;
         }
@@ -167,29 +167,21 @@ export function AiRequestFuzzerModal({ onClose }: Props) {
     setResults([]);
     setParseError('');
     setPhase('generating');
-    reqIdRef.current = `fuzz-${Date.now()}`;
 
-    const userMessage = `API request to fuzz:
-- Method: ${activeTab.method}
-- URL: ${activeTab.url}
-- Content-Type: ${activeTab.bodyContentType || 'application/json'}
-- Request body template:
-\`\`\`json
-${activeTab.bodyRaw.slice(0, 1000)}
-\`\`\`
-
-Categories to include: ${Array.from(selectedCategories).join(', ')}
-
-Generate the fuzz payloads:`;
-
-    postMsg({
-      type: 'ai:send',
-      reqId: reqIdRef.current,
-      systemPrompt: FUZZ_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMessage }],
-      stream: true,
+    reqIdRef.current = sendAiRequest({
+      stage: 'rest.request.fuzz',
+      screen: 'REST · Request',
+      systemPrompts: [resolve('rest.request.fuzz.system')],
+      userPrompt: `${resolve('rest.request.fuzz', {
+        method: activeTab.method,
+        url: activeTab.url,
+        currentBody: activeTab.bodyRaw.slice(0, 1000),
+        count: String(Math.max(selectedCategories.size * 2, 8)),
+      })}\n\nCategories to include: ${Array.from(selectedCategories).join(', ')}`,
+      settings: { temperature: 0.6, maxTokens: 1600 },
+      context: { authType: activeTab.authType, authData: activeTab.authData, envId: activeTab.envId },
     });
-  }, [activeTab, selectedCategories]);
+  }, [activeTab, selectedCategories, resolve]);
 
   const handleRunFuzz = useCallback(() => {
     if (payloads.length === 0 || !activeTab) return;
@@ -215,27 +207,29 @@ Generate the fuzz payloads:`;
 
   const handleAnalyze = useCallback(() => {
     if (results.length === 0) return;
-    const anomalies = results.filter(r => r.anomaly && !r.anomaly.startsWith('✓') && !r.anomaly.startsWith('Validation'));
+    const anomalies = results.filter(r => r.anomaly?.severity === 'warn');
     const summary = results.map(r =>
-      `[${r.status}] ${r.payload.category}/${r.payload.name}: ${r.anomaly || 'no anomaly'}`,
+      `[${r.status}] ${r.payload.category}/${r.payload.name}: ${r.anomaly?.text || 'no anomaly'}`,
     ).join('\n');
 
     accRef.current = '';
     setAnalysis('');
     setPhase('analyzing');
-    reqIdRef.current = `fuzz-analyze-${Date.now()}`;
 
-    postMsg({
-      type: 'ai:send',
-      reqId: reqIdRef.current,
-      systemPrompt: 'You are a security expert analyzing API fuzz test results.',
-      messages: [{
-        role: 'user',
-        content: `Fuzz test results for ${activeTab?.method} ${activeTab?.url}:\n\n${summary}\n\nAnomalies found: ${anomalies.length}\n\nAnalyze these results:\n1. What security vulnerabilities were found?\n2. Which unexpected behaviors need investigation?\n3. What should the developer fix first?\n4. Rate the overall security level (1-10)`,
-      }],
-      stream: true,
+    reqIdRef.current = sendAiRequest({
+      stage: 'rest.fuzz.analyze',
+      screen: 'REST · Response',
+      systemPrompts: [resolve('rest.fuzz.analyze.system')],
+      userPrompt: resolve('rest.fuzz.analyze', {
+        method: activeTab?.method ?? '',
+        url: activeTab?.url ?? '',
+        total: String(results.length),
+        anomalies: String(anomalies.length),
+        results: summary,
+      }),
+      settings: { temperature: 0.3, maxTokens: 1200 },
     });
-  }, [results, activeTab]);
+  }, [results, activeTab, resolve]);
 
   const filtered = payloads.filter(p => selectedCategories.has(p.category));
 
@@ -358,7 +352,7 @@ Generate the fuzz payloads:`;
             className="rounded-lg p-3 text-[11px] text-center"
             style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text-muted)' }}
           >
-            ⚠️ No request body found. Open a request with a JSON body, then come back to fuzz it.
+ No request body found. Open a request with a JSON body, then come back to fuzz it.
           </div>
         )}
 
@@ -405,9 +399,9 @@ Generate the fuzz payloads:`;
                     {result?.anomaly && (
                       <span
                         className="flex-shrink-0 text-[9.5px] truncate max-w-[160px]"
-                        style={{ color: result.anomaly.startsWith('⚠️') ? 'var(--color-error)' : 'var(--color-success)' }}
+                        style={{ color: result.anomaly.severity === 'warn' ? 'var(--color-error)' : 'var(--color-success)' }}
                       >
-                        {result.anomaly}
+                        {result.anomaly.text}
                       </span>
                     )}
                   </div>

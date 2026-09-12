@@ -17,8 +17,20 @@ const { buildZoompanFilter } = require('./effects');
 const ROOT = __dirname;
 const args = process.argv.slice(2).filter((a) => a !== '--gif');
 const makeGif = process.argv.includes('--gif');
-const configPath = path.resolve(args[0] || path.join(ROOT, 'config.json'));
+/*
+  The snapshot the recorder wrote, in preference to config.json.
+
+  `record.js` writes `config.snapshot.json` listing only the segments that
+  actually produced a verified clip, so composing from it means a `--only` run
+  stitches what it recorded instead of failing on the twenty clips it was never
+  asked to make. With no snapshot — someone composing by hand — config.json is
+  still the source.
+*/
+const OUT_DIR_EARLY = path.join(ROOT, '.output');
+const snapshot = path.join(OUT_DIR_EARLY, 'config.snapshot.json');
+const configPath = path.resolve(args[0] || (fs.existsSync(snapshot) ? snapshot : path.join(ROOT, 'config.json')));
 const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+if (configPath === snapshot) console.log('Composing the segments record.js verified.');
 
 const OUT_DIR = path.join(ROOT, '.output');
 const RAW_DIR = path.join(OUT_DIR, 'raw');
@@ -54,19 +66,34 @@ if (config.intro?.enabled) {
   plan.push({ id: 'intro', raw: path.join(RAW_DIR, 'intro.webm'), trimStartSec: 0, effect: config.intro.effect || 'zoom-in' });
 }
 for (const seg of config.segments) {
-  plan.push({ id: seg.id, raw: path.join(RAW_DIR, seg.id + '.webm'), trimStartSec: seg.trimStartSec ?? 1.5, effect: seg.effect || 'zoom-in' });
+  plan.push({
+    id: seg.id,
+    raw: path.join(RAW_DIR, seg.id + '.webm'),
+    trimStartSec: seg.trimStartSec ?? 1.5,
+    /* Where the recorder said the segment stopped being interesting. Absent
+       for a clip recorded before record.js marked its takes, or for one whose
+       driver never marked an end — both keep the whole tail. */
+    endAtSec: seg.endAtSec,
+    effect: seg.effect || 'zoom-in',
+  });
 }
 
 for (const clip of plan) {
   if (!fs.existsSync(clip.raw)) {
-    throw new Error(`Missing raw clip ${clip.raw} — run record.js first.`);
+    throw new Error(
+      `Missing clip for "${clip.id}".\n`
+      + 'record.js keeps a clip only when its segment verified, so this segment '
+      + 'either was never recorded or failed.\n'
+      + `Re-record just it:  node scripts/demo-video/record.js --only ${clip.id}`
+    );
   }
 }
 
 console.log('Processing clips (trim + camera effect)...');
 const processed = plan.map((clip, i) => {
   const rawDuration = ffprobeDuration(clip.raw);
-  const duration = Math.max(0.5, rawDuration - clip.trimStartSec);
+  const endAt = typeof clip.endAtSec === 'number' ? Math.min(rawDuration, clip.endAtSec) : rawDuration;
+  const duration = Math.max(0.5, endAt - clip.trimStartSec);
   const totalFrames = Math.round(duration * fps);
   const zoompan = buildZoompanFilter(clip.effect, totalFrames, { width, height, fps });
   const outFile = path.join(PROC_DIR, `${i}_${clip.id}.mp4`);
@@ -76,7 +103,7 @@ const processed = plan.map((clip, i) => {
     // per-frame rounding jitter on crisp UI edges — scale back down here.
     vfParts.push(zoompan, `scale=${width}:${height}:flags=lanczos`);
   }
-  const ffArgs = ['-ss', String(clip.trimStartSec), '-i', clip.raw];
+  const ffArgs = ['-ss', String(clip.trimStartSec), '-i', clip.raw, '-t', String(duration)];
   if (vfParts.length) ffArgs.push('-vf', vfParts.join(','));
   ffArgs.push('-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', outFile);
   ffmpeg(ffArgs);

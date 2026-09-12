@@ -4,7 +4,8 @@
  * The `gates` field shows exactly which UI buttons/icons each flag controls.
  */
 import { useEffect, useState } from 'react';
-import { useAiFeaturesStore, AI_FEATURE_LABELS, FEATURE_TO_TEMPLATE_KEY, type AiFeatureFlags } from '../../store/ai-features-store';
+import { useAiFeaturesStore, AI_FEATURE_LABELS, FEATURE_TO_TEMPLATE_KEY, type AiFeatureKey } from '../../store/ai-features-store';
+import { buildStageFeatures } from '../../store/ai-stage-features';
 import { SparkleIcon, ChevronRightIcon, BookOpenIcon, SearchIcon } from '../../icons';
 import { TextInputView } from '@salilvnair/dui';
 import type { AiPromptTemplateKey } from '../../store/prompt-template';
@@ -12,6 +13,27 @@ import { logUiEvent } from '../../store/ui-audit-store';
 
 
 const ACCENT = 'var(--color-protocol-ai)';
+
+/*
+  Every AI feature, hand-written flag or generated one, as a single list the
+  page can render without caring which list it came from.
+
+  Forty-three features — all of dk8s, the per-protocol mock generators,
+  Generate Docs — existed with no flag at all and so never appeared here. They
+  are generated from the audit taxonomy now, grouped by the screen they belong
+  to, so this page cannot fall behind the app again.
+*/
+type FeatureMeta = { label: string; description: string; group: string; gates?: string };
+
+const ALL_FEATURES: Record<string, FeatureMeta> = {
+  ...AI_FEATURE_LABELS,
+  ...Object.fromEntries(
+    buildStageFeatures().map(f => [f.stage, { label: f.label, description: f.description, group: f.group }]),
+  ),
+};
+
+/** The generated groups, in the order their stages first appear. */
+const STAGE_GROUPS = [...new Set(buildStageFeatures().map(f => f.group))];
 
 // Group display order (matches AI_FEATURE_LABELS group names in ai-features-store.ts)
 const GROUP_ORDER = [
@@ -27,6 +49,7 @@ const GROUP_ORDER = [
   'SOAP AI',
   'Realtime Protocols',
   'MCP & Platform AI',
+  ...STAGE_GROUPS,
 ];
 
 const GROUP_COLORS: Record<string, string> = {
@@ -42,16 +65,35 @@ const GROUP_COLORS: Record<string, string> = {
   'SOAP AI':                 'var(--color-protocol-soap)',
   'Realtime Protocols':      'var(--color-protocol-websocket)',
   'MCP & Platform AI':       'var(--color-protocol-ai)',
+  'Mock Server':             'var(--color-mock-server)',
+  'Daakia AI':               'var(--color-protocol-ai)',
+  'REST · Request':          'var(--color-protocol-rest)',
+  'REST · Response':         'var(--color-protocol-rest)',
+  'REST · Docs':             'var(--color-protocol-rest)',
+  'REST · Scripts':          'var(--color-protocol-rest)',
+  'Collections':             'var(--color-primary)',
+  'Environments':            'var(--color-success)',
+  'Import':                  'var(--color-warning)',
+  'Settings':                'var(--color-text-muted)',
+  'dk8s · Pods':             'var(--color-protocol-k8s, var(--color-primary))',
+  'dk8s · Logs':             'var(--color-protocol-k8s, var(--color-primary))',
+  'dk8s · Terminal':         'var(--color-protocol-k8s, var(--color-primary))',
+  'dk8s · Explorer':         'var(--color-protocol-k8s, var(--color-primary))',
+  'dk8s · Doctor':           'var(--color-protocol-k8s, var(--color-primary))',
+  'dk8s · Search':           'var(--color-protocol-k8s, var(--color-primary))',
 };
 
 // ── Feature row ───────────────────────────────────────────────────────────────
 
-function FeatureToggleRow({ featureKey, onNavigateToPrompt }: { featureKey: keyof AiFeatureFlags; onNavigateToPrompt?: (key: AiPromptTemplateKey) => void }) {
+function FeatureToggleRow({ featureKey, onNavigateToPrompt }: { featureKey: AiFeatureKey; onNavigateToPrompt?: (key: AiPromptTemplateKey) => void }) {
   const { features, toggleFeature } = useAiFeaturesStore();
-  const meta = AI_FEATURE_LABELS[featureKey];
-  const enabled = features[featureKey];
+  const meta = ALL_FEATURES[featureKey];
+  const enabled = features[featureKey] !== false;
   const color = GROUP_COLORS[meta.group] ?? ACCENT;
-  const templateKey = FEATURE_TO_TEMPLATE_KEY[featureKey];
+  /* A hand-written flag names its template; a generated one *is* its template
+     key, so the Prompt Library shortcut works for both. */
+  const templateKey = FEATURE_TO_TEMPLATE_KEY[featureKey as keyof typeof FEATURE_TO_TEMPLATE_KEY]
+    ?? (featureKey.includes('.') ? (featureKey as AiPromptTemplateKey) : undefined);
 
   return (
     <div className="flex items-start gap-4 py-2.5 border-b border-[color-mix(in_srgb,var(--color-text-primary)_5%,transparent)] last:border-b-0">
@@ -117,6 +159,54 @@ function FeatureToggleRow({ featureKey, onNavigateToPrompt }: { featureKey: keyo
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+
+/** All on, none on, or some on — the third is why this is not a checkbox. */
+type TriState = 'all' | 'none' | 'some';
+
+/**
+ * A switch that can say "some".
+ *
+ * A two-position control asked to represent three states has to lie about
+ * one of them, and the one it lied about was the common case: turn a single
+ * feature off out of 134 and the master switch read as off. The knob sits
+ * mid-track for "some", the track is tinted at half strength, and the tooltip
+ * carries the count — the switch stops claiming everything is off when almost
+ * nothing is.
+ */
+function TriToggle({ state, tone, width, title, onClick }: {
+  state: TriState;
+  tone: string;
+  width: number;
+  title: string;
+  onClick: (e: React.MouseEvent) => void;
+}) {
+  const height = Math.round(width * 0.5625);
+  const knob = Math.round(height * 0.667);
+  const pad = (height - knob) / 2;
+  const left = state === 'all' ? width - knob - pad : state === 'none' ? pad : (width - knob) / 2;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className="rounded-full cursor-pointer transition-all flex-shrink-0 relative"
+      style={{
+        width, height, border: 'none', padding: 0,
+        backgroundColor:
+          state === 'all' ? tone
+          : state === 'some' ? `color-mix(in srgb, ${tone} 45%, transparent)`
+          : 'color-mix(in srgb, var(--color-text-primary) 12%, transparent)',
+      }}
+    >
+      <span
+        className="absolute rounded-full bg-white shadow transition-all duration-200"
+        style={{ top: pad, width: knob, height: knob, left }}
+      />
+    </button>
+  );
+}
 export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?: (key: AiPromptTemplateKey) => void }) {
   const { loadFeatures, features, setGroupEnabled, setAllEnabled } = useAiFeaturesStore();
   // Empty set = all groups expanded by default
@@ -133,27 +223,32 @@ export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?:
     });
   };
 
-  const featureKeys = Object.keys(AI_FEATURE_LABELS) as (keyof AiFeatureFlags)[];
-  const enabledCount = featureKeys.filter(k => features[k]).length;
+  const featureKeys = Object.keys(ALL_FEATURES);
+  const enabledCount = featureKeys.filter(k => features[k] !== false).length;
   const allEnabled = enabledCount === featureKeys.length;
+  /* Three answers, not two — see TriToggle. Turning one feature off used to
+     flip the master switch to off, which says "AI is disabled" about a panel
+     where 133 of 134 things are on. */
+  const masterState: TriState = allEnabled ? 'all' : enabledCount === 0 ? 'none' : 'some';
 
   const q = searchQuery.trim().toLowerCase();
 
-  const matchesSearch = (key: keyof AiFeatureFlags) => {
+  const matchesSearch = (key: string) => {
     if (!q) return true;
-    const meta = AI_FEATURE_LABELS[key];
+    const meta = ALL_FEATURES[key];
     return (
       meta.label.toLowerCase().includes(q) ||
       meta.group.toLowerCase().includes(q) ||
       meta.description.toLowerCase().includes(q) ||
-      (meta.gates ?? '').toLowerCase().includes(q)
+      (meta.gates ?? '').toLowerCase().includes(q) ||
+      key.toLowerCase().includes(q)
     );
   };
 
   const grouped = GROUP_ORDER.map(g => ({
     group: g,
     color: GROUP_COLORS[g] ?? ACCENT,
-    keys: featureKeys.filter(k => AI_FEATURE_LABELS[k].group === g && matchesSearch(k)),
+    keys: featureKeys.filter(k => ALL_FEATURES[k].group === g && matchesSearch(k)),
   })).filter(g => g.keys.length > 0);
 
   return (
@@ -198,22 +293,25 @@ export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?:
                     }}>
                     {enabledCount}/{featureKeys.length}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => { logUiEvent('ai.toggle_all', { enabled: !allEnabled }); setAllEnabled(!allEnabled); }}
-                    className="w-[38px] h-[21px] rounded-full cursor-pointer transition-all flex-shrink-0 relative"
-                    style={{ backgroundColor: allEnabled ? ACCENT : 'color-mix(in srgb, var(--color-text-primary) 12%, transparent)' }}
-                    title={allEnabled ? 'Disable all AI features' : 'Enable all AI features'}
-                  >
-                    <span
-                      className="absolute top-[3.5px] w-[14px] h-[14px] rounded-full bg-white shadow transition-all duration-200"
-                      style={{ left: allEnabled ? '21px' : '3px' }}
-                    />
-                  </button>
+                  <TriToggle
+                    state={masterState}
+                    tone={ACCENT}
+                    width={38}
+                    title={
+                      masterState === 'all' ? 'Disable all AI features'
+                      : masterState === 'none' ? 'Enable all AI features'
+                      : `${enabledCount} of ${featureKeys.length} on — click to enable the rest`
+                    }
+                    onClick={() => {
+                      const next = masterState !== 'all';
+                      logUiEvent('ai.toggle_all', { enabled: next });
+                      setAllEnabled(next);
+                    }}
+                  />
                 </div>
               </div>
               <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">
-                Toggle any AI feature on or off. Disabled features are completely hidden — no buttons, no icons, no LLM calls.
+                Toggle any AI feature on or off. A disabled feature makes no LLM call — the request is refused before it leaves the panel — and its buttons are hidden where the surface supports it.
                 <span className="ml-1 inline-flex items-center gap-0.5" style={{ color: ACCENT }}>
                   <SparkleIcon size={10} /> marks AI-powered actions.
                 </span>
@@ -224,8 +322,9 @@ export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?:
           {/* Groups */}
           {grouped.map(({ group, color, keys }) => {
             const isCollapsed = collapsed.has(group);
-            const groupEnabledCount = keys.filter(k => features[k]).length;
+            const groupEnabledCount = keys.filter(k => features[k] !== false).length;
             const allGroupEnabled = groupEnabledCount === keys.length;
+            const groupState: TriState = allGroupEnabled ? 'all' : groupEnabledCount === 0 ? 'none' : 'some';
             return (
               <div key={group}>
                 {/* Header row: chevron+badge (clickable collapse) + divider + count + group toggle */}
@@ -258,18 +357,17 @@ export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?:
                     {groupEnabledCount}/{keys.length}
                   </span>
                   {/* Group-level toggle */}
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setGroupEnabled(keys, !allGroupEnabled); }}
-                    className="w-[32px] h-[18px] rounded-full cursor-pointer transition-all flex-shrink-0 relative"
-                    style={{ backgroundColor: allGroupEnabled ? color : 'color-mix(in srgb, var(--color-text-primary) 10%, transparent)' }}
-                    title={allGroupEnabled ? `Disable all ${group}` : `Enable all ${group}`}
-                  >
-                    <span
-                      className="absolute top-[3px] w-[12px] h-[12px] rounded-full bg-white shadow transition-all duration-200"
-                      style={{ left: allGroupEnabled ? '17px' : '3px' }}
-                    />
-                  </button>
+                  <TriToggle
+                    state={groupState}
+                    tone={color}
+                    width={32}
+                    title={
+                      groupState === 'all' ? `Disable all ${group}`
+                      : groupState === 'none' ? `Enable all ${group}`
+                      : `${groupEnabledCount} of ${keys.length} on — click to enable the rest`
+                    }
+                    onClick={(e) => { e.stopPropagation(); setGroupEnabled(keys, groupState !== 'all'); }}
+                  />
                 </div>
                 {/* Collapsible content — force-expand when search is active */}
                 {(!isCollapsed || !!q) && (
@@ -293,7 +391,7 @@ export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?:
             style={{ backgroundColor: `color-mix(in srgb, ${ACCENT} 5%, transparent)`, borderColor: `color-mix(in srgb, ${ACCENT} 15%, transparent)` }}
           >
             <p className="font-medium mb-1" style={{ color: ACCENT }}>Note</p>
-            <p>Disabling a feature only hides its UI entry points and prevents LLM calls for that action. Your AI provider config and API keys are not affected. Re-enabling instantly restores all buttons and icons for that feature.</p>
+            <p>Disabling a feature stops every LLM call it would make, and hides its UI entry points on the surfaces that check the flag. Your AI provider config and API keys are not affected. Re-enabling takes effect immediately.</p>
           </div>
         </div>
       </div>

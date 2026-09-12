@@ -144,6 +144,90 @@ const EXAMPLE_AI_AUDIT_ENTRIES = [
   },
 ];
 
+/*
+  A workspace list worth a screenshot.
+
+  The Overview counts and the switcher both come from the host, and a
+  capture run's database has one empty workspace -- so the honest screen is
+  four zeros, which teaches nobody what the screen is for. Two workspaces,
+  because the whole point is that there is more than one.
+*/
+const EXAMPLE_WORKSPACES = [
+  { id: 'ws-default', name: 'My Workspace', path: null, color: null, docs: null,
+    sort_order: 0, created_at: '2026-01-14T09:12:00.000Z', last_used_at: new Date().toISOString() },
+  { id: 'ws-payments', name: 'Payments Platform', path: null, color: null, docs: null,
+    sort_order: 1, created_at: '2026-02-02T14:40:00.000Z', last_used_at: '2026-08-30T11:05:00.000Z' },
+];
+
+const EXAMPLE_WORKSPACE_STATS = { collections: 6, environments: 3, requests: 48, history: 214 };
+
+/* A second protocol with something in it, so the Collections screen shows
+   what it is for: one tree per protocol, not one tree. */
+const EXAMPLE_GQL_COLLECTIONS = [
+  {
+    id: 'gcol-1', name: 'Catalog GraphQL', parent_id: null, sort_order: 0, children: [],
+    requests: [
+      { id: 'greq-1', collection_id: 'gcol-1', name: 'List products', method: 'GQL', url: 'https://api.example.com/graphql' },
+      { id: 'greq-2', collection_id: 'gcol-1', name: 'Product by id', method: 'GQL', url: 'https://api.example.com/graphql' },
+    ],
+  },
+];
+
+/*
+  A schema drifted the way schemas actually drift.
+
+  `payments` lost a column on the target, `idx_payments_ref` never got there
+  at all, and `migration_audit` exists only there — one of each status, so
+  the graph legend has something to point at and the report is not three
+  rows of the same finding. `customers` is identical on both sides, which is
+  what makes the "in sync" count meaningful.
+*/
+const SCHEMA_SOURCE = [
+  'CREATE TABLE customers (',
+  '  id           bigserial PRIMARY KEY,',
+  '  email        text NOT NULL UNIQUE,',
+  '  created_at   timestamptz NOT NULL DEFAULT now()',
+  ');',
+  'CREATE TABLE payments (',
+  '  id           bigserial PRIMARY KEY,',
+  '  customer_id  bigint NOT NULL REFERENCES customers(id),',
+  '  amount_cents bigint NOT NULL,',
+  '  currency     char(3) NOT NULL,',
+  '  settled_at   timestamptz',
+  ');',
+  'CREATE INDEX idx_payments_ref ON payments(customer_id, settled_at);',
+].join('\n');
+
+const SCHEMA_TARGET = [
+  'CREATE TABLE customers (',
+  '  id           bigserial PRIMARY KEY,',
+  '  email        text NOT NULL UNIQUE,',
+  '  created_at   timestamptz NOT NULL DEFAULT now()',
+  ');',
+  'CREATE TABLE payments (',
+  '  id           bigserial PRIMARY KEY,',
+  '  customer_id  bigint NOT NULL REFERENCES customers(id),',
+  '  amount_cents bigint NOT NULL,',
+  '  currency     char(3) NOT NULL',
+  ');',
+  'CREATE TABLE migration_audit (',
+  '  id       bigserial PRIMARY KEY,',
+  '  applied  text NOT NULL',
+  ');',
+].join('\n');
+
+/* Stands in for the model, which a capture run has no provider for. Written
+   as the real prompt asks for it: what breaks, and the one next action. */
+const SCHEMA_ANALYSIS = [
+  '`settled_at` is gone from `payments` on the target. Anything selecting it errors immediately, and the settlement report reads it on every run — this is the finding to act on first.',
+  '',
+  '`idx_payments_ref` is absent on the target. Nothing breaks, but the customer/settled_at lookup falls back to a sequential scan, which is the usual cause of a settlement job that got slower without a code change.',
+  '',
+  '`migration_audit` exists only on the target. That is the shape of a migration applied there and never committed back — worth confirming before anything else is deployed.',
+  '',
+  '**Overall** — the target is behind the source by one partly-applied migration. Restore `settled_at` before deploying; the index can follow.',
+].join('\n');
+
 const SETTINGS_SECTIONS: Array<{ sectionId: string; captureId: string; label: string }> = [
   { sectionId: 'general', captureId: 'settings-general', label: 'Settings — General' },
   { sectionId: 'theme', captureId: 'settings-theme', label: 'Settings — Theme' },
@@ -207,6 +291,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Sidebar — Collections (expanded)',
     explanation: 'The Collections panel, opened from the right-side icon rail — organizes saved requests into folders, each independently runnable.',
     directives: [
+      { action: 'closeAllTabs' },
       // Tabs opened by every capture suite that ran before this one in the
       // same long-lived webview session stay open otherwise — bleeding a
       // long, truncated tab-bar strip across the top of every platform
@@ -233,6 +318,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Sidebar — History (expanded)',
     explanation: 'Every request sent is logged here automatically, with method, status, and timing — click any entry to re-open it as a new tab.',
     directives: [
+      { action: 'closeAllTabs' },
       // Tabs opened by every capture suite that ran before this one in the
       // same long-lived webview session stay open otherwise — bleeding a
       // long, truncated tab-bar strip across the top of every platform
@@ -249,6 +335,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Sidebar — Environments (expanded)',
     explanation: 'Environments hold {{variable}} sets (base URLs, API keys) swappable per request — secret variables are masked in the UI.',
     directives: [
+      { action: 'closeAllTabs' },
       // Tabs opened by every capture suite that ran before this one in the
       // same long-lived webview session stay open otherwise — bleeding a
       // long, truncated tab-bar strip across the top of every platform
@@ -262,10 +349,94 @@ const SCREENS: ScreenSpec[] = [
     ],
   },
   {
+    id: 'platform-workspace-overview',
+    label: 'Workspace — Overview',
+    explanation: 'A workspace is the box above collections: one project\u2019s collections, environments and history, switched as a set. The Overview says how much is in this one and gives it a place to keep its own documentation.',
+    directives: [
+      { action: 'closeAllTabs' },
+      { action: 'closeAllTabs' },
+      // The Collections/History/Environments panel is left open by the three
+      // sidebar screens above, and it would take a third of a screen whose
+      // whole subject is the page behind it.
+      ...closeSidebarPanel(),
+      // The sub-tab is a pref rather than a click: WorkspacePage remembers
+      // which one you were on, so a capture that clicked would depend on
+      // whatever the previous screen left behind.
+      { action: 'setPref', prefKey: 'workspace.subtab', prefValue: 'overview' },
+      { action: 'openWorkspaceTab' },
+      // Seeded AFTER the tab is up, unlike the sidebar screens. Those panels
+      // gate their fetch on a cache flag, so seeding first stops the request
+      // ever going out; the workspace store has no such gate — it asks the
+      // host on every mount. Seeding first means the reply lands second and
+      // overwrites the fixture with an empty database, which is exactly what
+      // the first run of this screen captured.
+      { action: 'wait', ms: 700 },
+      { action: 'seedWorkspaces', workspaces: EXAMPLE_WORKSPACES as any,
+        activeWorkspaceId: 'ws-default', workspaceStats: EXAMPLE_WORKSPACE_STATS },
+      { action: 'wait', ms: 400 },
+    ],
+  },
+  {
+    id: 'platform-workspace-collections',
+    label: 'Workspace — Collections (all protocols)',
+    explanation: 'Every collection in the workspace, grouped by protocol. Each row holds the real Collections panel for that protocol \u2014 same tree, same right-click menu, same drag-and-drop as the sidebar.',
+    directives: [
+      { action: 'closeAllTabs' },
+      { action: 'closeAllTabs' },
+      ...closeSidebarPanel(),
+      { action: 'setPref', prefKey: 'workspace.subtab', prefValue: 'collections' },
+      { action: 'setPref', prefKey: 'workspace.collections.open', prefValue: 'rest' },
+      { action: 'openWorkspaceTab' },
+      // After the tab, not before — see the note on the Overview screen. This
+      // page asks the host for all seven protocols' trees on mount, so a seed
+      // that goes in first is overwritten by seven empty replies.
+      { action: 'wait', ms: 800 },
+      { action: 'seedWorkspaces', workspaces: EXAMPLE_WORKSPACES as any,
+        activeWorkspaceId: 'ws-default', workspaceStats: EXAMPLE_WORKSPACE_STATS },
+      { action: 'seedSidebarData', protocol: 'rest', collections: EXAMPLE_COLLECTIONS as any, history: EXAMPLE_HISTORY as any },
+      { action: 'seedSidebarData', protocol: 'graphql', collections: EXAMPLE_GQL_COLLECTIONS as any, history: [] },
+      { action: 'wait', ms: 600 },
+    ],
+  },
+  {
+    id: 'ai-schema-diff-report',
+    label: 'Schema Diff — anomaly report',
+    explanation: 'Two database schemas compared object by object. Severity is derived from the diff, not asked of the model: an object the target lacks is critical, a dropped column is critical, an added one is a warning. Each card opens the source and target definitions side by side.',
+    directives: [
+      { action: 'closeAllTabs' },
+      { action: 'closeAllTabs' },
+      ...closeSidebarPanel(),
+      /* Settings → Power Features → AI tools. The modal used to open from a
+         chip on the Daakia Assistant strip; the platform tools moved to the
+         Power Features grid, which is where anyone looking for a standalone
+         tool goes. */
+      { action: 'openSettingsTab' },
+      { action: 'wait', ms: 700 },
+      { action: 'click', selector: '[data-nav-id="power-features"]' },
+      { action: 'wait', ms: 600 },
+      { action: 'clickText', text: 'Schema Diff' },
+      { action: 'wait', ms: 700 },
+      { action: 'seedSchemaDiff', schemaDiffSource: SCHEMA_SOURCE, schemaDiffTarget: SCHEMA_TARGET,
+        schemaDiffView: 'report', schemaDiffOpen: ['table:payments'], schemaDiffAnalysis: SCHEMA_ANALYSIS },
+      { action: 'wait', ms: 700 },
+    ],
+  },
+  {
+    id: 'ai-schema-diff-graph',
+    label: 'Schema Diff — object graph',
+    explanation: 'The same comparison as a graph: one node per object, clustered by type, coloured by status — green in sync, amber drift, red missing from the target, grey target-only. Clicking a node opens that object’s side-by-side definitions.',
+    directives: [
+      { action: 'seedSchemaDiff', schemaDiffSource: SCHEMA_SOURCE, schemaDiffTarget: SCHEMA_TARGET,
+        schemaDiffView: 'graph' },
+      { action: 'wait', ms: 700 },
+    ],
+  },
+  {
     id: 'platform-devtools-console',
     label: 'DevTools — Console',
     explanation: 'The DevTools bottom panel’s Console tab — pre/post-request script logs and test assertion results, tagged by which request produced them.',
     directives: [
+      { action: 'closeAllTabs' },
       // Tabs opened by every capture suite that ran before this one in the
       // same long-lived webview session stay open otherwise — bleeding a
       // long, truncated tab-bar strip across the top of every platform
@@ -283,6 +454,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'DevTools — Network',
     explanation: 'The DevTools Network tab — every request/response Daakia has made, with headers, bodies, timing, and size, independent of the main Response panel.',
     directives: [
+      { action: 'closeAllTabs' },
       // Tabs opened by every capture suite that ran before this one in the
       // same long-lived webview session stay open otherwise — bleeding a
       // long, truncated tab-bar strip across the top of every platform
@@ -300,6 +472,7 @@ const SCREENS: ScreenSpec[] = [
     label: s.label,
     explanation: `The ${s.label.replace('Settings — ', '')} section of Settings.`,
     directives: [
+      { action: 'closeAllTabs' },
       // The DevTools panel (opened + seeded by the two devtools-* screens
       // just before this in SCREENS order) stays open across the whole
       // session otherwise — bleeding a stray Network/Console strip into
@@ -332,10 +505,11 @@ const SCREENS: ScreenSpec[] = [
     // (children ids prefixed `wiki:`) instead of DaakiaViewPage rendering a
     // second, independent SideNavView — this screen captures landing on the
     // wiki's default "Quick Start" tab via that merged nav.
-    id: 'settings-wiki',
+    id: 'wiki-quick-start',
     label: 'Settings — Wiki',
     explanation: 'The Wiki, reached via the "Wiki" group in Settings\' own left nav — lands on Quick Start.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'closeDevTools' },
       // The 5 REST tabs opened by the sidebar/devtools screens just before
       // this in SCREENS order stay open across the whole session otherwise —
@@ -343,9 +517,9 @@ const SCREENS: ScreenSpec[] = [
       // Settings captures (openSettingsTab only ADDS a Settings tab, it
       // doesn't replace whatever's already open).
       { action: 'closeAllTabs' },
-      { action: 'openSettingsTab' },
+      { action: 'openWikiTab' },
       { action: 'wait', ms: 600 },
-      { action: 'click', selector: '[data-nav-id="wiki:quick-start"]' },
+      { action: 'click', selector: '[data-nav-id="quick-start"]' },
       { action: 'wait', ms: 400 },
     ],
   },
@@ -355,10 +529,11 @@ const SCREENS: ScreenSpec[] = [
     // Env" nav item — the page with the most SectionTitle usages, so this is
     // the most sensitive screen for catching regressions in the gradient
     // section-card CSS (see WikiShared.css's `:has(> .dw-section-title)`).
-    id: 'settings-wiki-collections-env',
-    label: 'Settings — Wiki — Collections & Env (nested)',
-    explanation: 'The wiki\'s own Collections & Env page, reached via Settings\' own "Wiki" nav group.',
+    id: 'wiki-collections-env',
+    label: 'Wiki — Collections & Env',
+    explanation: 'The wiki\'s Collections & Env page — the most SectionTitle-dense screen, so the most sensitive to a regression in the gradient section-card CSS.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'closeDevTools' },
       // The 5 REST tabs opened by the sidebar/devtools screens just before
       // this in SCREENS order stay open across the whole session otherwise —
@@ -366,9 +541,9 @@ const SCREENS: ScreenSpec[] = [
       // Settings captures (openSettingsTab only ADDS a Settings tab, it
       // doesn't replace whatever's already open).
       { action: 'closeAllTabs' },
-      { action: 'openSettingsTab' },
+      { action: 'openWikiTab' },
       { action: 'wait', ms: 600 },
-      { action: 'click', selector: '[data-nav-id="wiki:collections-env"]' },
+      { action: 'click', selector: '[data-nav-id="collections-env"]' },
       { action: 'wait', ms: 400 },
     ],
   },

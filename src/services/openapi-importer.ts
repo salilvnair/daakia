@@ -6,7 +6,7 @@
  */
 import { randomUUID } from 'crypto';
 import * as yaml from 'js-yaml';
-import { upsertCollection, upsertCollectionRequest, type CollectionRequestRow } from '../storage/db';
+import { upsertCollection, upsertCollectionRequest, getCollectionData, updateCollectionData, type CollectionRequestRow } from '../storage/db';
 import type { ImportResult } from './import-types';
 
 // ─── OpenAPI Types (subset) ──────────────────────────────────────────────────
@@ -56,6 +56,8 @@ interface OpenAPIPathItem {
 }
 
 interface OpenAPISpec {
+  /** Kept at import so `toMatchSchema('#/components/schemas/X')` can resolve. */
+  definitions?: Record<string, unknown>;
   openapi?: string; // "3.x.x"
   swagger?: string; // "2.0"
   info?: { title?: string; version?: string; description?: string };
@@ -65,7 +67,7 @@ interface OpenAPISpec {
   servers?: { url?: string; description?: string }[];
   paths?: Record<string, OpenAPIPathItem>;
   tags?: { name: string; description?: string }[];
-  components?: { securitySchemes?: Record<string, OpenAPISecurityScheme> };
+  components?: { securitySchemes?: Record<string, OpenAPISecurityScheme>; schemas?: Record<string, unknown> };
   securityDefinitions?: Record<string, OpenAPISecurityScheme>; // Swagger 2.x
 }
 
@@ -313,6 +315,26 @@ export function importOpenAPISpec(content: string): ImportResult {
 
     // Create root collection — OpenAPI/Swagger specs are always REST-shaped.
     upsertCollection(collectionId, collectionName, null, 'rest');
+
+    /*
+      The spec is kept, not just converted.
+
+      Every schema in the document was thrown away the moment its operations
+      became requests — so `toMatchSchema` could only be given an object
+      pasted into a script by hand, and contract testing was possible only for
+      someone who already knew the matcher existed. Storing
+      `components.schemas` beside the collection turns
+      `toMatchSchema('#/components/schemas/User')` into a one-line test.
+
+      Only the schemas: the rest of the document is the collection, and
+      keeping two copies of the same paths invites them to disagree.
+    */
+    const schemas = spec.components?.schemas ?? (spec as { definitions?: Record<string, unknown> }).definitions;
+    if (schemas && Object.keys(schemas).length > 0) {
+      let data: Record<string, unknown> = {};
+      try { data = JSON.parse(getCollectionData(collectionId) || '{}'); } catch { /* fresh */ }
+      updateCollectionData(collectionId, JSON.stringify({ ...data, schemas }));
+    }
 
     // Import all operations
     const requestCount = importOperations(spec, collectionId);

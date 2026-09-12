@@ -57,6 +57,12 @@ export interface NetworkEntry {
   contentType: string;
   /** Protocol identifier for proper status interpretation */
   protocol?: 'http' | 'grpc' | 'graphql' | 'websocket' | 'soap';
+  /**
+   * How the request was routed. Shown per entry because a proxy that is
+   * configured but not actually applied is otherwise invisible — which is
+   * precisely how the proxy setting stayed broken.
+   */
+  proxy?: { used: boolean; description: string; warning?: string };
   /** True when the response body is binary/blob content (base64 encoded in responseBody) */
   isBlob?: boolean;
   /** Original MIME type for blob responses */

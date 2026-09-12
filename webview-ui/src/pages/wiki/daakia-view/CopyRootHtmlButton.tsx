@@ -103,7 +103,7 @@ export function CopyRootHtmlButton() {
         if (!copied) (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
       }}
     >
-      {copied ? '✅' : '🧢'}
+      {copied ? '✅' : ''}
     </button>
   );
 }

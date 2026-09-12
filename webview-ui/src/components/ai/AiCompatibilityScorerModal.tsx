@@ -22,9 +22,9 @@ const ACCENT = 'var(--color-info)';
 const SYSTEM_PROMPT = `You are an API compatibility expert. Given descriptions of two API versions, analyze breaking changes and generate a migration guide.
 
 Score each endpoint change with severity:
-- 🔴 **BREAKING** — existing clients will fail (removed fields, type changes, renamed endpoints)
-- 🟡 **WARNING** — may break some clients (optional field made required, changed defaults)
-- 🟢 **INFO** — non-breaking additions (new optional fields, new endpoints)
+-  **BREAKING** — existing clients will fail (removed fields, type changes, renamed endpoints)
+-  **WARNING** — may break some clients (optional field made required, changed defaults)
+-  **INFO** — non-breaking additions (new optional fields, new endpoints)
 
 Output format:
 ## Compatibility Score: X% (Y breaking, Z warning, W info)

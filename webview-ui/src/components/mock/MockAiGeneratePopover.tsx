@@ -23,6 +23,7 @@ import type { MockRoute, HttpMethod } from './mock-types';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 import { AIButtonView, EditorView, MultilineInputView, TextInputView, ButtonView, IconButtonView, ModalView, TabView, type EditorLanguage } from '@salilvnair/dui';
 import { logUiEvent } from '../../store/ui-audit-store';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 const ACCENT = 'var(--color-mock-server)';
 
@@ -289,7 +290,7 @@ const PROTOCOL_IDLE: Record<string, IdleFormConfig> = {
       urlPlaceholder: 'https://petstore.swagger.io/v2/swagger.json',
       urlError: 'Enter an OpenAPI spec URL.',
       contextPrefixUrl: 'OpenAPI/Swagger spec fetched from',
-      pasteLabel: '📋 Paste Spec',
+ pasteLabel: 'Paste Spec',
       pastePlaceholder: `Paste OpenAPI JSON/YAML or a sample JSON response:\n{\n  "openapi": "3.0.0",\n  "info": {...},\n  "paths": {...}\n}`,
       contextPrefixPaste: 'User-pasted spec / JSON sample',
       pasteLanguage: 'yaml',
@@ -300,7 +301,7 @@ const PROTOCOL_IDLE: Record<string, IdleFormConfig> = {
     chips: ['Social Platform', 'E-commerce Schema', 'Blog CMS', 'Auth + Roles', 'Real-time Subscriptions'],
     spec: {
       tabLabel: 'SDL', hasUrl: false,
-      pasteLabel: '📋 Paste SDL',
+ pasteLabel: 'Paste SDL',
       pastePlaceholder: `type Query {\n  user(id: ID!): User\n  users: [User!]!\n}\ntype Mutation {\n  createUser(name: String!, email: String!): User!\n}\ntype User { id: ID!, name: String!, email: String! }`,
       contextPrefixPaste: 'GraphQL SDL definition',
       pasteLanguage: 'graphql',
@@ -311,7 +312,7 @@ const PROTOCOL_IDLE: Record<string, IdleFormConfig> = {
     chips: ['User Service', 'Payment Service', 'Notification Service', 'Auth Service', 'File Transfer'],
     spec: {
       tabLabel: 'Proto File', hasUrl: false,
-      pasteLabel: '📋 Paste .proto',
+ pasteLabel: 'Paste .proto',
       pastePlaceholder: `syntax = "proto3";\n\npackage users;\n\nservice UserService {\n  rpc GetUser (GetUserRequest) returns (User);\n  rpc ListUsers (ListUsersRequest) returns (ListUsersResponse);\n}\n\nmessage User { string id = 1; string name = 2; string email = 3; }`,
       contextPrefixPaste: 'Protocol Buffer definition',
       pasteLanguage: 'proto',
@@ -325,7 +326,7 @@ const PROTOCOL_IDLE: Record<string, IdleFormConfig> = {
       urlPlaceholder: 'http://www.dneonline.com/calculator.asmx?WSDL',
       urlError: 'Enter a WSDL URL.',
       contextPrefixUrl: 'WSDL fetched from',
-      pasteLabel: '📋 Paste WSDL',
+ pasteLabel: 'Paste WSDL',
       pastePlaceholder: `<?xml version="1.0" encoding="UTF-8"?>\n<definitions name="MyService"\n  xmlns="http://schemas.xmlsoap.org/wsdl/"\n  xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/">\n  <!-- paste your WSDL here -->\n</definitions>`,
       contextPrefixPaste: 'WSDL definition',
       pasteLanguage: 'xml',
@@ -556,30 +557,16 @@ export function MockAiGeneratePopover({
 
     window.addEventListener('message', handler);
 
-    postMsg({
-      type: 'ai:send',
+    sendAiRequest({
       tabId: popoverId,
       stage: templateKey,
+      screen: 'Mock Server',
       provider,
       model,
-      baseUrl: '',
       systemPrompts: [systemPrompt],
       userPrompt: prompt,
-      conversation: [],
-      tools: [],
-      settings: {
-        temperature: 0.6,
-        maxTokens: 4096,
-        stream: true,
-        topP: 1,
-        stopSequences: [],
-        responseFormat: 'text',
-        frequencyPenalty: 0,
-        presencePenalty: 0,
-        seed: null,
-      },
-      mcpServerConfigs: [],
-      envId: activeTab?.envId,
+      settings: { temperature: 0.6, maxTokens: 4096 },
+      context: { envId: activeTab?.envId },
     });
 
     return () => window.removeEventListener('message', handler);
@@ -793,7 +780,7 @@ export function MockAiGeneratePopover({
   // ── Footer right: generate (idle) | add-all + copy-sdl (done) ───────────────
   const footerRight = isIdle ? (
     <ButtonView size="md" accentColor={ACCENT} disabled={specFetching} onClick={idleMode === 'describe' ? handleGenerate : handleFetchAndGenerate}>
-      {specFetching ? 'Fetching…' : '✨ Generate'}
+      {specFetching ? 'Fetching…': 'Generate'}
     </ButtonView>
   ) : (!streaming && !error && text) ? (
     <div className="flex items-center gap-2">
@@ -847,7 +834,7 @@ export function MockAiGeneratePopover({
       headerColor={ACCENT}
       headerGradient
       headerIcon={<SparkleIcon size={14} style={{ color: ACCENT }} />}
-      title={`✨ Generate ${title}`}
+ title={`Generate ${title}`}
       headerRight={headerRight}
       footerLeft={footerLeft}
       footerRight={footerRight}
@@ -863,8 +850,8 @@ export function MockAiGeneratePopover({
             {idleCfg.spec && (
               <TabView
                 tabs={[
-                  { id: 'describe', label: '✏️ Describe' },
-                  { id: 'url-spec', label: `📄 ${idleCfg.spec.tabLabel}` },
+                  { id: 'describe', label: ' Describe' },
+                  { id: 'url-spec', label: `${idleCfg.spec.tabLabel}`},
                 ]}
                 activeTab={idleMode}
                 onChange={(id) => setIdleMode(id as 'describe' | 'url-spec')}
@@ -878,7 +865,7 @@ export function MockAiGeneratePopover({
             {idleMode === 'describe' && (
               <div className="flex flex-col gap-2.5">
                 <label className="text-[11px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-                  Describe what you want to generate{' '}
+                  Describe what you want to generate
                   <span className="text-[10px] font-normal italic" style={{ color: 'var(--color-text-muted)' }}>
                     (uses server name "{serverName}" if empty)
                   </span>
@@ -923,7 +910,7 @@ export function MockAiGeneratePopover({
                 {idleCfg.spec.hasUrl && (
                   <TabView
                     tabs={[
-                      { id: 'url', label: '🔗 URL' },
+                      { id: 'url', label: 'URL'},
                       { id: 'paste', label: idleCfg.spec.pasteLabel },
                     ]}
                     activeTab={urlInputMode}
@@ -968,7 +955,7 @@ export function MockAiGeneratePopover({
         {/* Thinking placeholder */}
         {streaming && !text && !error && (
           <div className="px-5 py-4 flex-shrink-0 text-[11px] italic" style={{ color: 'var(--color-text-muted)' }}>
-            Generating {title.toLowerCase()} for{' '}
+            Generating {title.toLowerCase()} for
             <span className="font-medium not-italic" style={{ color: ACCENT }}>{serverName}</span>…
           </div>
         )}
@@ -976,7 +963,7 @@ export function MockAiGeneratePopover({
         {/* Error */}
         {error && (
           <div className="px-5 py-4 flex-shrink-0">
-            <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>⚠️ {error}</p>
+            <p className="text-[11px]"style={{ color: 'var(--color-error)'}}> {error}</p>
           </div>
         )}
 

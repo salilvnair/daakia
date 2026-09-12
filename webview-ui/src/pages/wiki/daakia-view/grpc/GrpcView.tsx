@@ -4,14 +4,14 @@ import { ProtocolGrpcBadge } from '../../../../icons';
 import { GRPC_CAPTURES } from './captures';
 
 const TOC_ITEMS: TocItem[] = [
-  { id: 'grpc-protocol', emoji: '📖', label: 'What is gRPC?' },
-  { id: 'grpc-overview', emoji: '🟣', label: 'Overview' },
-  { id: 'grpc-proto', emoji: '📜', label: 'Proto Import' },
-  { id: 'grpc-calltypes', emoji: '🔄', label: 'Call Types' },
-  { id: 'grpc-metadata', emoji: '🔑', label: 'Metadata & TLS' },
-  { id: 'grpc-scripts', emoji: '📜', label: 'Scripts' },
-  { id: 'grpc-response', emoji: '📥', label: 'Response' },
-  { id: 'grpc-tips', emoji: '💡', label: 'Tips' },
+  { id: 'grpc-protocol', icon: 'book', label: 'What is gRPC?' },
+  { id: 'grpc-overview', icon: 'dot', label: 'Overview' },
+  { id: 'grpc-proto', icon: 'script', label: 'Proto Import' },
+  { id: 'grpc-calltypes', icon: 'refresh', label: 'Call Types' },
+  { id: 'grpc-metadata', icon: 'key', label: 'Metadata & TLS' },
+  { id: 'grpc-scripts', icon: 'script', label: 'Scripts' },
+  { id: 'grpc-response', icon: 'download', label: 'Response' },
+  { id: 'grpc-tips', icon: 'ai', label: 'Tips' },
 ];
 
 export function GrpcView() {
@@ -21,7 +21,7 @@ export function GrpcView() {
     <WikiScrollPage
       hero={
         <WikiHero
-          emoji="🟣"
+          icon="dot"
           title="gRPC Client"
           subtitle="Call unary and streaming RPCs — import a .proto file for auto-discovery, or use server reflection."
           chips={chips(['Unary', 'Streaming', 'Proto Import', 'Reflection'])}
@@ -36,14 +36,14 @@ export function GrpcView() {
       <Divider />
 
       <div>
-        <SectionTitle id="grpc-protocol" emoji="📖">What is gRPC?</SectionTitle>
+        <SectionTitle id="grpc-protocol" icon="book">What is gRPC?</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           <strong>gRPC</strong> ("gRPC Remote Procedure Calls") is an open-source RPC framework originally built by
           Google, built on top of <strong>HTTP/2</strong> and <strong>Protocol Buffers</strong> (protobuf). Instead
           of a client constructing an HTTP request against a resource URL the way REST does, gRPC lets you call a
           method on a remote service as if it were a local function — <Code>UserService.GetUser(request)</Code> —
           and the framework handles serializing the call, sending it over the network, and deserializing the reply.
-          Both the service's methods and the shape of every message are defined up front in a{' '}
+          Both the service's methods and the shape of every message are defined up front in a
           <Code>.proto</Code> file, which is why gRPC needs a schema (imported or reflected) before you can even
           build a call — there's no equivalent of REST's "just type a URL and go".
         </p>
@@ -63,7 +63,7 @@ export function GrpcView() {
         <SubTitle>Protocol Buffers — the wire format</SubTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           A <Code>.proto</Code> file defines messages and services in a compact IDL (interface definition language).
-          The protobuf compiler turns that into real client/server code for whatever language you're using — the{' '}
+          The protobuf compiler turns that into real client/server code for whatever language you're using — the
           <strong>Proto Import</strong> section below is Daakia's version of that step, done for you automatically:
         </p>
         <CodeBlock label="user_service.proto — the service contract" lang="protobuf">
@@ -91,12 +91,12 @@ message User {
           protobuf payloads are smaller and faster to parse than the equivalent JSON, but also why they're
           unreadable without the schema. That's the tradeoff gRPC makes versus REST/GraphQL's human-readable JSON:
           more efficient over the wire, but you can't just "read" a raw gRPC payload the way you can inspect REST's
-          Raw response tab — Daakia decodes it back into JSON for you using the imported <Code>.proto</Code>{' '}
+          Raw response tab — Daakia decodes it back into JSON for you using the imported <Code>.proto</Code>
           definitions before showing it in the Body tab.
         </p>
         <Callout type="tip">
           gRPC also defines its own status model — <Code>grpc-status</Code> and <Code>grpc-message</Code> trailers
-          sent <em>after</em> the message body, not an HTTP status code — which is exactly what the Response panel's{' '}
+          sent <em>after</em> the message body, not an HTTP status code — which is exactly what the Response panel's
           <strong>Metadata</strong> tab surfaces.
         </Callout>
       </div>
@@ -104,13 +104,13 @@ message User {
       <Divider />
 
       <div>
-        <SectionTitle id="grpc-overview" emoji="🟣">Overview</SectionTitle>
+        <SectionTitle id="grpc-overview" icon="dot">Overview</SectionTitle>
         <FeatureGrid items={[
-          { emoji: '📜', title: 'Proto Import', desc: 'Load .proto files to discover services and methods automatically.' },
-          { emoji: '🔄', title: 'Streaming', desc: 'Unary, server streaming, client streaming, and bidirectional streaming.' },
-          { emoji: '🔑', title: 'TLS + Metadata', desc: 'One-toggle TLS (no cert fields) plus a key/value metadata editor for auth.' },
-          { emoji: '📁', title: 'Collections', desc: 'Save gRPC calls to collections, inherit auth.' },
-          { emoji: '🎭', title: 'Mock Server', desc: 'gRPC mock server with configurable method responses and delays.' },
+          { icon: 'script', title: 'Proto Import', desc: 'Load .proto files to discover services and methods automatically.' },
+          { icon: 'refresh', title: 'Streaming', desc: 'Unary, server streaming, client streaming, and bidirectional streaming.' },
+          { icon: 'key', title: 'TLS + Metadata', desc: 'One-toggle TLS (no cert fields) plus a key/value metadata editor for auth.' },
+          { icon: 'folder', title: 'Collections', desc: 'Save gRPC calls to collections, inherit auth.' },
+          { icon: 'mock', title: 'Mock Server', desc: 'gRPC mock server with configurable method responses and delays.' },
         ]} />
         <SubTitle>Request Config Tabs</SubTitle>
         <WikiTable
@@ -140,7 +140,7 @@ message User {
       {byId['grpc-message'] && <CaptureCard entry={byId['grpc-message']} />}
 
       <div>
-        <SectionTitle id="grpc-proto" emoji="📜">Proto Import — Exactly Two Ways</SectionTitle>
+        <SectionTitle id="grpc-proto" icon="script">Proto Import — Exactly Two Ways</SectionTitle>
         <WikiTable
           headers={['Method', 'How']}
           rows={[
@@ -157,9 +157,9 @@ message User {
       {byId['grpc-proto'] && <CaptureCard entry={byId['grpc-proto']} />}
 
       <div>
-        <SectionTitle id="grpc-calltypes" emoji="🔄">The 4 Call Types</SectionTitle>
+        <SectionTitle id="grpc-calltypes" icon="refresh">The 4 Call Types</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
-          Not a dropdown you pick — Daakia reads the proto's <Code>requestStream</Code>/<Code>responseStream</Code>{' '}
+          Not a dropdown you pick — Daakia reads the proto's <Code>requestStream</Code>/<Code>responseStream</Code>
           flags for the selected method and shows a colored badge automatically:
         </p>
         <WikiTable
@@ -174,14 +174,14 @@ message User {
       </div>
 
       <div>
-        <SectionTitle id="grpc-metadata" emoji="🔑">Metadata & TLS</SectionTitle>
+        <SectionTitle id="grpc-metadata" icon="key">Metadata & TLS</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           Metadata is gRPC's header equivalent — same key/value table component as REST Headers, just bound to a
           separate field. Nothing is auto-added to it; every row is exactly what you typed. AI header suggestions
           (✨) are available here too, same opt-in feature as REST.
         </p>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
-          TLS is a single lock-icon toggle in the URL bar — <strong>on</strong> uses a standard SSL credential, <strong>off</strong>{' '}
+          TLS is a single lock-icon toggle in the URL bar — <strong>on</strong> uses a standard SSL credential, <strong>off</strong>
           uses an insecure channel. There are no client certificate, private key, or CA bundle fields to configure.
         </p>
       </div>
@@ -192,7 +192,7 @@ message User {
 
       {/* ── Scripts ───────────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="grpc-scripts" emoji="📜">Scripts</SectionTitle>
+        <SectionTitle id="grpc-scripts" icon="script">Scripts</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           Same <Code>dk.*</Code> runtime and Pre-request/Post-response split as every other protocol:
         </p>
@@ -208,7 +208,7 @@ message User {
 
       {/* ── Response ──────────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="grpc-response" emoji="📥">Response Panel</SectionTitle>
+        <SectionTitle id="grpc-response" icon="download">Response Panel</SectionTitle>
         <WikiTable
           headers={['Tab', 'Answers']}
           rows={[
@@ -233,20 +233,20 @@ message User {
 
       {/* ── Tips ──────────────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="grpc-tips" emoji="💡">Tips & Troubleshooting</SectionTitle>
-        <Collapsible title="🔌 Server Reflection returns no services">
+        <SectionTitle id="grpc-tips" icon="ai">Tips & Troubleshooting</SectionTitle>
+        <Collapsible title=" Server Reflection returns no services">
           <p className="text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
             The target server needs the reflection service registered — many production gRPC servers disable it
             deliberately. Upload the .proto file instead if reflection comes back empty.
           </p>
         </Collapsible>
-        <Collapsible title="🔑 Call fails with an auth/permission error">
+        <Collapsible title=" Call fails with an auth/permission error">
           <p className="text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
-            Check the Metadata tab, not Auth — some servers expect the token as a plain metadata row (e.g.{' '}
+            Check the Metadata tab, not Auth — some servers expect the token as a plain metadata row (e.g.
             <Code>authorization: Bearer …</Code>) rather than through the Auth tab's Bearer Token type.
           </p>
         </Collapsible>
-        <WikiCard title="dk.* quick reference" icon="🧰">
+        <WikiCard title="dk.* quick reference" icon="settings">
           <WikiTable
             headers={['API', 'Scope', 'What it does']}
             rows={[

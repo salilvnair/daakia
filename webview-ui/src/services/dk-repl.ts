@@ -3,7 +3,7 @@
  * Single source of truth for the dk API shape used in both the REPL sandbox
  * and Monaco intellisense completions.
  *
- * ⚠️ KEEP IN SYNC WITH: src/services/script-runtime/core/ (backend providers)
+ * KEEP IN SYNC WITH: src/services/script-runtime/core/ (backend providers)
  * The real dk runtime lives there. When you add/remove dk.* methods in providers,
  * update this file's createDkStub() and getDkCompletions() to match.
  *

@@ -86,9 +86,13 @@ export function handleWsConnect(
       postMessage({ type: 'ws:message', tabId, data: str });
     });
 
-    ws.on('close', () => {
+    // The close code is the single most diagnostic fact about a WebSocket
+    // ending — 1000 and 1006 mean very different things — so it is reported
+    // rather than dropped.
+    ws.on('close', (code: number, reasonBuf: Buffer) => {
       connections.delete(tabId);
-      postMessage({ type: 'ws:disconnected', tabId });
+      const reason = reasonBuf?.toString() || undefined;
+      postMessage({ type: 'ws:disconnected', tabId, code, reason });
     });
 
     ws.on('error', (err: Error) => {
@@ -133,7 +137,12 @@ export function handleWsSend(
   ws.send(data, (err) => {
     if (err) {
       postMessage({ type: 'ws:error', tabId, error: err.message });
+      return;
     }
+    // Confirms the frame was actually accepted by the socket, which is what the
+    // session audit counts. The panel renders outgoing frames optimistically
+    // and ignores this type, so it changes nothing on screen.
+    postMessage({ type: 'ws:sent', tabId, data });
   });
 }
 

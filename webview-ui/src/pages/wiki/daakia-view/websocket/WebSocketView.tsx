@@ -4,11 +4,11 @@ import { ProtocolRealtimeBadge } from '../../../../icons';
 import { WEBSOCKET_CAPTURES } from './captures';
 
 const TOC_ITEMS: TocItem[] = [
-  { id: 'rt-protocol', emoji: '📖', label: 'What is Realtime?' },
-  { id: 'rt-websocket', emoji: '🔌', label: 'WebSocket' },
-  { id: 'rt-sse', emoji: '📡', label: 'SSE' },
-  { id: 'rt-socketio', emoji: '🔷', label: 'Socket.IO' },
-  { id: 'rt-mqtt', emoji: '📶', label: 'MQTT' },
+  { id: 'rt-protocol', icon: 'book', label: 'What is Realtime?' },
+  { id: 'rt-websocket', icon: 'connect', label: 'WebSocket' },
+  { id: 'rt-sse', icon: 'radio', label: 'SSE' },
+  { id: 'rt-socketio', icon: 'dot', label: 'Socket.IO' },
+  { id: 'rt-mqtt', icon: 'wifi', label: 'MQTT' },
 ];
 
 export function WebSocketView() {
@@ -18,7 +18,7 @@ export function WebSocketView() {
     <WikiScrollPage
       hero={
         <WikiHero
-          emoji="🟢"
+          icon="dot"
           title="Realtime — WebSocket, SSE, Socket.IO, MQTT"
           subtitle="One tab, four realtime protocols — switch sub-protocol from the pills at the top of the panel."
           chips={chips(['WebSocket', 'SSE', 'Socket.IO', 'MQTT'])}
@@ -45,7 +45,7 @@ export function WebSocketView() {
       <Divider />
 
       <div>
-        <SectionTitle id="rt-protocol" emoji="📖">What is Realtime Messaging?</SectionTitle>
+        <SectionTitle id="rt-protocol" icon="book">What is Realtime Messaging?</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           REST, GraphQL, gRPC unary calls, and SOAP all share the same shape: the client asks a question, the server
           answers, the connection (or at least the logical exchange) is over. That's fine for "give me the current
@@ -75,9 +75,9 @@ export function WebSocketView() {
       <Divider />
 
       <div>
-        <SectionTitle id="rt-websocket" emoji="🔌">WebSocket</SectionTitle>
+        <SectionTitle id="rt-websocket" icon="connect">WebSocket</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
-          Standardized as <strong>RFC 6455</strong>, WebSocket starts life as a normal HTTP request that asks to be{' '}
+          Standardized as <strong>RFC 6455</strong>, WebSocket starts life as a normal HTTP request that asks to be
           <em>upgraded</em> — the server swaps the connection from HTTP semantics to a lightweight framed protocol,
           on the exact same TCP connection, without a second handshake:
         </p>
@@ -103,10 +103,10 @@ Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=`}
           sends the payload; the framing itself is handled underneath, invisibly.
         </p>
         <FeatureGrid items={[
-          { emoji: '🔌', title: 'Connect/Disconnect', desc: 'URL bar connects/disconnects. Dot indicator: grey=off, green=on.' },
-          { emoji: '📨', title: 'Send Messages', desc: 'JSON or Raw mode — Monaco editor at bottom. Clear input toggle.' },
-          { emoji: '📜', title: 'Message Log', desc: 'Collapsible entries — green dot=sent, purple dot=received. Auto-scroll.' },
-          { emoji: '🔧', title: 'Protocols Tab', desc: 'Set WebSocket subprotocols (e.g. graphql-ws) — enable/disable each.' },
+          { icon: 'connect', title: 'Connect/Disconnect', desc: 'URL bar connects/disconnects. Dot indicator: grey=off, green=on.' },
+          { icon: 'mail', title: 'Send Messages', desc: 'JSON or Raw mode — Monaco editor at bottom. Clear input toggle.' },
+          { icon: 'script', title: 'Message Log', desc: 'Collapsible entries — green dot=sent, purple dot=received. Auto-scroll.' },
+          { icon: 'settings', title: 'Protocols Tab', desc: 'Set WebSocket subprotocols (e.g. graphql-ws) — enable/disable each.' },
         ]} />
       </div>
       {cap('ws-communication')}
@@ -114,7 +114,7 @@ Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=`}
       <div>
         <SubTitle>Log</SubTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
-          Every log toolbar button — Clear log, Scroll to top, Scroll to bottom, Autoscroll — is the same <Code>xs</Code>{' '}
+          Every log toolbar button — Clear log, Scroll to top, Scroll to bottom, Autoscroll — is the same <Code>xs</Code>
           icon-button size as REST's response toolbar, not a bigger custom size.
         </p>
       </div>
@@ -163,10 +163,10 @@ Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=`}
       {byId['realtime-sse'] && <CaptureCard entry={byId['realtime-sse']} />}
 
       <div>
-        <SectionTitle id="rt-sse" emoji="📡">Server-Sent Events (SSE)</SectionTitle>
+        <SectionTitle id="rt-sse" icon="radio">Server-Sent Events (SSE)</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           SSE is deliberately the simplest of the four — there's no upgrade handshake or binary framing at all. It's
-          a plain HTTP response the server just never finishes sending, with <Code>Content-Type: text/event-stream</Code>{' '}
+          a plain HTTP response the server just never finishes sending, with <Code>Content-Type: text/event-stream</Code>
           and a specific line-based text format the browser's native <Code>EventSource</Code> API (and Daakia's own
           SSE panel) knows how to parse incrementally as bytes arrive:
         </p>
@@ -203,13 +203,13 @@ id: 1002
       </div>
 
       <div>
-        <SectionTitle id="rt-socketio" emoji="🔷">Socket.IO</SectionTitle>
+        <SectionTitle id="rt-socketio" icon="dot">Socket.IO</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           Socket.IO is <strong>not</strong> the WebSocket protocol — it's a separate library and wire protocol built
           on top of its own transport layer, <strong>Engine.IO</strong>, which starts every connection as HTTP
           long-polling and then transparently upgrades to a real WebSocket if the network allows it, falling back
           gracefully if it doesn't. On top of that, Socket.IO adds its own packet format (connect/disconnect/event/
-          ack packet types), <strong>namespaces</strong> (logically separate channels sharing one connection, default{' '}
+          ack packet types), <strong>namespaces</strong> (logically separate channels sharing one connection, default
           <Code>/</Code>), and <strong>rooms</strong> (server-side groupings within a namespace for targeted
           broadcasts) — none of which exist in plain WebSocket.
         </p>
@@ -247,12 +247,12 @@ socket.on('order.updated', (payload) => {
       {byId['realtime-mqtt'] && <CaptureCard entry={byId['realtime-mqtt']} />}
 
       <div>
-        <SectionTitle id="rt-mqtt" emoji="📶">MQTT</SectionTitle>
+        <SectionTitle id="rt-mqtt" icon="wifi">MQTT</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           MQTT (Message Queuing Telemetry Transport) is a lightweight <strong>publish/subscribe</strong> protocol
           designed for constrained devices and unreliable networks — originally built for oil-pipeline telemetry,
           now the de-facto standard for IoT. The defining difference from WebSocket/Socket.IO: publishers and
-          subscribers <strong>never talk to each other directly</strong>. Every client connects to a{' '}
+          subscribers <strong>never talk to each other directly</strong>. Every client connects to a
           <strong>broker</strong>; publishers send messages to a named <strong>topic</strong>, and the broker fans
           each message out to every client currently subscribed to that topic (or a matching wildcard) — the
           publisher has no idea who, or how many clients, are listening.

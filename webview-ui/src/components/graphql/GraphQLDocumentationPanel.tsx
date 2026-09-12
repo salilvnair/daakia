@@ -89,7 +89,7 @@ export function GraphQLDocumentationPanel() {
   if (!activeTab?.authData?.['gql_connected']) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-[var(--color-text-muted)] gap-2 px-4">
-        <span className="text-[24px] opacity-20">📖</span>
+        <span className="text-[24px] opacity-20"></span>
         <p className="text-[12px] text-center">Connect to a GraphQL endpoint to view documentation</p>
       </div>
     );

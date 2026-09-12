@@ -13,8 +13,12 @@ import {
   getAllEnvironments, upsertEnvironment,
   getCollectionData, updateCollectionData,
   getSetting, setSetting, getCookies, upsertCookie,
+  insertUiAudit,
 } from '../../../storage/db';
 import { decryptIfNeeded, encryptEnvVariables } from '../../../services/vault';
+import { resolveExecutionSettings, type ExecutionSettings } from '../../../services/execution-settings';
+import { collectionSettings } from '../../../services/collection-settings';
+import { globalSettings, settingsForRequest } from '../../../services/resolve-request-settings';
 
 type PostMessage = (msg: unknown) => void;
 type RefreshFn = () => void;
@@ -32,23 +36,22 @@ export async function handleExecuteRequest(
   refreshHistory: RefreshFn,
 ) {
   try {
-    // Inject execution settings — prefer app_settings DB, fallback to VS Code workspace config
-    const settings = getSetting<Record<string, unknown>>('general') ?? {};
-    const vsConfig = vscode.workspace.getConfiguration('daakia');
+    // Resolve execution settings across the three levels — see
+    // services/execution-settings.ts for why they inherit per field.
+    const resolved = settingsForRequest(msg);
 
-    msg.timeout = settings.timeout ?? vsConfig.get<number>('requestTimeout', 0);
-    msg.followRedirects = settings.followRedirects ?? vsConfig.get<boolean>('followRedirects', true);
-    msg.sslVerification = settings.sslVerification ?? vsConfig.get<boolean>('sslVerification', true);
+    msg.timeout = resolved.timeout;
+    msg.followRedirects = resolved.followRedirects;
+    msg.sslVerification = resolved.sslVerification;
+    msg.encoding = resolved.encoding;
+    if (resolved.proxy) msg.proxy = resolved.proxy;
+    // Carried so the response can say which level each value came from,
+    // rather than leaving you to guess why one request timed out at 5s.
+    msg.settingsFrom = resolved.from;
 
     // Inject trusted SSL hosts
     const trustedHosts = getSetting<string[]>('trustedHosts') ?? [];
     msg.trustedHosts = trustedHosts;
-
-    // Inject proxy settings
-    const proxySettings = (settings as any).proxy as { mode: string; host?: string; port?: number; username?: string; password?: string; bypass?: string[] } | undefined;
-    if (proxySettings) {
-      msg.proxy = proxySettings;
-    }
 
     // Cookie jar: inject stored cookies for the request domain
     try {
@@ -86,6 +89,7 @@ export async function handleExecuteRequest(
     const envVarsForScript = loadEnvironmentVarsForScript(msg.envId as string | undefined);
     const colVarsForScript = loadCollectionVarsForScript(msg.collectionId as string | undefined);
     const globalVarsForScript = loadGlobalVarsForScript();
+    const schemasForScript = loadCollectionSchemas(msg.collectionId as string | undefined);
 
     if (preScripts.length > 0) {
       const headersObj: Record<string, string> = {};
@@ -102,6 +106,7 @@ export async function handleExecuteRequest(
         },
         environmentVariables: { ...envVarsForScript },
         collectionVariables: { ...colVarsForScript },
+        schemas: schemasForScript,
         globalVariables: { ...globalVarsForScript },
       };
 
@@ -264,6 +269,7 @@ export async function handleExecuteRequest(
         },
         environmentVariables: { ...envVarsForScript },
         collectionVariables: { ...colVarsForScript },
+        schemas: schemasForScript,
         globalVariables: { ...globalVarsForScript },
       };
 
@@ -357,7 +363,7 @@ export async function handleExecuteRequest(
               let size = '';
               let fileExists = false;
               try { if (filePath && fs.existsSync(filePath)) { fileExists = true; size = ` (${formatBytes(fs.statSync(filePath).size)})`; } } catch { /* ignore */ }
-              return `📎 ${f.key}: ${name} [${mime}]${size}${fileExists ? ` {${filePath}}` : ''}`;
+              return `[file] ${f.key}: ${name} [${mime}]${size}${fileExists ? ` {${filePath}}` : ''}`;
             }).join('\n');
           }
           return `${f.key}: ${f.value}`;
@@ -425,7 +431,7 @@ export async function handleExecuteRequest(
     }
 
     // Save to history
-    const saveResponse = settings.saveResponseInHistory ?? true;
+    const saveResponse = resolved.saveResponseInHistory;
     // Strip fileData from bodyFormData — never store binary data in DB, only file paths
     const bodyFormDataForHistory = (msg.bodyFormData as any[])?.map((f: any) => {
       const { fileData, ...rest } = f;
@@ -459,8 +465,11 @@ export async function handleExecuteRequest(
         : undefined,
     });
 
-    // Trim history to configured max entries
-    const maxEntries = (settings.maxHistoryEntries as number) || vsConfig.get<number>('maxHistoryEntries', 500) || 500;
+    // Trim history to configured max entries. Global-only — history is one
+    // shared table, so a per-request cap on it would not mean anything.
+    const maxEntries = ((getSetting<Record<string, unknown>>('general') ?? {}).maxHistoryEntries as number)
+      || vscode.workspace.getConfiguration('daakia').get<number>('maxHistoryEntries', 500)
+      || 500;
     trimHistory(maxEntries);
 
     // Push updated history to webview
@@ -581,6 +590,22 @@ function loadCollectionVarsForScript(collectionId: string | undefined): Record<s
     }
   }
   return vars;
+}
+
+/**
+ * Schemas kept when an OpenAPI document was imported into this collection.
+ *
+ * What makes `toMatchSchema('#/components/schemas/User')` mean the spec
+ * rather than a blob someone pasted into the script.
+ */
+function loadCollectionSchemas(collectionId: string | undefined): Record<string, unknown> | undefined {
+  if (!collectionId) return undefined;
+  try {
+    const props = JSON.parse(getCollectionData(collectionId)) as { schemas?: Record<string, unknown> };
+    return props.schemas && Object.keys(props.schemas).length > 0 ? props.schemas : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function loadGlobalVarsForScript(): Record<string, string> {
@@ -719,3 +744,35 @@ export function buildResponseFilters(contentType: string, ext?: string): Record<
   return { 'Response Files': [resolvedExt], 'All Files': ['*'] };
 }
 
+
+/**
+ * What a request would inherit if it overrode nothing.
+ *
+ * The editor needs this to label its Inherit options with the value they
+ * resolve to. It is computed here rather than in the webview so there is one
+ * implementation of the resolution: a second one in the UI could disagree with
+ * the real one, and a settings screen that misreports the effective value is
+ * worse than a screen that reports nothing.
+ */
+export function handleGetEffectiveSettings(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+) {
+  // A request's Settings tab inherits global + its collection; a collection's
+  // own tab inherits global only, so it is not shown its own values as though
+  // they came from somewhere else.
+  const scope = msg.scope as 'request' | 'collection' | undefined;
+  const collection = scope === 'collection'
+    ? undefined
+    : collectionSettings(msg.collectionId as string | undefined);
+
+  const { from, ...values } = resolveExecutionSettings(globalSettings(), collection);
+  postMessage({
+    type: 'settings:effective',
+    scope,
+    tabId: msg.tabId,
+    collectionId: msg.collectionId,
+    values,
+    from,
+  });
+}

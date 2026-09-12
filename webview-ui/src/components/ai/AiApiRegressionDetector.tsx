@@ -184,7 +184,7 @@ export function AiApiRegressionDetector({ onClose }: Props) {
             border: '1px solid color-mix(in srgb, var(--color-warning) 40%, var(--color-surface-border))',
             background: 'color-mix(in srgb, var(--color-warning) 5%, transparent)',
           }}>
-            <p style={{ fontSize: 11, fontWeight: 600, marginBottom: 8, color: 'var(--color-warning)' }}>⚠ {regressions.length} regressions detected</p>
+            <p style={{ fontSize: 11, fontWeight: 600, marginBottom: 8, color: 'var(--color-warning)'}}> {regressions.length} regressions detected</p>
             {regressions.map((r, i) => (
               <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 6 }}>
                 <p style={{ fontSize: 11, fontWeight: 500, margin: 0, color: 'var(--color-text-primary)' }}>{r.name}</p>

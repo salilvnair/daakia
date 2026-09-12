@@ -24,6 +24,18 @@ function detectMode(body: string, contentType: string = ''): VisualizationMode {
   }
 }
 
+/**
+ * Whether this response has anything to show here.
+ *
+ * The tab is offered only when the answer is yes: a Visualize tab that sits
+ * present and empty on every plain JSON object teaches people to ignore it.
+ * Exported so the response panel can ask without keeping its own copy of the
+ * rules — two copies of "is this a table" would disagree within a week.
+ */
+export function canVisualize(body: string, contentType?: string): boolean {
+  return detectMode(body, contentType) !== 'none';
+}
+
 function JsonTable({ data }: { data: Record<string, unknown>[] }) {
   if (data.length === 0) return null;
 
@@ -162,7 +174,7 @@ export function ResponseVisualization({ responseBody, contentType }: Props) {
 
         {activeMode === 'pdf' && (
           <div className="flex items-center justify-center h-full flex-col gap-2">
-            <span className="text-[32px]">📄</span>
+            <span className="text-[32px]"></span>
             <p className="text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>PDF response detected</p>
             <button type="button"
               onClick={() => {

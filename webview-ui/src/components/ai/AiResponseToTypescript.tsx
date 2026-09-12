@@ -8,6 +8,7 @@ import { useState, useEffect, useRef } from 'react';
 import { SparkleIcon, TypeIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { ModalView, AIButtonView, CopyButtonView, ButtonView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface Props {
   responseBody: string;
@@ -77,9 +78,10 @@ export function AiResponseToTypescript({ responseBody, method, url, onClose }: P
 
     const userPrompt = `Convert this JSON API response to TypeScript interfaces.\n\nEndpoint: ${method || 'GET'} ${url || ''}\n\nResponse body:\n${responseBody.slice(0, 6000)}`;
 
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'rest.ts.generate',
+      screen: 'REST · Request',
       systemPrompts: [SYSTEM_PROMPT],
       userPrompt,
       conversation: [], tools: [],

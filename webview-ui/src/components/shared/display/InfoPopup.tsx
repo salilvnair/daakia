@@ -9,13 +9,14 @@
  *     description="What this section does"
  *     items={[{ code: '.name', label: 'Access field' }]}
  *     footer="Example: use .data.users"
- *     wikiSlug="environments"
+ *     wikiSlug="collections-env"
  *   />
  */
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { HelpCircleIcon } from '../../../icons';
 import { useClickOutside } from '../../../hooks/useClickOutside';
+import { useTabsStore } from '../../../store/tabs-store';
 
 export interface InfoPopupItem {
   code: string;
@@ -27,6 +28,13 @@ interface InfoPopupProps {
   description?: string;
   items?: InfoPopupItem[];
   footer?: string;
+  /**
+   * A wiki page id — the ones in `WIKI_TABS`, e.g. `collections-env`.
+   *
+   * The link used to be inert: a button with an empty handler, which reads as
+   * a dead control rather than a missing page. It now opens the wiki tab on
+   * that page; a slug naming no page opens the wiki where it was left.
+   */
   wikiSlug?: string;
   accentColor?: string;
 }
@@ -143,7 +151,7 @@ export function InfoPopup({ title, description, items, footer, wikiSlug, accentC
               <button
                 className="text-[10px] hover:underline cursor-pointer"
                 style={{ color: accentColor || 'var(--color-primary)' }}
-                onClick={() => { /* TODO: open wiki page */ }}
+                onClick={() => { setOpen(false); useTabsStore.getState().openDaakiaWikiTab(wikiSlug); }}
               >
                 Open Wiki →
               </button>

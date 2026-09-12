@@ -1,3 +1,17 @@
+/*
+  ── Running this in dev ──
+
+      npm run local-server:dev
+
+  Watches, rebuilds, and **restarts the server** on every rebuild.
+
+  Use that rather than `local-server:watch`, which rebuilds the bundle and
+  leaves the old process serving it. Everything under `src/services/**` and
+  `src/panel/main/handlers/**` compiles INTO this bundle, so with a stale
+  process a fix to any of them appears to have done nothing — which reads as
+  "the fix is wrong" rather than "the process is old", and costs a debugging
+  session every time it happens.
+*/
 /**
  * router.ts — routes webview postMessage-shaped messages to the REAL
  * extension-host handler functions (src/panel/main/handlers/*), the same
@@ -19,10 +33,23 @@ import {
   getSqliteStatus, getDbPath, getHistory, clearHistory, deleteHistoryById, getSetting, setSetting, getCookies,
   getAllPrompts, upsertPrompt, resetPrompt,
   getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries,
-  getUiAuditEntries, clearUiAuditEntries,
+  getUiAuditEntries, clearUiAuditEntries, insertUiAudit,
   getDbTables, getDbTableRows, deleteDbRow,
 } from '../src/storage/db';
-import { handleExecuteRequest, handleGetOAuth2Token } from '../src/panel/main/handlers/request-handler';
+import { handleExecuteRequest, handleGetOAuth2Token, handleGetEffectiveSettings } from '../src/panel/main/handlers/request-handler';
+import {
+  handleHeapOpen, handleHeapQuery, handleHeapSetBaseline, handleHeapCancel,
+  handleHeapLocateClass, handleHeapOpenSource,
+} from '../src/panel/main/handlers/heap-handler';
+import {
+  handleFilesList,
+  handleFilesMounts,
+  handleFilesDirSize, handleFilesSearch, handleFilesRead,
+  handleFilesDownload, handleFilesDownloadDir, handleFilesReveal,
+  handleFilesSearchMany,
+  handleDk8sCancel,
+} from '../src/panel/main/handlers/files-handler';
+import { handleJfrOpen, handleJfrAnalyze, handleJfrEvents } from '../src/panel/main/handlers/jfr-handler';
 import { cancelRestRequest } from '../src/http/request-executor';
 import {
   handleExecuteGraphQL, handleGraphQLConnect, handleGraphQLSubscribe, handleGraphQLUnsubscribe, cancelGraphQLRequest,
@@ -35,6 +62,22 @@ import {
   handleExtractFields, handleGenerateSecurity, handleInjectSecurity, handleImportSoapUiProject, handleImportWsdlToCollection,
 } from '../src/panel/main/handlers/soap-handler';
 import { handleWsConnect, handleWsDisconnect, handleWsSend } from '../src/panel/main/handlers/websocket-handler';
+import {
+  handleDk8sProbe, handleDk8sUseContext, handleDk8sNamespaces, handleDk8sSetNamespace,
+  handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSearchLogs, handleDk8sProbeAccess, handleDk8sCancelSearch, handleDk8sCancelExport,
+  handleDk8sGetFormats, handleDk8sSaveFormat, handleDk8sDeleteFormat,
+  handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat,
+  handleDk8sListArtifacts, handleDk8sImportArtifact, handleDk8sDeleteArtifact,
+  handleDk8sOpenArtifact, handleDk8sSetKubectlPath, handleDk8sWatchPods, handleDk8sStopWatch,
+  handleDk8sPinNamespace, handleDk8sUnpinNamespace,
+  handleDk8sUseContexts, handleDk8sSetTargets, handleDk8sExportLogs,
+  handleDk8sExportSearch,
+  handleDk8sLogsOpen, handleDk8sLogsClose, handleDk8sDescribe,
+  handleDk8sShell, handleDk8sProbePod, handleDk8sAsk,
+  handleDk8sCollect, handleDk8sAnalyze, handleDk8sRevealArtifacts,
+  handleDk8sProbePv, handleDk8sSavePv, handleDk8sOpenLogFile, handleDk8sSetLogLineNumbers,
+} from '../src/panel/main/handlers/k8s-handler';
+import { handleDk8sHeapInvestigate } from '../src/panel/main/handlers/heap-investigate';
 import { handleSseConnect, handleSseDisconnect } from '../src/panel/main/handlers/sse-handler';
 import { handleSocketIOConnect, handleSocketIODisconnect, handleSocketIOEmit } from '../src/panel/main/handlers/socketio-handler';
 import { handleMqttConnect, handleMqttDisconnect, handleMqttSubscribe, handleMqttUnsubscribe, handleMqttPublish } from '../src/panel/main/handlers/mqtt-handler';
@@ -42,7 +85,14 @@ import {
   handleGetEnvironments, handleSaveEnvironments,
 } from '../src/panel/main/handlers/environment-handler';
 import {
+  handleGetWorkspaces, handleSwitchWorkspace, handleCreateWorkspace,
+  handleRenameWorkspace, handleDeleteWorkspace, handleSaveWorkspaceDocs,
+  handleWorkspaceDocsContext,
+  handleImportWorkspace, handleOpenWorkspace, handleExportWorkspace,
+} from '../src/panel/main/handlers/workspace-handler';
+import {
   handleGetCollections, handleGetCollectionTree, handleGetCollectionChildren,
+  handleImportCollectionUrl,
   handleGetCollectionBreadcrumb, handleCreateCollection, handleCreateFolder,
   handleRenameCollection, handleRenameRequest, handleDeleteCollection,
   handleMoveCollection, handleSaveCollection, handleSaveRequestToCollection,
@@ -63,9 +113,36 @@ import {
   handleSmWorkflowSaveFolder, handleSmWorkflowDeleteFolder, handleSmWorkflowSaveTodos,
 } from '../src/panel/main/handlers/sm-workflow-handler';
 import { handleSaveUiState, handleGetUiState, handleSaveWorkspaceSnapshot, handleGetWorkspaceSnapshot } from '../src/panel/main/handlers/ui-state-handler';
-import { handleAiChat, handleAiStream, handleAiStreamRequest } from '../src/panel/main/handlers/ai-handler';
-import { window as vscodeWindow, Uri } from './vscode-shim';
+import { handleAiSend, handleAiCancel, handleAiChat, handleAiStream, handleAiStreamRequest } from '../src/panel/main/handlers/ai-handler';
+import { handleLoadStart, handleLoadStop } from '../src/panel/main/handlers/load-handler';
+import { handleBulkRun, handleBulkStop } from '../src/panel/main/handlers/bulk-handler';
+import { handleInterceptorStart, handleInterceptorStop } from '../src/panel/main/handlers/interceptor-handler';
+import {
+  initDkgh, handleDkghProbe, handleDkghRecheck, handleDkghSetPath,
+  handleDkghSetRepo, handleDkghBoard, handleDkghRepoOptions, handleDkghSearchRepos,
+  handleDkghPinRepo, handleDkghDiagnose, handleDkghFindGh, handleDkghBrowseGh,
+  handleDkghDismissOldGh, handleDkghPlanEdit, handleDkghApplyEdit, handleDkghCommands,
+  handleDkghInspectRepo, handleDkghRepoMeta, handleDkghIssue, handleDkghEvidence,
+  handleDkghSearchIssues, handleDkghPlanCreate, handleDkghApplyCreate,
+  handleDkghTimeline, handleDkghExport,
+  handleDkghImport, handleDkghPlanTemplates, handleDkghApplyTemplates,
+  handleDkghPlanLabels, handleDkghApplyLabels,
+  handleDkghPlanUpload, handleDkghApplyUpload,
+  handleDkghProject, handleDkghPlanProject,
+  handleDkghPlanProjectItem,
+  handleDkghApplyProjectItem, handleDkghApplyProject,
+  handleDkghTerminal, handleDkghRelations,
+  handleDkghHarvest, handleDkghHarvestCancel,
+  handleDkghSchedules, handleDkghSaveSchedule, handleDkghDeleteSchedule,
+  handleDkghScheduleRan, handleDkghFieldMap, handleDkghLabelsFrom,
+} from '../src/panel/main/handlers/dkgh-handler';
+import { window as vscodeWindow, Uri, env as vscodeEnv } from './vscode-shim';
 import * as fs from 'fs';
+
+import {
+  handleTerminalOpen, handleTerminalInput, handleTerminalResize,
+  handleTerminalClose, closeAllTerminals,
+} from '../src/panel/main/handlers/terminal-handler';
 
 export type PostMessage = (msg: unknown) => void;
 
@@ -81,6 +158,7 @@ export function sendInitialState(post: PostMessage) {
 
   initMockLogForwarding(post);
   initSmWorkflowStorage();
+  initDkgh(post);
   handleGetMockServerState(post);
 
   handleGetEnvironments(post);
@@ -92,6 +170,415 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
   switch (msg.type) {
     case 'ready':
       sendInitialState(post);
+      break;
+
+    // ── dkgh — GitHub. Same reason as dk8s below: the first-run screens are
+    //    the part most likely to be wrong on somebody else's machine, and
+    //    driving them in a browser is how they get looked at. ──
+    case 'dkgh:probe':
+      await handleDkghProbe(post);
+      break;
+    case 'dkgh:recheck':
+      await handleDkghRecheck(post);
+      break;
+    case 'dkgh:setPath':
+      await handleDkghSetPath(msg, post);
+      break;
+    case 'dkgh:setRepo':
+      await handleDkghSetRepo(msg, post);
+      break;
+    case 'dkgh:repoOptions':
+      await handleDkghRepoOptions(post);
+      break;
+    case 'dkgh:searchRepos':
+      await handleDkghSearchRepos(msg, post);
+      break;
+    case 'dkgh:pinRepo':
+      await handleDkghPinRepo(msg, post);
+      break;
+    case 'dkgh:diagnose':
+      await handleDkghDiagnose(post);
+      break;
+    case 'dkgh:findGh':
+      await handleDkghFindGh(post);
+      break;
+    case 'dkgh:browseGh':
+      await handleDkghBrowseGh(post);
+      break;
+    case 'dkgh:dismissOldGh':
+      await handleDkghDismissOldGh(msg, post);
+      break;
+    case 'dkgh:planEdit':
+      await handleDkghPlanEdit(msg, post);
+      break;
+    case 'dkgh:applyEdit':
+      await handleDkghApplyEdit(msg, post);
+      break;
+    case 'dkgh:commands':
+      await handleDkghCommands(post);
+      break;
+    case 'dkgh:board':
+      await handleDkghBoard(msg, post);
+      break;
+    case 'dkgh:inspectRepo':
+      await handleDkghInspectRepo(msg, post);
+      break;
+    case 'dkgh:repoMeta':
+      await handleDkghRepoMeta(msg, post);
+      break;
+    case 'dkgh:issue':
+      await handleDkghIssue(msg, post);
+      break;
+    case 'dkgh:labelsFrom':
+      await handleDkghLabelsFrom(msg, post);
+      break;
+    case 'dkgh:fieldMap':
+      await handleDkghFieldMap(msg, post);
+      break;
+    case 'dkgh:schedules':
+      await handleDkghSchedules(msg, post);
+      break;
+    case 'dkgh:schedule:save':
+      await handleDkghSaveSchedule(msg, post);
+      break;
+    case 'dkgh:schedule:delete':
+      await handleDkghDeleteSchedule(msg, post);
+      break;
+    case 'dkgh:schedule:ran':
+      await handleDkghScheduleRan(msg, post);
+      break;
+    case 'dkgh:harvest':
+      await handleDkghHarvest(msg, post);
+      break;
+    case 'dkgh:harvest:cancel':
+      await handleDkghHarvestCancel(msg, post);
+      break;
+    case 'dkgh:relations':
+      await handleDkghRelations(msg, post);
+      break;
+    case 'dkgh:timeline':
+      await handleDkghTimeline(msg, post);
+      break;
+    case 'dkgh:export':
+      await handleDkghExport(msg, post);
+      break;
+    case 'dkgh:import':
+      await handleDkghImport(msg, post);
+      break;
+    case 'dkgh:planTemplates':
+      await handleDkghPlanTemplates(msg, post);
+      break;
+    case 'dkgh:applyTemplates':
+      await handleDkghApplyTemplates(msg, post);
+      break;
+    case 'dkgh:planLabels':
+      await handleDkghPlanLabels(msg, post);
+      break;
+    case 'dkgh:applyLabels':
+      await handleDkghApplyLabels(msg, post);
+      break;
+    case 'dkgh:planUpload':
+      await handleDkghPlanUpload(msg, post);
+      break;
+    case 'dkgh:applyUpload':
+      await handleDkghApplyUpload(msg, post);
+      break;
+    /*
+      A link out of the webview.
+
+      `window.open` is inert inside a VS Code webview — a sandboxed iframe with
+      no `allow-popups` — so every external link in the app goes through here.
+      It was wired in MainPanel and not out here, which made the browser build
+      the *only* place those buttons appeared to work.
+    */
+    case 'openExternalUrl': {
+      const url = String(msg.url ?? '');
+      if (url) await vscodeEnv.openExternal(Uri.parse(url));
+      break;
+    }
+    case 'dkgh:terminal':
+      await handleDkghTerminal(msg, post);
+      break;
+    case 'dkgh:project':
+      await handleDkghProject(msg, post);
+      break;
+    case 'dkgh:planProject':
+      await handleDkghPlanProject(msg, post);
+      break;
+    case 'dkgh:planProjectItem':
+      await handleDkghPlanProjectItem(msg, post);
+      break;
+    case 'dkgh:applyProjectItem':
+      await handleDkghApplyProjectItem(msg, post);
+      break;
+    case 'dkgh:applyProject':
+      await handleDkghApplyProject(msg, post);
+      break;
+    case 'dkgh:searchIssues':
+      await handleDkghSearchIssues(msg, post);
+      break;
+    case 'dkgh:planCreate':
+      await handleDkghPlanCreate(msg, post);
+      break;
+    case 'dkgh:applyCreate':
+      await handleDkghApplyCreate(msg, post);
+      break;
+    case 'dkgh:evidence':
+      await handleDkghEvidence(msg, post);
+      break;
+
+    // ── dk8s — Kubernetes. Routed here so the pod grid can be driven and
+    //    screenshotted in a real browser without an extension host. ──
+    case 'dk8s:probe':
+      await handleDk8sProbe(post);
+      break;
+    case 'dk8s:useContext':
+      await handleDk8sUseContext(msg, post);
+      break;
+    case 'dk8s:useContexts':
+      await handleDk8sUseContexts(msg, post);
+      break;
+    case 'dk8s:setTargets':
+      handleDk8sSetTargets(msg, post);
+      break;
+    case 'dk8s:exportLogs':
+      await handleDk8sExportLogs(msg, post);
+      break;
+    case 'dk8s:exportSearch':
+      await handleDk8sExportSearch(msg, post);
+      break;
+
+    /*
+      Five messages the webview has always sent and this mirror never answered.
+
+      Each one silently did nothing in browser mode: the archived-logs settings
+      screen accepted a mount path and a template, said Save, and wrote
+      nothing — so every PV feature looked broken to anyone testing here, with
+      no error to explain it. Found by pointing dk8s at a real volume for the
+      first time.
+    */
+    case 'dk8s:savePv':
+      await handleDk8sSavePv(msg, post);
+      break;
+    case 'dk8s:probePv':
+      await handleDk8sProbePv(msg, post);
+      break;
+    case 'dk8s:openLogFile':
+      await handleDk8sOpenLogFile(msg);
+      break;
+    case 'dk8s:setLogLineNumbers':
+      handleDk8sSetLogLineNumbers(msg, post);
+      break;
+    case 'dk8s:heapInvestigate':
+      await handleDk8sHeapInvestigate(msg, post);
+      break;
+
+    /*
+      Audit events, which were reaching nothing in browser mode.
+
+      The extension host has written these to SQLite for a long time; this
+      mirror never wired the message, so every dk8s action audited itself into
+      the server's "no handler wired" warning and the Audit Log stayed empty
+      for anyone testing here. The whole point of an audit trail is that it is
+      there afterwards, so a path that silently drops it is worse than one that
+      never claimed to record.
+    */
+    case 'uiAudit:log': {
+      const { event_type, module, button, action, metadata } = msg as unknown as {
+        event_type: string; module: string;
+        button?: string; action?: string; metadata?: Record<string, unknown>;
+      };
+      if (event_type && module) {
+        insertUiAudit({
+          event_type, module, button, action,
+          metadata: metadata ? JSON.stringify(metadata) : undefined,
+        });
+      }
+      break;
+    }
+    case 'dk8s:namespaces':
+      await handleDk8sNamespaces(msg, post);
+      break;
+    case 'dk8s:setNamespace':
+      handleDk8sSetNamespace(msg, post);
+      break;
+    case 'dk8s:setSensitivity':
+      handleDk8sSetSensitivity(msg, post);
+      break;
+    case 'dk8s:setGuardHeapDump':
+      handleDk8sSetGuardHeapDump(msg, post);
+      break;
+    case 'dk8s:listArtifacts':
+      handleDk8sListArtifacts(post);
+      break;
+    case 'dk8s:importArtifact':
+      handleDk8sImportArtifact(post);
+      break;
+    case 'dk8s:deleteArtifact':
+      handleDk8sDeleteArtifact(msg, post);
+      break;
+    case 'dk8s:openArtifact':
+      handleDk8sOpenArtifact(msg, post, process.cwd());
+      break;
+    case 'dk8s:getFormats':
+      handleDk8sGetFormats(post);
+      break;
+    case 'dk8s:saveFormat':
+      handleDk8sSaveFormat(msg, post);
+      break;
+    case 'dk8s:deleteFormat':
+      handleDk8sDeleteFormat(msg, post);
+      break;
+    case 'dk8s:testFormat':
+      handleDk8sTestFormat(msg, post);
+      break;
+    case 'dk8s:sampleLines':
+      handleDk8sSampleLines(msg, post);
+      break;
+    case 'dk8s:detectFormat':
+      handleDk8sDetectFormat(msg, post);
+      break;
+    case 'dk8s:probeAccess':
+      void handleDk8sProbeAccess(msg, post);
+      break;
+    case 'dk8s:searchLogs':
+      handleDk8sSearchLogs(msg, post);
+      break;
+    case 'dk8s:cancelExport':
+      handleDk8sCancelExport(post);
+      break;
+    case 'dk8s:cancelSearch':
+      handleDk8sCancelSearch(post);
+      break;
+    case 'dk8s:setKubectlPath':
+      await handleDk8sSetKubectlPath(msg, post);
+      break;
+    case 'dk8s:watchPods':
+      handleDk8sWatchPods(msg, post);
+      break;
+    case 'dk8s:stopWatch':
+      handleDk8sStopWatch();
+      break;
+    case 'dk8s:pinNamespace':
+      handleDk8sPinNamespace(msg, post);
+      break;
+    case 'dk8s:unpinNamespace':
+      handleDk8sUnpinNamespace(msg, post);
+      break;
+    case 'dk8s:openLogs':
+      await handleDk8sLogsOpen(msg, post);
+      break;
+    case 'dk8s:closeLogs':
+      handleDk8sLogsClose();
+      break;
+    case 'dk8s:describe':
+      await handleDk8sDescribe(msg, post);
+      break;
+    case 'term:open':
+      void handleTerminalOpen(msg, post);
+      break;
+    case 'term:input':
+      handleTerminalInput(msg);
+      break;
+    case 'term:resize':
+      handleTerminalResize(msg);
+      break;
+    case 'term:close':
+      handleTerminalClose(msg);
+      break;
+    case 'dk8s:shell':
+      await handleDk8sShell(msg, post);
+      break;
+    case 'dk8s:probePod':
+      await handleDk8sProbePod(msg, post);
+      break;
+    case 'dk8s:ask':
+      await handleDk8sAsk(msg, post);
+      break;
+    case 'dk8s:collect':
+      await handleDk8sCollect(msg, post);
+      break;
+    case 'dk8s:analyze':
+      await handleDk8sAnalyze(msg, post, process.cwd());
+      break;
+    case 'dk8s:revealArtifacts':
+      await handleDk8sRevealArtifacts();
+      break;
+
+    /*
+      Heap analyzer.
+
+      `dk8s:analyze` already forks the parse worker here — the same code the
+      extension host runs — but the channel the views read back on was never
+      routed, so the analyzer opened and then sat empty forever. Every heap
+      screen queries: the histogram, the treemap, the retention tree, growth
+      and the evidence pack all go through `heap:query`.
+    */
+    case 'heap:open':
+      await handleHeapOpen(post, process.cwd());
+      break;
+    case 'heap:query':
+      handleHeapQuery(msg, post);
+      break;
+    case 'heap:setBaseline':
+      handleHeapSetBaseline(post);
+      break;
+    case 'heap:cancel':
+      handleHeapCancel(post);
+      break;
+    case 'heap:locateClass':
+      await handleHeapLocateClass(msg, post);
+      break;
+    case 'heap:openSource':
+      await handleHeapOpenSource(msg);
+      break;
+
+    /*
+      The recording analyzer, wired here as well as in the extension.
+
+      A message type this router does not name logs "no handler wired" and the
+      view sits empty forever — which is exactly how the heap screens above
+      came to be opened and never filled. Same handler, both paths.
+    */
+    case 'jfr:open':
+      await handleJfrOpen(post);
+      break;
+    case 'files:searchMany':
+      void handleFilesSearchMany(msg, post);
+      break;
+    // One stop for every long dk8s operation — see cancel.ts.
+    case 'dk8s:cancel':
+      handleDk8sCancel(msg, post);
+      break;
+    case 'files:revealFolder':
+      void handleFilesReveal(msg, post);
+      break;
+    case 'files:dirSize':
+      void handleFilesDirSize(msg, post);
+      break;
+    case 'files:mounts':
+      void handleFilesMounts(msg, post);
+      break;
+    case 'files:list':
+      void handleFilesList(msg, post);
+      break;
+    case 'files:search':
+      void handleFilesSearch(msg, post);
+      break;
+    case 'files:read':
+      void handleFilesRead(msg, post);
+      break;
+    case 'files:download':
+      void handleFilesDownload(msg, post);
+      break;
+    case 'files:downloadDir':
+      void handleFilesDownloadDir(msg, post);
+      break;
+    case 'jfr:analyze':
+      handleJfrAnalyze(msg, post);
+      break;
+    case 'jfr:events':
+      handleJfrEvents(msg, post);
       break;
 
     // ── Request Execution ──
@@ -310,6 +797,41 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
 
     // ── Environments ──
+    // -- Workspaces --
+    case 'getWorkspaces':
+      handleGetWorkspaces(post);
+      break;
+    case 'switchWorkspace':
+      handleSwitchWorkspace(msg, post);
+      break;
+    case 'createWorkspace':
+      handleCreateWorkspace(msg, post);
+      break;
+    case 'renameWorkspace':
+      handleRenameWorkspace(msg, post);
+      break;
+    case 'deleteWorkspace':
+      handleDeleteWorkspace(msg, post);
+      break;
+    case 'saveWorkspaceDocs':
+      handleSaveWorkspaceDocs(msg, post);
+      break;
+    case 'importCollectionUrl':
+      void handleImportCollectionUrl(msg, post);
+      break;
+    case 'importWorkspace':
+      void handleImportWorkspace(post);
+      break;
+    case 'openWorkspace':
+      void handleOpenWorkspace(post);
+      break;
+    case 'exportWorkspace':
+      void handleExportWorkspace(post);
+      break;
+    case 'workspaceDocsContext':
+      handleWorkspaceDocsContext(post);
+      break;
+
     case 'getEnvironments':
       handleGetEnvironments(post);
       break;
@@ -367,6 +889,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'getCollectionProperties':
       handleGetCollectionProperties(msg, post);
+      break;
+    case 'settings:getEffective':
+      handleGetEffectiveSettings(msg, post);
       break;
     case 'clearCollections':
       handleClearCollections(post, msg.protocol as string | undefined);
@@ -462,6 +987,53 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
     // in this router; retrieveApiKey() gracefully returns undefined outside a real
     // extension host (no SecretStorage) instead of throwing, so this degrades to a
     // real aiStream:error instead of hanging silently like the unwired default case did.
+    /* The contract every AI feature in the app actually uses. It was missing
+       here, so in the browser dev build every sparkle button posted into the
+       unwired default case: no reply, no error, and a spinner that ran until
+       the panel was closed. The real handler, same as everything else in this
+       router — outside a real extension host it degrades to an ai:error about
+       the missing provider rather than hanging. */
+    case 'ai:send':
+      handleAiSend(msg, post);
+      break;
+    case 'ai:cancel':
+      handleAiCancel(msg, post);
+      break;
+
+    // ── Load testing — real requests, measured.
+    // ── Bulk URL checks — real responses, run with a worker pool.
+    // ── Request interceptor — the panel posted these to nothing at all.
+    case 'interceptor:start':
+      handleInterceptorStart(msg, post);
+      break;
+    case 'interceptor:stop':
+      handleInterceptorStop(msg, post);
+      break;
+
+    case 'bulk:run':
+      handleBulkRun(msg, post);
+      break;
+    case 'bulk:stop':
+      handleBulkStop(msg);
+      break;
+
+    /* The clipboard, read where it can actually be read — see MainPanel. */
+    case 'clipboard:read': {
+      const requestId = msg.requestId as string | undefined;
+      void vscodeEnv.clipboard.readText().then(
+        (text: string) => post({ type: 'clipboard:text', requestId, text }),
+        () => post({ type: 'clipboard:text', requestId, text: '', failed: true }),
+      );
+      break;
+    }
+
+    case 'load:start':
+      handleLoadStart(msg, post);
+      break;
+    case 'load:stop':
+      handleLoadStop(msg);
+      break;
+
     case 'aiChat':
       handleAiChat(msg, post);
       break;

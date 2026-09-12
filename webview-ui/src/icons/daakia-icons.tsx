@@ -194,6 +194,22 @@ export function CloseSquareIcon(props: IconProps) {
   );
 }
 
+/**
+ * A luggage-style tag: the angled label with a punched hole.
+ *
+ * Distinct from PinIcon, which is a drawing pin and reads as "pinned to the
+ * top" rather than "labelled" — the two mean different things and were being
+ * drawn with the same glyph.
+ */
+export function TagIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2.7 12.7A2 2 0 0 1 2.12 11.3V4a2 2 0 0 1 2-2h7.3a2 2 0 0 1 1.4.58l7.77 7.77a2 2 0 0 1 0 2.83z" />
+      <circle cx="7.5" cy="7.5" r="1.2" />
+    </svg>
+  );
+}
+
 export function PinIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>
@@ -318,6 +334,46 @@ export function ServerIcon(props: IconProps) {
       <rect width="20" height="8" x="2" y="2" rx="2" ry="2" />
       <rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
       <path d="M6 6h.01M6 18h.01" />
+    </svg>
+  );
+}
+
+/** Doctor / Diagnostics — heap dumps, thread dumps and log analysis. */
+export function Dk8sIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      {/* Seven spokes at 51.43 degrees, first straight up: the helm everyone
+          reads as Kubernetes. No outer ring — at 14px a ring closes on the
+          spoke tips and the whole glyph turns to mud. Dropping it is also what
+          lets the shape read as a node graph as well as a wheel. */}
+      <path d="M12 8.4V6M14.81 9.76l1.88-.9M15.51 12.8l2.24.49M13.56 15.24l1.33 2.02M10.44 15.24l-1.33 2.02M8.49 12.8l-2.24.49M9.19 9.76l-1.88-.9" />
+      {/* Machined hexagonal hub. Everything else in this set is circles, so a
+          hexagon reads as deliberate rather than as a badly drawn circle. */}
+      <path d="M14.42 13.4L12 14.8l-2.42-1.4v-2.8L12 9.2l2.42 1.4z" />
+      {/* Filled terminals. These keep their separation at 16px, which is the
+          only reason this survives at rail size. */}
+      <g fill="currentColor" stroke="none">
+        <circle cx="12" cy="4" r="1.35" />
+        <circle cx="18.25" cy="7.01" r="1.35" />
+        <circle cx="19.8" cy="13.78" r="1.35" />
+        <circle cx="15.47" cy="19.21" r="1.35" />
+        <circle cx="8.53" cy="19.21" r="1.35" />
+        <circle cx="4.2" cy="13.78" r="1.35" />
+        <circle cx="5.75" cy="7.01" r="1.35" />
+      </g>
+    </svg>
+  );
+}
+
+export function StethoscopeIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      {/* binaural tubes looping down from both earpieces */}
+      <path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6 6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3" />
+      {/* tubing running down to the chest piece */}
+      <path d="M8 15v1a6 6 0 0 0 6 6 6 6 0 0 0 6-6v-4" />
+      {/* chest piece */}
+      <circle cx="20" cy="10" r="2" />
     </svg>
   );
 }
@@ -495,6 +551,28 @@ export function ClockIcon(props: IconProps) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...rest}>
       <circle cx="12" cy="12" r="10" />
       <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
+export function LayoutGridIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+  );
+}
+
+export function TableIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <line x1="3" y1="9" x2="21" y2="9" />
+      <line x1="3" y1="14" x2="21" y2="14" />
+      <line x1="9" y1="9" x2="9" y2="20" />
     </svg>
   );
 }
@@ -698,6 +776,18 @@ export function InfoCircleIcon(props: IconProps) {
   );
 }
 
+/** A file with a magnifier: searched, and there was nothing of this name. */
+export function FileSearchIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h9" />
+      <polyline points="14 2 14 8 20 8" />
+      <circle cx="15" cy="16" r="3" />
+      <line x1="17.3" y1="18.3" x2="20" y2="21" />
+    </svg>
+  );
+}
+
 export function WarningTriangleIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>
@@ -713,6 +803,15 @@ export function BulkEditIcon(props: IconProps) {
     <svg {...withDefaults(props)}>
       <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
       <path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z" />
+    </svg>
+  );
+}
+
+export function PencilIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+      <path d="m15 5 4 4" />
     </svg>
   );
 }
@@ -1086,6 +1185,75 @@ export function NetworkIcon(props: IconProps) {
 }
 
 // ─── Debugger Icons ──────────────────────────────────────────────────────────
+
+/**
+ * An open issue — GitHub's own glyph, a ring with a dot in it.
+ *
+ * DkGH's mark. Deliberately NOT the GitHub logo, which Git Sync already wears:
+ * the two features share a word and nothing else, and giving them one icon
+ * would undo the distinction the plan opens by making. This one says "issues",
+ * which is what the tab is.
+ */
+export function IssueOpenedIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+/**
+ * A repository — the book-and-spine shape GitHub uses.
+ *
+ * Drawn on the same 24 grid as the rest rather than lifted from octicons at 16,
+ * so it sits at the same optical weight as the icons beside it.
+ */
+/** Insights — bars on a baseline. */
+export function ChartBarIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M3 21h18" />
+      <rect x="5" y="12" width="4" height="6" />
+      <rect x="11" y="7" width="4" height="11" />
+      <rect x="17" y="15" width="4" height="3" />
+    </svg>
+  );
+}
+
+/** A column board — three lanes with cards in them. */
+export function ColumnsIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <rect x="3" y="4" width="5" height="16" rx="1" />
+      <rect x="9.5" y="4" width="5" height="11" rx="1" />
+      <rect x="16" y="4" width="5" height="14" rx="1" />
+    </svg>
+  );
+}
+
+/** Two people — an account list, a team, an assignee facet. */
+export function UsersIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3 20a6 6 0 0 1 12 0" />
+      <path d="M16.5 5.5a3.2 3.2 0 0 1 0 5" />
+      <path d="M18 14.6A6 6 0 0 1 21 20" />
+    </svg>
+  );
+}
+
+export function RepoIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M5 3h13a1 1 0 0 1 1 1v13" />
+      <path d="M5 3a2 2 0 0 0-2 2v12.5A3.5 3.5 0 0 0 6.5 21H19v-4" />
+      <path d="M6.5 17H19" />
+      <path d="M8 7h7" />
+    </svg>
+  );
+}
 
 export function BugIcon(props: IconProps) {
   return (
@@ -1786,6 +1954,15 @@ export function XCircleIcon(props: IconProps) {
   );
 }
 
+export function BracesIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5a2 2 0 0 0 2 2h1" />
+      <path d="M16 3h1a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2 2 2 0 0 0-2 2v5a2 2 0 0 1-2 2h-1" />
+    </svg>
+  );
+}
+
 export function XmlTagIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>
@@ -2087,7 +2264,7 @@ export function AzureOpenAiProviderIcon({ size = 22 }: { size?: number }) {
   );
 }
 
-/** 🤖 Bot/Agent icon — for AI agents */
+/** Bot/Agent icon — for AI agents */
 export function AgentIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>
@@ -2101,7 +2278,7 @@ export function AgentIcon(props: IconProps) {
 
 // ─── AI Agent Scenario Icons ──────────────────────────────────────────────────
 
-/** 🌐 REST API Agent — globe with HTTP layers */
+/** REST API Agent — globe with HTTP layers */
 export function RestAgentIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>
@@ -2113,7 +2290,7 @@ export function RestAgentIcon(props: IconProps) {
   );
 }
 
-/** 💻 cURL Agent — terminal prompt with command line */
+/** cURL Agent — terminal prompt with command line */
 export function CurlAgentIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>
@@ -2124,7 +2301,7 @@ export function CurlAgentIcon(props: IconProps) {
   );
 }
 
-/** 🗄️ Mock Server Agent — layered server rack */
+/** Mock Server Agent — layered server rack */
 export function MockServerAgentIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>
@@ -2137,7 +2314,7 @@ export function MockServerAgentIcon(props: IconProps) {
   );
 }
 
-/** 🧪 Test Script Agent — beaker / test tube */
+/** Test Script Agent — beaker / test tube */
 export function TestAgentIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>
@@ -2147,7 +2324,7 @@ export function TestAgentIcon(props: IconProps) {
   );
 }
 
-/** 📚 Knowledge Agent — open book */
+/** Knowledge Agent — open book */
 export function KnowledgeAgentIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>
@@ -2157,7 +2334,7 @@ export function KnowledgeAgentIcon(props: IconProps) {
   );
 }
 
-/** 💬 General Assistant — chat bubble with sparkle dot */
+/** General Assistant — chat bubble with sparkle dot */
 export function GeneralAssistantIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>
@@ -2267,6 +2444,108 @@ export function DaakiaMockProviderIcon({ size = 22 }: { size?: number }) {
       <rect x="5.5" y="12.5" width="7" height="1.5" rx="0.75" fill="#eab308" opacity="0.3" />
       {/* Bottom accent strip */}
       <rect x="3.5" y="17.5" width="17" height="2" rx="1" fill="#eab308" opacity="0.2" />
+    </svg>
+  );
+}
+
+/**
+ * A star, hollow or filled.
+ *
+ * One component rather than StarIcon and StarFilledIcon, because the two
+ * states have to be the same shape at the same weight — a filled star drawn
+ * from different path data than the hollow one appears to change size when it
+ * is clicked, which reads as the row moving rather than the star toggling.
+ */
+export function StarIcon({ filled, ...props }: IconProps & { filled?: boolean }) {
+  return (
+    <svg {...withDefaults(props)} fill={filled ? 'currentColor' : 'none'}>
+      <path d="M12 2.6l2.9 5.9 6.5.95-4.7 4.6 1.1 6.5-5.8-3.05-5.8 3.05 1.1-6.5-4.7-4.6 6.5-.95z" />
+    </svg>
+  );
+}
+
+/**
+ * The funnel, struck through with a red cross: clear the filter.
+ *
+ * Two colours on purpose, and the only icon here that hard-codes one. The
+ * funnel says which thing is being acted on and the cross says what is being
+ * done to it — a plain × beside the words "Clear filter" said the second half
+ * twice and the first half not at all, which is why it read as a generic
+ * close.
+ *
+ * The funnel is shortened and shifted left to make room, so the cross sits in
+ * the corner rather than on top of it.
+ */
+export function FilterClearIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <polygon points="19 3 2 3 9 11.5 9 18 13 20 13 11.5 19 3" />
+      <g stroke="var(--color-error)">
+        <line x1="16.5" y1="14.5" x2="22" y2="20" />
+        <line x1="22" y1="14.5" x2="16.5" y2="20" />
+      </g>
+    </svg>
+  );
+}
+
+/** A shield. Used where something was protected on the way out. */
+export function ShieldIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  );
+}
+
+/**
+ * Compare with clipboard — a clipboard whose page is split down the middle,
+ * one half against the other. Used by the right-click entry that diffs what is
+ * under the pointer against whatever was copied.
+ */
+export function ClipboardCompareIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M9 3h6a1 1 0 0 1 1 1v1H8V4a1 1 0 0 1 1-1z" />
+      <path d="M16 5h1a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h1" />
+      <path d="M12 9v9" />
+      <path d="M9.5 12 8 13.5 9.5 15" />
+      <path d="M14.5 12 16 13.5 14.5 15" />
+    </svg>
+  );
+}
+
+/**
+ * A compass — the Daakia Tour's nav icon.
+ *
+ * A tour is the one page in the wiki you navigate rather than read, and a
+ * compass says that where a document page icon would not.
+ */
+export function CompassIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m15.5 8.5-2.1 5-5 2.1 2.1-5z" />
+    </svg>
+  );
+}
+
+/** A picture — evidence attached to an issue, on a card or in a peek. */
+export function ImageIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <circle cx="8.5" cy="9.5" r="1.5" />
+      <path d="M21 16l-5-5-4.5 4.5L9 13l-6 6" />
+    </svg>
+  );
+}
+
+/** Two overlapping rectangles — a peek at one thing without leaving the rest. */
+export function PeekIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <rect x="3" y="5" width="12" height="10" rx="2" />
+      <path d="M9 19h10a2 2 0 0 0 2-2V9" />
     </svg>
   );
 }

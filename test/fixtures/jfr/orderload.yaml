@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-load
+  namespace: dk8s-test
+  labels: { app: order-load, dk8s-purpose: profiler-testbed }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: order-load } }
+  template:
+    metadata:
+      labels: { app: order-load }
+    spec:
+      containers:
+        - name: app
+          image: eclipse-temurin:21-jdk
+          command: ["java", "-Xmx384m", "-XX:StartFlightRecording=disk=true,maxsize=64m", "/src/OrderLoad.java"]
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits:   { cpu: "1500m", memory: "640Mi" }
+          volumeMounts:
+            - { name: src, mountPath: /src }
+      volumes:
+        - name: src
+          configMap: { name: order-load-src }

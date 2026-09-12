@@ -439,7 +439,25 @@ export interface MockServerConfig {
   soapWsdl?: string;
   aiScenarios?: AiMockScenario[];
   mcpTools?: McpMockTool[];
+  /**
+   * The port it is listening on right now.
+   *
+   * An *output*: written by `startMockServer` once the bind succeeded, and
+   * read by things that need the running address — WSDL generation, the URL on
+   * the card. Not a request, which is why `requestedPort` exists separately:
+   * if this doubled as the ask, every restart would silently demand whatever
+   * port the last run happened to be given, and the first time that port was
+   * taken the server would stop starting for reasons nobody could see.
+   */
   port?: number;
+  /**
+   * The port the user asked for, if they asked for one.
+   *
+   * Only meaningful while the fixed-port setting is on — see
+   * `mock.fixedPort`. Absent means "find a free one", which is what this has
+   * always done and remains the default.
+   */
+  requestedPort?: number;
   /** Sprint 13.32: HTTP callbacks to fire when any non-REST protocol handler matches */
   protocolWebhooks?: ProtocolWebhookConfig[];
 

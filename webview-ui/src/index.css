@@ -76,6 +76,49 @@
   --color-mock-server-muted: #d4a017;
   --color-try-button: #6366f1;
 
+  /* Doctor — diagnostics (heap / thread / log analysis) */
+  --color-doctor: #10b981;
+  --color-doctor-muted: #0d9668;
+  /* dk8s takes cyan: doctor holds green and mock-server holds yellow, and it
+     must stay clear of the red/amber/green reserved for pod status. */
+  /* Workspaces. Not the app accent: amber is the chrome colour everywhere
+     else, and a workspace is not one more piece of chrome — it is the thing
+     all of it sits inside. A teal between dk8s cyan and success green, so it
+     reads as the parent of both without being either. */
+  --color-workspace: #2dd4bf;
+  --color-dk8s: #22d3ee;
+  --color-dk8s-muted: #0e9bb5;
+  /* dkgh. GitHub's mark is monochrome, so the tab needs a colour of its own:
+     a warm terracotta, away from workspace teal, dk8s cyan and every protocol
+     hue — and far enough from the red used for errors to never be mistaken
+     for one. */
+  --color-dkgh: #DE7356;
+  --color-dkgh-muted: #c05a3e;
+
+  /*
+    dkgh's field-map palette — eight slots, assigned by the option's index in
+    the dropdown that declared it, and stable for the life of that field.
+
+    Fixed order, never cycled: colour follows the value, so a filter that hides
+    three modules must not repaint the ones that are left. The two sets are
+    stepped separately against their own surface rather than being one set
+    lightened — an automatic flip fails the contrast check in one direction or
+    the other.
+
+    Both sets pass the categorical checks (lightness band, chroma floor,
+    adjacent-pair CVD separation, normal-vision floor). The light set carries a
+    contrast warning on three slots, which is why every use of these is paired
+    with its own text label rather than relying on colour alone.
+  */
+  --dkgh-cat-1: #3987e5;
+  --dkgh-cat-2: #d95926;
+  --dkgh-cat-3: #199e70;
+  --dkgh-cat-4: #c98500;
+  --dkgh-cat-5: #d55181;
+  --dkgh-cat-6: #008300;
+  --dkgh-cat-7: #9085e9;
+  --dkgh-cat-8: #e66767;
+
   /* Settings */
   --color-settings: #2a9d8f;
 
@@ -328,6 +371,28 @@
   --color-mock-server-muted: #92400e;
   --color-try-button: #4338ca;
 
+  --color-doctor: #047857;
+  --color-doctor-muted: #065f46;
+
+  /* Darker cyan so it holds contrast on a light ground. */
+  --color-workspace: #0d9488;
+  --color-dk8s: #0891b2;
+  --color-dk8s-muted: #0e7490;
+  /* Deeper on a light ground, the way the other tab hues are — #DE7356 is
+     built for the dark panel and goes thin on white. */
+  --color-dkgh: #c0543a;
+  --color-dkgh-muted: #9c422d;
+
+  /* The same eight slots, stepped against the light surface. */
+  --dkgh-cat-1: #2a78d6;
+  --dkgh-cat-2: #eb6834;
+  --dkgh-cat-3: #1baf7a;
+  --dkgh-cat-4: #eda100;
+  --dkgh-cat-5: #e87ba4;
+  --dkgh-cat-6: #008300;
+  --dkgh-cat-7: #4a3aa7;
+  --dkgh-cat-8: #e34948;
+
   --color-settings: #1f7a6e;
   --color-wiki: #b45309;
 
@@ -416,6 +481,17 @@ body {
 }
 .breathing-connected {
   animation: breathing 2.5s ease-in-out infinite;
+}
+
+/*
+  Someone who has asked their system for less motion has asked for it here
+  too. The dot keeps its colour and its meaning — only the movement stops,
+  so the state is still readable without it.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .breathing-connected {
+    animation: none;
+  }
 }
 
 /* Mock server running — smooth, subtle scale-pulse (not the jarring glow) */
@@ -1563,4 +1639,232 @@ input[type="number"] {
   background-color: var(--color-input-bg, #f9fafb) !important;
   border-color: var(--color-surface-border, #e5e7eb) !important;
   color: var(--color-text-primary) !important;
+}
+
+/* The dk8s log view draws its own scrollbar as the density ribbon, which shows
+   where you are AND what is there. Two scrollbars side by side is one too many. */
+.dk8s-no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.dk8s-no-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+
+/*
+ * The artifact selection HUD.
+ *
+ * dui sizes its HUD for an icon-only toolbar — 3px of padding and 2px between
+ * items, which is right for a row of square buttons and far too tight once the
+ * items carry labels and a status string. This gives the same control room to
+ * breathe without changing dui's default for everyone else.
+ */
+.dk8s-artifact-hud {
+  padding: 7px 12px;
+  gap: 6px;
+}
+
+.dk8s-artifact-hud button {
+  padding-inline: 9px;
+  height: 26px;
+}
+
+/*
+ * The destructive item, tinted through its label as well as its icon.
+ *
+ * Matched on the title rather than on position. dui wraps every HudItem in a
+ * `display: contents` div, so each button is the only one inside its own
+ * wrapper and `:last-of-type` matched all of them — which quietly turned
+ * Cancel red as well. The title is set in ArtifactsView and is the only stable
+ * hook the component gives us.
+ */
+.dk8s-artifact-hud button[title^="Delete the selected"] {
+  color: color-mix(in srgb, var(--color-error) 80%, transparent);
+}
+
+/*
+ * dui's hover is a neutral surface wash, which on the one destructive item
+ * reads as "nothing special happens here". Tinted red so the hover agrees
+ * with the label it is highlighting.
+ */
+.dk8s-artifact-hud button[title^="Delete the selected"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-error) 18%, transparent);
+  color: var(--color-error);
+}
+
+/*
+  The date fields in the search's time window, level with the pills beside them.
+
+  A `compact` segmented control is 26px tall at every size dui offers; the date
+  field is 24 at `sm` and 28 at `md`. Neither matches, so the two controls sat
+  two pixels apart whichever way round it was done. dui applies its `style` prop
+  to the wrapper rather than the trigger, so the height is set here instead.
+*/
+.dk8s-window-dates > div > button {
+  /* `!important` because dui sets the height inline on the trigger, and an
+     inline style beats a stylesheet rule without it. */
+  height: 26px !important;
+}
+
+/*
+  Node actions appear on hover.
+
+  A graph with two buttons on every node is a graph of buttons — the shapes
+  and their sizes are the information, and permanent controls compete with
+  them. Kept in CSS rather than React state so the pointer never waits on a
+  re-render, and focus-within so the keyboard reaches them too.
+*/
+.dk8s-retention-node .dk8s-node-actions {
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+.dk8s-retention-node:hover .dk8s-node-actions,
+.dk8s-retention-node:focus-within .dk8s-node-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+
+/* The indeterminate bar on a running download. `cat` over exec reports no
+   total, so there is no percentage to show — this says "still going" without
+   inventing one. */
+@keyframes dk8s-slide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="dk8s-slide"] { animation: none !important; opacity: .6; }
+}
+
+/* ── The active workspace, down the rail ──────────────────────────────────── */
+
+/*
+  Which workspace you are in, under the icon it belongs to.
+
+  Rotated rather than wrapped: the rail is 48px wide and a name like
+  "Payments — incident 4417" has no horizontal room at all, while vertically it
+  has the whole height of the window. `vertical-rl` alone starts at the top and
+  runs the word downward, which reads as falling over, so it is turned 180 to
+  set the baseline running upward the way vertical labels are set everywhere
+  else.
+
+  Muted until the workspace tab is the one you are on — this is a watermark, and
+  a watermark that shouts is just another button.
+*/
+/*
+  A fixed height, not one that follows the name.
+
+  The label is as tall as the name is long, so renaming a workspace moved every
+  protocol icon under it — the whole rail jumped on each keystroke. It reserves
+  the room a full-length name needs and keeps it whether the name is "Test" or
+  twenty-five characters, so the icons below never move.
+*/
+.dk-rail-workspace {
+  height: 176px;
+  margin: 6px 0 2px;
+  padding: 2px 1px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  opacity: 0.5;
+  transition: opacity 0.16s, color 0.16s;
+}
+.dk-rail-workspace:hover { opacity: 0.85; }
+.dk-rail-workspace--on {
+  opacity: 1;
+  color: var(--color-workspace);
+}
+
+.dk-rail-workspace-name {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  max-height: 100%;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+  The magnifier on a facet value — take this one to the whole log, not just the
+  buffer on screen.
+
+  It was a 45%-opacity glyph with no box, which is a thing you discover by
+  accident rather than a thing you press. It has a target now: a square that
+  lights in the dk8s accent under the pointer and swells very slightly, which
+  is the cheapest way to say "this is a control" without adding a border to
+  every row in a list of forty.
+*/
+.facet-zoom {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 4px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-text-muted);
+  opacity: 0.5;
+  cursor: pointer;
+  transition: opacity 120ms ease, color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+.facet-zoom:hover {
+  opacity: 1;
+  color: var(--color-dk8s);
+  background: color-mix(in srgb, var(--color-dk8s) 18%, transparent);
+  transform: scale(1.15);
+}
+.facet-zoom:active { transform: scale(1); }
+.facet-zoom:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--color-dk8s);
+  outline-offset: -2px;
+}
+
+/*
+  Stopping a running export.
+
+  The dialog's footer already has a Cancel — that one shuts the dialog, this
+  one stops the read. Two buttons a centimetre apart saying the same word and
+  meaning different things is a choice nobody should have to make quickly, so
+  this is an icon, and it is red the moment you reach it.
+*/
+.dk8s-stop {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 7px;
+  /* A faint ground even at rest: a bare glyph on a dialog reads as a mark
+     rather than as something to press, and this is the control that stops a
+     four-minute read. */
+  background: color-mix(in srgb, var(--color-error) 8%, transparent);
+  color: color-mix(in srgb, var(--color-error) 75%, transparent);
+  cursor: pointer;
+  transition: background 120ms, transform 80ms, color 120ms;
+}
+.dk8s-stop svg { width: 16px; height: 16px; }
+.dk8s-stop:hover {
+  color: #fff;
+  background: var(--color-error);
+}
+.dk8s-stop:active {
+  background: color-mix(in srgb, var(--color-error) 80%, #000);
+  transform: scale(0.88);
+  transition: background 60ms, transform 60ms;
 }

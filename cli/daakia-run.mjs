@@ -7,32 +7,54 @@
  *
  * Options:
  *   --env <file>        Environment file: {"key":"value"} map, or Daakia env export
+ *   --env-var k=v       Override one variable; repeatable, wins over --env
+ *   --folder <name>     Only run requests under the folder of that name
  *   --filter <text>     Only run requests whose name contains <text>
+ *   --data <file>       CSV or JSON rows — one iteration of the run per row
+ *   --iterations <n>    Run the collection n times (ignored when --data is given)
+ *   --delay <ms>        Wait between requests (between batches when concurrent)
+ *   --concurrency <n>   Send n requests at once — for suites whose order does not matter
  *   --timeout <ms>      Per-request timeout (default 30000)
  *   --bail              Stop on first failure
  *   --insecure          Ignore TLS certificate errors
  *   --json              Emit machine-readable JSON report to stdout
+ *   --junit <file>      Write a JUnit XML report — what CI actually renders
  *
  * Accepts Daakia JSON ({version, collections:[...]}) and Postman v2.1 collections.
  * Exit code: 0 = all passed, 1 = failures or runner error.
  */
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
+import { toJUnitXml } from './lib/junit.mjs';
+import { parseDataFile, parseEnvVar, inFolder } from './lib/data.mjs';
 
 const args = process.argv.slice(2);
 if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
-  console.log('Usage: node cli/daakia-run.mjs <collection.json> [--env env.json] [--filter text] [--timeout ms] [--bail] [--insecure] [--json]');
+  console.log('Usage: node cli/daakia-run.mjs <collection.json> [--env env.json] [--env-var k=v]'
+    + ' [--folder name] [--filter text] [--data rows.csv] [--iterations n] [--delay ms]'
+    + ' [--timeout ms] [--concurrency n] [--bail] [--insecure] [--json] [--junit report.xml]');
   process.exit(args.length === 0 ? 1 : 0);
 }
 
-const opt = { file: args[0], env: null, filter: null, timeout: 30000, bail: false, insecure: false, json: false };
+const opt = {
+  file: args[0], env: null, envVars: [], folder: null, filter: null,
+  data: null, iterations: 1, delay: 0, concurrency: 1,
+  timeout: 30000, bail: false, insecure: false, json: false, junit: null,
+};
 for (let i = 1; i < args.length; i++) {
   switch (args[i]) {
     case '--env': opt.env = args[++i]; break;
+    case '--env-var': opt.envVars.push(args[++i]); break;
+    case '--folder': opt.folder = args[++i]; break;
     case '--filter': opt.filter = args[++i]; break;
+    case '--data': opt.data = args[++i]; break;
+    case '--iterations': opt.iterations = Math.max(1, Number(args[++i]) || 1); break;
+    case '--delay': opt.delay = Math.max(0, Number(args[++i]) || 0); break;
+    case '--concurrency': opt.concurrency = Math.min(50, Math.max(1, Number(args[++i]) || 1)); break;
     case '--timeout': opt.timeout = Number(args[++i]) || 30000; break;
     case '--bail': opt.bail = true; break;
     case '--insecure': opt.insecure = true; break;
     case '--json': opt.json = true; break;
+    case '--junit': opt.junit = args[++i]; break;
     default: console.error(`Unknown option: ${args[i]}`); process.exit(1);
   }
 }
@@ -50,8 +72,28 @@ if (opt.env) {
     vars = raw;
   }
 }
+/*
+  `--env-var` last, so a CI secret beats whatever the committed env file says.
+  That order is the point of the flag: the same collection runs against three
+  environments by overriding two values at the call site.
+*/
+for (const pair of opt.envVars) {
+  const parsed = parseEnvVar(pair);
+  if (!parsed) { console.error(`--env-var expects key=value, got: ${pair}`); process.exit(1); }
+  vars[parsed.key] = parsed.value;
+}
+
+/*
+  The data row is a layer above both, rebound per iteration. `rowVars` is
+  reassigned by the loop below rather than merged into `vars`, so row three's
+  values cannot leak into row four when a column is missing.
+*/
+let rowVars = {};
 const resolve = (s) => typeof s === 'string'
-  ? s.replace(/\{\{([\w.\-]+)\}\}|\$\{([\w.\-]+)\}/g, (m, a, b) => vars[a || b] ?? m)
+  ? s.replace(/\{\{([\w.\-]+)\}\}|\$\{([\w.\-]+)\}/g, (m, a, b) => {
+      const key = a || b;
+      return rowVars[key] ?? vars[key] ?? m;
+    })
   : s;
 
 // ── Collect requests from Daakia or Postman format ──
@@ -88,11 +130,33 @@ if (Array.isArray(doc.collections)) {
   process.exit(1);
 }
 
-const toRun = opt.filter ? requests.filter(r => r.name.toLowerCase().includes(opt.filter.toLowerCase())) : requests;
+let toRun = requests;
+if (opt.folder) toRun = toRun.filter(r => inFolder(r.name, opt.folder));
+if (opt.filter) toRun = toRun.filter(r => r.name.toLowerCase().includes(opt.filter.toLowerCase()));
 if (toRun.length === 0) {
-  console.error(opt.filter ? `No requests match filter "${opt.filter}".` : 'Collection contains no requests.');
+  const why = [opt.folder && `folder "${opt.folder}"`, opt.filter && `filter "${opt.filter}"`]
+    .filter(Boolean).join(' and ');
+  console.error(why ? `No requests match ${why}.` : 'Collection contains no requests.');
   process.exit(1);
 }
+
+// ── Iterations: one run of the collection per data row ──
+let dataRows = [];
+if (opt.data) {
+  try {
+    dataRows = parseDataFile(readFileSync(opt.data, 'utf8'), opt.data);
+  } catch (e) {
+    console.error(`Could not read --data ${opt.data}: ${e.message}`);
+    process.exit(1);
+  }
+  if (dataRows.length === 0) {
+    console.error(`--data ${opt.data} has no rows.`);
+    process.exit(1);
+  }
+}
+// A data file sets the count; --iterations only applies without one, so the
+// two can never disagree about how many times the collection ran.
+const iterations = dataRows.length > 0 ? dataRows.length : opt.iterations;
 
 // ── Build and execute ──
 function buildRequest(entry) {
@@ -138,8 +202,10 @@ function buildRequest(entry) {
 
 const results = [];
 let failures = 0;
+let stopped = false;
 
-for (const entry of toRun) {
+/** Send one request and describe what happened. Never throws. */
+async function runOne(entry, iteration) {
   const { url, method, headers, body } = buildRequest(entry);
   const started = Date.now();
   let status = 0, statusText = '', error = null, size = 0;
@@ -157,24 +223,89 @@ for (const entry of toRun) {
   }
   const ms = Date.now() - started;
   const passed = !error && status > 0 && status < 400;
-  if (!passed) failures++;
-  results.push({ name: entry.name, method, url, status, statusText, ms, size, passed, error });
+  return { name: entry.name, method, url, status, statusText, ms, size, passed, error, iteration };
+}
 
+function report(result) {
+  results.push(result);
+  if (!result.passed) failures++;
   if (!opt.json) {
-    const mark = passed ? '✓' : '✗';
-    const detail = error ? `ERROR ${error}` : `${status} ${statusText}`;
-    console.log(`${mark} ${method.padEnd(6)} ${entry.name}  →  ${detail}  (${ms}ms, ${size}B)`);
+    const mark = result.passed ? '✓' : '✗';
+    const detail = result.error ? `ERROR ${result.error}` : `${result.status} ${result.statusText}`;
+    console.log(`${mark} ${result.method.padEnd(6)} ${result.name}  →  ${detail}  (${result.ms}ms, ${result.size}B)`);
   }
-  if (!passed && opt.bail) break;
+}
+
+for (let iteration = 0; iteration < iterations && !stopped; iteration++) {
+  rowVars = dataRows[iteration] ?? {};
+  if (iterations > 1 && !opt.json) {
+    const label = dataRows.length > 0
+      ? `iteration ${iteration + 1}/${iterations} — ${Object.entries(rowVars).slice(0, 3).map(([k, v]) => `${k}=${v}`).join(' ')}`
+      : `iteration ${iteration + 1}/${iterations}`;
+    console.log(`
+── ${label}`);
+  }
+
+  if (opt.concurrency > 1) {
+    /*
+      Batched, not pipelined, and deliberately so.
+
+      A batch settles before the next one starts, which keeps the report in
+      the collection's own order and keeps `--bail` meaning something: the
+      run stops after the batch that failed rather than mid-flight with an
+      unknown number of requests still in the air. Order within a batch does
+      not matter — that is what asking for concurrency says.
+
+      `rowVars` is read by `buildRequest` when the request is BUILT, which
+      happens inside `runOne` before its first await, so a batch cannot see
+      the next iteration's row.
+    */
+    for (let i = 0; i < toRun.length && !stopped; i += opt.concurrency) {
+      const batch = toRun.slice(i, i + opt.concurrency);
+      const settled = await Promise.all(batch.map(entry => runOne(entry, iteration)));
+      for (const result of settled) report(result);
+      if (opt.bail && settled.some(r => !r.passed)) { stopped = true; break; }
+      if (opt.delay > 0 && i + opt.concurrency < toRun.length) {
+        await new Promise(r => setTimeout(r, opt.delay));
+      }
+    }
+  } else {
+    for (const entry of toRun) {
+      const result = await runOne(entry, iteration);
+      report(result);
+      if (!result.passed && opt.bail) { stopped = true; break; }
+      if (opt.delay > 0) await new Promise(r => setTimeout(r, opt.delay));
+    }
+  }
+}
+
+// ── Reports ──
+/*
+  JUnit before anything else, and before the exit code decides anything: a
+  report that only exists when the run passed is a report CI cannot use.
+*/
+if (opt.junit) {
+  const name = doc.info?.name ?? doc.collections?.[0]?.name ?? 'daakia';
+  try {
+    writeFileSync(opt.junit, toJUnitXml(results, { name }), 'utf8');
+    if (!opt.json) console.log(`
+JUnit report → ${opt.junit}`);
+  } catch (e) {
+    console.error(`Could not write --junit ${opt.junit}: ${e.message}`);
+  }
 }
 
 // ── Summary ──
 if (opt.json) {
-  console.log(JSON.stringify({ total: results.length, passed: results.length - failures, failed: failures, results }, null, 2));
+  console.log(JSON.stringify({
+    total: results.length, passed: results.length - failures, failed: failures,
+    iterations, results,
+  }, null, 2));
 } else {
   const passedCount = results.length - failures;
   console.log('\n──────────────────────────────────');
   console.log(`  Requests: ${results.length}   Passed: ${passedCount}   Failed: ${failures}`);
+  if (iterations > 1) console.log(`  Iterations: ${iterations}`);
   console.log(`  Total time: ${results.reduce((a, r) => a + r.ms, 0)}ms`);
   console.log('──────────────────────────────────');
   if (failures > 0) {
@@ -184,4 +315,21 @@ if (opt.json) {
     }
   }
 }
-process.exit(failures > 0 ? 1 : 0);
+/*
+  The exit code, without killing the process to deliver it.
+
+  `process.exit()` here aborted the whole run on Windows with a libuv
+  assertion — "!(handle->flags & UV_HANDLE_CLOSING)" — the moment more than
+  one request had been sent, because fetch's connection pool still held
+  sockets it was in the middle of closing. The process died with code 127 on
+  a run where every request passed, which in CI is indistinguishable from the
+  runner being broken.
+
+  Setting `exitCode` and closing the pool lets the loop drain and node exit on
+  its own, with the code the results earned.
+*/
+process.exitCode = failures > 0 ? 1 : 0;
+const dispatcher = globalThis[Symbol.for('undici.globalDispatcher.1')];
+if (dispatcher && typeof dispatcher.close === 'function') {
+  try { await dispatcher.close(); } catch { /* already gone — nothing to close */ }
+}

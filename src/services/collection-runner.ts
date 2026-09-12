@@ -16,6 +16,7 @@ import {
   getAllEnvironments, getSetting, type CollectionTreeNode, type CollectionRequestRow,
 } from '../storage/db';
 import { decryptIfNeeded } from './vault';
+import { mergeRuns, passCount } from './run-merge';
 
 // ────────── Types ──────────
 
@@ -27,9 +28,27 @@ export interface RunConfig {
   flow?: ScriptFlow;
   delay: number;
   stopOnError: boolean;
+  /**
+   * How many times to run the whole collection.
+   *
+   * Ignored when `dataRows` is given — the rows decide, and two numbers that
+   * can disagree about how many times something ran is a bug waiting to be
+   * filed.
+   */
+  iterations?: number;
+  /**
+   * One run per row, with the row's columns layered over the environment.
+   *
+   * "Run this login flow against fifty accounts from a CSV" is the canonical
+   * Runner demo and could not be expressed here at all: the runner took a
+   * collection and an environment and ran each request exactly once.
+   */
+  dataRows?: Record<string, string>[];
 }
 
 export interface RequestResult {
+  /** Which pass over the collection this ran in — 0 for a single run. */
+  iteration?: number;
   id: string;
   name: string;
   method: string;
@@ -48,6 +67,8 @@ export interface RequestResult {
 
 export interface RunResult {
   collectionId: string;
+  /** How many passes over the collection this result covers. */
+  iterations?: number;
   collectionName: string;
   flow: ScriptFlow;
   total: number;
@@ -122,9 +143,18 @@ function loadEnvironmentVars(envId: string | undefined): Record<string, string> 
   const env = allEnvs.find(e => e.id === envId);
   if (!env) return {};
   try {
-    const vars = JSON.parse(env.variables) as { key: string; currentValue: string }[];
+    const vars = JSON.parse(env.variables) as { key: string; currentValue?: string; initialValue?: string }[];
     const result: Record<string, string> = {};
-    for (const v of vars) { if (v.key) result[v.key] = decryptIfNeeded(v.currentValue || ''); }
+    /*
+      Current, then initial — the order every other reader uses.
+
+      This took `currentValue` alone, so a variable that carries only an
+      initial value (which is what an imported or freshly committed
+      environment looks like, since nothing has overwritten it yet) resolved
+      to an empty string in a collection run and to its value on a normal
+      send. Same environment, two answers, depending on how you pressed go.
+    */
+    for (const v of vars) { if (v.key) result[v.key] = decryptIfNeeded(v.currentValue || v.initialValue || ''); }
     return result;
   } catch { return {}; }
 }
@@ -217,10 +247,23 @@ if (!dk.runRequest) {
 
 // ────────── Runner Core ──────────
 
-export async function runCollection(
+/**
+ * One pass over the collection.
+ *
+ * `rowVars` is a data file's row, layered over the environment so that a
+ * request saying `{{email}}` resolves per pass with nothing else changing.
+ * `offset` and `grandTotal` keep the progress callback counting across the
+ * whole run rather than restarting at 1 on every iteration — the progress bar
+ * watching it has no idea iterations exist.
+ */
+async function runIteration(
   config: RunConfig,
-  onProgress?: ProgressCallback,
-  abortSignal?: { aborted: boolean },
+  onProgress: ProgressCallback | undefined,
+  abortSignal: { aborted: boolean } | undefined,
+  rowVars: Record<string, string>,
+  iteration: number,
+  offset: number,
+  grandTotal: number,
 ): Promise<RunResult> {
   const { collectionId, environmentId, flow = 'sandwich', delay, stopOnError } = config;
   const startTime = Date.now();
@@ -237,12 +280,25 @@ export async function runCollection(
   const results: RequestResult[] = [];
 
   // Shared variable state across the entire run
-  let envVars = loadEnvironmentVars(environmentId);
+  // The row wins over the environment: it is the layer above, per pass.
+  let envVars = { ...loadEnvironmentVars(environmentId), ...rowVars };
   let colVars = loadCollectionVars(collectionId);
   let globalVars = loadGlobalVars();
 
   // Collection-level scripts
   const collectionScripts = loadFolderScripts(collectionId);
+
+  /*
+    Schemas from the spec this collection was imported from, if it was.
+    Loaded once per pass: they do not change while a run is in flight, and
+    re-reading the blob per request would be a JSON parse per request for a
+    value that cannot have moved.
+  */
+  let collectionSchemas: Record<string, unknown> | undefined;
+  try {
+    const props = JSON.parse(getCollectionData(collectionId) || '{}') as { schemas?: Record<string, unknown> };
+    collectionSchemas = props.schemas && Object.keys(props.schemas).length > 0 ? props.schemas : undefined;
+  } catch { collectionSchemas = undefined; }
 
   // Build request name → index lookup for setNextRequest
   const requestByName = new Map<string, number>();
@@ -306,6 +362,7 @@ export async function runCollection(
       request: { method: request.method, url: request.url, headers: headersObj, body: (reqData.bodyRaw as string) || '' },
       environmentVariables: { ...envVars },
       collectionVariables: { ...colVars },
+      schemas: collectionSchemas,
       globalVariables: { ...globalVars },
     };
 
@@ -337,7 +394,7 @@ export async function runCollection(
         testResults: [], scriptLogs, scriptErrors, error: scriptErrors.join('; '),
       };
       results.push(reqResult);
-      onProgress?.(reqResult, i, flatRequests.length);
+      onProgress?.({ ...reqResult, iteration }, offset + i, grandTotal);
       if (stopOnError) break;
       i = advanceIndex(i, nextRequestTarget, requestByName);
       nextRequestTarget = undefined;
@@ -383,7 +440,7 @@ export async function runCollection(
         testResults: [], scriptLogs, scriptErrors, error: msg,
       };
       results.push(reqResult);
-      onProgress?.(reqResult, i, flatRequests.length);
+      onProgress?.({ ...reqResult, iteration }, offset + i, grandTotal);
       if (stopOnError) break;
       i = advanceIndex(i, nextRequestTarget, requestByName);
       nextRequestTarget = undefined;
@@ -421,6 +478,7 @@ export async function runCollection(
       },
       environmentVariables: { ...envVars },
       collectionVariables: { ...colVars },
+      schemas: collectionSchemas,
       globalVariables: { ...globalVars },
     };
 
@@ -460,7 +518,7 @@ export async function runCollection(
       scriptErrors,
     };
     results.push(reqResult);
-    onProgress?.(reqResult, i, flatRequests.length);
+    onProgress?.({ ...reqResult, iteration }, offset + i, grandTotal);
 
     if (!reqResult.passed && stopOnError) break;
 
@@ -479,6 +537,7 @@ export async function runCollection(
   return {
     collectionId,
     collectionName: collectionNode.name,
+    iterations: 1,
     flow,
     total: flatRequests.length,
     passed: results.filter(r => r.passed).length,
@@ -487,10 +546,49 @@ export async function runCollection(
     totalTests: allTests.length,
     passedTests: allTests.filter(t => t.passed).length,
     failedTests: allTests.filter(t => !t.passed).length,
-    results,
+    results: results.map(r => ({ ...r, iteration })),
     duration: Date.now() - startTime,
   };
 }
+
+/**
+ * The whole run: every iteration, merged.
+ *
+ * A data file sets the count; `iterations` applies only without one. Results
+ * are concatenated and the totals summed, so a caller that never asked for
+ * iterations sees exactly what it saw before — one pass, `iterations: 1`.
+ */
+export async function runCollection(
+  config: RunConfig,
+  onProgress?: ProgressCallback,
+  abortSignal?: { aborted: boolean },
+): Promise<RunResult> {
+  const rows = config.dataRows ?? [];
+  const passes = passCount(config.iterations, rows);
+
+  // The progress callback reports position in the whole run, which means
+  // knowing the length of one pass before the first one starts.
+  const tree = getCollectionTree();
+  const node = findNodeById(tree, config.collectionId);
+  const perPass = node ? flattenTree(node).length : 0;
+  const grandTotal = perPass * passes;
+
+  const done: RunResult[] = [];
+  for (let i = 0; i < passes; i++) {
+    if (abortSignal?.aborted) break;
+    done.push(await runIteration(
+      config, onProgress, abortSignal, rows[i] ?? {}, i, i * perPass, grandTotal,
+    ));
+  }
+
+  return mergeRuns(done, {
+    collectionId: config.collectionId, collectionName: node?.name ?? '',
+    flow: config.flow ?? 'sandwich', iterations: 0,
+    total: 0, passed: 0, failed: 0, skipped: 0,
+    totalTests: 0, passedTests: 0, failedTests: 0, results: [], duration: 0,
+  });
+}
+
 
 /** Determine next index: if setNextRequest was called, jump; otherwise i+1 */
 function advanceIndex(current: number, target: string | null | undefined, lookup: Map<string, number>): number {

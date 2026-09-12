@@ -9,6 +9,7 @@ import { useState, useEffect, useRef } from 'react';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
 import { AIButtonView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface PatternRecord {
   url: string;
@@ -85,9 +86,10 @@ export function AiResponsePatternLearning({ responseBody, method, url, status }:
     const pid = `ai-pattern-${Date.now()}`;
     reqIdRef.current = pid;
 
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'rest.pattern.check',
+      screen: 'REST · Response',
       systemPrompts: ['You are an API response anomaly detector. Compare two API responses and identify structural changes, missing/added fields, or type changes. Be concise. If no anomaly, say "No anomaly detected." If anomaly found, say "Anomaly:" then describe it in 1-2 sentences.'],
       userPrompt: `Baseline response:\n${baseline.slice(0, 2000)}\n\nCurrent response:\n${current.slice(0, 2000)}`,
       conversation: [], tools: [],
@@ -116,7 +118,7 @@ export function AiResponsePatternLearning({ responseBody, method, url, status }:
         <button type="button" onClick={() => setOpen(p => !p)}
           className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border cursor-pointer animate-pulse"
           style={{ color: WARN, borderColor: `color-mix(in srgb, ${WARN} 40%, transparent)`, backgroundColor: `color-mix(in srgb, ${WARN} 10%, transparent)` }}>
-          ⚠ Pattern anomaly
+ Pattern anomaly
         </button>
       )}
 
@@ -139,7 +141,7 @@ export function AiResponsePatternLearning({ responseBody, method, url, status }:
       {open && anomaly && (
         <div className="absolute top-full mt-1 right-0 z-50 w-[320px] rounded-xl border p-3 shadow-xl"
           style={{ backgroundColor: 'var(--color-panel)', borderColor: `color-mix(in srgb, ${WARN} 40%, var(--color-surface-border))` }}>
-          <p className="text-[11px] font-semibold mb-1.5" style={{ color: WARN }}>⚠ Pattern Anomaly Detected</p>
+          <p className="text-[11px] font-semibold mb-1.5"style={{ color: WARN }}> Pattern Anomaly Detected</p>
           <MdViewer content={anomaly} />
           <button type="button" onClick={() => setOpen(false)} className="mt-2 text-[10px] cursor-pointer" style={{ color: 'var(--color-text-muted)' }}>Dismiss</button>
         </div>

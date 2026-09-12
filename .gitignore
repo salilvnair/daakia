@@ -116,3 +116,7 @@ scripts/demo-video/.output/
 
 skills
 CLAUDE.md
+
+# Fixture snapshots hold live Secrets and service-account tokens from the test
+# clusters. Regenerate with `./scripts/dk8s-fixtures.sh snapshot` when needed.
+src/test/fixtures/k8s/snapshot/

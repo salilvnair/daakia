@@ -1,0 +1,52 @@
+# A pod logging Logback-shaped JSON with MDC, because the facet rail cannot be
+# verified without one.
+#
+# Every other fixture logs plain text, which means `buildFacets` had nothing to
+# build from and the rail correctly showed nothing — a true result that proves
+# nothing. This emits the shape a Spring Boot service with
+# logstash-logback-encoder produces: the standard keys, plus tenant, orderId
+# and traceId beside them.
+#
+# The values are chosen to exercise the rules rather than to look realistic:
+#   tenant   3 values, unevenly split      → a useful facet
+#   orderId  8 values                      → a facet, lower down
+#   traceId  distinct on every line        → dropped, it is a list not a filter
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zp-mdc
+  namespace: dk8s-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zp-mdc
+  template:
+    metadata:
+      labels:
+        app: zp-mdc
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              i=0
+              while true; do
+                i=$((i + 1))
+                case $((i % 6)) in
+                  0) T=eu-west;  L=ERROR; M="settlement batch failed" ;;
+                  1) T=eu-west;  L=INFO;  M="starting settlement batch" ;;
+                  2) T=eu-west;  L=DEBUG; M="ledger call ok" ;;
+                  3) T=us-east;  L=WARN;  M="connection pool at 90%" ;;
+                  4) T=us-east;  L=INFO;  M="payout accepted" ;;
+                  *) T=ap-south; L=INFO;  M="idempotency key hit" ;;
+                esac
+                W=$((i % 4))
+                O=$((i % 8))
+                printf '{"@timestamp":"%s","level":"%s","logger_name":"com.zp.payments.SettlementJob","thread_name":"settle-worker-%s","message":"%s","tenant":"%s","orderId":"ORD-%s","traceId":"%s"}\n' \
+                  "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" "$L" "$W" "$M" "$T" "8840$O" "trace-$i-$RANDOM"
+                sleep 1
+              done
