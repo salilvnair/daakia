@@ -34,6 +34,14 @@ const {
   developer would see it land, which is why the strings below carry no leading
   indentation of their own.
 */
+/*
+  The two tab strips REST puts on screen both carry a "Headers", and the
+  response one renders a count beside several labels. `data-tab` is the id the
+  app gave the tab, which neither problem touches.
+*/
+const reqTab = (page, id) => css(page, `[data-testid="rest-request-tabs"] [data-tab="${id}"]`).first();
+const resTab = (page, id) => css(page, `[data-testid="rest-response-tabs"] [data-tab="${id}"]`).first();
+
 async function calmMonaco(page) {
   await page.evaluate(() => {
     if (!window.monaco) return;
@@ -114,13 +122,121 @@ async function sendRest(page, url, { typeDelay = 40 } = {}) {
 const recipes = {
   // ── Protocols ─────────────────────────────────────────────────────────────
 
+  /**
+   * The flagship segment: one request, end to end.
+   *
+   * It types a body minified on purpose so that formatting has visible work to
+   * do, then shows both ways to ask for it — the editor's own right-click menu
+   * and the toolbar button beside it — before sending and walking the two tab
+   * strips the response arrives in.
+   *
+   * Tabs are addressed by `data-tab`, not by their label: the response strip
+   * renders counts beside "Headers" and "Cookies", so the accessible name is
+   * "Headers 12" on one run and "Headers 9" on the next.
+   */
   restRequest: {
     async run(page, o = {}) {
-      await sendRest(page, o.url || 'https://jsonplaceholder.typicode.com/users/1');
-      await page.waitForTimeout(o.settleMs ?? 1600);
+      const url = o.url || 'https://jsonplaceholder.typicode.com/posts';
+      /* One line, no spaces — the "before" that makes Format Document read as
+         something happening rather than as a no-op. */
+      const minified = o.json
+        || '{"title":"Daakia","body":"Every protocol in one window","userId":1,"tags":["rest","grpc","graphql"]}';
+      const delay = o.typeDelay || 30;
+
+      await openRail(page, 'REST');
+      await newTab(page);
+
+      /*
+        The method first, and through its own control.
+
+        Clicking the URL bar opens the suggestion list — history and mock
+        routes — and an earlier version of this recipe then clicked the first
+        thing reading "POST", which was a saved request. The URL bar ended up
+        holding somebody else's localhost URL and the segment recorded a
+        connection refused. The method sits in a dui select with its own
+        trigger; nothing else on screen is one.
+      */
+      await act('open the method menu', () => css(page, '.dui_select-text__trigger').first().click({ timeout: 6000 }));
+      await page.waitForTimeout(400);
+      await act('choose POST', () => css(page, '.dui_select-text__option:has-text("POST")').first().click({ timeout: 6000 }));
+      await page.waitForTimeout(500);
+
+      await typeInto(page, 'the URL bar', urlBar(page), url, delay);
+      /* Dismiss the suggestion list, so the next click lands on the tab strip
+         and not on whatever the list is covering. */
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(400);
+
+      await act('open the Body tab', () => reqTab(page, 'body').click({ timeout: 8000 }));
+      await page.waitForTimeout(400);
+      await act('open the body-type menu', () => text(page, 'No Body').first().click({ timeout: 8000 }));
+      await page.waitForTimeout(300);
+      await act('choose JSON', () => text(page, 'JSON').first().click({ timeout: 8000 }));
+      await page.waitForTimeout(500);
+      await typeCode(page, 'request body', minified, { delay });
+      await page.waitForTimeout(700);
+
+      /* One: the editor's own context menu, shortcut and all. */
+      await act('right-click the body', () => editor(page).first().click({ button: 'right', timeout: 6000 }));
+      await page.waitForTimeout(600);
+      await act('choose Format Document', () => text(page, 'Format Document').first().click({ timeout: 6000 }));
+      await page.waitForTimeout(1200);
+
+      /* Two: the same thing from the toolbar. Undo puts the one-liner back so
+         the button has the same work to do — Monaco formats as a single edit,
+         so one undo is exactly the format and not the typing. */
+      await act('undo the formatting', async () => {
+        await editor(page).first().click({ timeout: 6000 });
+        await page.keyboard.press('Control+Z');
+      });
+      await page.waitForTimeout(800);
+      await act('press Prettify', () => css(page, 'button[title="Prettify"], button[title="Prettify JSON"]').first().click({ timeout: 6000 }));
+      await page.waitForTimeout(1100);
+
+      await act('press Send', () => btn(page, 'Send').first().click({ timeout: 8000 }));
+      await expect(page, 'a response status', css(page, '[class*="status"]:has-text("201"), [class*="status"]:has-text("200"), :text("201 Created")'), { timeout: 20000 });
+      await page.waitForTimeout(1100);
+
+      /* The response, tab by tab, and back to the body it opened on. */
+      for (const [id, label] of [['headers', 'Headers'], ['timeline', 'Timeline'], ['raw', 'Raw'], ['json', 'JSON']]) {
+        await soft(`the response ${label} tab`, async () => {
+          await resTab(page, id).click({ timeout: 4000 });
+          await page.waitForTimeout(1100);
+        });
+      }
+
+      /* Then the request's own, ending on the two the segment is here for. */
+      for (const [id, label] of [['params', 'Params'], ['headers', 'Headers'], ['docs', 'Docs'], ['settings', 'Settings']]) {
+        await soft(`the request ${label} tab`, async () => {
+          await reqTab(page, id).click({ timeout: 4000 });
+          await page.waitForTimeout(1400);
+        });
+      }
+      await page.waitForTimeout(o.settleMs ?? 900);
     },
+
     async verify(page) {
-      await expect(page, 'the response body', css(page, '.monaco-editor, pre'), { timeout: 8000 });
+      /*
+        Three things, because this segment claims three.
+
+        The formatted body proves both Format paths ran — a one-line body means
+        the right-click did nothing and Prettify did nothing either. The status
+        proves the request left the machine. The Settings panel proves the last
+        tab click landed somewhere real rather than on a tab that exists but
+        renders nothing.
+      */
+      const body = await page.evaluate(() => window.monaco?.editor.getEditors()
+        .map((e) => e.getValue()).find((v) => v && v.includes('Daakia')));
+      if (!body) throw new Error('the body editor does not hold the typed JSON');
+      if (!body.includes('\n')) throw new Error(`the body was never formatted — it is still one line:\n${body}`);
+
+      /* The same selector `run` waited on. An earlier version looked only for
+         an element whose class contains "status"; the pill's class does not,
+         so `run` passed on the text match and `verify` then failed on a screen
+         that was entirely correct. */
+      await expect(page, 'a response status', css(page, ':text("201 Created"), :text("200 OK")'), { timeout: 8000 });
+      /* Something the Settings tab shows without scrolling. */
+      await expect(page, 'the request Settings panel', text(page, 'Follow Redirects', false), { timeout: 6000 });
     },
   },
 

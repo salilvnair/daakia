@@ -66,7 +66,16 @@ if (config.intro?.enabled) {
   plan.push({ id: 'intro', raw: path.join(RAW_DIR, 'intro.webm'), trimStartSec: 0, effect: config.intro.effect || 'zoom-in' });
 }
 for (const seg of config.segments) {
-  plan.push({ id: seg.id, raw: path.join(RAW_DIR, seg.id + '.webm'), trimStartSec: seg.trimStartSec ?? 1.5, effect: seg.effect || 'zoom-in' });
+  plan.push({
+    id: seg.id,
+    raw: path.join(RAW_DIR, seg.id + '.webm'),
+    trimStartSec: seg.trimStartSec ?? 1.5,
+    /* Where the recorder said the segment stopped being interesting. Absent
+       for a clip recorded before record.js marked its takes, or for one whose
+       driver never marked an end — both keep the whole tail. */
+    endAtSec: seg.endAtSec,
+    effect: seg.effect || 'zoom-in',
+  });
 }
 
 for (const clip of plan) {
@@ -83,7 +92,8 @@ for (const clip of plan) {
 console.log('Processing clips (trim + camera effect)...');
 const processed = plan.map((clip, i) => {
   const rawDuration = ffprobeDuration(clip.raw);
-  const duration = Math.max(0.5, rawDuration - clip.trimStartSec);
+  const endAt = typeof clip.endAtSec === 'number' ? Math.min(rawDuration, clip.endAtSec) : rawDuration;
+  const duration = Math.max(0.5, endAt - clip.trimStartSec);
   const totalFrames = Math.round(duration * fps);
   const zoompan = buildZoompanFilter(clip.effect, totalFrames, { width, height, fps });
   const outFile = path.join(PROC_DIR, `${i}_${clip.id}.mp4`);
@@ -93,7 +103,7 @@ const processed = plan.map((clip, i) => {
     // per-frame rounding jitter on crisp UI edges — scale back down here.
     vfParts.push(zoompan, `scale=${width}:${height}:flags=lanczos`);
   }
-  const ffArgs = ['-ss', String(clip.trimStartSec), '-i', clip.raw];
+  const ffArgs = ['-ss', String(clip.trimStartSec), '-i', clip.raw, '-t', String(duration)];
   if (vfParts.length) ffArgs.push('-vf', vfParts.join(','));
   ffArgs.push('-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', outFile);
   ffmpeg(ffArgs);

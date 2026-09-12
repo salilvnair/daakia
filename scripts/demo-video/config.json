@@ -36,7 +36,7 @@
       "effect": "static",
       "trimStartSec": 1.2,
       "options": {
-        "url": "https://jsonplaceholder.typicode.com/users/1"
+        "url": "https://jsonplaceholder.typicode.com/posts"
       }
     },
     {
@@ -119,7 +119,7 @@
     },
     {
       "id": "dk8s_pods",
-      "label": "Dk8s \u2014 Pods",
+      "label": "Dk8s — Pods",
       "recipe": "dk8sPods",
       "effect": "static",
       "trimStartSec": 1.2,
@@ -127,7 +127,7 @@
     },
     {
       "id": "dk8s_logs",
-      "label": "Dk8s \u2014 Pod detail",
+      "label": "Dk8s — Pod detail",
       "recipe": "dk8sLogs",
       "effect": "static",
       "trimStartSec": 1.2,
@@ -135,7 +135,7 @@
     },
     {
       "id": "dkgh_board",
-      "label": "DkGH \u2014 Board",
+      "label": "DkGH — Board",
       "recipe": "dkghBoard",
       "effect": "static",
       "trimStartSec": 1.2,
@@ -143,7 +143,7 @@
     },
     {
       "id": "dkgh_team",
-      "label": "DkGH \u2014 Team",
+      "label": "DkGH — Team",
       "recipe": "dkghTeam",
       "effect": "static",
       "trimStartSec": 1.2,
@@ -158,7 +158,7 @@
     },
     {
       "id": "settings_mock",
-      "label": "Settings \u2014 Mock Server",
+      "label": "Settings — Mock Server",
       "recipe": "settings",
       "effect": "static",
       "trimStartSec": 1.2,
@@ -169,7 +169,7 @@
     },
     {
       "id": "settings_cluster",
-      "label": "Settings \u2014 Cluster",
+      "label": "Settings — Cluster",
       "recipe": "settings",
       "effect": "static",
       "trimStartSec": 1.2,
@@ -179,7 +179,7 @@
     },
     {
       "id": "settings_provider",
-      "label": "Settings \u2014 LLM Provider",
+      "label": "Settings — LLM Provider",
       "recipe": "settings",
       "effect": "static",
       "trimStartSec": 1.2,
@@ -189,7 +189,7 @@
     },
     {
       "id": "settings_prompt",
-      "label": "Settings \u2014 Prompt Library",
+      "label": "Settings — Prompt Library",
       "recipe": "settings",
       "effect": "static",
       "trimStartSec": 1.2,

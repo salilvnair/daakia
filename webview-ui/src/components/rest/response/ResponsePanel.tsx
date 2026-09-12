@@ -186,6 +186,8 @@ export function ResponsePanel() {
           onChange={(v) => setActiveView(v as ResponseView)}
           size="md"
           variant="underline"
+          /* See the matching strip in RequestPanel — both carry "Headers". */
+          testId="rest-response-tabs"
         />
 
         {/*

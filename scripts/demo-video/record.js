@@ -104,10 +104,24 @@ async function take(browser, id, drive) {
     recordVideo: { dir, size: { width, height } },
   });
   const page = await context.newPage();
+  /*
+    Playwright starts filming when the page is created, so the clip opens on a
+    blank frame, the app booting, and the warmup — eighteen seconds of nothing
+    in a segment whose interesting part is ten. The driver marks the window
+    that is worth keeping and compose.js cuts to it; without this every clip
+    has the same long dead head and the finished video runs three times its
+    useful length.
+  */
+  const t0 = Date.now();
+  const marks = {};
+  const mark = {
+    begin: () => { marks.begin = (Date.now() - t0) / 1000; },
+    end: () => { marks.end = (Date.now() - t0) / 1000; },
+  };
 
   let failure;
   try {
-    await drive(page);
+    await drive(page, mark);
   } catch (e) {
     failure = e;
     /* A picture of the moment it went wrong, which is worth far more than the
@@ -127,7 +141,24 @@ async function take(browser, id, drive) {
   const dest = path.join(RAW_DIR, `${id}.webm`);
   fs.renameSync(path.join(dir, files[0]), dest);
   fs.rmSync(dir, { recursive: true, force: true });
-  return dest;
+  return { dest, marks };
+}
+
+/**
+ * Turn the marked window into the trim the composer wants.
+ *
+ * A little lead-in so the first click is not the first frame, and a little
+ * hold at the end so the result is on screen long enough to read. A take that
+ * never marked anything keeps the old behaviour rather than guessing.
+ */
+const LEAD_IN_SEC = 0.6;
+const HOLD_SEC = 1.4;
+
+function trimFromMarks(marks, fallbackStart) {
+  if (typeof marks.begin !== 'number') return { trimStartSec: fallbackStart };
+  const trimStartSec = Math.max(0, marks.begin - LEAD_IN_SEC);
+  if (typeof marks.end !== 'number') return { trimStartSec };
+  return { trimStartSec, endAtSec: marks.end + HOLD_SEC };
 }
 
 (async () => {
@@ -141,6 +172,8 @@ async function take(browser, id, drive) {
 
   const failed = [];
   const made = [];
+  /* id -> the trim its marks earned, written into the snapshot below. */
+  const kept = {};
   /*
     Tidy the scratch tabs first.
 
@@ -170,8 +203,9 @@ async function take(browser, id, drive) {
     fs.mkdirSync(OUT_DIR, { recursive: true });
     fs.writeFileSync(introHtmlPath, buildIntroHtml(config.intro));
     const browser = await launch();
-    await take(browser, 'intro', async (page) => {
+    await take(browser, 'intro', async (page, mark) => {
       await page.goto('file://' + introHtmlPath);
+      mark.begin();
       await page.waitForTimeout((config.intro.durationSec || 3.2) * 1000);
     });
     await browser.close();
@@ -187,22 +221,27 @@ async function take(browser, id, drive) {
 
     let ok = false;
     let last;
+    let trim;
     for (let attempt = 1; attempt <= retries && !ok; attempt++) {
       /* Its own browser, closed below whatever happens — a crashed renderer
          must not take the rest of the run with it. */
       const browser = await launch();
       try {
-        await take(browser, seg.id, async (page) => {
+        const { marks } = await take(browser, seg.id, async (page, mark) => {
           await page.goto(config.appUrl, { waitUntil: 'networkidle' });
           await page.waitForTimeout(seg.warmupMs ?? 1500);
+          mark.begin();
           await recipe.run(page, seg.options || {});
           /* The half the old recorder had none of: does the screen agree that
              the thing happened? */
           if (recipe.verify) await recipe.verify(page, seg.options || {});
-          /* After the verify, so nothing here can affect what was filmed —
-             this keeps the bar from growing across the twenty-two takes. */
+          mark.end();
+          /* After the mark, so the tidy is filmed but never composed — this
+             keeps the bar from growing across the twenty-two takes without
+             putting a flurry of closing tabs in the video. */
           await closeScratchTabs(page);
         });
+        trim = trimFromMarks(marks, seg.trimStartSec ?? 1.5);
         ok = true;
       } catch (e) {
         last = e;
@@ -213,7 +252,8 @@ async function take(browser, id, drive) {
 
     if (ok) {
       made.push(seg.id);
-      console.log(`✓ ${seg.id}`);
+      kept[seg.id] = trim;
+      console.log(`✓ ${seg.id} (${trim.endAtSec ? (trim.endAtSec - trim.trimStartSec).toFixed(1) + 's usable' : 'untrimmed'})`);
     } else {
       failed.push({ id: seg.id, why: String(last && last.message) });
       if (!keepGoing) break;
@@ -221,7 +261,12 @@ async function take(browser, id, drive) {
   }
 
   fs.writeFileSync(path.join(OUT_DIR, 'config.snapshot.json'),
-    JSON.stringify({ ...config, segments: config.segments.filter((s) => made.includes(s.id)) }, null, 2));
+    JSON.stringify({
+      ...config,
+      segments: config.segments
+        .filter((s) => made.includes(s.id))
+        .map((s) => ({ ...s, ...(kept[s.id] || {}) })),
+    }, null, 2));
 
   console.log(`\n${made.length} clip${made.length === 1 ? '' : 's'} recorded to ${RAW_DIR}`);
 

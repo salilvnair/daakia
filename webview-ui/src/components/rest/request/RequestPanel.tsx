@@ -296,6 +296,10 @@ export function RequestPanel() {
             onChange={setActiveSection}
             size="md"
             variant="underline"
+            /* Request and response both offer a "Headers" tab, so a test that
+               asks for one by name gets two. Named strips give it a way to say
+               which half of the screen it means. */
+            testId="rest-request-tabs"
           />
         </div>
         <RequestAiToolbar tab={tab} activeSection={activeSection} onOpenFuzzer={() => setShowFuzzer(true)} />
