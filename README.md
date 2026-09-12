@@ -12,7 +12,7 @@
 [![React](https://img.shields.io/badge/React-19-61dafb?logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6?logo=typescript)](https://www.typescriptlang.org/)
 
-![Daakia demo — REST, GraphQL, gRPC, SOAP, WebSocket, MCP, Mock Server, Collections, Daakia AI, DevTools, Dk8s and DkGH](https://raw.githubusercontent.com/salilvnair/daakia/main/media/daakia-showcase.gif)
+![Daakia demo — REST, GraphQL, gRPC, SOAP, WebSocket, MCP, Mock Server, Collections, Daakia AI, DevTools, Dk8s and DkGH](https://raw.githubusercontent.com/salilvnair/daakia/main/media/daakia-showcase-3.0.gif)
 
 ---
 

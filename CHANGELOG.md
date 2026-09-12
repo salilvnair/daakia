@@ -28,7 +28,7 @@ from the UI.
 The major bump is for the shape of the app, not a break in the file formats —
 collections, environments and mock configs from 2.x load unchanged.
 
-![Dk8s and DkGH](https://raw.githubusercontent.com/salilvnair/daakia/main/media/daakia-dk8s-dkgh.gif)
+![Dk8s and DkGH](https://raw.githubusercontent.com/salilvnair/daakia/main/media/daakia-dk8s-dkgh-3.0.gif)
 
 ### Added — dk8s: Kubernetes, without leaving the editor
 - **Pods, watched live** — contexts, namespaces and pod grids with status,
