@@ -119,6 +119,17 @@ async function take(browser, id, drive) {
     viewport: { width, height },
     recordVideo: { dir, size: { width, height } },
   });
+  /*
+    Tell dui that something other than a person is typing.
+
+    Editor options are construction options: every re-render hands Monaco the
+    same object again, so turning bracket and tag auto-closing off from outside
+    lasted exactly until the next keystroke put it back. The typing then landed
+    a closing brace on top of one Monaco had already inserted. Setting this
+    before the app loads is the only place the answer holds for the whole take.
+  */
+  await context.addInitScript(() => { window.__DUI_NO_AUTOCLOSE__ = true; });
+
   const page = await context.newPage();
   /*
     Playwright starts filming when the page is created, so the clip opens on a

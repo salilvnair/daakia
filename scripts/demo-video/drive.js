@@ -257,13 +257,28 @@ async function closeAllTabs(page, { rounds = 3 } = {}) {
   return before - (await tabCount(page));
 }
 
+/**
+ * Open one of the right-hand panels — Collections, History, Schema and so on.
+ *
+ * Only a request tab has these: a standalone tab (dk8s, dkgh, mock server,
+ * settings) owns the whole width and the rail is not rendered at all, so this
+ * is a no-op there rather than a failure.
+ */
+async function openPanel(page, title) {
+  const icon = css(page, `button[title="${title}"]`).first();
+  if (!(await icon.count())) return false;
+  await icon.click({ timeout: 5000 }).catch(() => {});
+  await page.waitForTimeout(700);
+  return true;
+}
+
 /** How many tabs are open right now. */
 async function tabCount(page) {
   return css(page, 'button[title="Close tab"]').count().catch(() => 0);
 }
 
 module.exports = {
-  closeAllTabs, tabCount,
+  closeAllTabs, tabCount, openPanel,
   STEP_MS, act, soft, expect, typeInto,
   vis, btn, field, tab, css, text, byId, rail, urlBar, readField, openRail, newTab,
 };

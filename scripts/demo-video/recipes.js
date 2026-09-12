@@ -14,8 +14,10 @@
  * See `drive.js` for the helpers, and for why every locator is visible-only.
  */
 const {
-  act, soft, expect, typeInto, btn, field, tab, css, text, urlBar, openRail, newTab,
+  act, soft, expect, typeInto, btn, field, tab, css, text, byId, rail, urlBar, openRail, newTab,
 } = require('./drive');
+/* The five protocol recipes live next door — see protocols.js for why. */
+const { protocols } = require('./protocols');
 
 // ── Monaco ──────────────────────────────────────────────────────────────────
 
@@ -43,10 +45,12 @@ const {
   The control that picks the body type.
 
   It reads "No Body" on a fresh request and the chosen type afterwards, so it
-  cannot be found by its text twice in a row. The Body tab has exactly one dui
-  select in it, which is what this asks for.
+  cannot be found by its text twice in a row — and asking for "the last dui
+  select on screen" found the *method* dropdown instead, so the recipe opened
+  GET/POST/PUT and then waited six seconds for an "XML" that was never coming.
+  `BodyEditor` names it.
 */
-const bodyTypeMenu = (page) => css(page, '.dui_select__trigger, .dui_select-text__trigger, [class*="select"][class*="trigger"]').last();
+const bodyTypeMenu = (page) => byId(page, 'body-type');
 
 const reqTab = (page, id) => css(page, `[data-testid="rest-request-tabs"] [data-tab="${id}"]`).first();
 const resTab = (page, id) => css(page, `[data-testid="rest-response-tabs"] [data-tab="${id}"]`).first();
@@ -321,118 +325,7 @@ const recipes = {
     },
   },
 
-  graphqlQuery: {
-    async run(page, o = {}) {
-      const query = o.query || '{\ncountries {\ncode\nname\nemoji\n}\n}';
-      await openRail(page, 'GraphQL');
-      await newTab(page);
-      await typeInto(page, 'the endpoint', urlBar(page), o.url || 'https://countries.trevorblades.com/', 30);
-      await page.waitForTimeout(300);
-      await typeCode(page, 'query', query, { delay: o.typeDelay || 30, json: false });
-      await page.waitForTimeout(300);
-      await act('run the query', () => css(page, 'button[title="Run query"]').first().click({ timeout: 8000 }));
-      await page.waitForTimeout(o.settleMs ?? 2400);
-    },
-    async verify(page) {
-      await expect(page, 'a GraphQL response', css(page, ':text("data"), :text("countries")'), { timeout: 12000 });
-    },
-  },
-
-  websocketEcho: {
-    async run(page, o = {}) {
-      const json = o.json || '{\n"type": "subscribe",\n"channel": "orders"\n}';
-      await openRail(page, 'Real time');
-      await newTab(page);
-      await typeInto(page, 'the socket URL', urlBar(page), o.url || 'wss://echo.websocket.org', 30);
-      await page.waitForTimeout(300);
-      await act('connect', () => btn(page, 'Connect').first().click({ timeout: 8000 }));
-      await expect(page, 'a connected socket', css(page, ':text("Connected"), :text("OPEN")'), { timeout: 12000 });
-      await typeCode(page, 'message', json, { delay: o.typeDelay || 30 });
-      await soft('send the message', () => btn(page, 'Send').first().click({ timeout: 4000 }));
-      await page.waitForTimeout(o.settleMs ?? 1600);
-    },
-    async verify(page) {
-      await expect(page, 'the communication panel', css(page, ':text("Connected"), :text("OPEN")'), { timeout: 6000 });
-    },
-  },
-
-  grpcMessage: {
-    async run(page, o = {}) {
-      await openRail(page, 'gRPC');
-      await newTab(page);
-      /* gRPC's endpoint bar is dui's HighlightedInputView — a contentEditable
-         div with a decorative placeholder span, not an <input>, so
-         getByPlaceholder never matches it. */
-      await typeInto(page, 'the endpoint', urlBar(page), o.endpoint || 'localhost:50051', 40);
-      await page.waitForTimeout(300);
-      await act('open the Message tab', () => tab(page, 'Message').first().click({ timeout: 8000 }));
-      await page.waitForTimeout(400);
-      await typeCode(page, 'request message', o.message || '{\n"name": "Daakia"\n}', { delay: o.typeDelay || 30 });
-      await page.waitForTimeout(o.settleMs ?? 1400);
-    },
-    async verify(page) {
-      const seen = await page.evaluate(() => window.monaco?.editor.getEditors().map((e) => e.getValue()).find((v) => v && v.trim()));
-      if (!seen || !seen.includes('Daakia')) throw new Error('the gRPC message editor is empty');
-    },
-  },
-
-  soapEnvelope: {
-    async run(page, o = {}) {
-      await openRail(page, 'SOAP');
-      await newTab(page);
-      await expect(page, 'the envelope editor', css(page, '.monaco-editor'), { timeout: 10000 });
-      await act('focus the envelope editor', () => css(page, '.monaco-editor').first().click({ timeout: 8000 }));
-      await page.waitForTimeout(250);
-      await act('clear it', async () => {
-        await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
-        await page.keyboard.press('Delete');
-      });
-
-      /*
-        Opening tags only — the editor writes the closing ones.
-
-        dui's editor completes an element the moment you type the `>` and puts
-        the caret between the tags (`installTagAutoClose`). Typing the closing
-        tags on top of that is what produced
-        `</Currency>Currency></GetRate>GetRate>` in the last video: two things
-        both doing the same job. So this types the envelope the way the editor
-        is built to be typed, which is also how a person using it would.
-      */
-      for (const open of ['<soap:Envelope>', '<soap:Body>', '<GetRate>', '<Currency>']) {
-        await act(`type ${open}`, () => page.keyboard.type(open, { delay: o.typeDelay || 34 }));
-        await page.waitForTimeout(120);
-      }
-      await act('type the value', () => page.keyboard.type(o.value || 'EUR', { delay: o.typeDelay || 34 }));
-      await page.waitForTimeout(o.settleMs ?? 1600);
-    },
-    async verify(page) {
-      const seen = await page.evaluate(() => window.monaco?.editor.getEditors().map((e) => e.getValue()).find((v) => v && v.trim()));
-      const want = '<soap:Envelope><soap:Body><GetRate><Currency>EUR</Currency></GetRate></soap:Body></soap:Envelope>';
-      const flat = (seen || '').replace(/\s+/g, '');
-      if (flat !== want.replace(/\s+/g, '')) {
-        throw new Error(`the envelope came out as:
-${seen}
-expected:
-${want}`);
-      }
-    },
-  },
-
-  mcpServer: {
-    async run(page, o = {}) {
-      await openRail(page, 'MCP');
-      await newTab(page);
-      /* MCP's command bar is the same dui editor every other protocol uses —
-         `testId="url-bar"` — rather than the `npx…` placeholder input the old
-         recipe hunted for and never found. */
-      await typeInto(page, 'the MCP command', urlBar(page),
-        o.command || 'npx @modelcontextprotocol/server-filesystem /workspace', o.typeDelay || 34);
-      await page.waitForTimeout(o.settleMs ?? 1600);
-    },
-    async verify(page) {
-      await expect(page, 'the MCP panel', text(page, 'STDIO', false), { timeout: 8000 });
-    },
-  },
+  ...protocols,
 
   aiChat: {
     async run(page, o = {}) {
