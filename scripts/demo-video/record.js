@@ -201,7 +201,15 @@ function trimFromMarks(marks, fallbackStart) {
   const made = [];
   /* id -> the trim its marks earned, written into the snapshot below. */
   const kept = {};
-  if (config.intro?.enabled && !only.length) {
+  /*
+    The intro is a segment too, as far as `--only` is concerned.
+
+    It used to be skipped by any `--only` run, so once the reshoot workflow
+    existed the intro clip quietly disappeared from `raw/` and compose stopped
+    with "Missing clip for intro" — suggesting `--only intro`, which was the
+    one thing that could not produce it.
+  */
+  if (config.intro?.enabled && (!only.length || only.includes('intro'))) {
     const introHtmlPath = path.join(OUT_DIR, 'intro.html');
     fs.mkdirSync(OUT_DIR, { recursive: true });
     fs.writeFileSync(introHtmlPath, buildIntroHtml(config.intro));
@@ -285,6 +293,8 @@ function trimFromMarks(marks, fallbackStart) {
       carried.set(seg.id, seg);
     }
   }
+  /* The intro is not in config.segments, so it is neither made nor carried by
+     the loop above — but compose plans it whenever it is enabled. */
   fs.writeFileSync(path.join(OUT_DIR, 'config.snapshot.json'),
     JSON.stringify({
       ...config,
