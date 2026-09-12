@@ -36,6 +36,7 @@ import {
 } from './pod-view';
 
 import { ACCENT, OK, MUTED, MATCH } from './tone';
+import { isTypingTarget } from '../../utils/typing-target';
 /* Amber, not the dk8s accent: a star is a personal mark, not a status, and
    reusing the accent made starred rows look selected. */
 const FAV_COLOR = 'var(--color-warning)';
@@ -733,12 +734,16 @@ export function PodGrid() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      const typing = target && /^(INPUT|TEXTAREA)$/.test(target.tagName);
+      /* `isTypingTarget`, not a tag test. This listener is on `window` — the
+         last stop in the bubble path — and it used to `preventDefault()` every
+         `/` typed into a contenteditable anywhere in the app, so a URL typed in
+         REST came out with its slashes missing and nothing said why. */
+      const typing = isTypingTarget(target);
       if (e.key === '/' && !typing) {
         e.preventDefault();
         searchRef.current?.querySelector('input')?.focus();
       } else if (e.key === 'Escape' && typing) {
-        (target as HTMLInputElement).blur();
+        (target as HTMLInputElement).blur?.();
       }
     };
     window.addEventListener('keydown', onKey);

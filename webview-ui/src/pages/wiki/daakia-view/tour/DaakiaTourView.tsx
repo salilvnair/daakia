@@ -28,6 +28,7 @@ import { WEBSOCKET_CAPTURES } from '../websocket/captures';
 import type { CaptureEntry } from '../capture/CaptureScrollView';
 import { ChevronRightIcon, CloseIcon, PlayIcon, PauseIcon } from '../../../../icons';
 import './tour.css';
+import { isTypingTarget } from '../../../../utils/typing-target';
 
 /** How long each marker's card stays open while the tour plays itself. */
 const SPOT_MS = 5000;
@@ -344,7 +345,7 @@ export function DaakiaTourView() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
-      if (el && /^(INPUT|TEXTAREA)$/.test(el.tagName)) return;
+      if (isTypingTarget(el)) return;
       if (e.key === 'ArrowRight') goManually(index + 1);
       if (e.key === 'ArrowLeft') goManually(index - 1);
       if (e.key === ' ') { e.preventDefault(); setPlaying(p => !p); }

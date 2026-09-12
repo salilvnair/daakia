@@ -108,6 +108,7 @@ import {
 } from './board-types';
 import { since, until, atClock } from './format';
 import { ACCENT, activeAccount, hasScope, type GhEnv, type RepoMeta } from './types';
+import { isPlainKeyInField } from '../../utils/typing-target';
 
 /** The four sections of the tab, in the order a lead uses them. */
 const SECTIONS: { id: string; label: string; icon: IcoName; disabled?: boolean }[] = [
@@ -1873,11 +1874,10 @@ function useKeys({
     };
 
     const down = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      /* Never steal a key from something somebody is typing into. */
-      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
-      if (target?.isContentEditable) return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      /* Never steal a key from something somebody is typing into — see
+         `isPlainKeyInField`, which knows about Monaco and contenteditable as
+         well as the three field tags. */
+      if (isPlainKeyInField(e)) return;
 
       const current = ordered.find(i => i.number === cursor);
 
