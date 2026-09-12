@@ -8,6 +8,57 @@ const {
 
 const app = {
   /**
+   * Ctrl+K — the way into everything.
+   *
+   * It searches commands, open tabs, saved requests, settings sections and
+   * the eighty inline AI features from one box, so it is the first thing
+   * worth showing and it was not in the video at all.
+   */
+  commandPalette: {
+    async run(page, o = {}) {
+      await openRail(page, 'REST');
+      await newTab(page);
+      await page.waitForTimeout(700);
+
+      await act('press Ctrl+K', () => page.keyboard.press('Control+K'));
+      const box = field(page, 'Search commands, requests, tabs…');
+      await expect(page, 'the command palette', box, { timeout: 10000 });
+      /* Held open unsearched first — the default list is the point as much as
+         the filtering is. */
+      await page.waitForTimeout(2200);
+
+      await act('search for a protocol', () => page.keyboard.type('graphql', { delay: 105 }));
+      await page.waitForTimeout(2000);
+
+      await act('clear it', async () => {
+        for (let i = 0; i < 7; i++) await page.keyboard.press('Backspace');
+      });
+      await page.waitForTimeout(700);
+
+      await act('search the settings', () => page.keyboard.type(o.query || 'llm', { delay: 115 }));
+      await page.waitForTimeout(2000);
+
+      /*
+        And run one, because a palette that only filters is a list.
+
+        Clicked by name rather than by pressing Enter on the highlighted row:
+        what ranks first for a two-letter query is the palette's business, and
+        an earlier version of this segment asked for "llm", got Mock Server,
+        and failed on a screen that was working perfectly.
+      */
+      await act('open LLM Provider from the palette',
+        () => text(page, 'LLM Provider', false).first().click({ timeout: 8000 }));
+      await page.waitForTimeout(o.settleMs ?? 2600);
+    },
+    async verify(page) {
+      /* Enter opened LLM Provider, so the providers page is what should be on
+         screen — not the palette, and not the request it was opened over. */
+      await expect(page, 'the LLM Provider settings the palette opened',
+        text(page, 'AI Providers', false), { timeout: 10000 });
+    },
+  },
+
+  /**
    * The collections tree, opened far enough to see requests in it.
    */
   collections: {

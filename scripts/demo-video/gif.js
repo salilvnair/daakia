@@ -54,6 +54,8 @@ const mb = (f) => (fs.statSync(f).size / 1024 / 1024).toFixed(1);
 const HIGHLIGHTS = [
   /* The title card, so a loop that plays with no context says what it is. */
   ['intro', 5.2],
+  /* Then Ctrl+K, which is how somebody reaches everything below it. */
+  ['command_palette', 5.0],
   ['rest', 5.5],
   ['graphql', 4.5],
   ['websocket', 4.5],

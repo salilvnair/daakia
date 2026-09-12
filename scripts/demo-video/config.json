@@ -30,6 +30,14 @@
   },
   "segments": [
     {
+      "id": "command_palette",
+      "label": "Ctrl+K — everything",
+      "recipe": "commandPalette",
+      "effect": "static",
+      "trimStartSec": 1.2,
+      "warmupMs": 1800
+    },
+    {
       "id": "rest",
       "label": "REST",
       "recipe": "restRequest",

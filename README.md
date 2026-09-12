@@ -40,6 +40,7 @@ feature without the tokens.
 ## Table of contents
 
 - [Install](#install)
+- [Ctrl+K — one box for everything](#ctrlk--one-box-for-everything)
 - [The surfaces](#the-surfaces)
 - [Protocols](#protocols)
   - [REST](#rest) · [GraphQL](#graphql) · [gRPC](#grpc) · [SOAP](#soap) · [Realtime](#realtime-websocket--sse--socketio--mqtt) · [MCP](#mcp)
@@ -78,6 +79,28 @@ code --install-extension daakia-3.0.0.vsix
 
 Open it with **Daakia: Open Panel** from the command palette, or the Daakia icon
 in the activity bar. There is nothing to sign into.
+
+---
+
+## Ctrl+K — one box for everything
+
+![Ctrl+K — the command palette searching commands, requests, tabs and settings](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/command-palette.gif)
+
+The fastest way into any of what follows. `Ctrl+K` opens a single box that
+searches across:
+
+- **New request** in any of the seven protocols
+- **Open tabs**, by name — including the standalone ones
+- **Saved requests**, across every collection
+- **Navigation** — Collections, History, Environments, Mock Server, Daakia AI,
+  Settings
+- **Settings sections** by what they contain, not just their name: "api key"
+  finds LLM Provider, "port range" finds Mock Server, "cookie" finds Power
+  Features
+- **The eighty inline AI features**, each of which also has its own trigger
+  where it is used
+
+`↑` `↓` to move, `↵` to run, `esc` to close.
 
 ---
 
