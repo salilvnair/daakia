@@ -52,6 +52,8 @@ const mb = (f) => (fs.statSync(f).size / 1024 / 1024).toFixed(1);
  * page of checkboxes says nothing in four seconds.
  */
 const HIGHLIGHTS = [
+  /* The title card, so a loop that plays with no context says what it is. */
+  ['intro', 2.4],
   ['rest', 5.5],
   ['graphql', 4.5],
   ['websocket', 4.5],
@@ -75,7 +77,17 @@ function toGif(source, dest, extraIn = []) {
 }
 
 if (highlights || pick.length) {
-  const chosen = pick.length ? pick.map((id) => [id, seconds]) : HIGHLIGHTS;
+  /*
+    A picked GIF opens on the title card as well — `--no-intro` to skip it.
+
+    Without this the GIFs began mid-request, which reads as a clip that lost
+    its first second rather than as the start of anything.
+  */
+  const picked = pick.map((id) => [id, seconds]);
+  const wantsIntro = !argv.includes('--no-intro') && !pick.includes('intro');
+  const chosen = pick.length
+    ? (wantsIntro ? [['intro', 2.4], ...picked] : picked)
+    : HIGHLIGHTS;
   const parts = [];
   const listFile = path.join(OUT_DIR, '_highlights.txt');
   const tmp = [];
@@ -89,7 +101,17 @@ if (highlights || pick.length) {
     /* From a little way in — the opening second of a segment is usually the
        app settling, and the interesting part is what happens next. */
     const cut = path.join(OUT_DIR, `_hl_${id}.mp4`);
-    ffmpeg(['-ss', '2', '-i', clip, '-t', String(secs), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', cut]);
+    /*
+      Where to start each clip.
+
+      The title card types its name in, so its first second is a cursor on an
+      empty background — and the first frame of a GIF is what GitHub shows
+      before the image loads, and what a paused loop sits on. Two and a bit
+      seconds in, the word and the badges are drawn. Every other clip opens on
+      the app settling, so those skip two seconds for the opposite reason.
+    */
+    const from = id === 'intro' ? '2.2' : '2';
+    ffmpeg(['-ss', from, '-i', clip, '-t', String(secs), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', cut]);
     tmp.push(cut);
     parts.push(`file '${cut.replace(/\\/g, '/')}'`);
   }

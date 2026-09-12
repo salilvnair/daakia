@@ -34,9 +34,22 @@ const snapshot = JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
 
 fs.mkdirSync(REFINED_DIR, { recursive: true });
 
-const segments = snapshot.segments.filter((s) => !wanted.length || wanted.includes(s.id));
+/*
+  The intro is a clip but not a segment.
+
+  `record.js` writes `raw/intro.webm` and `compose.js` plans it, but it is not
+  in `config.segments`, so nothing here ever produced `refined/intro.mp4` — and
+  the GIFs, which are built from this folder, all opened on the first REST
+  frame with no title card in front of them.
+*/
+const introClip = { id: 'intro', trimStartSec: 0 };
+const all = fs.existsSync(path.join(RAW_DIR, 'intro.webm'))
+  ? [introClip, ...snapshot.segments]
+  : snapshot.segments;
+
+const segments = all.filter((s) => !wanted.length || wanted.includes(s.id));
 if (!segments.length) {
-  console.error(`Nothing to do. The snapshot holds: ${snapshot.segments.map((s) => s.id).join(', ')}`);
+  console.error(`Nothing to do. Available: ${all.map((s) => s.id).join(', ')}`);
   process.exit(1);
 }
 
