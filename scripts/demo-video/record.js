@@ -58,9 +58,25 @@ if (urlOverride && urlOverride !== true) config.appUrl = String(urlOverride);
 const OUT_DIR = path.join(ROOT, '.output');
 const RAW_DIR = path.join(OUT_DIR, 'raw');
 const SHOT_DIR = path.join(OUT_DIR, 'failed');
-fs.rmSync(RAW_DIR, { recursive: true, force: true });
+/*
+  A full run starts from nothing; `--only` reshoots one segment and leaves the
+  rest of the take alone.
+
+  Wiping unconditionally made reshooting a single segment destroy the twenty-one
+  clips beside it, so the only way to fix one bad segment was to record them all
+  again. The snapshot below is merged for the same reason: it has to keep saying
+  where the untouched clips were trimmed.
+*/
+if (!only.length) fs.rmSync(RAW_DIR, { recursive: true, force: true });
 fs.rmSync(SHOT_DIR, { recursive: true, force: true });
 fs.mkdirSync(RAW_DIR, { recursive: true });
+
+/** What the previous run verified, so an `--only` reshoot can keep it. */
+function previousSnapshot() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(OUT_DIR, 'config.snapshot.json'), 'utf8'));
+  } catch { return null; }
+}
 
 /** Is the app actually up? A refused connection is worth saying once, clearly. */
 async function reachable(url) {
@@ -260,12 +276,24 @@ function trimFromMarks(marks, fallbackStart) {
     }
   }
 
+  /*
+    Everything this run verified, plus everything an earlier run verified whose
+    clip is still on disk. A reshoot of one segment must not drop the other
+    twenty-one out of the composition.
+  */
+  const previous = previousSnapshot();
+  const carried = new Map();
+  for (const seg of previous?.segments || []) {
+    if (!made.includes(seg.id) && fs.existsSync(path.join(RAW_DIR, seg.id + '.webm'))) {
+      carried.set(seg.id, seg);
+    }
+  }
   fs.writeFileSync(path.join(OUT_DIR, 'config.snapshot.json'),
     JSON.stringify({
       ...config,
       segments: config.segments
-        .filter((s) => made.includes(s.id))
-        .map((s) => ({ ...s, ...(kept[s.id] || {}) })),
+        .filter((s) => made.includes(s.id) || carried.has(s.id))
+        .map((s) => (made.includes(s.id) ? { ...s, ...(kept[s.id] || {}) } : carried.get(s.id))),
     }, null, 2));
 
   console.log(`\n${made.length} clip${made.length === 1 ? '' : 's'} recorded to ${RAW_DIR}`);
