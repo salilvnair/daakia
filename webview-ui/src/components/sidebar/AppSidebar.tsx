@@ -101,6 +101,11 @@ export function AppSidebar({ activeSection, onSectionChange, onOpenChange, sideb
     <div className="flex h-full">
       {/* Expandable panel — width animates to 0 when collapsed, CSS-controlled */}
       <div
+        /* Which panel is showing, or nothing when it is collapsed. The width
+           animates to 0 rather than unmounting, so "is it open" is not a
+           question the DOM answers on its own. */
+        data-testid="side-panel"
+        data-section={showPanel && sidebarOpen ? activeSection : ''}
         className="bg-[var(--color-surface)] flex flex-col overflow-hidden"
         style={{
           width: showPanel && sidebarOpen ? sidebarWidth : 0,

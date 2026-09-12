@@ -267,9 +267,27 @@ async function closeAllTabs(page, { rounds = 3 } = {}) {
 async function openPanel(page, title) {
   const icon = css(page, `button[title="${title}"]`).first();
   if (!(await icon.count())) return false;
+
+  /*
+    The icons toggle, so clicking the one already showing *closes* the panel.
+    That is right for a person and wrong here: the SOAP take ended with a shut
+    panel because Collections happened to be the section already open.
+
+    `AppSidebar` reports what it is showing in `data-section` — empty when the
+    panel is collapsed — so this can tell "switched to it" from "closed it"
+    rather than assuming. The section ids are protocol-prefixed (`gql-schema`,
+    `soap-collections`), so the check is that the panel ends up open at all,
+    which keeps this free of that naming.
+  */
+  const open = async () => !!(await page.getAttribute('[data-testid="side-panel"]', 'data-section').catch(() => ''));
+
   await icon.click({ timeout: 5000 }).catch(() => {});
   await page.waitForTimeout(700);
-  return true;
+  if (await open()) return true;
+
+  await icon.click({ timeout: 5000 }).catch(() => {});
+  await page.waitForTimeout(700);
+  return open();
 }
 
 /** How many tabs are open right now. */

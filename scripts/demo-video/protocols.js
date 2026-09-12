@@ -206,8 +206,27 @@ const protocols = {
       await page.keyboard.press('Escape');
       await page.waitForTimeout(600);
 
-      await walk(page, 'request', [['args', 'Args'], ['env', 'Env'], ['config', 'Config']], reqSub, 1300);
-      await walk(page, 'server', [['tools', 'Tools'], ['resources', 'Resources'], ['prompts', 'Prompts'], ['servers', 'Servers']], resSub, 1300);
+      /*
+        Try to bring a server up, but do not hang the take on it.
+
+        `npx` has to fetch the package the first time, which can take a minute
+        on a cold cache or fail outright with no network — neither of which is
+        worth losing the segment over. If it connects, Tools and Resources fill
+        in; if it does not, the Catalog below carries the segment on its own.
+      */
+      await soft('connect to the server', async () => {
+        await btn(page, 'Connect').first().click({ timeout: 5000 });
+        await page.waitForTimeout(6000);
+      });
+
+      /* The Catalog is the one tab that has something to show either way — it
+         is the list of servers the app knows about, not the ones running. */
+      await soft('the Catalog', async () => {
+        await reqSub(page, 'catalog').click({ timeout: 4000 });
+        await page.waitForTimeout(2600);
+      });
+
+      await walk(page, 'request', [['tools', 'Tools'], ['resources', 'Resources'], ['prompts', 'Prompts'], ['args', 'Args'], ['env', 'Env'], ['config', 'Config'], ['servers', 'Servers']], reqSub, 1200);
 
       await soft('open Collections', () => openPanel(page, 'Collections'));
       await page.waitForTimeout(o.settleMs ?? 1500);
