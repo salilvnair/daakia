@@ -120,25 +120,46 @@
 .dkgh svg { width: 14.4px; height: 14.4px; flex-shrink: 0; }
 
 /*
-  A button in the mock is a span; here it is a real button.
+  ── The button reset, and why it is in a layer ──
 
-  Do not put a `:not()` on this. It was tried twice — first to keep the reset
-  out of dui's components, then narrowed to just the editor — and both times it
-  broke the whole tab, because `:not()` takes the specificity of its argument:
-  `.dkgh button:not(.dui_mde *)` is (0,2,1), which outranks `.dkgh .btn` at
-  (0,2,0) and every other class the mock styles its buttons with. Every button
-  in dkgh lost its padding at once.
+  A button in the mock is a span; here it is a real button, so it needs the
+  browser's chrome taken off it.
 
-  Where dui's own rule needs to win over this one, raise dui's rule instead —
-  see `.dui_mde__ask button` in additions.css.
+  The trouble is that `.dkgh button` is (0,1,1), which outranks the single-class
+  rules every component library styles its own buttons with — `.dui_button--primary`,
+  `.dui_mde__ask button` — and dkgh's stylesheet loads after theirs. So this
+  reset silently won inside components that are not ours: dui's Save came out as
+  a ghost that only filled on hover, and the editor's Apply and Cancel lost their
+  padding and their hit area.
+
+  Two attempts to fix that with `:not()` both made it worse. `:not()` takes the
+  specificity of its argument, so `.dkgh button:not(.dui_mde *)` is (0,2,1) —
+  which outranks `.dkgh .btn` at (0,2,0) and every other class the mock styles
+  its buttons with, and stripped the padding from every button in the tab.
+
+  A cascade layer is the actual answer, because the problem was never
+  specificity — it was reach. **Anything unlayered beats anything layered,
+  whatever its specificity.** So this reset now loses to dui's rules and to the
+  mock's own `.btn`, and still wins where nothing else has an opinion, which is
+  exactly the job it was written for. Nothing has to be restated to out-specify
+  it, and there is nothing left for a future `:not()` to be tempted by.
+
+  The order is pinned rather than left to import order: `dkgh-reset` last means
+  it still beats Tailwind's preflight `button`, which lives in `base`. Those
+  four names are Tailwind's own, in Tailwind's own order — re-declaring them
+  here only fixes where ours sits relative to them.
 */
-.dkgh button {
-  font: inherit;
-  color: inherit;
-  background: none;
-  border: none;
-  padding: 0;
-  text-align: left;
+@layer theme, base, components, utilities, dkgh-reset;
+
+@layer dkgh-reset {
+  .dkgh button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+  }
 }
 
 
@@ -2027,25 +2048,6 @@
   by rule: anything inside `.dkgh-mde` is dui's component, and dkgh has no
   business restyling its internals.
 */
-.dkgh .dui_mde button { font: inherit; text-align: inherit; }
-
-/*
-  The link and image row's Apply and Cancel.
-
-  Same collision, and it has to be fixed the same way: dui says `padding: 3.6px
-  8.4px` at (0,1,1), dkgh's reset says `padding: 0` at (0,1,1) and loads second,
-  so the two buttons rendered as bare words touching each other with no hit
-  area and no hover to speak of. Restated here at a weight that wins — and at
-  dkgh's own scale, like everything else in this file.
-*/
-.dkgh .dui_mde__ask button {
-  padding: 3.6px 8.4px;
-  border-radius: 6px;
-  font-weight: 600;
-}
-.dkgh .dui_mde__ask button:hover {
-  background: color-mix(in srgb, currentColor 14%, transparent);
-}
 
 /*
   The switch itself, at dkgh's scale.
@@ -2987,31 +2989,10 @@ body.dkgh-dragging .kcard:hover { transform: none; box-shadow: none; }
 .dkgh .ghmenu-r:disabled:hover { background: transparent; }
 
 /*
-  ── dui's buttons keep their fill inside dkgh ──
+  Nothing here about dui's buttons any more.
 
-  `.dkgh button { background: none }` is (0,1,1); `.dui_button--primary` is
-  (0,1,0) and dkgh's stylesheet loads second, so the reset won and every dui
-  button in this tab came out as a ghost — a Save that was only orange while
-  the pointer was on it.
-
-  Restated here rather than defended with a `:not()` on the reset: that was
-  tried twice and both times it outranked `.dkgh .btn` and stripped the padding
-  from every button in the tab. The values are dui's own, variable and all, so
-  a theme change still moves them.
+  Their fills used to be restated at `.dkgh .dui_button--primary` to out-specify
+  the `.dkgh button` reset, which is a thing you have to remember to do again
+  for every component that comes along. The reset is in a cascade layer now —
+  see header.css — so dui's own unlayered rules beat it without help.
 */
-.dkgh .dui_button--primary { background: var(--dui-btn-bg, var(--color-btn-primary-bg)); }
-.dkgh .dui_button--primary:not(:disabled):hover {
-  background: var(--dui-btn-hover-bg, var(--color-btn-primary-hover));
-}
-.dkgh .dui_button--secondary { background: var(--color-btn-secondary-bg); }
-.dkgh .dui_button--secondary:not(:disabled):hover { background: var(--color-btn-secondary-hover); }
-.dkgh .dui_button--danger { background: var(--color-btn-danger-bg); }
-.dkgh .dui_button--accent {
-  background: var(--dui-accent-bg, color-mix(in srgb, var(--color-btn-primary-bg) 12%, transparent));
-}
-.dkgh .dui_button--accent:not(:disabled):hover {
-  background: var(--dui-accent-hover-bg, color-mix(in srgb, var(--color-btn-primary-bg) 20%, transparent));
-}
-.dkgh .dui_button--ghost:not(:disabled):hover {
-  background: var(--dui-ghost-hover-bg, var(--color-btn-ghost-hover));
-}

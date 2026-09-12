@@ -1019,25 +1019,6 @@
   by rule: anything inside `.dkgh-mde` is dui's component, and dkgh has no
   business restyling its internals.
 */
-.dkgh .dui_mde button { font: inherit; text-align: inherit; }
-
-/*
-  The link and image row's Apply and Cancel.
-
-  Same collision, and it has to be fixed the same way: dui says `padding: 3px
-  7px` at (0,1,1), dkgh's reset says `padding: 0` at (0,1,1) and loads second,
-  so the two buttons rendered as bare words touching each other with no hit
-  area and no hover to speak of. Restated here at a weight that wins — and at
-  dkgh's own scale, like everything else in this file.
-*/
-.dkgh .dui_mde__ask button {
-  padding: 3px 7px;
-  border-radius: 5px;
-  font-weight: 600;
-}
-.dkgh .dui_mde__ask button:hover {
-  background: color-mix(in srgb, currentColor 14%, transparent);
-}
 
 /*
   The switch itself, at dkgh's scale.
@@ -1979,31 +1960,10 @@ body.dkgh-dragging .kcard:hover { transform: none; box-shadow: none; }
 .dkgh .ghmenu-r:disabled:hover { background: transparent; }
 
 /*
-  ── dui's buttons keep their fill inside dkgh ──
+  Nothing here about dui's buttons any more.
 
-  `.dkgh button { background: none }` is (0,1,1); `.dui_button--primary` is
-  (0,1,0) and dkgh's stylesheet loads second, so the reset won and every dui
-  button in this tab came out as a ghost — a Save that was only orange while
-  the pointer was on it.
-
-  Restated here rather than defended with a `:not()` on the reset: that was
-  tried twice and both times it outranked `.dkgh .btn` and stripped the padding
-  from every button in the tab. The values are dui's own, variable and all, so
-  a theme change still moves them.
+  Their fills used to be restated at `.dkgh .dui_button--primary` to out-specify
+  the `.dkgh button` reset, which is a thing you have to remember to do again
+  for every component that comes along. The reset is in a cascade layer now —
+  see header.css — so dui's own unlayered rules beat it without help.
 */
-.dkgh .dui_button--primary { background: var(--dui-btn-bg, var(--color-btn-primary-bg)); }
-.dkgh .dui_button--primary:not(:disabled):hover {
-  background: var(--dui-btn-hover-bg, var(--color-btn-primary-hover));
-}
-.dkgh .dui_button--secondary { background: var(--color-btn-secondary-bg); }
-.dkgh .dui_button--secondary:not(:disabled):hover { background: var(--color-btn-secondary-hover); }
-.dkgh .dui_button--danger { background: var(--color-btn-danger-bg); }
-.dkgh .dui_button--accent {
-  background: var(--dui-accent-bg, color-mix(in srgb, var(--color-btn-primary-bg) 12%, transparent));
-}
-.dkgh .dui_button--accent:not(:disabled):hover {
-  background: var(--dui-accent-hover-bg, color-mix(in srgb, var(--color-btn-primary-bg) 20%, transparent));
-}
-.dkgh .dui_button--ghost:not(:disabled):hover {
-  background: var(--dui-ghost-hover-bg, var(--color-btn-ghost-hover));
-}

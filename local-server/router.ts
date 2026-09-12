@@ -1,3 +1,17 @@
+/*
+  ── Running this in dev ──
+
+      npm run local-server:dev
+
+  Watches, rebuilds, and **restarts the server** on every rebuild.
+
+  Use that rather than `local-server:watch`, which rebuilds the bundle and
+  leaves the old process serving it. Everything under `src/services/**` and
+  `src/panel/main/handlers/**` compiles INTO this bundle, so with a stale
+  process a fix to any of them appears to have done nothing — which reads as
+  "the fix is wrong" rather than "the process is old", and costs a debugging
+  session every time it happens.
+*/
 /**
  * router.ts — routes webview postMessage-shaped messages to the REAL
  * extension-host handler functions (src/panel/main/handlers/*), the same

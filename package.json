@@ -357,6 +357,7 @@
     "local-server:build": "node local-server/build.js",
     "local-server:watch": "node local-server/build.js --watch",
     "local-server": "npm run local-server:build && node local-server/dist/server.js",
+    "local-server:dev": "node local-server/build.js --serve",
     "demo-video:record": "node scripts/demo-video/record.js",
     "demo-video:compose": "node scripts/demo-video/compose.js",
     "demo-video": "npm run demo-video:record && npm run demo-video:compose",
