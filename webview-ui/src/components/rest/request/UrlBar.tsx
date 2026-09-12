@@ -160,6 +160,7 @@ export function UrlBar() {
           bar scrolls horizontally rather than squeezing this illegibly small. */}
       <div className="flex-[2] min-w-0" style={{ minWidth: 160 }} data-menu="url">
         <SelectTextInputView
+          testId="url-bar"
           selectOptions={METHOD_OPTIONS}
           selectValue={tab.method}
           onSelectChange={(v) => updateTab(tab.id, { method: v as HttpMethod })}

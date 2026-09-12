@@ -176,6 +176,7 @@ export function SoapUrlBar() {
             minWidth; past that the bar scrolls horizontally instead of squeezing/overlapping. */}
         <div className="flex-[2] min-w-0" style={{ minWidth: 140 }} data-menu="url">
           <SelectTextInputView
+          testId="url-bar"
             selectOptions={SOAP_VERSION_OPTIONS}
             selectValue={soapVersion}
             onSelectChange={handleVersionChange}

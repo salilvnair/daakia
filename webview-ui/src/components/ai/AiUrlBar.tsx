@@ -235,6 +235,7 @@ export function AiUrlBar() {
       {hasUrlField && (
         <div className="flex-1 min-w-0" style={{ minWidth: 160 }} data-menu="url">
           <HighlightedInputView
+          testId="url-bar"
             value={url}
             onChange={handleUrlChange}
             placeholder="API base URL"

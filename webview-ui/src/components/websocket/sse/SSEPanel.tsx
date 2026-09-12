@@ -325,6 +325,7 @@ export function SSEPanel() {
             instead of squeezing/overlapping. */}
         <div className="flex-1 min-w-0" style={{ minWidth: 160 }}>
           <HighlightedInputView
+          testId="url-bar"
             value={activeTab.url}
             onChange={(v) => updateTab(activeTab.id, { url: v })}
             onKeyDown={(e) => { if (e.key === 'Enter') connState === 'disconnected' ? handleConnect() : handleDisconnect(); }}

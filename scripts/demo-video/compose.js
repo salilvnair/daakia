@@ -17,8 +17,20 @@ const { buildZoompanFilter } = require('./effects');
 const ROOT = __dirname;
 const args = process.argv.slice(2).filter((a) => a !== '--gif');
 const makeGif = process.argv.includes('--gif');
-const configPath = path.resolve(args[0] || path.join(ROOT, 'config.json'));
+/*
+  The snapshot the recorder wrote, in preference to config.json.
+
+  `record.js` writes `config.snapshot.json` listing only the segments that
+  actually produced a verified clip, so composing from it means a `--only` run
+  stitches what it recorded instead of failing on the twenty clips it was never
+  asked to make. With no snapshot — someone composing by hand — config.json is
+  still the source.
+*/
+const OUT_DIR_EARLY = path.join(ROOT, '.output');
+const snapshot = path.join(OUT_DIR_EARLY, 'config.snapshot.json');
+const configPath = path.resolve(args[0] || (fs.existsSync(snapshot) ? snapshot : path.join(ROOT, 'config.json')));
 const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+if (configPath === snapshot) console.log('Composing the segments record.js verified.');
 
 const OUT_DIR = path.join(ROOT, '.output');
 const RAW_DIR = path.join(OUT_DIR, 'raw');
@@ -59,7 +71,12 @@ for (const seg of config.segments) {
 
 for (const clip of plan) {
   if (!fs.existsSync(clip.raw)) {
-    throw new Error(`Missing raw clip ${clip.raw} — run record.js first.`);
+    throw new Error(
+      `Missing clip for "${clip.id}".\n`
+      + 'record.js keeps a clip only when its segment verified, so this segment '
+      + 'either was never recorded or failed.\n'
+      + `Re-record just it:  node scripts/demo-video/record.js --only ${clip.id}`
+    );
   }
 }
 

@@ -180,6 +180,7 @@ export function GrpcUrlBar() {
           instead of squeezing/overlapping. */}
       <div className="flex-[2] min-w-0" style={{ minWidth: 140 }} data-menu="url">
         <HighlightedInputView
+          testId="url-bar"
           value={activeTab.url}
           onChange={(val) => {
             updateTab(activeTab.id, { url: val, dirty: true });

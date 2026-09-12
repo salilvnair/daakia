@@ -143,6 +143,7 @@ export function McpUrlBar() {
         {transport === 'stdio' && (
           <div className="flex-1 min-w-0" style={{ minWidth: 160 }} data-menu="url">
             <HighlightedInputView
+          testId="url-bar"
               value={command}
               onChange={handleCommandChange}
               placeholder="npx @modelcontextprotocol/server-name"

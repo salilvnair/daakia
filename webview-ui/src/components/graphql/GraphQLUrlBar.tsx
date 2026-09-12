@@ -99,6 +99,7 @@ export function GraphQLUrlBar() {
           instead of squeezing/overlapping. */}
       <div className="flex-1 min-w-0" style={{ minWidth: 160 }} data-menu="url">
         <HighlightedInputView
+          testId="url-bar"
           value={activeTab.url}
           onChange={(v) => updateTab(activeTab.id, { url: v })}
           onKeyDown={(e) => { if (e.key === 'Enter') isConnected ? handleDisconnect() : handleConnect(); }}
