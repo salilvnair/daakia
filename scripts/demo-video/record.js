@@ -35,7 +35,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 const { recipes } = require('./recipes');
-const { closeScratchTabs, tabCount } = require('./drive');
+const { closeAllTabs, tabCount } = require('./drive');
 const { buildIntroHtml } = require('./intro-template');
 
 const ROOT = __dirname;
@@ -190,30 +190,6 @@ function trimFromMarks(marks, fallbackStart) {
   const made = [];
   /* id -> the trim its marks earned, written into the snapshot below. */
   const kept = {};
-  /*
-    Tidy the scratch tabs first.
-
-    Every take opens one and they persist, so a few runs leave fifty "Untitled
-    Request"s in the bar — visible in the last clips, and heavy enough that the
-    renderer crashed partway through a segment. Only tabs still carrying the
-    name the app gave them are closed; anything named, saved or opened as a
-    panel belongs to whoever is at this machine.
-  */
-  {
-    const browser = await launch();
-    const tidy = await browser.newContext({ viewport: config.output });
-    const page = await tidy.newPage();
-    await page.goto(config.appUrl, { waitUntil: 'networkidle' });
-    await page.waitForTimeout(2200);
-    const before = await tabCount(page);
-    const closed = await closeScratchTabs(page);
-    await page.waitForTimeout(600);
-    const after = await tabCount(page).catch(() => 0);
-    await tidy.close();
-    await browser.close();
-    if (closed) console.log(`tidied ${closed} untitled tab${closed === 1 ? '' : 's'} of ${before} (${after} left, all named or panels)`);
-  }
-
   if (config.intro?.enabled && !only.length) {
     const introHtmlPath = path.join(OUT_DIR, 'intro.html');
     fs.mkdirSync(OUT_DIR, { recursive: true });
@@ -246,16 +222,26 @@ function trimFromMarks(marks, fallbackStart) {
         const { marks } = await take(browser, seg.id, async (page, mark) => {
           await page.goto(config.appUrl, { waitUntil: 'networkidle' });
           await page.waitForTimeout(seg.warmupMs ?? 1500);
+          /*
+            An empty bar to start from, and never a frame of getting there.
+
+            This runs before the mark, so the right-click, the menu and the
+            unsaved-changes prompt all happen outside the window compose keeps.
+            It used to run at the *end* of the take instead, where the hold
+            after the mark reached straight into it — which is how a confirm
+            dialog ended up flickering at the close of the recorded segment.
+          */
+          await closeAllTabs(page);
+          await page.waitForTimeout(400);
           mark.begin();
           await recipe.run(page, seg.options || {});
           /* The half the old recorder had none of: does the screen agree that
              the thing happened? */
           if (recipe.verify) await recipe.verify(page, seg.options || {});
           mark.end();
-          /* After the mark, so the tidy is filmed but never composed — this
-             keeps the bar from growing across the twenty-two takes without
-             putting a flurry of closing tabs in the video. */
-          await closeScratchTabs(page);
+          /* Still frames for the hold compose keeps after the mark. Nothing
+             else may touch the screen from here to the end of the take. */
+          await page.waitForTimeout(HOLD_SEC * 1000 + 400);
         });
         trim = trimFromMarks(marks, seg.trimStartSec ?? 1.5);
         ok = true;

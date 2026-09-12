@@ -202,47 +202,52 @@ async function newTab(page) {
  * Returns how many it closed, so the run can say so rather than quietly
  * rearranging the reader's window.
  */
-async function closeScratchTabs(page, { limit = 120 } = {}) {
-  /*
-    Clicked in the page, not through a locator.
+/**
+ * Empty the tab bar, using the app's own "Close All".
+ *
+ * Every take opens a tab and they persist, so a few runs leave eighty
+ * "Untitled Request"s in the bar — visible in the clips, and heavy enough that
+ * the renderer crashed partway through a segment.
+ *
+ * The first version clicked each tab's own × and answered the unsaved-changes
+ * prompt each time: eighty clicks, eighty dialogs, and a real chance of one of
+ * them landing in a frame. "Close All" asks once for the whole set, however
+ * many of them are dirty — so this is one right-click, one menu item, one
+ * confirmation. Pinned tabs survive it, which is the app's rule and the right
+ * one: a pinned tab belongs to whoever is at this machine.
+ */
+async function closeAllTabs(page, { rounds = 3 } = {}) {
+  const before = await tabCount(page);
+  if (!before) return 0;
 
-    The first version found the button's index with `querySelectorAll` (every
-    close button) and then clicked `nth(index)` on a locator filtered to the
-    *visible* ones. With a bar wide enough to overflow those two lists are not
-    the same list, so it clicked the wrong tab eighty times and closed nothing:
-    "tidied 80 untitled tabs of 62 (62 left)".
-  */
-  let closed = 0;
-  for (let guard = 0; guard < limit; guard++) {
-    const didClose = await page.evaluate(() => {
-      const closers = [...document.querySelectorAll('button[title="Close tab"]')];
-      const hit = closers.find((c) => {
-        const row = c.closest('[class*="tab"]') || c.parentElement;
-        return /Untitled Request/.test(row?.textContent || '');
-      });
-      if (!hit) return false;
-      hit.click();
-      return true;
-    });
-    if (!didClose) break;
-    await page.waitForTimeout(90);
-    /*
-      Answer the unsaved-changes prompt.
+  for (let round = 0; round < rounds; round++) {
+    const rows = css(page, '[data-context-menu="tab"]');
+    if (!(await rows.count())) break;
 
-      Every one of these tabs has a URL typed into it, so it is `dirty` and
-      closing it opens "This tab has unsaved changes. Close it anyway?". The
-      first version never answered, so the dialog sat there, the tab stayed
-      open, and the loop cheerfully reported closing eighty of them.
-    */
+    await rows.first().click({ button: 'right', force: true, timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(320);
+
+    const closeAll = text(page, 'Close All');
+    if (!(await closeAll.count())) { await page.keyboard.press('Escape'); break; }
+    await closeAll.first().click({ timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(350);
+
+    /* One dialog for the whole set — `TabBar` raises it once when any tab is
+       dirty, and `closeAllTabs` in the store is a single update. */
     await page.evaluate(() => {
       const yes = [...document.querySelectorAll('button')]
-        .find((b) => /^Discard & Close( All)?$/.test((b.textContent || '').trim()));
+        .find((b) => /^Discard & Close All$/.test((b.textContent || '').trim()));
       yes?.click();
     });
-    await page.waitForTimeout(90);
-    closed++;
+    await page.waitForTimeout(500);
+
+    const now = await tabCount(page);
+    if (!now || now === before) break;
   }
-  return closed;
+
+  await page.keyboard.press('Escape').catch(() => {});
+  await page.waitForTimeout(150);
+  return before - (await tabCount(page));
 }
 
 /** How many tabs are open right now. */
@@ -251,7 +256,7 @@ async function tabCount(page) {
 }
 
 module.exports = {
-  closeScratchTabs, tabCount,
+  closeAllTabs, tabCount,
   STEP_MS, act, soft, expect, typeInto,
   vis, btn, field, tab, css, text, byId, rail, urlBar, readField, openRail, newTab,
 };
