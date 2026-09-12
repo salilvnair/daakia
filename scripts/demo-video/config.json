@@ -135,9 +135,9 @@
       "warmupMs": 2500
     },
     {
-      "id": "dk8s_logs",
+      "id": "dk8s_detail",
       "label": "Dk8s — Pod detail",
-      "recipe": "dk8sLogs",
+      "recipe": "dk8sDetail",
       "effect": "static",
       "trimStartSec": 1.2,
       "warmupMs": 2500
@@ -177,14 +177,12 @@
       }
     },
     {
-      "id": "settings_cluster",
-      "label": "Settings — Cluster",
-      "recipe": "settings",
+      "id": "settings_dk8s",
+      "label": "Settings — Dk8s",
+      "recipe": "dk8sSettings",
       "effect": "static",
       "trimStartSec": 1.2,
-      "options": {
-        "section": "Cluster"
-      }
+      "warmupMs": 1800
     }
   ]
 }

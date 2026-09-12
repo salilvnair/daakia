@@ -20,6 +20,8 @@ const {
 const { protocols } = require('./protocols');
 /* The assistant and its settings — see ai.js, and ai-mock.js for the provider. */
 const { ai } = require('./ai');
+/* The cluster console — see dk8s.js. */
+const { dk8s } = require('./dk8s');
 
 // ── Monaco ──────────────────────────────────────────────────────────────────
 
@@ -358,37 +360,7 @@ const recipes = {
 
   // ── dk8s ──────────────────────────────────────────────────────────────────
 
-  dk8sPods: {
-    async run(page, o = {}) {
-      await openRail(page, 'Dk8s — Daakia K8s', 1800);
-      await expect(page, 'the pod list', css(page, 'input[placeholder^="Filter pods"]'), { timeout: 20000 });
-      /* A cluster with nothing in it makes a dull and misleading clip, so it is
-         a failure rather than something to record. */
-      await expect(page, 'at least one pod', css(page, '[class*="pod"], button:has-text("Deployment/")'), { timeout: 20000 });
-      await page.waitForTimeout(900);
-      await soft('filter the pods', async () => {
-        await typeInto(page, 'the pod filter', css(page, 'input[placeholder^="Filter pods"]'), o.filter || 'zp', 60);
-      });
-      await page.waitForTimeout(o.settleMs ?? 2000);
-    },
-    async verify(page) {
-      await expect(page, 'the pod list', css(page, 'input[placeholder^="Filter pods"]'), { timeout: 6000 });
-    },
-  },
-
-  dk8sLogs: {
-    async run(page, o = {}) {
-      await openRail(page, 'Dk8s — Daakia K8s', 1800);
-      await expect(page, 'the pod list', css(page, 'input[placeholder^="Filter pods"]'), { timeout: 20000 });
-      const pod = css(page, 'button:has-text("Deployment/")').first();
-      await expect(page, 'a pod to open', pod, { timeout: 20000 });
-      await act('open a pod', () => pod.click({ timeout: 8000 }));
-      await page.waitForTimeout(o.settleMs ?? 2600);
-    },
-    async verify(page) {
-      await expect(page, 'the pod detail', css(page, ':text("Logs"), :text("Containers"), :text("Events")'), { timeout: 10000 });
-    },
-  },
+  ...dk8s,
 
   // ── dkgh ──────────────────────────────────────────────────────────────────
 

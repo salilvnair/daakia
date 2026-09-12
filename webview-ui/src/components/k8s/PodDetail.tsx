@@ -367,6 +367,10 @@ export function PodDetail() {
                 <button
                   key={id}
                   type="button"
+                  /* The same hook dui's TabView gives its tabs, so anything
+                     driving this panel asks for a tab by id rather than by a
+                     label that also appears in the pod list behind it. */
+                  data-tab={id}
                   onClick={() => setDetailTab(id)}
                   title={locked ? `${label} needs ${ACCESS_RULE[needs!]}` : undefined}
                   className="flex items-center gap-1.5 px-3 py-2 text-[11.5px] cursor-pointer border-none bg-transparent transition-colors"
