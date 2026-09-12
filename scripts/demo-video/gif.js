@@ -33,8 +33,13 @@ const flag = (name, fallback) => {
   return at === -1 ? fallback : argv[at + 1];
 };
 const highlights = argv.includes('--highlights');
-const width = Number(flag('--width', highlights ? 720 : 800));
-const fps = Number(flag('--fps', highlights ? 12 : 12));
+/* A GIF of named segments — `--pick dk8s_pods,dkgh_board` — for the ones that
+   go beside a specific piece of writing rather than at the top of a README. */
+const pick = String(flag('--pick', '') || '').split(',').map((s) => s.trim()).filter(Boolean);
+const seconds = Number(flag('--seconds', 6));
+const name = flag('--name', pick.length ? 'daakia_picked' : null);
+const width = Number(flag('--width', 800));
+const fps = Number(flag('--fps', 12));
 
 const ffmpeg = (args) => execFileSync('ffmpeg', ['-y', '-loglevel', 'error', ...args], { stdio: ['ignore', 'ignore', 'inherit'] });
 const mb = (f) => (fs.statSync(f).size / 1024 / 1024).toFixed(1);
@@ -69,12 +74,13 @@ function toGif(source, dest, extraIn = []) {
   fs.unlinkSync(palette);
 }
 
-if (highlights) {
+if (highlights || pick.length) {
+  const chosen = pick.length ? pick.map((id) => [id, seconds]) : HIGHLIGHTS;
   const parts = [];
   const listFile = path.join(OUT_DIR, '_highlights.txt');
   const tmp = [];
 
-  for (const [id, seconds] of HIGHLIGHTS) {
+  for (const [id, secs] of chosen) {
     const clip = path.join(REFINED_DIR, `${id}.mp4`);
     if (!fs.existsSync(clip)) {
       console.log(`  ${id}: no refined clip, skipped`);
@@ -83,7 +89,7 @@ if (highlights) {
     /* From a little way in — the opening second of a segment is usually the
        app settling, and the interesting part is what happens next. */
     const cut = path.join(OUT_DIR, `_hl_${id}.mp4`);
-    ffmpeg(['-ss', '2', '-i', clip, '-t', String(seconds), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', cut]);
+    ffmpeg(['-ss', '2', '-i', clip, '-t', String(secs), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', cut]);
     tmp.push(cut);
     parts.push(`file '${cut.replace(/\\/g, '/')}'`);
   }
@@ -96,7 +102,7 @@ if (highlights) {
   const joined = path.join(OUT_DIR, '_highlights.mp4');
   ffmpeg(['-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', joined]);
 
-  const dest = path.join(OUT_DIR, `${config.output.name}_highlights.gif`);
+  const dest = path.join(OUT_DIR, `${name || config.output.name + '_highlights'}.gif`);
   toGif(joined, dest);
 
   for (const f of [...tmp, listFile, joined]) fs.unlinkSync(f);

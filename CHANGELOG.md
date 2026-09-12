@@ -4,15 +4,31 @@ All notable changes to the Daakia API Client extension are documented here.
 
 ---
 
-## [2.1.0] — 2026-09-07
+## [3.0.0] — 2026-09-12
 
-dk8s arrives: a Kubernetes surface inside the extension — pods, logs, a real
-terminal, a file explorer, cross-pod search — and Doctor, which reads a heap
-dump, a thread dump or a flight recording and tells you what is wrong with
-the process that produced it. Alongside it, per-request execution settings,
-the operating system's proxy, an audit trail for every protocol, and four
-features that were written months ago and had never been reachable from the
-UI.
+Two surfaces that are not an API client at all.
+
+**dk8s** puts Kubernetes in the editor — pods, structured logs, a real
+terminal in the container, a file explorer, search across every watched pod —
+and **Doctor**, which reads a heap dump, a thread dump or a flight recording
+and tells you what is wrong with the process that produced it.
+
+**dkgh** puts one repository's issues there too — a board in four shapes,
+saved views, a team view, charts, and a write path that files, edits, labels
+and closes through the official `gh` CLI, so your GitHub credential stays in
+the OS keychain and never reaches Daakia.
+
+Around them: **Workspaces**, so collections, environments and history belong
+to a project rather than to the app; an in-app **wiki and tour**; the
+**Power Features** shelf wired to real requests; an audit trail behind every
+AI call; and per-request execution settings, the operating system's proxy,
+and four features that had been written months ago and were never reachable
+from the UI.
+
+The major bump is for the shape of the app, not a break in the file formats —
+collections, environments and mock configs from 2.x load unchanged.
+
+![Dk8s and DkGH](https://raw.githubusercontent.com/salilvnair/daakia/main/media/daakia-dk8s-dkgh.gif)
 
 ### Added — dk8s: Kubernetes, without leaving the editor
 - **Pods, watched live** — contexts, namespaces and pod grids with status,
@@ -43,6 +59,61 @@ UI.
 - **dk8s as MCP tools**, deliberately read-only
 - Redaction runs over everything that reaches a model, and now catches
   dotted property names — `spring.datasource.password=…` used to get through
+
+### Added — dkgh: the issue tracker, in the editor
+- **One repository's board, in four shapes** — cards, a table, columns by
+  status, and a roadmap over time. The same filter renders as all four, so
+  changing the question does not mean rebuilding the view
+- **Saved views** — "All open", "Stale & unowned", "My plate", "This sprint",
+  "Closed this week", and your own. Each carries its count, and a shared link
+  says what it drops rather than silently narrowing
+- **A team view** — who is carrying what, unassigned first on purpose,
+  because that is the row a lead needs
+- **One issue in full, over the board** — a sheet rather than a navigation,
+  with comments, a close reason, labels, relations, and the rail edits the
+  way github.com does them
+- **Insights** — open issues over time, where they are by module split by
+  environment, how long they sit, and who is carrying what; plus your own
+  charts, pinned, and a comparison against the period before
+- **Repository** — where the chips come from: issue templates imported, a
+  field map that moves between repositories, and label sets taken from
+  somewhere else
+- **Export** — a real `.xlsx`, a PDF that reads as a status mail, a
+  repository's whole history, and a scheduled export that runs every Friday
+- **Filing** — a composer with the metadata beside it, generate-with-AI, and
+  screenshot upload; creation runs as a sequence with duplicate detection and
+  retry
+- **Through the official `gh` CLI**, never a token in the extension: scopes,
+  hosts and accounts are read from it, every command is disclosed before it
+  runs, and a confirm screen is built so it cannot describe an action other
+  than the one about to happen
+
+### Added — Workspaces
+- **Collections, environments and history belong to a workspace**, across
+  every protocol, so two projects stop sharing one drawer
+- Open, import and export a workspace; the rail says which one you are in
+- What you collapsed stays collapsed, and the badges count everything rather
+  than the first page
+
+### Added — A wiki, and a tour
+- **Documentation inside the extension**, including a Daakia Tour that walks
+  the whole app, with a way to keep its screens fresh rather than letting
+  them rot
+- Help links from settings and the sidebar reach the page they name
+
+### Added — Power features, and AI you can audit
+- **The Load Tester sends real requests**, the **Bulk URL Tester** reports
+  what the server actually said, and the **Request Interceptor** has a proxy
+  behind it — three tools that had a UI and no engine
+- **Every AI feature has a switch, and the switch stops the call** — not the
+  rendering of the result, the call itself
+- **Every AI call has a name, a screen and one door**, and leaves an audit
+  entry — including the ones that fail
+- **Schema Diff and anomaly detection**, and **Compare with clipboard** from
+  the right-click menu of anything holding data
+- **Translate: anything → Daakia**, with the source tool detected rather than
+  asked for
+- **Monitors run**, and a rule can be edited after it is written
 
 ### Added — Requests, settings and proxy
 - **Per-request and per-collection execution settings** — timeout,
@@ -191,6 +262,38 @@ UI.
   indistinguishable from a broken runner
 - **The wiki's "Open Wiki" links did nothing** — a button with an empty
   handler. They open the page they name now
+- **A global shortcut ate characters you typed.** Three views registered a
+  single-key shortcut on `window` — dk8s's `/`, the issue board's
+  `j k o a l c m g f /`, the wiki tour's — and two of them guarded only
+  `INPUT` and `TEXTAREA`. Every URL bar in the app is a `contenteditable`
+  div and every tab stays mounted once visited, so after opening dk8s once,
+  typing a URL anywhere silently lost every slash:
+  `https://api.example.com/v1/users` became
+  `https:api.example.comv1users`. `window` is the last stop in the bubble
+  path, so nothing downstream could put the character back and there was no
+  way to see why the URL was wrong
+- **The collections panel appeared beside tabs that own the whole screen.**
+  The rule was a list of "is the active tab this kind" comparisons, and the
+  two kinds added most recently — dkgh and Workspaces — were never added to
+  it, so both shipped with a REST collections tree taking a third of the
+  width beside an issue board and a pod list. It asks what a tab *is* now,
+  so the next standalone kind is right without anybody remembering
+- **The editor closed brackets and tags even when told not to.**
+  `autoClosingBrackets` was hard-coded in two places, one of them applied
+  after mount, so nothing outside could turn it off; anything typing a
+  character at a time landed its own closing brace on the one already
+  inserted. A SOAP envelope came out with every tag doubled
+- **dkgh's button reset** was written to out-specify a library rule and broke
+  the whole tab twice, because `:not()` takes the specificity of its
+  argument. It lives in a cascade layer now, where it does not have to win on
+  specificity at all
+- **The repository search returned repositories that were not yours**
+- **A dkgh handler that threw left the screen waiting** forever instead of
+  saying so
+- **A dk8s target with no container list** raised a TypeError rather than
+  rendering an empty one
+- **A dk8s volume export could not finish** — it reports bytes and can be
+  cancelled now
 
 ### Removed
 - A second, superseded gRPC client and a "Coming soon" protocol placeholder,
