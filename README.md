@@ -1,6 +1,6 @@
 # Daakia — API Development Platform for VS Code
 
-![Daakia](images/daakia-icon.png)
+![Daakia](https://raw.githubusercontent.com/salilvnair/daakia/main/images/daakia-icon.png)
 
 > **Daakia** (*डाकिया*, "the messenger") — a multi-protocol API client that lives
 > inside VS Code. REST, GraphQL, gRPC, SOAP, WebSocket/SSE/Socket.IO/MQTT and MCP,
@@ -666,4 +666,4 @@ code --install-extension daakia-3.0.0.vsix
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+MIT — see [LICENSE](https://github.com/salilvnair/daakia/blob/main/LICENSE).
