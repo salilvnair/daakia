@@ -2,10 +2,10 @@
 
 ![Daakia](images/daakia-icon.png)
 
-> **Daakia** (*डाकिया*, "The Messenger") — A multi-protocol API client built as a
-> first-class VS Code extension. Think **Postman + Insomnia + Bruno**, but living inside your
-> editor — REST, GraphQL, gRPC, SOAP, WebSocket/SSE/Socket.IO/MQTT, and MCP, with a stateful
-> mock server, a script debugger, an in-app documentation wiki, and 20+ AI-powered tools.
+> **Daakia** (*डाकिया*, "the messenger") — a multi-protocol API client that lives
+> inside VS Code. REST, GraphQL, gRPC, SOAP, WebSocket/SSE/Socket.IO/MQTT and MCP,
+> with a stateful mock server, a script debugger, a Kubernetes console, a GitHub
+> issue board, and AI that you can switch off one feature at a time.
 
 [![VS Code Marketplace](https://img.shields.io/badge/VS%20Code-1.99%2B-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
@@ -16,562 +16,612 @@
 
 ---
 
-## Table of Contents
+## What this is
 
-- [Supported Protocols](#supported-protocols)
-- [UI Layout](#ui-layout)
-- [Key Features](#key-features)
-- [Architecture](#architecture)
-- [Getting Started](#getting-started)
-- [Protocol Details](#protocol-details)
-  - [REST API](#rest-api)
-  - [GraphQL](#graphql)
-  - [gRPC](#grpc)
-  - [SOAP](#soap)
-  - [WebSocket / Realtime](#websocket--realtime)
-  - [MCP Client](#mcp-client)
-- [Mock Server — Stateful, Multi-Protocol](#mock-server--stateful-multi-protocol)
-- [Scripts & Debugger](#scripts--debugger)
-- [AI Assistant](#ai-assistant)
-- [AI Power Tools](#ai-power-tools)
-- [Command Palette](#command-palette)
-- [Wiki — In-App Documentation](#wiki--in-app-documentation)
+Most API clients are a separate application. You alt-tab to them, they keep their
+own copy of your collections, and they know nothing about the repository you have
+open. Daakia is a VS Code extension: the requests live beside the code, the
+credentials live in the OS keychain, and everything it stores is a file or a
+SQLite row you can point at.
+
+It also does two things an API client normally does not. **Dk8s** is a Kubernetes
+console — pods, structured logs, a shell in the container, a file explorer, and a
+profiler that reads heap dumps, thread dumps and flight recordings. **DkGH** is an
+issue board for one repository, driven through the official `gh` CLI.
+
+Nothing here calls home. AI is opt-in per feature, and the provider is yours —
+including a local Ollama, or Daakia's own mock server if you want the shape of the
+feature without the tokens.
+
+---
+
+## Table of contents
+
+- [Install](#install)
+- [The surfaces](#the-surfaces)
+- [Protocols](#protocols)
+  - [REST](#rest) · [GraphQL](#graphql) · [gRPC](#grpc) · [SOAP](#soap) · [Realtime](#realtime-websocket--sse--socketio--mqtt) · [MCP](#mcp)
+- [Anatomy of a request](#anatomy-of-a-request)
+- [Authentication](#authentication)
+- [Scripts and the debugger](#scripts-and-the-debugger)
+- [Collections, environments, variables, history](#collections-environments-variables-history)
+- [Workspaces](#workspaces)
+- [Mock server](#mock-server)
+- [Dk8s — Kubernetes in the editor](#dk8s--kubernetes-in-the-editor)
+- [Doctor — heap, threads, flight recordings](#doctor--heap-threads-flight-recordings)
+- [DkGH — one repository's issues](#dkgh--one-repositorys-issues)
+- [Daakia AI](#daakia-ai)
+- [Power features](#power-features)
+- [Import and export](#import-and-export)
+- [The CLI](#the-cli)
+- [Git Sync, Vault, Bin](#git-sync-vault-bin)
+- [DevTools](#devtools)
 - [Settings](#settings)
-- [Developer Tools](#developer-tools)
-- [Import / Export](#import--export)
-- [Collection Sync (git-native)](#collection-sync-git-native)
-- [Tech Stack](#tech-stack)
-- [Design Principles](#design-principles)
-- [Contributing / Local Development](#contributing--local-development)
+- [Commands and keybindings](#commands-and-keybindings)
+- [Architecture](#architecture)
+- [Development](#development)
 - [License](#license)
 
 ---
 
-## Supported Protocols
+## Install
 
-Daakia is a **multi-protocol** API client. Each protocol has its own execution engine,
-UI panels, sidebar context, and store state. Switch between protocols using the
-**left icon rail** — everything updates instantly.
+Requires **VS Code 1.99+**.
 
-| Protocol | Execution Engine | Status |
-|----------|-----------------|--------|
-| **REST** | Axios (extension host) | ✅ |
-| **GraphQL** | HTTP POST + WebSocket (subscriptions), schema introspection | ✅ |
-| **gRPC** | `@grpc/grpc-js` + proto-loader, server reflection | ✅ |
-| **SOAP** | `soap` + WSDL parser, WS-Security | ✅ |
-| **WebSocket** | `ws` (Node.js), auto-reconnect | ✅ |
-| **SSE** | Axios streaming | ✅ |
-| **Socket.IO** | `socket.io-client` | ✅ |
-| **MQTT** | `mqtt` + Aedes broker (for mocking) | ✅ |
-| **MCP** (Model Context Protocol) | Custom stdio + HTTP/SSE transport | ✅ |
-| **AI** | 13 LLM providers, tool calling, streaming | ✅ |
+From the Marketplace, or from a `.vsix`:
 
----
-
-## UI Layout
-
-```
- ┌──────────┬───────────────────────────────────────┬──────────────┐
- │  LEFT    │          MAIN CONTENT AREA            │    RIGHT     │
- │ SIDEBAR  │  ┌─────────────────────────────────┐  │   SIDEBAR    │
- │          │  │ Tab Bar (drag-drop, ctx menu)   │  │              │
- │ REST     │  ├─────────────────────────────────┤  │ Collections  │
- │ GraphQL  │  │ URL Bar (per-protocol, per-tab) │  │ History      │
- │ RealTime │  ├─────────────────────────────────┤  │ Environments │
- │ gRPC     │  │ Request Config (top)            │  │              │
- │ SOAP     │  │ ─── draggable splitter ───      │  │              │
- │ AI       │  │ Response/Conversation (bottom)  │  │              │
- │ MCP      │  └─────────────────────────────────┘  │              │
- │          │                                       │              │
- │ ──────── │                                       │ ──────────   │
- │ Mock     │                                       │ Settings ⚙   │
- │ DevTools │                                       │              │
- └──────────┴───────────────────────────────────────┴──────────────┘
+```bash
+code --install-extension daakia-3.0.0.vsix
 ```
 
-- **Left protocol rail** — one icon per protocol plus Mock Server and DevTools; each
-  glows in its own accent color when active, and key UI accents (scrollbar thumb,
-  focus rings) follow the active protocol.
-- **Tab bar** — per-protocol tabs with drag-and-drop reorder, a right-click context
-  menu (Close / Close Others / Close to Right), a dirty-state dot, and a per-tab
-  environment selector.
-- **Resizable split panels** — request config (top) and response/conversation (bottom),
-  with a draggable pill-grip handle; the split position persists per protocol.
-- **Right sidebar** — Collections, History, and Environments for REST/GraphQL/SOAP;
-  the Settings gear is always available at the bottom.
-- The global **Command Palette** (`Cmd/Ctrl+K`) reaches almost everything below without
-  touching the mouse — see [Command Palette](#command-palette).
+Open it with **Daakia: Open Panel** from the command palette, or the Daakia icon
+in the activity bar. There is nothing to sign into.
 
 ---
 
-## Key Features
+## The surfaces
 
-### Request Builder
-- **Full HTTP method support**: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS
-- **Request config tabs**: Params, Headers, Body, Auth, Variables, Scripts (pre-request + post-response)
-- **Body modes**: JSON, XML, HTML, Text, JavaScript, form-data (with file upload), URL-encoded, binary, GraphQL
-- **Auth types**: None, Bearer Token, Basic Auth, API Key, OAuth 2.0 (all grant types + PKCE), AWS Signature
-- **Variable substitution**: `{{variable}}` and `${variable}` syntax with layered resolution (request → env → collection → global)
+Daakia is a tabbed workspace. The rail down the left switches between them; each
+one opens as a tab, and tabs of different kinds live side by side.
 
-### Response Viewer
-- **Body views**: Pretty-printed JSON, Raw text, Preview (HTML/image)
-- **Response tabs**: Body, Headers, Cookies, Test Results, Timeline
-- **Timeline**: DNS/connect/TLS/first-byte breakdown
-- **Search**: Ctrl+F inside the response panel opens Monaco's built-in find widget
-- **Large responses**: bodies over 512 KB are truncated for display with a warning banner; the full file is always saved to disk
+| Rail | What it opens |
+|---|---|
+| **REST** | HTTP requests |
+| **GraphQL** | queries, mutations, subscriptions, and a schema explorer |
+| **Real time** | WebSocket, SSE, Socket.IO and MQTT behind one selector |
+| **gRPC** | unary and streaming calls against a `.proto` or reflection |
+| **SOAP** | envelopes, WSDL, WS-Security |
+| **AI** | a request tab whose backend is a language model |
+| **MCP** | Model Context Protocol servers, tools, resources and prompts |
+| **Mock Server** | ten protocols' worth of local servers |
+| **Dk8s** | the Kubernetes console |
+| **DkGH** | the GitHub issue board |
+| **DevTools** | Daakia's own console, network log and timeline |
+| **Settings** | sixteen sections, searchable |
 
-### Collections & Environments
-- **Nested folders**: recursive tree, drag-and-drop reorder, hover actions, search
-- **Collection-level**: variables, auth (inherited by child requests), pre-request/test scripts
-- **Environments**: create/edit/delete, global variables, secret values masked with `***`
-- **Variable resolution**: request vars → env vars → collection vars → global vars
-- **Collection runner**: execute every request in sequence with delay, stop-on-error, progress tracking
-
-### Request History
-- Auto-saved on every send with the full response body
-- Search, replay to a new tab, clear history
-- Configurable max entries (default: 500)
-
-### Code Generation
-- 12 target snippets: cURL, JavaScript (fetch + axios), Python (requests), Go (net/http),
-  Java (HttpClient), C# (HttpClient), PHP (cURL), Ruby (Net::HTTP), wget — generated from
-  the Send dropdown's "Show Code"
+A **request tab** carries a protocol and gets the right-hand panel — collections,
+history, environments, schema. A **standalone tab** — mock server, Dk8s, DkGH,
+Workspaces, the wiki, settings — owns the full width, because a collections tree
+next to a pod list is noise.
 
 ---
 
-## Architecture
+## Protocols
 
-### Extension Host ↔ Webview Communication
+### REST
 
-```
-┌────────────────────────── VS Code Extension Host ──────────────────────────┐
-│                                                                             │
-│  extension.ts ──► MainPanel.ts ──► postMessage ──► React Webview           │
-│       │                  │                                                 │
-│       ▼                  ▼                                                 │
-│  ┌─────────┐    ┌───────────────┐    ┌───────────────┐   ┌────────────┐  │
-│  │ SQLite  │    │ HTTP Executor │    │ Mock Servers   │   │ AI / Chat  │  │
-│  │ (sql.js)│    │   (Axios)     │    │ (per protocol, │   │ Participant│  │
-│  │         │    │               │    │  state-machine │   │ (Copilot)  │  │
-│  │         │    │               │    │  backed)       │   │            │  │
-│  └─────────┘    └───────────────┘    └───────────────┘   └────────────┘  │
-│                                                                             │
-│  Message handlers — one per protocol (REST, GraphQL, gRPC, SOAP, Realtime,│
-│  MCP), plus git-sync, mock-server, and AI handler modules.                │
-└─────────────────────────────────────────────────────────────────────────────┘
+The URL bar takes a URL or a pasted cURL command and unpacks it. Method,
+params, headers, body, auth, scripts, variables, per-request settings and
+documentation each get a tab.
 
-┌────────────────────────── Webview UI (React 19) ────────────────────────────┐
-│                                                                             │
-│  App.tsx                                                                    │
-│  ├── Left Protocol Rail                                                    │
-│  ├── TabBar (tabs-store.ts — Zustand)                                      │
-│  ├── Main Content Area (per-protocol panels, built from @salilvnair/dui)   │
-│  └── Right Sidebar (Collections / History / Environments, context-aware)   │
-│                                                                             │
-│  Zustand stores: tabs, collections, env, toast, sidebar, devtools,         │
-│  ui-state, url-suggestions, ai-providers, ai-features, mock, prompt-       │
-│  template, and the embedded @salilvnair/state-machine workspace stores.    │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+**Bodies** — `No Body`, JSON, XML, HTML, YAML, plain text, multipart form,
+URL-encoded form, or a binary file. JSON and XML get Monaco with the right
+language, a **Prettify** button and **Format Document** in the editor's own
+right-click menu.
 
-### Component library — `@salilvnair/dui`
+**Responses** — JSON tree, raw, headers with counts, cookies, a timeline of the
+request's phases, and script test results. **Visualize** renders an array of
+objects as a table, or an image or PDF inline. **Assert** builds assertions by
+clicking through the JSON rather than writing paths by hand. Anything you send
+can be saved as a **named example** and re-used as documentation or as a mock.
 
-The entire webview UI is built on [`@salilvnair/dui`](https://www.npmjs.com/package/@salilvnair/dui),
-a shared React 19 component library (also used by other Daakia-family projects) —
-65+ components (`ButtonView`, `ModalView`, `TextInputView`, `SelectInputView`,
-`EditorView`, `TabView`, `SideNavView`, `KeyValueTableView`, and more), a single
-CSS-variable theme, and an optional Monaco-backed code editor. Two hard rules
-flow from this: no native `<select>` anywhere in the app, and every color comes
-from a `var(--color-*)` token, never a hardcoded hex value — see
-[Design Principles](#design-principles).
-
-### Stateful mocking — `@salilvnair/state-machine`
-
-The Mock Server's "connect this route to a workflow" experience is powered by
-[`@salilvnair/state-machine`](https://github.com/salilvnair/state-machine), a
-standalone visual state-machine library (React Flow canvas, ck8t card style)
-embedded directly into the Mock Server tab. See
-[Mock Server — Stateful, Multi-Protocol](#mock-server--stateful-multi-protocol).
-
-### Storage
-
-All persistent data lives in a single SQLite file at `~/.salilvnair/daakia-vsce/db/daakia.db`,
-via **sql.js** (SQLite compiled to WASM) — no native addons, works unmodified on every
-platform. If the DB fails to load, the UI offers a one-click Rebuild.
-
----
-
-## Getting Started
-
-Install **Daakia** directly from the VS Code Marketplace — search for "Daakia" in the
-Extensions view (`Cmd/Ctrl+Shift+X`) and click Install, or click the Install button at
-the top of this page. Requires **VS Code `^1.99.0`**.
-
----
-
-## Protocol Details
-
-### REST API
-
-The flagship protocol — a full Postman-compatible request builder.
-
-- Method selector + URL bar with a method-colored badge
-- Config tabs: Params, Headers, Body, Auth, Variables, Scripts (Pre-request & Post-response)
-- Body sub-tabs: none, JSON, XML, Text, HTML, JavaScript, form-data, URL-encoded, binary, GraphQL
-- Split Send button: Send, Send & Download, Import cURL, Show Code, Clear All
-- Split Save button: Save (in-place), Save As (tree-browser modal)
-- Response: Pretty JSON, Raw, Preview, Headers table, Cookies table, Test Results, Timeline
+**Send** honours per-request execution settings: timeout, redirect following and
+a redirect cap, whether `Authorization` survives a cross-origin redirect, SSL
+verification, encoding, and a proxy — each inheriting from the collection and
+then the global default unless you pin it here.
 
 ### GraphQL
 
-Schema-aware GraphQL client with introspection and auto-complete.
-
-- Query/Mutation editor with syntax highlighting (Monaco), separate Variables and Headers panels
-- **Schema introspection** — connect to an endpoint to auto-discover types, queries, mutations,
-  subscriptions, browsable in a Schema Explorer sidebar with type-aware auto-complete
-- **Subscriptions** — live WebSocket-based subscription viewer
-- Separate collections and history from REST
+Query, mutation and subscription, with variables and headers as their own tabs.
+The **Schema** panel is a GraphiQL-style checkbox tree: tick fields to build the
+query, edit arguments inline, promote a literal to a `$variable`, and read the
+SDL pretty-printed. Subscriptions run over WebSocket.
 
 ### gRPC
 
-- **Proto Manager** — import `.proto` files, browse services and methods
-- **Server Reflection** — auto-discover services from a gRPC reflection endpoint (no `.proto` needed)
-- Method selector, JSON message body editor (Monaco), custom metadata pairs
-- Configurable per-request deadline
+Point it at a host, load a `.proto` or use server reflection, and the **Service
+Definition** tab lists the methods it found. Unary, server-streaming,
+client-streaming and bidirectional. Metadata and auth are separate tabs; the
+request message is JSON with the message shape available beside it.
 
 ### SOAP
 
-- **WSDL import** — by URL or file, auto-discovers every operation
-- Envelope editor (XML, Monaco) and a generated Form editor per operation
-- **WS-Security** — Username Token, Timestamp, Signature
-- MTOM/SwA attachments, response assertions on SOAP body content
+An envelope editor with XML formatting, a **Form** view that fills the envelope
+from fields, **WS-Security** (username token, timestamps, digests), a **WSDL**
+tab that reads the contract and lists operations, plus assertions and
+attachments.
 
-### WebSocket / Realtime
+### Realtime: WebSocket / SSE / Socket.IO / MQTT
 
-One unified panel covers four sub-protocols:
+One rail, four protocols, chosen by a selector in the tab. Connect, then send
+frames as JSON or text with a message log showing direction, timestamp and
+payload. **Templates** keep the frames you send often. Socket.IO gets named
+events and acks; MQTT gets topics, QoS and retained messages; SSE gets the event
+stream parsed into named events.
 
-- **WebSocket** — custom headers/sub-protocols, text/binary messages (with a hex+ASCII
-  dump for binary frames), message templates, auto-reconnect with exponential backoff
-- **SSE** — real-time event stream with type filtering, auto-reconnect
-- **Socket.IO** — namespace support, custom event send/listen
-- **MQTT** — QoS 0/1/2, retain flag, topic subscribe/publish
+### MCP
 
-### MCP Client
-
-A dedicated protocol for testing and debugging Model Context Protocol servers.
-
-- **Transports**: stdio (subprocess) or HTTP/SSE
-- **Multi-server per tab** — connect to several MCP servers simultaneously, with per-server
-  status dots and merged capabilities
-- Tool / Resource / Prompt browsers, an Auth tab (Bearer/API-key for HTTP, env-var table
-  for stdio), a Config tab that imports Claude Desktop's `mcpServers` JSON directly, and a
-  curated 20-server Catalog for one-click add
+Connect to a Model Context Protocol server over STDIO or HTTP, and get its
+**Tools**, **Resources** and **Prompts** as tabs you can invoke. The **Catalog**
+lists twenty known servers — filesystem, github, postgres, sqlite, brave-search
+and the rest — and adds one to your config with a click. **Args**, **Env** and
+**Config** cover how the server is launched.
 
 ---
 
-## Mock Server — Stateful, Multi-Protocol
+## Anatomy of a request
 
-Daakia's mock server runs locally inside VS Code and covers every supported protocol
-(REST, GraphQL, gRPC, SOAP, WebSocket, SSE, Socket.IO, MQTT), with per-route config
-for status code, headers, response body, and artificial delay.
+Every protocol's request panel is built from the same strip:
 
-**What makes it more than a static mock**: any route (or gRPC method, or GraphQL
-operation, or SOAP operation) can be gated by a real **State Machine** workflow —
-built on the embedded `@salilvnair/state-machine` canvas. Pick which workflow a route
-is connected to, then pick a real **Trigger Event** from that workflow's transition
-graph; when a request hits the route, the runtime fires that event against the
-workflow exactly like the canvas's own "Run" debugger would, and the response returned
-can change depending on which state the machine is currently in. Multiple workflows
-connected to the same server track independent state per workflow, so you can model
-things like "the third `GET /order/:id` after a `POST /order` returns `shipped`"
-without writing any server code.
-
-- Multiple mock servers can run simultaneously on different ports
-- Full request logger — every incoming request with method, path, headers, body, timestamp
-- Export a running mock as a real WireMock project (mappings + `__files`), or generate
-  a standalone server (Node.js HTTP, Dockerfile, Apollo Server, `@grpc/grpc-js` server,
-  Node.js SOAP server, `ws`/SSE/Socket.IO server, or an Aedes MQTT broker) — see
-  [Import / Export](#import--export)
-
----
-
-## Scripts & Debugger
-
-A **VS Code-style JavaScript debugger** lives inside the webview — set breakpoints,
-step through pre-request/post-response scripts, inspect variables, hover for values,
-all without leaving Daakia.
-
-### Script Types
-
-| Script | When It Runs | Use For |
-|--------|-------------|---------|
-| **Pre-request** | Before the HTTP request is sent | Set variables, generate timestamps, compute auth tokens, abort requests |
-| **Post-response** | After the response is received | Assertions, extract data to env vars, chain requests |
-| **Collection-level** | Inherited by all requests in a collection | Shared setup/teardown, common auth headers |
-
-### Script API (`dk.*`)
-
-Scripts run in a sandboxed Node.js `vm` context with a `dk` global:
-
-- `dk.env.set/get/secret` — environment variable read/write, secrets masked as `***`
-- `dk.globals.set/get` — global variable scope
-- `dk.request` / `dk.response` — read-only request, and (post-response only) response with `.status`/`.headers`/`.body`/`.time`/`.json()`
-- `dk.sendRequest({...})` — sub-requests from inside a script (e.g. auto-login)
-- `dk.test(name, fn)` + `dk.expect(value)` — assertions (`.toBe`, `.toContain`, `.toBeLessThan`, `.toHaveProperty`, ...)
-- `dk.console.log/warn/error` — logged to the DevTools Console tab
-- `dk.crypto.md5/sha1/sha256/hmac/base64/uuid`, `dk.oauth` — utility helpers
-
-### Debugger
-
-- Click a line-number gutter to set a breakpoint (persists with the request)
-- A pill-shaped, draggable HUD toolbar appears when execution pauses: Continue / Step Over /
-  Step Into / Step Out / Restart / Stop
-- **Run & Debug sidebar**: Variables (expandable tree), Watch expressions, Call Stack, Breakpoints list
-- Hover any variable while paused to see its live value; the current line highlights yellow
-- Debug mode auto-activates the moment a breakpoint is set — no separate "start debugging" step
-- Test results land in the Response panel's Tests tab (`N passed` / `N failed`) — tests run
-  even without any breakpoints set
-
----
-
-## AI Assistant
-
-Daakia ships AI in two complementary surfaces:
-
-### 1. In-app AI panel
-
-A full LLM playground built into the app — its own protocol tab, with a URL bar
-(provider + model selector), five config tabs (Prompt, Authorization, Tools, MCP,
-Settings — temperature/max tokens/top_p/penalties/stream/stop sequences/seed/response
-format), and a streaming conversation panel with tool-call cards.
-
-**13 built-in providers**, each with real model IDs pulled live from the source:
-
-| Provider | Sample models |
+| Tab | What it holds |
 |---|---|
-| **GitHub Copilot** | `auto`, `gpt-4o`, `claude-sonnet-4-5`, `gemini-2.0-flash`, `o3-mini` (live list from `vscode.lm`) |
-| **OpenAI** | `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex`, `gpt-4.1`, `gpt-4o`, `o3-pro`, `o4-mini` |
-| **Anthropic** | `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-3-7-sonnet-20250219`, `claude-3-5-haiku-20241022` |
-| **Google AI** | `gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-1.5-pro` |
-| **Ollama** (local) | `llama3.3`, `qwen2.5`, `deepseek-r1`, `mistral`, `codellama` |
-| **Groq** | `compound-beta`, Llama 4 Maverick/Scout, `llama-3.3-70b-versatile`, Kimi K2 |
-| **Together AI** | Llama 3.1 405B/70B, DeepSeek R1 |
-| **Mistral AI** | Mistral Large/Small, Codestral |
-| **xAI** | `grok-3`, `grok-3-mini` |
-| **DeepSeek** | V4 Pro/Flash, V3, R1 |
-| **Azure OpenAI** | Azure deployment variants |
-| **Custom** | any OpenAI-compatible endpoint |
-| **Daakia Mock** | points at a local Daakia AI mock server, for offline dev |
-
-### 2. `@daakia` Copilot Chat participant
-
-Registered as a real VS Code chat participant (`daakia.copilot`) — type `@daakia` in
-Copilot Chat. Five explicit slash commands (`/request`, `/mock`, `/test`, `/curl`,
-`/explain`) plus free-text intent classification that routes to **11 total specialized
-agents**: request builder, mock generator, test-script generator, cURL converter,
-response explainer, general Q&A, SOAP, GraphQL, XSD→request, documentation generator,
-and security review — each with its own system prompt, heuristic-matched first with an
-LLM fallback for ambiguous phrasing.
+| **Params** | query parameters, toggled individually |
+| **Headers** | request headers, plus a view of what Daakia computes for you |
+| **Body** | the nine body types above |
+| **Authorization** | see below |
+| **Scripts** | pre-request and post-response JavaScript |
+| **Variables** | request-scoped variables |
+| **Action** | what this request *does* around a send — response chaining, writing a value into the environment |
+| **Docs** | Markdown describing the request, exported with the collection |
+| **Settings** | the per-request execution overrides |
 
 ---
 
-## AI Power Tools
+## Authentication
 
-Beyond chat, the AI panel's toolbar exposes a catalog of task-specific tools (each
-individually toggleable in **Settings → AI Features**):
+None, **Bearer**, **Basic**, **API key** (header or query), and **OAuth 2.0**
+with the token exchange handled for you. Client certificates are configured
+per-host. Secrets can live in the [Vault](#git-sync-vault-bin) rather than in the
+collection file, and cookies are managed in one place with a jar per domain.
 
-| Tool | What it does |
+---
+
+## Scripts and the debugger
+
+Pre-request and post-response scripts are JavaScript with a `dk.*` API:
+
+```js
+// pre-request
+dk.env.set('requestId', crypto.randomUUID());
+const auth = await dk.sendRequest({ method: 'POST', url: '{{authUrl}}/token' });
+dk.env.set('token', auth.json().access_token);
+
+// post-response
+dk.test('created', () => dk.expect(dk.response.status).toBe(201));
+dk.test('has an id', () => dk.expect(dk.response.json().id).toBeDefined());
+dk.collectionVariables.set('lastId', dk.response.json().id);
+```
+
+`dk.request`, `dk.response`, `dk.env` / `dk.environment`, `dk.globals`,
+`dk.collectionVariables`, `dk.interpolate`, `dk.test`, `dk.expect`,
+`dk.sendRequest`, `dk.runner`, and a `console` that writes to
+[DevTools](#devtools).
+
+**Postman scripts are translated on import**, including the parts that are easy
+to get wrong: `pm.expect(...).to.not.equal(500)` keeps its negation,
+`pm.response.to.have.status()` resolves, and callback-style `pm.sendRequest`
+becomes an awaited call. The translator has 37 tests, several of which execute
+the converted script rather than pattern-matching it.
+
+**The debugger** sets breakpoints in the gutter, with conditional breakpoints,
+step over/into/out, a variables pane, and hover-to-inspect while paused.
+
+---
+
+## Collections, environments, variables, history
+
+**Collections** are a tree of folders and requests with their own variables,
+auth and scripts inherited downward. Search across every collection at once with
+`Ctrl+Shift+F`.
+
+**The collection runner** runs a folder or a whole collection, iterating over a
+data file (JSON or CSV) so one request becomes N, with per-iteration variables,
+a delay, and a pass/fail report per assertion.
+
+**Environments** hold variables resolved as `{{name}}` at send time, with a
+switcher in the header. Values can be marked secret and stored in the Vault.
+Precedence runs request → collection → environment → global.
+
+**History** is every request the app has run, SQLite-backed, searchable, grouped
+by time, and re-openable into a tab. How many entries to keep and whether to
+store response bodies are both settings.
+
+---
+
+## Workspaces
+
+A workspace owns its collections, environments and history across every
+protocol, so two projects stop sharing one drawer. Open, import and export them;
+the rail says which one you are in; what you collapsed stays collapsed between
+sessions.
+
+---
+
+## Mock server
+
+Local servers for **ten protocols**: REST, GraphQL, WebSocket, SSE, Socket.IO,
+MQTT, gRPC, SOAP, **AI** and **MCP**. Each gets a port (or picks a free one) and
+a panel:
+
+- **Routes** — method, path with `path-to-regexp` params, status, headers, body,
+  and a delay. Load a sample, add routes by hand, or **Generate with AI** from a
+  description.
+- **State Machine** — a mock that remembers. Backed by
+  [`@salilvnair/state-machine`](https://www.npmjs.com/package/@salilvnair/state-machine):
+  a `POST /orders` moves the server to `created`, and the next `GET /orders/1`
+  answers differently because of it. Edited as a graph.
+- **Traffic** — every request the mock served, with what matched it.
+- **Chaos** — latency, error injection and dropped connections, so the client
+  can be tested against a server having a bad day.
+- **Import / Export** — bring in an OpenAPI spec or a WireMock stub set; export
+  the config to share.
+- **Catalog** — ready-made mocks to start from.
+
+The **AI mock** is worth calling out: it serves an OpenAI-compatible
+`/v1/chat/completions` with fifteen API-development scenarios, so you can point
+any OpenAI-compatible provider — including Daakia's own — at
+`http://localhost:PORT/v1` and develop against a language model that costs
+nothing and answers the same way twice.
+
+---
+
+## Dk8s — Kubernetes in the editor
+
+Reads your existing kubeconfig. No agent, no port opened, no credential leaves
+the machine.
+
+**Pods** — contexts and namespaces, a live grid with status, ready count,
+restarts and age. Starred deployments stay at the top and the tab opens on them.
+Filter as you type.
+
+Opening a pod gives seven tabs:
+
+| Tab | |
 |---|---|
-| **Export** | Exports the AI conversation (prompts, responses, generated requests) as a Markdown report |
-| **@ Prompts** | Quick-insert picker into the AI Prompt Library |
-| **OpenAPI** | Generates a full OpenAPI 3.1 spec (YAML/JSON) from the active collection or open tabs |
-| **Security** | Scans open tabs for security anti-patterns |
-| **pm→dk** | Translates Postman `pm.*` test scripts to Daakia's `dk.*` API automatically |
-| **Webhook** | Analyzes webhook payloads, validates HMAC signatures, explains structure |
-| **Cluster** | Groups request history into logical API domains, auto-organized into collections |
-| **Orchestrate** | Turns a plain-English multi-protocol user journey into a coordinated, pass/fail-tracked test timeline |
-| **Chaos** | Designs a chaos-engineering test plan — fault scenarios, order, probability, protocols, duration — plus a risk matrix and resilience report |
-| **Contracts** | Diffs two teams' OpenAPI specs, proposes resolutions, and generates adapter stub mocks so both teams can develop independently |
-| **Traffic** | Proxy mode — mirrors real API traffic into Daakia, analyzes patterns live, auto-updates mocks, flags anomalies |
+| **Overview** | conditions, containers, images, resources, events |
+| **Logs** | see below |
+| **Terminal** | a real PTY in the container over the Kubernetes exec API |
+| **Doctor** | [the profiler](#doctor--heap-threads-flight-recordings) |
+| **Explorer** | the container's filesystem |
+| **Describe** | `kubectl describe`, highlighted |
+| **YAML** | the live manifest |
 
-Plus a longer tail available from Collections' context menu and elsewhere: a deep
-per-collection Security Audit, Voice-to-Request, Request-from-Screenshot, API Flow
-Builder, Response Transformer, Request-from-Logs, Scenario Generator, Adaptive Mock
-Learning, Semantic Validator, and more.
+**Logs with structure.** A configurable log format turns raw lines into fields,
+and a facet rail down the left says how events divide across them — level,
+thread, logger, and any MDC key the application logged (`tenant`, `orderId`).
+Click a value to include it, again to exclude it, again to clear. The magnifier
+searches the pod's whole log rather than the buffer you have. JSON, logfmt and
+access logs are recognised out of the box; anything else you can describe.
+
+**The terminal** carries your own kubeconfig. Themes are configurable — import,
+export, generate with AI, six at a time — and every theme has a dark and a light
+variant with a preview toggle.
+
+**Explorer** browses the container's filesystem with folder sizes, downloads
+that can be stopped and retried, a search across files, and "open a shell here"
+from any path or search hit.
+
+**Search across pods** — text or regex over files and logs in every watched pod,
+with a force-stop that kills the child processes rather than setting a flag.
+
+**Artifacts** collects what you capture — heap dumps, thread dumps, flight
+recordings — and hands them to Doctor.
 
 ---
 
-## Command Palette
+## Doctor — heap, threads, flight recordings
 
-`Cmd/Ctrl+K` opens a global command palette covering essentially the whole app:
-New Request, Navigate, Settings, per-protocol "Go to Tab" (REST/GraphQL/SOAP),
-Developer Tools, Collections & Environments, currently open tabs, and the full AI
-feature catalog from above — each AI tool is reachable here even if you don't know
-which panel it normally lives in.
+Open a `.hprof`, a thread dump or a `.jfr` and get a verdict rather than a
+viewer.
+
+- **Heap** — dominators and retained sizes, a histogram, a treemap, growth over
+  successive dumps, leak suspects with the retention chain that keeps each one
+  alive, and a class tracker.
+- **Threads** — states over time, deadlocks, contention, and the frames that
+  matter with a call graph that reads as a stack.
+- **Flight recordings** — CPU hot spots with self and total time kept apart,
+  blocking and allocation profiles, GC and probe timelines, and an event browser.
+
+There is a CLI for the same analysis (`cli/daakia-heap-check.mjs`), so a heap
+check can run in CI.
 
 ---
 
-## Wiki — In-App Documentation
+## DkGH — one repository's issues
 
-**Settings → Wiki** is a tabbed, scrollable, in-app documentation system built from
-real screenshots of the running app (Quick Start, REST, GraphQL, WebSocket/Realtime,
-gRPC, SOAP, Mock Server, Collections & Env, AI Assistant, Settings), interleaved with
-written explanations, code samples, and callouts for each screen — so help is a click
-away without leaving the editor, and it never drifts from what the UI actually looks
-like since the screenshots are real captures, not mockups.
+Driven entirely through the official **`gh` CLI**: your GitHub credential stays
+in the OS keychain and never reaches Daakia. Scopes, hosts and accounts are read
+from `gh`, every command is disclosed before it runs, and the confirm screen is
+built so it cannot describe an action other than the one about to happen.
+
+![Dk8s and DkGH](https://raw.githubusercontent.com/salilvnair/daakia/main/media/daakia-dk8s-dkgh-3.0.gif)
+
+**Board**, in four shapes from one filter — cards, a table, columns by status,
+and a roadmap over time.
+
+**Saved views** — "All open", "Stale & unowned", "My plate", "This sprint",
+"Closed this week", and your own. Each carries its count, and a shared link says
+what it drops rather than silently narrowing.
+
+**Team** — who is carrying what, unassigned first, because that is the row a lead
+needs.
+
+**One issue in full**, as a sheet over the board rather than a navigation away
+from it: comments, closing with a reason, labels, relations, and rail edits the
+way github.com does them.
+
+**Insights** — open issues over time, where they are by module split by
+environment, how long they sit, who is carrying what; plus your own charts,
+pinned, and a comparison against the period before.
+
+**Repository** — where the chips come from. Import the repo's issue-form
+templates and their dropdowns become board columns; move a field map between
+repositories; take a label set from somewhere else.
+
+**Export** — a real `.xlsx`, a PDF that reads as a status mail, a repository's
+whole history, and a scheduled export that runs every Friday.
+
+**Filing** — a composer with the metadata beside it, generate-with-AI, and
+screenshot upload. Creation runs as a sequence with duplicate detection and
+retry.
+
+---
+
+## Daakia AI
+
+### The panel
+
+A chat tab that knows about the request in front of you: it can turn a
+description into a request, explain a response, write test scripts, convert a
+cURL command, and hand its answer straight into a collection.
+
+### Providers
+
+Thirteen, configured in **Settings → LLM Provider**: GitHub Copilot (no key —
+it uses your VS Code session), OpenAI, Anthropic, Google Gemini, **Ollama**
+(local), Groq, Together AI, Mistral, xAI, DeepSeek, Azure OpenAI, any
+OpenAI-compatible endpoint, and **DaakiaAI (Mock)** pointed at your own
+[AI mock server](#mock-server). Keys are stored through VS Code's
+`SecretStorage`, which means the OS keychain.
+
+### The tools
+
+Around eighty AI features, each attached to the screen where it is useful rather
+than to a separate menu — schema validation, semantic diff, security audit, SDK
+generation, data generation, contract testing, mock intelligence, traffic
+analysis, a dependency graph, protocol-specific explainers for GraphQL, gRPC and
+SOAP, and an agent that can compose several of them.
+
+Three things make that number bearable:
+
+- **Every feature has a switch, and the switch stops the call** — not the
+  rendering of the result, the network call itself.
+- **Every call has a name, a screen and one door**, and leaves an entry in the
+  **AI Audit** log, including the ones that fail.
+- **The Prompt Library** holds the prompt behind every feature, editable, so a
+  house style or a domain hint applies everywhere.
+
+### `@daakia` in Copilot Chat
+
+A registered chat participant, with `/request`, `/mock`, `/test`, `/curl` and
+`/explain`.
+
+---
+
+## Power features
+
+- **Load Tester** — concurrency, duration and ramp, against real requests.
+- **Bulk URL Tester** — a list of URLs in, what the server actually said out.
+- **Request Interceptor** — a proxy that captures traffic into Daakia.
+- **API Monitor** — scheduled checks with rules, editable after the fact.
+- **Request Chaining** — take a value out of one response and into the next.
+- **Response Diff** and **Schema Diff** — two responses or two schemas, compared
+  structurally, with anomaly detection.
+- **Compare with clipboard** — right-click anything holding data.
+- **Response Visualization** — tables, images and PDFs rendered inline.
+- **Client Certificates**, **Cookie Manager**, **Proxy Settings** including the
+  operating system's proxy and PAC files.
+
+---
+
+## Import and export
+
+**Import** — Postman, Insomnia, Bruno, Thunder Client, HTTPie, HAR, OpenAPI
+(v2/v3), cURL commands, and Daakia's own format. One detector decides what a
+document is, so every entry point recognises the same set.
+
+**Export** — Daakia JSON, Postman, Bruno, Insomnia, HTTPie, **OpenAPI** and
+**HTML/Markdown docs**. The OpenAPI export describes a real API: inferred body
+schemas with types and formats rather than `{ type: 'object' }`, and responses
+built from your saved examples.
+
+---
+
+## The CLI
+
+```bash
+node cli/daakia-run.mjs collection.json \
+  --env staging.json --iterations 5 --concurrency 4 \
+  --filter smoke --bail --junit results.xml
+```
+
+`--env`, `--env-var`, `--data`, `--folder`, `--filter`, `--iterations`,
+`--concurrency`, `--delay`, `--timeout`, `--insecure`, `--bail`, `--json`,
+`--junit`. Exit codes are honest, which took fixing: a passing run used to exit
+127 on Windows.
+
+`cli/daakia-heap-check.mjs` runs Doctor's heap analysis headlessly.
+
+---
+
+## Git Sync, Vault, Bin
+
+**Git Sync** commits your collections, environments, mock servers, history and
+AI config to a repository on an interval, each category individually switchable,
+with serialized sync cycles and a status card that says what actually happened.
+
+**Vault** encrypts secret environment values with AES-256-GCM, the passphrase
+held in the OS keychain. Secrets stay redacted across every export format.
+
+**Bin** is a 30-day soft delete for history, collections, mock servers and
+environments — deleting is recoverable.
+
+---
+
+## DevTools
+
+Daakia's own instrumentation, not the browser's: a **Console** carrying script
+`console` output, a **Network** log of what the extension host sent, a
+**Performance** timeline, and — when the Intelligence Dashboard feature is on —
+**AI Insights**. Settings → Developer Tools adds a
+database explorer, a debug snapshot, and the request and session audit trails.
 
 ---
 
 ## Settings
 
-| Section | Covers |
+Sixteen sections, searchable:
+
+**General** · **Theme** · **Keymap** — appearance, and the keyboard map.
+
+**Mock Server** · **Git Sync** · **Vault** · **Bin** — the server side.
+
+**LLM Provider** · **AI Features** · **Prompt Library** · **AI Audit** — the four
+AI sections.
+
+**Cluster** · **Terminal** — Dk8s: log formats, diagnostics limits, terminal
+themes.
+
+**GitHub CLI** — which `gh`, which account, which scopes, with a live status
+check.
+
+**Developer Tools** · **Power Features**.
+
+Fourteen settings are also exposed to VS Code's own `settings.json` under
+`daakia.*`, including `dbPath`, `requestTimeout`, `followRedirects`,
+`sslVerification`, `maxHistoryEntries` and the `gitSync.*` family.
+
+---
+
+## Commands and keybindings
+
+| Key | Command |
 |---|---|
-| **General** | Follow redirects, SSL verification, save response in history, request timeout, max history entries |
-| **Theme** | Dark/Light toggle, persists across sessions |
-| **Mock Server** | Default port range, auto-start behavior |
-| **LLM Provider** | Enable/disable providers, API keys (stored via VS Code SecretStorage), custom base URLs, per-provider model toggles |
-| **AI Features** | Per-tool on/off switches for every [AI Power Tool](#ai-power-tools) |
-| **Prompt Library** | Manage saved prompt templates and agent system prompts, with reset-to-default |
-| **AI Audit** | Full LLM call audit trail — model, prompts, payloads, timing |
-| **Developer Tools** | Memory Footprint, Audit Log, Audit Config, DB Explorer, Debug Snapshot |
-| **Power Features** | 8 cards: Cookie Manager, Proxy Settings, Client Certificates, API Monitor, Request Interceptor, Response Diff, Bulk URL Tester, Load Tester |
-| **Wiki** | The in-app documentation described above |
+| `Ctrl+Enter` | Send request |
+| `Ctrl+N` | New request |
+| `Ctrl+S` | Save request |
+| `Ctrl+W` | Close tab |
+| `Ctrl+L` | Focus URL bar |
+| `Ctrl+K` | Command palette (Daakia's own) |
+| `Ctrl+Shift+I` | Import collection |
+
+Eighteen commands are registered under `Daakia:` in VS Code's palette, including
+**Open Panel**, **Import Bruno Collection**, **Start/Stop Mock Server**, **Change
+Database Location**, **Rebuild SQLite**, and the two Git Sync directions.
 
 ---
 
-## Developer Tools
+## Architecture
 
-Two distinct surfaces, both reachable from the app:
+```
+┌──────────────────────────────────────────────────────────────┐
+│  VS Code extension host  (Node)                              │
+│  src/ — 337 files                                            │
+│                                                              │
+│  protocol clients · mock servers · SQLite · kubeconfig       │
+│  gh CLI · heap/thread/JFR analysers · importers/exporters    │
+└───────────────────────────┬──────────────────────────────────┘
+                            │  postMessage
+┌───────────────────────────┴──────────────────────────────────┐
+│  Webview  (React 19 + TypeScript + Vite)                     │
+│  webview-ui/ — 742 files                                     │
+│                                                              │
+│  tabs · panels · Monaco · zustand stores · @salilvnair/dui   │
+└──────────────────────────────────────────────────────────────┘
+```
 
-**The DevTools panel** (rail icon, bottom-left) — a resizable bottom panel with
-**Console** (script logs, error traces, a REPL for live expression evaluation),
-**Network** (every request across every protocol — method/status/URL/duration/size,
-click for full request/response detail), and **Performance** (heap/RSS/external
-memory/CPU, auto-refreshing).
+**Everything privileged happens in the extension host.** The webview renders and
+asks; it never opens a socket, reads a file or spawns a process itself. Messages
+are typed and one-way in each direction.
 
-**Settings → Developer Tools** — a separate, DB-focused surface: Memory Footprint,
-Audit Log (browse/filter/delete `ce_audit` entries), Audit Config, DB Explorer
-(browse every SQLite table, expand JSON cells, delete rows), and a one-click Debug
-Snapshot export (DB status, memory, versions, recent errors, as JSON).
+**`local-server/`** is a third process used only in browser development. It
+mirrors the extension host over a WebSocket so the UI can be run and driven
+outside VS Code — which is also how the demo recorder works.
 
----
+**`@salilvnair/dui`** is the component library, developed alongside Daakia.
+Every interactive component takes a `testId`, which is what makes the whole app
+drivable by Playwright.
 
-## Import / Export
+**Storage** is SQLite (`sql.js`) at a path you can change, holding history,
+collections, environments, mock configs and audit trails. Secrets are the
+exception: those go to `SecretStorage`.
 
-**Import**: Postman Collection v2.1, OpenAPI/Swagger (2.x & 3.x, YAML or JSON), HAR
-(HTTP Archive), Bruno `.bru`, HTTPie, Thunder Client.
-
-**Export** (per-collection, right-click menu): Daakia JSON, Postman-compatible JSON,
-Insomnia, Bruno `.bru`, HTTPie, OpenAPI 3.0, and a Markdown API-docs export.
-
-**Mock Server export**: a real WireMock project (mappings + `__files`, zipped), or a
-generated standalone server for the target protocol (Node.js HTTP server + Dockerfile,
-GraphQL via `graphql-http` or Apollo Server, a real `@grpc/grpc-js` server, a Node.js
-SOAP server, or `ws`/SSE/Socket.IO/Aedes-MQTT servers) — so a mock built visually in
-Daakia can leave the editor as a runnable project.
-
----
-
-## Collection Sync (git-native)
-
-`daakia.exportCollectionsToWorkspace` / `daakia.importCollectionsFromWorkspace` (VS Code
-Command Palette) write every collection out as diffable `<protocol>.daakia.json` files
-inside your workspace, so they can be committed, code-reviewed, and diffed like any
-other file — and re-imported on another machine after a `git pull`. An optional
-auto-export mode (`daakia.gitSync.enabled`) debounces a write on every collection
-mutation and watches the sync folder for external changes to re-import automatically.
-No GitHub/git credentials are ever touched by the extension — actual `git add/commit/push`
-stays entirely in your own hands via VS Code's Source Control panel.
+**Tests** — 165 test files across the extension host, the webview and the CLI.
 
 ---
 
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| **Extension Host** | TypeScript 5.7, VS Code Extension API, esbuild |
-| **Webview UI** | React 19, Vite 6 |
-| **Styling** | Tailwind CSS v4 + CSS custom properties |
-| **Component Library** | [`@salilvnair/dui`](https://www.npmjs.com/package/@salilvnair/dui) — shared design system |
-| **State Machine** | [`@salilvnair/state-machine`](https://github.com/salilvnair/state-machine) — stateful mock workflows |
-| **State** | Zustand 5 |
-| **Code Editor** | Monaco (`@monaco-editor/react` + `monaco-editor`, wrapped by DUI's `EditorView`) |
-| **Storage** | sql.js (SQLite compiled to WASM) — no native addons |
-| **HTTP Client** | Axios |
-| **gRPC** | `@grpc/grpc-js` + `@grpc/proto-loader` + `protobufjs` |
-| **SOAP** | `soap` + `fast-xml-parser` |
-| **WebSocket / Socket.IO / MQTT** | `ws`, `socket.io-client`, `mqtt` + `aedes` (mock broker) |
-| **YAML** | `js-yaml` (OpenAPI/Swagger parsing) |
-| **Path matching** | `path-to-regexp` (mock route matching) |
-
----
-
-## Design Principles
-
-1. **No hardcoded colors** — every color is a `var(--color-*)` token or comes from `daakia-colors.ts`
-2. **No inline SVGs** — every icon lives in `daakia-icons.tsx`
-3. **No native `<select>`** — always DUI's `SelectInputView`/`StyledDropdown`
-4. **No backdrop-close modals** — only an explicit X or Cancel/Close button dismisses a modal
-5. **No browser right-click menu** — globally disabled; a custom `ContextMenu` component takes over
-6. **Protocol separation** — each protocol is self-contained: own panels, sidebar, stores, execution
-7. **Confirm all destructive actions** — via a shared `ConfirmDialog`, never an inline confirmation
-8. **Stable scrollbars** — every scrollable area reserves gutter space so content never shifts
-9. **Help icons** — always the shared `InfoPopup` (title + description + code badges + wiki link), never a bare toast or direct link
-10. **postMessage bridge** — all extension ↔ webview communication goes through typed message handlers
-
----
-
-## Contributing / Local Development
-
-> This section is for people building Daakia from source — not needed to use the extension,
-> which installs in one click from the Marketplace above.
-
-**Prerequisites:** Node.js 20+ (`nvm use 22`).
+## Development
 
 ```bash
 git clone https://github.com/salilvnair/daakia.git
 cd daakia
-nvm use 22
 npm install
-npm run build:all
-
-npm run watch          # watch mode, extension host
-npm run dev:webview    # Vite dev server, hot reload for the UI
-
-# Press F5 in VS Code → Extension Development Host window opens
+npm run watch          # extension host, incrementally
+npm run dev:webview    # the webview, in another terminal
+# then press F5 in VS Code — an Extension Development Host opens
 ```
 
-### Build Commands
-
-| Command | Description |
-|---------|-------------|
-| `npm run build:all` | Typecheck + build extension (esbuild) + build webview (Vite) |
-| `npm run build:ext` | Build extension only |
-| `npm run build:webview` | Build webview only |
-| `npm run watch` | Watch mode for the extension |
-| `npm run dev:webview` | Vite dev server for the webview (hot reload) |
-| `npm run local-server` | Standalone dev backend (real SQLite + mock servers) for browser-only UI testing |
-| `npm run vscode:package` | Package into a `.vsix` file (for manual/offline installs) |
-| `npm run vscode:publish` | Publish to the VS Code Marketplace (current `package.json` version) |
-| `npm run vscode:publish:patch` / `:minor` / `:major` | Bump semver and publish in one step |
-| `npm run lint` | ESLint on `src/` |
-
-### Installing a locally-built VSIX
+To run the UI outside VS Code — which is also how the demo recorder drives it:
 
 ```bash
-npm run build:all
-npm run vscode:package
-code --install-extension daakia-*.vsix
+npm run local-server:dev   # the extension-host mirror on 7890, restarts on rebuild
+npm run dev:webview        # the webview
+```
+
+| Command | |
+|---|---|
+| `npm run build:all` | typecheck, then build both halves |
+| `npm run build:ext` / `build:webview` | one half at a time |
+| `npm run watch` | extension host, incrementally |
+| `npm run dev:webview` | Vite dev server for the webview |
+| `npm run typecheck` | `tsc --noEmit` across both halves |
+| `npm run lint` | ESLint over `src/` |
+| `npm run test:webview` | Vitest — the webview suites |
+| `npm run test:e2e` | the VS Code integration tests |
+| `npm run heap:all` | the Doctor analyser fixtures end to end |
+| `npm run dk8s:verify` · `threads:verify` · `logs:verify` · `proxy:verify` · `audit:verify` | the fixture suites, by area |
+| `npm run run:collection` | the CLI runner |
+| `npm run showcase` | re-record, compose, and write the short GIF |
+
+Packaging:
+
+```bash
+npm run vscode:package                       # -> daakia-3.0.0.vsix
+code --install-extension daakia-3.0.0.vsix
 ```
 
 ---
 
 ## License
 
-MIT © 2026 [salilvnair](https://github.com/salilvnair)
-
----
-
-<p align="center">
-  <sub>Built with  for the VS Code community</sub>
-</p>
+MIT — see [LICENSE](./LICENSE).
