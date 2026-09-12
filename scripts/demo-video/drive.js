@@ -163,7 +163,14 @@ const byId = (page, id) => css(page, `[data-testid="${id}"]`);
   "Mock Server (2 running)" once anything is up, so an exact-title selector
   finds it on a clean machine and never again.
 */
-const rail = (page, title) => css(page, `button[title="${title}"], button[title^="${title} ("]`);
+/*
+  A rail button by its name.
+
+  The titles carry more than the name — "DkGH — Daakia GitHub", and
+  "Mock Server (2 running)" once one is up — so this matches the name and
+  whatever the app appends to it.
+*/
+const rail = (page, title) => css(page, `button[title="${title}"], button[title^="${title} "]`);
 
 /** Click a rail icon and wait for the tab to settle. */
 async function openRail(page, title, settle = 700) {

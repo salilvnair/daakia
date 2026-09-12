@@ -40,9 +40,9 @@
       }
     },
     {
-      "id": "json_body",
-      "label": "JSON Body",
-      "recipe": "jsonBodyType",
+      "id": "body_types",
+      "label": "Body Types",
+      "recipe": "bodyTypes",
       "effect": "static",
       "trimStartSec": 1.2
     },

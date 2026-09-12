@@ -61,16 +61,23 @@ export function AppSidebar({ activeSection, onSectionChange, onOpenChange, sideb
     }
   }, [hasAnyBreakpoints, debugActive, activeSection, onSectionChange]);
 
-  // Protocol-aware sidebar — use store protocol (follows left rail switch)
-  const isMockServer = activeTab?.type === 'mock-server';
-  const isStateMachine = activeTab?.type === 'state-machine';
-  const isDaakiaAi = activeTab?.type === 'daakia-ai';
-  const isWiki = activeTab?.type === 'wiki';
-  const isDk8s = activeTab?.type === 'dk8s';
-  // Never show protocol icons when a standalone tab is active — settings,
-  // mock-server, dk8s, state-machine, daakia-ai or wiki. Those own the whole
-  // surface, so a REST collections tree beside them is just noise.
-  const showProtocolIcons = !settingsActive && !isMockServer && !isStateMachine && !isDaakiaAi && !isWiki && !isDk8s;
+  /*
+    Protocol-aware sidebar — use store protocol (follows left rail switch).
+
+    Only a request tab has protocols, so only a request tab gets the protocol
+    rail and the collections tree beside it. Everything else — settings,
+    mock-server, dk8s, dkgh, state-machine, daakia-ai, wiki, workspace — owns
+    the whole surface, and a REST collections tree next to a Kubernetes pod
+    list is just noise.
+
+    This was a list of `activeTab?.type === …` comparisons, one per standalone
+    kind, and the last two kinds added to the app were never added to it: dkgh
+    and workspace both shipped showing a collections panel they have no use
+    for. Asking what a tab *is* rather than listing what it is not means the
+    next one is right without anybody remembering this line.
+  */
+  const isStandaloneTab = !!activeTab && activeTab.type !== 'request';
+  const showProtocolIcons = !settingsActive && !isStandaloneTab;
   const showRestSidebar = showProtocolIcons && activeProtocol === 'rest';
   const showGraphqlSidebar = showProtocolIcons && activeProtocol === 'graphql';
   const showWebsocketSidebar = showProtocolIcons && activeProtocol === 'websocket';

@@ -119,6 +119,9 @@ export function BodyEditor({ tab, showFuzzer, onCloseFuzzer }: BodyEditorProps) 
             narrower than the list deserves: a floor of 200px, with 14px of
             room either side of each row. */}
         <SelectInputView
+          /* Named because its label is whatever type the request carries, so
+             it cannot be found by its own text twice in a row. */
+          testId="body-type"
           options={bodyTypeOptions(dropdownValue)}
           value={dropdownValue}
           onChange={handleContentTypeChange}

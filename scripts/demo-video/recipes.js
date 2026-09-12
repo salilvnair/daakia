@@ -39,6 +39,15 @@ const {
   response one renders a count beside several labels. `data-tab` is the id the
   app gave the tab, which neither problem touches.
 */
+/*
+  The control that picks the body type.
+
+  It reads "No Body" on a fresh request and the chosen type afterwards, so it
+  cannot be found by its text twice in a row. The Body tab has exactly one dui
+  select in it, which is what this asks for.
+*/
+const bodyTypeMenu = (page) => css(page, '.dui_select__trigger, .dui_select-text__trigger, [class*="select"][class*="trigger"]').last();
+
 const reqTab = (page, id) => css(page, `[data-testid="rest-request-tabs"] [data-tab="${id}"]`).first();
 const resTab = (page, id) => css(page, `[data-testid="rest-response-tabs"] [data-tab="${id}"]`).first();
 
@@ -240,29 +249,75 @@ const recipes = {
     },
   },
 
-  jsonBodyType: {
+  /**
+   * The body is not only JSON.
+   *
+   * REST already shows a JSON body being typed and formatted, so this one is
+   * about the menu beside it: the same request carrying XML, then YAML, then a
+   * form — each with the editor or the table the app swaps in for it.
+   */
+  bodyTypes: {
     async run(page, o = {}) {
-      const url = o.url || 'https://jsonplaceholder.typicode.com/posts';
-      const json = o.json || '{\n"title": "Daakia is fast",\n"body": "Live JSON typing, recorded in one take",\n"userId": 1\n}';
+      const delay = o.typeDelay || 26;
       await openRail(page, 'REST');
       await newTab(page);
-      await typeInto(page, 'the URL bar', urlBar(page), url, 30);
-      await act('open the Body tab', () => tab(page, 'Body').first().click({ timeout: 8000 }));
+
+      await act('open the method menu', () => css(page, '.dui_select-text__trigger').first().click({ timeout: 6000 }));
+      await page.waitForTimeout(350);
+      await act('choose POST', () => css(page, '.dui_select-text__option:has-text("POST")').first().click({ timeout: 6000 }));
       await page.waitForTimeout(400);
-      /* The control reads "No Body" until a type is chosen — not "None", which
-         is what the old recipe looked for and never found. */
-      await act('open the body-type menu', () => text(page, 'No Body').first().click({ timeout: 8000 }));
-      await page.waitForTimeout(300);
-      /* The menu says "JSON", not the MIME type the old recipe looked for. */
-      await act('choose JSON', () => text(page, 'JSON').first().click({ timeout: 8000 }));
+
+      await typeInto(page, 'the URL bar', urlBar(page), o.url || 'https://httpbin.org/post', delay);
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(350);
+
+      await act('open the Body tab', () => reqTab(page, 'body').click({ timeout: 8000 }));
       await page.waitForTimeout(500);
-      await typeCode(page, 'request body', json, { delay: o.typeDelay || 32 });
-      await soft('prettify', () => css(page, 'button[title="Prettify"], button[title="Prettify JSON"]').first().click({ timeout: 2500 }));
-      await page.waitForTimeout(o.settleMs ?? 1200);
+
+      /* Held open a beat: the whole point of the segment is the list. */
+      await act('open the body-type menu', () => bodyTypeMenu(page).click({ timeout: 8000 }));
+      await page.waitForTimeout(1500);
+      await act('choose XML', () => text(page, 'XML').first().click({ timeout: 6000 }));
+      await page.waitForTimeout(600);
+      await typeCode(page, 'XML body', o.xml
+        || '<order>\n<item sku=\'DK-1\'>Daakia</item>\n<qty>2</qty>\n</order>',
+        { delay, json: false });
+      await page.waitForTimeout(1300);
+
+      await act('back to the body-type menu', () => bodyTypeMenu(page).click({ timeout: 8000 }));
+      await page.waitForTimeout(700);
+      await act('choose YAML', () => text(page, 'YAML').first().click({ timeout: 6000 }));
+      await page.waitForTimeout(600);
+      await typeCode(page, 'YAML body', o.yaml
+        || 'order:\nsku: DK-1\nqty: 2',
+        { delay, json: false });
+      await page.waitForTimeout(1300);
+
+      /* The two that are a table rather than an editor. */
+      await act('back to the body-type menu', () => bodyTypeMenu(page).click({ timeout: 8000 }));
+      await page.waitForTimeout(700);
+      await act('choose Form URL Encoded', () => text(page, 'Form URL Encoded').first().click({ timeout: 6000 }));
+      await page.waitForTimeout(1400);
+
+      await soft('type a form field', async () => {
+        const cell = css(page, 'input[placeholder="Key"], input[placeholder="key"]').first();
+        await cell.click({ timeout: 4000 });
+        await page.keyboard.type('sku', { delay });
+        await page.keyboard.press('Tab');
+        await page.keyboard.type('DK-1', { delay });
+        await page.waitForTimeout(900);
+      });
+
+      await act('back to the body-type menu', () => bodyTypeMenu(page).click({ timeout: 8000 }));
+      await page.waitForTimeout(700);
+      await act('choose Multipart Form', () => text(page, 'Multipart Form').first().click({ timeout: 6000 }));
+      await page.waitForTimeout(o.settleMs ?? 1600);
     },
+
     async verify(page) {
-      const seen = await page.evaluate(() => window.monaco?.editor.getEditors().map((e) => e.getValue()).find((v) => v && v.trim()));
-      if (!seen || !seen.includes('Daakia is fast')) throw new Error('the body editor does not hold the typed JSON');
+      /* The trigger names whichever type the request is carrying now — the one
+         thing that is true at the end however the middle went. */
+      await expect(page, 'the Multipart Form body type', text(page, 'Multipart Form', false), { timeout: 6000 });
     },
   },
 
