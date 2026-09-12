@@ -290,13 +290,85 @@ async function openPanel(page, title) {
   return open();
 }
 
+/**
+ * Is the app actually working, or only answering?
+ *
+ * A dev server returns 200 for index.html whether or not the modules behind it
+ * compile. When Vite cannot resolve an import it serves the page, then the
+ * browser fetches a module, gets an error, and paints an overlay — so an HTTP
+ * check says the app is up and the first segment then fails eight seconds
+ * later on "open REST timed out", which points at the recipe rather than at
+ * the dev server.
+ *
+ * That cost a run today: the alias for `@daakia/pv-layouts` had gone stale in
+ * a Vite process and every take would have failed the same opaque way.
+ *
+ * So this opens the page and asks the browser. Returns null when the app is
+ * fine, or a sentence saying what is wrong.
+ */
+async function appHealth(browser, url, { viewport } = {}) {
+  const context = await browser.newContext(viewport ? { viewport } : {});
+  const page = await context.newPage();
+  const consoleErrors = [];
+  page.on('pageerror', (e) => consoleErrors.push(String(e.message || e).split('\n')[0]));
+
+  try {
+    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    await page.waitForTimeout(1500);
+
+    /* Vite's overlay is a custom element in a shadow root, so its text is not
+       in document.body.innerText — it has to be read through the shadow. */
+    const overlay = await page.evaluate(() => {
+      const el = document.querySelector('vite-error-overlay');
+      if (!el) return null;
+      const root = el.shadowRoot;
+      const message = root?.querySelector('.message')?.textContent?.trim();
+      const file = root?.querySelector('.file')?.textContent?.trim();
+      return [message, file].filter(Boolean).join('  —  ') || 'a build error';
+    });
+    if (overlay) return `the dev server is serving a build error:\n    ${overlay}`;
+
+    /* No overlay, but nothing rendered either — a runtime throw during mount. */
+    const mounted = await page.evaluate(() => {
+      const root = document.getElementById('root') || document.body.firstElementChild;
+      return !!root && root.childElementCount > 0;
+    });
+    if (!mounted) {
+      /* Phrased to follow "but": the caller writes "the app is answering at
+         X, but ...", and "but the page loaded but the app did not" does not
+         read as a sentence. */
+      return 'nothing rendered — the page loaded and the app never mounted'
+        + (consoleErrors.length ? `:\n    ${consoleErrors[0]}` : '.');
+    }
+    return null;
+  } catch (e) {
+    return `the page did not load: ${String(e.message).split('\n')[0]}`;
+  } finally {
+    await context.close().catch(() => {});
+  }
+}
+
+/**
+ * Click a row by the text in it, rather than pressing Enter on whichever row
+ * something else decided to highlight.
+ *
+ * The command-palette segment typed "llm", pressed Enter, and opened Mock
+ * Server — because what ranks first for a short query is the palette's
+ * business and not the recorder's. A recipe that names what it wants keeps
+ * working when the ranking changes, and fails honestly when the thing it
+ * names is gone.
+ */
+function pickRow(page, name) {
+  return text(page, name, false).first();
+}
+
 /** How many tabs are open right now. */
 async function tabCount(page) {
   return css(page, 'button[title="Close tab"]').count().catch(() => 0);
 }
 
 module.exports = {
-  closeAllTabs, tabCount, openPanel,
+  closeAllTabs, tabCount, openPanel, appHealth, pickRow,
   STEP_MS, act, soft, expect, typeInto,
   vis, btn, field, tab, css, text, byId, rail, urlBar, readField, openRail, newTab,
 };

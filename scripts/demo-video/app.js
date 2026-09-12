@@ -3,7 +3,7 @@
  * point it, what you already ran, what it mocked, and what it logged.
  */
 const {
-  act, soft, expect, typeInto, btn, field, css, text, urlBar, openRail, newTab, openPanel,
+  act, soft, expect, typeInto, btn, field, css, text, urlBar, openRail, newTab, openPanel, pickRow,
 } = require('./drive');
 
 const app = {
@@ -47,7 +47,7 @@ const app = {
         and failed on a screen that was working perfectly.
       */
       await act('open LLM Provider from the palette',
-        () => text(page, 'LLM Provider', false).first().click({ timeout: 8000 }));
+        () => pickRow(page, 'LLM Provider').click({ timeout: 8000 }));
       await page.waitForTimeout(o.settleMs ?? 2600);
     },
     async verify(page) {

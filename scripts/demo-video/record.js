@@ -35,7 +35,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 const { recipes } = require('./recipes');
-const { closeAllTabs, tabCount } = require('./drive');
+const { closeAllTabs, tabCount, appHealth } = require('./drive');
 const { buildIntroHtml, introAnimationSec } = require('./intro-template');
 
 const ROOT = __dirname;
@@ -189,12 +189,36 @@ function trimFromMarks(marks, fallbackStart) {
 }
 
 (async () => {
+  const START = [
+    '  npm run dev:webview -- --port ' + (new URL(config.appUrl).port || '5173'),
+    '  npm run local-server:dev      (needed for dk8s, dkgh and mock servers)',
+  ].join('\n');
+
   if (!(await reachable(config.appUrl))) {
     console.error(`\nThe app is not answering at ${config.appUrl}.`);
-    console.error('Start it first:');
-    console.error('  cd webview-ui && npm run dev -- --port ' + (new URL(config.appUrl).port || '5173'));
-    console.error('  npm run local-server:dev      (needed for dk8s, dkgh and mock servers)\n');
+    console.error('Start it first:\n' + START + '\n');
     process.exit(1);
+  }
+
+  /*
+    Answering is not the same as working.
+
+    A dev server returns 200 for index.html whether or not the modules behind
+    it compile, so the check above passes while the browser shows a build
+    error — and every segment then fails eight seconds in on a timeout that
+    points at the recipe. This opens the page once and asks the browser, so a
+    broken dev server is one clear line before anything is recorded rather
+    than twenty-three opaque ones afterwards.
+  */
+  {
+    const browser = await launch();
+    const why = await appHealth(browser, config.appUrl, { viewport: config.output });
+    await browser.close();
+    if (why) {
+      console.error(`\nThe app is answering at ${config.appUrl}, but ${why}`);
+      console.error('\nNothing was recorded. Fix that, or restart the dev server:\n' + START + '\n');
+      process.exit(1);
+    }
   }
 
   const failed = [];
