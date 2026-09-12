@@ -53,7 +53,7 @@ const mb = (f) => (fs.statSync(f).size / 1024 / 1024).toFixed(1);
  */
 const HIGHLIGHTS = [
   /* The title card, so a loop that plays with no context says what it is. */
-  ['intro', 2.4],
+  ['intro', 3.0],
   ['rest', 5.5],
   ['graphql', 4.5],
   ['websocket', 4.5],
@@ -86,7 +86,7 @@ if (highlights || pick.length) {
   const picked = pick.map((id) => [id, seconds]);
   const wantsIntro = !argv.includes('--no-intro') && !pick.includes('intro');
   const chosen = pick.length
-    ? (wantsIntro ? [['intro', 2.4], ...picked] : picked)
+    ? (wantsIntro ? [['intro', 3.0], ...picked] : picked)
     : HIGHLIGHTS;
   const parts = [];
   const listFile = path.join(OUT_DIR, '_highlights.txt');
@@ -102,16 +102,19 @@ if (highlights || pick.length) {
        app settling, and the interesting part is what happens next. */
     const cut = path.join(OUT_DIR, `_hl_${id}.mp4`);
     /*
-      Where to start each clip.
+      The title card is taken from its END, everything else from 2s in.
 
-      The title card types its name in, so its first second is a cursor on an
-      empty background — and the first frame of a GIF is what GitHub shows
-      before the image loads, and what a paused loop sits on. Two and a bit
-      seconds in, the word and the badges are drawn. Every other clip opens on
-      the app settling, so those skip two seconds for the opposite reason.
+      A GIF's first frame is what GitHub shows before the image loads and what
+      a paused loop sits on, so the card has to be finished by then — and the
+      card spends its first three seconds typing. Reading backwards from the
+      end also means the intro's animation timings can change without this
+      needing to know them. Every other clip skips two seconds for the
+      opposite reason: that is the app settling.
     */
-    const from = id === 'intro' ? '2.2' : '2';
-    ffmpeg(['-ss', from, '-i', clip, '-t', String(secs), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', cut]);
+    const args = id === 'intro'
+      ? ['-sseof', `-${secs}`, '-i', clip]
+      : ['-ss', '2', '-i', clip, '-t', String(secs)];
+    ffmpeg([...args, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', cut]);
     tmp.push(cut);
     parts.push(`file '${cut.replace(/\\/g, '/')}'`);
   }

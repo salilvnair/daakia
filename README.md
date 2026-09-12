@@ -14,6 +14,8 @@
 
 ![Daakia demo — REST, GraphQL, gRPC, SOAP, WebSocket, MCP, Mock Server, Collections, Daakia AI, DevTools, Dk8s and DkGH](https://raw.githubusercontent.com/salilvnair/daakia/main/media/daakia-showcase-3.0.gif)
 
+<sub>Ninety seconds of it. The whole seven-minute walkthrough is [here as an mp4](https://raw.githubusercontent.com/salilvnair/daakia/main/media/daakia-showcase-3.0.mp4).</sub>
+
 ---
 
 ## What this is
@@ -110,6 +112,8 @@ next to a pod list is noise.
 
 ### REST
 
+![A REST request end to end — POST, a JSON body formatted two ways, 201 Created, and the response tabs](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/rest.gif)
+
 The URL bar takes a URL or a pasted cURL command and unpacks it. Method,
 params, headers, body, auth, scripts, variables, per-request settings and
 documentation each get a tab.
@@ -132,12 +136,16 @@ then the global default unless you pin it here.
 
 ### GraphQL
 
+![A GraphQL query against a live schema, with the Schema panel open](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/graphql.gif)
+
 Query, mutation and subscription, with variables and headers as their own tabs.
 The **Schema** panel is a GraphiQL-style checkbox tree: tick fields to build the
 query, edit arguments inline, promote a literal to a `$variable`, and read the
 SDL pretty-printed. Subscriptions run over WebSocket.
 
 ### gRPC
+
+![A gRPC call — endpoint, message, and the service definition](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/grpc.gif)
 
 Point it at a host, load a `.proto` or use server reflection, and the **Service
 Definition** tab lists the methods it found. Unary, server-streaming,
@@ -146,12 +154,16 @@ request message is JSON with the message shape available beside it.
 
 ### SOAP
 
+![A SOAP envelope, with Form, WS-Security and WSDL beside it](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/soap.gif)
+
 An envelope editor with XML formatting, a **Form** view that fills the envelope
 from fields, **WS-Security** (username token, timestamps, digests), a **WSDL**
 tab that reads the contract and lists operations, plus assertions and
 attachments.
 
 ### Realtime: WebSocket / SSE / Socket.IO / MQTT
+
+![A WebSocket connected, a frame sent and echoed back](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/realtime.gif)
 
 One rail, four protocols, chosen by a selector in the tab. Connect, then send
 frames as JSON or text with a message log showing direction, timestamp and
@@ -160,6 +172,8 @@ events and acks; MQTT gets topics, QoS and retained messages; SSE gets the event
 stream parsed into named events.
 
 ### MCP
+
+![The MCP catalog, and a server added to the config](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/mcp.gif)
 
 Connect to a Model Context Protocol server over STDIO or HTTP, and get its
 **Tools**, **Resources** and **Prompts** as tabs you can invoke. The **Catalog**
@@ -170,6 +184,8 @@ and the rest — and adds one to your config with a click. **Args**, **Env** and
 ---
 
 ## Anatomy of a request
+
+![The Content Type menu — XML, YAML, and the two form tables](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/body-types.gif)
 
 Every protocol's request panel is built from the same strip:
 
@@ -230,6 +246,12 @@ step over/into/out, a variables pane, and hover-to-inspect while paused.
 
 ## Collections, environments, variables, history
 
+![The collections tree, a saved request opened, and a search across it](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/collections.gif)
+
+![History — every request the app has run, and one reopened](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/history.gif)
+
+![Environments — the variables a request resolves against, and the switcher](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/environments.gif)
+
 **Collections** are a tree of folders and requests with their own variables,
 auth and scripts inherited downward. Search across every collection at once with
 `Ctrl+Shift+F`.
@@ -259,6 +281,8 @@ sessions.
 
 ## Mock server
 
+![A mock server started, with Routes, Traffic, Chaos and the State Machine](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/mock.gif)
+
 Local servers for **ten protocols**: REST, GraphQL, WebSocket, SSE, Socket.IO,
 MQTT, gRPC, SOAP, **AI** and **MCP**. Each gets a port (or picks a free one) and
 a panel:
@@ -286,6 +310,10 @@ nothing and answers the same way twice.
 ---
 
 ## Dk8s — Kubernetes in the editor
+
+![The pod grid, filtered and cleared](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/dk8s.gif)
+
+![One pod — logs, a shell, Doctor, the file Explorer, Describe and YAML](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/dk8s-detail.gif)
 
 Reads your existing kubeconfig. No agent, no port opened, no credential leaves
 the machine.
@@ -354,7 +382,11 @@ in the OS keychain and never reaches Daakia. Scopes, hosts and accounts are read
 from `gh`, every command is disclosed before it runs, and the confirm screen is
 built so it cannot describe an action other than the one about to happen.
 
-![Dk8s and DkGH](https://raw.githubusercontent.com/salilvnair/daakia/main/media/daakia-dk8s-dkgh-3.0.gif)
+![The DkGH board — cards, table, columns and roadmap from one filter](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/dkgh.gif)
+
+![The team view, and an issue opened as a sheet over the board](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/dkgh-team.gif)
+
+![Insights — open issues over time, by module, by age, by assignee](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/dkgh-insights.gif)
 
 **Board**, in four shapes from one filter — cards, a table, columns by status,
 and a roadmap over time.
@@ -388,6 +420,8 @@ retry.
 ---
 
 ## Daakia AI
+
+![The assistant answering, with the Prompt Library open over it](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/ai.gif)
 
 ### The panel
 
@@ -490,6 +524,8 @@ environments — deleting is recoverable.
 
 ## DevTools
 
+![Daakia's own console, network log, performance timeline and AI insights](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/devtools.gif)
+
 Daakia's own instrumentation, not the browser's: a **Console** carrying script
 `console` output, a **Network** log of what the extension host sent, a
 **Performance** timeline, and — when the Intelligence Dashboard feature is on —
@@ -499,6 +535,12 @@ database explorer, a debug snapshot, and the request and session audit trails.
 ---
 
 ## Settings
+
+![The four AI sections — LLM Provider, AI Features, Prompt Library, AI Audit](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/ai-settings.gif)
+
+![Dk8s settings — cluster, terminal themes, and the app theme](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/dk8s-settings.gif)
+
+![Mock Server settings — port range and defaults](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/settings.gif)
 
 Sixteen sections, searchable:
 

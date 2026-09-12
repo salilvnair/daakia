@@ -22,3 +22,7 @@ plan
 media/*.gif
 *.vsix
 local-server
+
+# The README loads its GIFs from raw.githubusercontent, so they are a
+# repository asset rather than something the extension needs to carry.
+media

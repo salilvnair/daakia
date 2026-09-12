@@ -36,7 +36,7 @@ const path = require('path');
 const fs = require('fs');
 const { recipes } = require('./recipes');
 const { closeAllTabs, tabCount } = require('./drive');
-const { buildIntroHtml } = require('./intro-template');
+const { buildIntroHtml, introAnimationSec } = require('./intro-template');
 
 const ROOT = __dirname;
 const argv = process.argv.slice(2);
@@ -217,7 +217,17 @@ function trimFromMarks(marks, fallbackStart) {
     await take(browser, 'intro', async (page, mark) => {
       await page.goto('file://' + introHtmlPath);
       mark.begin();
-      await page.waitForTimeout((config.intro.durationSec || 3.2) * 1000);
+      /*
+        The animation, and then the finished card for `holdSec`.
+
+        `durationSec` used to be the whole clip, which meant the card was on
+        screen complete for whatever was left after the badges finished — a
+        third of a second. The hold is stated now and the animation is measured,
+        so changing the badge list cannot quietly eat it.
+      */
+      const animation = introAnimationSec((config.intro.badges || []).length);
+      const hold = config.intro.holdSec ?? 5.5;
+      await page.waitForTimeout((animation + hold) * 1000);
     });
     await browser.close();
     made.push('intro');

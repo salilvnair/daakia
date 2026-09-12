@@ -12,7 +12,6 @@
   },
   "intro": {
     "enabled": true,
-    "durationSec": 3.2,
     "title": "Daakia",
     "tagline": "Every protocol. Your cluster. Your issues.",
     "badges": [
@@ -26,7 +25,8 @@
       "DkGH"
     ],
     "accentColor": "#2ad4a8",
-    "effect": "static"
+    "effect": "static",
+    "holdSec": 5.5
   },
   "segments": [
     {
