@@ -167,7 +167,18 @@ export async function defaultNamespace(context: string): Promise<string> {
  * `eu-live-01` matches nothing here and is absolutely production, while
  * `prod-sandbox` matches and is not. The guess saves a click; the human decides.
  */
+/**
+ * Clusters that run on this machine, and therefore are not production.
+ *
+ * A guess from a substring cannot help matching `kind-dk8s-prod`, and asking
+ * somebody whether their throwaway kind cluster is production is a question
+ * with an obviously correct answer — which makes it a question not worth
+ * asking. These prefixes are what local Kubernetes actually calls itself.
+ */
+const LOCAL = /^(kind-|k3d-|minikube$|docker-desktop$|rancher-desktop$|colima$|orbstack$)/i;
+
 export function looksLikeProduction(context: string, cluster: string): boolean {
+  if (LOCAL.test(context)) return false;
   return /(^|[-_.])(prod|prd|live|production)([-_.]|$)/i.test(`${context} ${cluster}`);
 }
 

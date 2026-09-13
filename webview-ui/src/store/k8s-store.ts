@@ -1129,6 +1129,8 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         else if (!contexts.length) stage = 'no-contexts';
         else if (!context) stage = 'pick-context';
         else if (reachable && !reachable.reachable) stage = 'unreachable';
+        /* Kept in the union so an explicit visit from the breadcrumb still
+           works; nothing routes here on its own. */
         else if (msg.needsSensitivity) stage = 'ask-sensitivity';
         else if (!msg.namespace) stage = 'pick-namespace';
         else stage = 'ready';
@@ -1160,7 +1162,10 @@ export const useK8sStore = create<K8sState>((set, get) => ({
           busy: false, context: ctx, reachable,
           namespace: msg.namespace as string | undefined,
           stage: !reachable.reachable ? 'unreachable'
-            : !known ? 'ask-sensitivity'
+            /* Was: an unclassified context sent you to the prompt before you
+               had seen a single pod. An unclassified context is now simply one
+               that has not been corrected yet. */
+            : !known ? 'ready'
             : 'pick-namespace',
         });
         break;

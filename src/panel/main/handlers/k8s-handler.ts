@@ -219,7 +219,17 @@ export async function handleDk8sProbe(postMessage: PostMessage): Promise<void> {
        than left wondering where a name they no longer recognise came from. */
     droppedContexts,
     // A context the user has not classified yet needs the one-time prompt.
-    needsSensitivity: chosen ? !(saved.sensitivity ?? {})[chosen] : false,
+    /*
+      Nothing is asked up front any more.
+
+      This drove a full-screen prompt between the reader and their pods, to set
+      a marker whose entire effect is a small chip in the breadcrumb — dk8s runs
+      no delete, no scale, no rollout, no patch, and there is no type-the-name
+      confirmation for it to gate. A guess is offered as the badge instead, and
+      the breadcrumb is where it gets corrected, which is what the prompt itself
+      told people to do.
+    */
+    needsSensitivity: false,
     sensitivityGuess: chosen
       ? looksLikeProduction(chosen, list.contexts.find(c => c.name === chosen)?.cluster ?? '')
       : false,
