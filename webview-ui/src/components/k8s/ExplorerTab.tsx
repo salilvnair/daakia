@@ -17,7 +17,7 @@ import {
   PathBreadcrumbView, FileBrowserView, SearchFieldView, SegmentedControlView,
   EmptyStateView, SelectInputView, ContextMenuView, ModalView, ButtonView, BadgeChipView,
   type ContextMenuItem,
-  type FileBrowserEntry, type FileBrowserAction, IconSize, SkeletonView } from '@salilvnair/dui';
+  type FileBrowserEntry, type FileBrowserAction, IconSize, SkeletonView, LoadingStateView } from '@salilvnair/dui';
 import {
   ExternalLinkIcon, DownloadIcon, SearchIcon, LockIcon, ArrowToLeftIcon, FolderOpenIcon,
   RefreshIcon,
@@ -239,6 +239,10 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
   const [hits, setHits] = useState<Hits | null>(null);
   const [pattern, setPattern] = useState('');
   const [busy, setBusy] = useState(false);
+
+  /* The first listing has not landed yet — distinct from a listing that came
+     back empty, which is a directory with nothing in it and says so. */
+  const settlingPath = !path && busy;
   const [open, setOpen] = useState<{ path: string; name: string; size?: number } | null>(null);
   const [selected, setSelected] = useState<string | undefined>();
   /*
@@ -619,6 +623,30 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
   */
   const error = mode === 'files' ? listing?.error : (hits?.error ?? listing?.error);
 
+  /*
+    Nothing is drawn until there is a directory to draw.
+
+    The start directory is probed — /data, then /var/lib, then /mnt and the
+    rest — and each probe is a round trip through exec. Rendering the browser
+    during that showed the root, empty, and then jumped to wherever the probe
+    landed. A reader who clicked into a folder in that window was navigating a
+    directory listing that was about to be replaced.
+  */
+  if (settlingPath) {
+    return (
+      <div className="flex-1 grid place-items-center">
+        <LoadingStateView
+          icon={<FolderOpenIcon size={IconSize.medallion} />}
+          title="Opening the file browser"
+          message="Looking for a sensible directory to start in — /data, /var/lib, /mnt, then the root."
+          accentColor={ACCENT}
+          slowAfterSeconds={8}
+          slowMessage="Still asking the container. Each probe is an exec, and a pod under load answers them slowly."
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full min-h-0"
          /*
@@ -698,7 +726,20 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
           flex: pathEditing ? '1 1 70%' : '0 1 auto',
         }}>
           <PathBreadcrumbView
-            path={path || '/'}
+            /*
+              Never `/` as a stand-in.
+
+              The start directory is found by probing /data, /var/lib, /mnt and
+              the rest in turn, which is several round trips through exec. While
+              that ran, `path` was still empty and this fell back to `/` — so the
+              tab opened at the root, sat there, and then jumped to /var/lib. The
+              breadcrumb was describing a directory nobody had listed.
+
+              Empty means not yet known, and the body below draws a loader for
+              exactly that state, so this is only ever asked once there is a real
+              answer.
+            */
+            path={path}
             /*
               The path changes where you are, not which screen you are on.
 

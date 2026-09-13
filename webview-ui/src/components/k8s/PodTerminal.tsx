@@ -160,7 +160,21 @@ export function PodTerminal() {
     Guarded on the id so a re-render never opens a second shell.
   */
   useEffect(() => {
-    const noShell = capabilities && !capabilities.shell && !capabilities.unreachable;
+    /*
+      Decide nothing until the probe has answered.
+
+      `capabilities` arrives from an exec into the container, so for the first
+      moment it is undefined — and both branches below treated that as a
+      decision. The tab dropped to idle, drew the whole "Open a shell in this
+      pod" panel, and then replaced it the instant the probe landed: a
+      paragraph of text that appears and vanishes before it can be read.
+
+      Not knowing is its own state, and `opening` already draws it as a
+      prompt-shaped skeleton.
+    */
+    if (!capabilities) return;
+
+    const noShell = !capabilities.shell && !capabilities.unreachable;
     if (noShell) { setPhase('idle'); return; }
     if (!prefs.openOnArrival) { setPhase(p => (p === 'opening' ? 'idle' : p)); return; }
     if (!idRef.current && phase === 'opening' && detail && container) start();
