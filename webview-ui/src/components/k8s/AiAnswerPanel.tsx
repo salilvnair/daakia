@@ -87,7 +87,17 @@ function AnswerCard({ answer }: { answer: Dk8sAnswer }) {
   const [open, setOpen] = useState(true);
 
   return (
-    <div className="flex flex-col rounded-lg overflow-hidden"
+    /*
+      `shrink-0`, and it is the whole reason this panel would not scroll.
+
+      The column is a flex container, so every card is a flex item with
+      `flex-shrink: 1`. A flex item's automatic minimum size normally protects
+      its content — but `overflow: hidden` (here, for the rounded corners) sets
+      that minimum to zero. So instead of the column overflowing and scrolling,
+      each card was squashed to fit and its answer clipped: the content was
+      never taller than the box, which is why there was never a scrollbar.
+    */
+    <div className="flex flex-col rounded-lg overflow-hidden shrink-0"
          style={{
            background: 'var(--color-surface)',
            border: `1px solid ${answer.error
@@ -412,7 +422,7 @@ export function AiAnswerPanel() {
       {/* `scrollbar-gutter: stable` keeps the track reserved, so the bar is
           visible the moment there is anything to scroll and the column does
           not shift sideways when it appears. */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-3 min-h-0"
+      <div className="dk8s-ai-scroll flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-3 min-h-0"
            style={{ scrollbarGutter: 'stable' }}>
         {answers.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-2 px-6 text-center">

@@ -956,6 +956,27 @@ input[type="number"] {
   border-radius: 99px;
   min-height: 24px;
 }
+/*
+  The AI answer column, which is read by scrolling and nothing else.
+
+  The product's bar is 6px and deliberately quiet — right for a log gutter
+  beside a minimap, wrong for the one column whose entire job is a thread you
+  scroll through. It was reported as "no scrollbar", and the report was fair:
+  at 6px against this panel's surface there is nothing to aim at.
+*/
+.dk8s-ai-scroll::-webkit-scrollbar { width: 10px; }
+.dk8s-ai-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-protocol-ai) 60%, var(--color-surface-border));
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 99px;
+  min-height: 32px;
+}
+.dk8s-ai-scroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--color-protocol-ai) 85%, var(--color-surface-border));
+  background-clip: padding-box;
+}
+
 ::-webkit-scrollbar-thumb:hover {
   background: color-mix(in srgb, var(--color-accent) 85%, var(--color-surface-border));
 }
