@@ -133,7 +133,73 @@ export async function resolveBinary(): Promise<string> {
 }
 
 /** Run kubectl and collect its output. */
+/**
+ * Verbs that are about kubectl itself rather than about a cluster.
+ *
+ * `config` reads and writes the kubeconfig, `version --client` asks the binary
+ * what it is, and `completion`/`help` never touch a server. Everything else
+ * talks to a cluster and must say which one.
+ */
+const CLUSTERLESS = new Set(['config', 'version', 'completion', 'help', 'options', 'plugin']);
+
+/**
+ * Every cluster call names its context. No exceptions, no silent default.
+ *
+ * ── Why this is a hard guard and not a convention ──
+ *
+ * Call sites spelled it `ctx ? ['--context', ctx] : []` — pass it when we have
+ * it, quietly leave it out when we do not. That looks harmless and is the
+ * single worst thing this code can do, because kubectl always has an answer:
+ *
+ *   No current-context set   -> it talks to localhost:8080 and the refusal is
+ *                               instant, which is indistinguishable from the
+ *                               cluster being down. This is what produced
+ *                               "connection refused" against a cluster that was
+ *                               fine, and a padlock on a pod for somebody with
+ *                               full access.
+ *   A current-context set    -> worse. It silently runs against whatever
+ *                               cluster kubectl happens to be pointing at, so
+ *                               you read one cluster's logs believing they are
+ *                               another's, and nothing anywhere says so.
+ *
+ * k9s does not have this class of bug because it names the context on every
+ * call. So does this, now, and the guard is here rather than at each call site
+ * because there are fifty-three of them and the next one has not been written
+ * yet.
+ *
+ * A missing context is a programming error, so it fails loudly and without
+ * running anything — the message says exactly what was about to happen, which
+ * is the one thing a silent fallback never does.
+ */
+function requireContext(args: string[]): RunResult | undefined {
+  const verb = args.find(a => !a.startsWith('-'));
+  if (verb && CLUSTERLESS.has(verb)) return undefined;
+  if (args.includes('--context')) return undefined;
+
+  const shown = args.slice(0, 6).join(' ');
+  return {
+    ok: false,
+    code: null,
+    stdout: '',
+    stderr: '',
+    failure:
+      `dk8s refused to run \`kubectl ${shown}\` without --context. Without one, `
+      + 'kubectl uses whichever cluster it is pointing at — or localhost:8080 when '
+      + 'that is nothing — and the result would be a different cluster\'s answer '
+      + 'presented as this one\'s. This is a bug in dk8s, not a problem with your '
+      + 'cluster or your access.',
+  };
+}
+
 export async function run(args: string[], opts: RunOptions = {}): Promise<RunResult> {
+  const refusal = requireContext(args);
+  if (refusal) {
+    /* Loud in development, and carried to the caller in production. A context
+       that went missing is worth a stack trace while there is still somebody
+       around to read it. */
+    console.error('[dk8s]', refusal.failure, new Error('missing --context').stack);
+    return refusal;
+  }
   const bin = await resolveBinary();
   return runRaw(bin, args, opts);
 }
