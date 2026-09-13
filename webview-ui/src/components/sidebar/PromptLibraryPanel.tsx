@@ -105,20 +105,35 @@ function computeDecos(text: string, monaco: any): any[] {
 function PromptPreview({ text, vars }: { text: string; vars: string[] }) {
   if (!text) return <p className="text-[12px] text-[var(--color-text-muted)] italic">No prompt — switch to Edit to add one.</p>;
 
-  const known = new Set(vars);
-  // Longest first, so `{{x}}` is matched before the `{x}` inside it.
-  const alternatives = [...known]
+  /*
+    A placeholder is `{{name}}`, and only that.
+
+    This split on the bare names, with no braces and no word boundary, so
+    every variable lit up wherever its letters happened to fall in ordinary
+    prose: `repo` inside "repository" and "reporter", `description` inside
+    the sentence describing what a description is. The prompt then read as
+    though half its English would be substituted at send time, which is both
+    wrong and alarming — the point of the highlight is to say "this part is
+    not text, it is a slot".
+  */
+  const names = vars.map(v => v.replace(/^\{\{|\}\}$/g, '').trim()).filter(Boolean);
+  const known = new Set(names.map(n => `{{${n}}}`));
+
+  // Longest first, so a name that is a prefix of another cannot win.
+  const escaped = [...names]
     .sort((a, b) => b.length - a.length)
     .map(v => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
 
-  const parts = alternatives.length
-    ? text.split(new RegExp(`(${alternatives.join('|')})`, 'g'))
+  /* Whitespace inside the braces is the same slot — `{{ repo }}` — and is
+     normalised below so the pill test still recognises it. */
+  const parts = escaped.length
+    ? text.split(new RegExp(`(\\{\\{\\s*(?:${escaped.join('|')})\\s*\\}\\})`, 'g'))
     : [text];
 
   return (
     <div className="text-[12px] font-mono leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap break-words">
       {parts.map((part, i) => (
-        known.has(part)
+        known.has(part.replace(/\s+/g, ''))
           ? <span key={i} className="inline-block rounded px-1 font-semibold" style={{ background:'rgba(139,92,246,.18)', color:'#c084fc', border:'1px solid rgba(139,92,246,.35)', lineHeight:'1.6' }}>{part}</span>
           : <span key={i}>{part}</span>
       ))}
