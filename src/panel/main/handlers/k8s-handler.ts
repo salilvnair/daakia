@@ -58,6 +58,7 @@ import { handleHeapAnalyze, handleThreadsAnalyze, handleLogsAnalyze } from './he
 import { handleJfrAnalyze } from './jfr-handler';
 import { streamLogs, type LogStreamHandle } from '../../../services/k8s/k8s-log-stream';
 import { run, kubectlBinary, resolveBinary } from '../../../services/k8s/kubectl';
+import { clearAccessCache } from '../../../services/k8s/k8s-access';
 import { probeCapabilities, classifyFromSpec, availableActions, execFailureKind } from '../../../services/k8s/pod-classify';
 
 type PostMessage = (msg: unknown) => void;
@@ -125,9 +126,25 @@ function saveState(patch: Partial<Dk8sState>): Dk8sState {
  * cluster answer. Everything the first-run screen needs in one round trip, so
  * the UI never has to render a half-known state.
  */
+/**
+ * A refresh has to actually re-ask.
+ *
+ * `probeAccess` caches its answer for five minutes, which is right — seven
+ * SelfSubjectAccessReviews per pod open is not free, and permissions rarely
+ * change. It is wrong when the answer was taken against the wrong cluster, or
+ * before somebody was granted the role they just asked for: a stale "denied"
+ * then outlives every refresh in the panel, and the only thing that clears it
+ * is restarting the editor. Which is what people did.
+ *
+ * So an explicit probe drops it. Not the periodic ones — only the ones a
+ * person asked for.
+ */
 export async function handleDk8sProbe(postMessage: PostMessage): Promise<void> {
   const saved = state();
   if (saved.kubectlPath) setKubectlPath(saved.kubectlPath);
+
+  /* See the note above: a refresh that returns the cached answer is not one. */
+  clearAccessCache();
 
   const env = await probeEnvironment();
   if (!env.present) {

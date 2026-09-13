@@ -490,11 +490,21 @@ export function PodTerminal() {
         <IconBtn label="Clear the screen" onClick={() => termRef.current?.clear()}>
           <TrashIcon size={IconSize.inline} />
         </IconBtn>
-        {(phase === 'ended' || phase === 'error') && (
-          <IconBtn label="Open a new shell" onClick={start}>
-            <RefreshIcon size={IconSize.inline} />
-          </IconBtn>
-        )}
+        {/*
+          Always offered, not only once the shell has died.
+
+          A shell opened against the wrong cluster, or before a role was
+          granted, is not "ended" — it is sitting there working against
+          something you no longer meant. There was no way back to it short of
+          leaving the pod and coming in again, and the button that would have
+          done it only appeared after a failure.
+        */}
+        <IconBtn
+          label={phase === 'live' ? 'Reconnect this shell' : 'Open a new shell'}
+          onClick={() => { if (phase === 'live') end(); start(); }}
+        >
+          <RefreshIcon size={IconSize.inline} />
+        </IconBtn>
         {phase === 'live' && (
           <IconBtn label="End this shell (Esc)" onClick={end}>
             <CloseIcon size={IconSize.inline} />
