@@ -10,7 +10,7 @@
  * turning any of them into a link corrupts the thing it is inside.
  */
 import { describe, it, expect } from 'vitest';
-import { linkIssueRefs } from './GhProse';
+import { attachmentsIn, imagesIn, linkIssueRefs } from './GhProse';
 
 const REPO = 'acme/app';
 const link = (n: number, slug = REPO) => `https://github.com/${slug}/issues/${n}`;
@@ -91,5 +91,54 @@ describe('a body with several', () => {
     expect(out).toContain(`[#2](${link(2)})`);
     expect(out).toContain('\n#3\n');
     expect(out).toContain(`[#4](${link(4)})`);
+  });
+});
+
+/**
+ * Attachments that are not images.
+ *
+ * GitHub renders these as an ordinary markdown link, so a crash log, a HAR or
+ * a heap dump — exactly the things worth having on a bug report — arrived as a
+ * sentence-coloured link in the middle of prose and read as a reference rather
+ * than a file.
+ */
+describe('attachments', () => {
+  it('finds a file on GitHub\'s modern attachment path', () => {
+    const md = 'log attached: [server.log](https://github.com/user-attachments/files/123/server.log)';
+    expect(attachmentsIn(md)).toEqual([
+      { label: 'server.log', url: 'https://github.com/user-attachments/files/123/server.log' },
+    ]);
+  });
+
+  it('finds one on the older per-repository path', () => {
+    const md = '[trace.har](https://github.com/acme/app/files/9/trace.har)';
+    expect(attachmentsIn(md)[0].label).toBe('trace.har');
+  });
+
+  it('finds a file by extension wherever it is hosted', () => {
+    expect(attachmentsIn('[dump.hprof](https://files.example.com/a/dump.hprof)')).toHaveLength(1);
+  });
+
+  it('is not fooled by an ordinary link', () => {
+    /* The docs link in every other issue body must not become an attachment. */
+    expect(attachmentsIn('see [the docs](https://example.com/guide)')).toEqual([]);
+  });
+
+  it('does not collect images, which the gallery already draws', () => {
+    expect(attachmentsIn('![shot](https://github.com/user-attachments/assets/abc)')).toEqual([]);
+  });
+
+  it('lists each file once, however many times it is linked', () => {
+    const url = 'https://github.com/user-attachments/files/1/a.log';
+    expect(attachmentsIn(`[a](${url}) and again [a](${url})`)).toHaveLength(1);
+  });
+});
+
+describe('images uploaded to GitHub since 2023', () => {
+  it('are recognised as bare URLs, which have no extension at all', () => {
+    /* `user-attachments/assets/<uuid>` — an extension test missed every
+       screenshot pasted into GitHub in the last two years. */
+    const md = 'before\n\nhttps://github.com/user-attachments/assets/9f3c-uuid\n\nafter';
+    expect(imagesIn(md)).toEqual(['https://github.com/user-attachments/assets/9f3c-uuid']);
   });
 });

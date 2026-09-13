@@ -18,11 +18,62 @@
 import { useMemo } from 'react';
 import { MarkdownView } from '@salilvnair/dui';
 import { GhEvidence } from './GhEvidence';
+import { Ico } from './GhIcons';
 
 /** Markdown images, HTML ones, and a bare image URL on its own line. */
 const MD_IMAGE = /!\[[^\]]*\]\(([^)\s]+)[^)]*\)/g;
 const HTML_IMAGE = /<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi;
-const BARE_IMAGE = /^\s*(https?:\/\/\S+\.(?:png|jpe?g|gif|webp))\s*$/gim;
+/*
+  A bare image URL, by extension OR by being one of GitHub's own asset links.
+
+  Anything uploaded through the issue composer since 2023 lands on
+  `user-attachments/assets/<uuid>` with no extension at all, so an extension
+  test alone missed every screenshot pasted into GitHub in the last two years.
+*/
+const BARE_IMAGE = new RegExp(
+  String.raw`^\s*(https?:\/\/(?:\S+\.(?:png|jpe?g|gif|webp)|github\.com\/user-attachments\/assets\/\S+))\s*$`,
+  'gim',
+);
+
+/**
+ * A file somebody attached that is not an image.
+ *
+ * GitHub renders these as an ordinary markdown link, so a crash log, a HAR or
+ * a heap dump — exactly the things a bug report is worth having — arrived as a
+ * sentence-coloured link in the middle of prose and read as a reference rather
+ * than a file. They are lifted out and drawn as what they are.
+ *
+ * Matched by where the URL points rather than by extension: GitHub's own
+ * attachment paths are the reliable signal, and a `.log` hosted anywhere is
+ * still a file worth showing.
+ */
+const MD_ATTACHMENT = new RegExp(
+  String.raw`\[([^\]]+)\]\((https?:\/\/(?:github\.com\/(?:user-attachments\/files|[\w.-]+\/[\w.-]+\/files)\/\S+|\S+\.(?:log|txt|json|csv|har|zip|gz|tgz|pdf|hprof|jfr|yaml|yml|xml|patch|diff)))\)`,
+  'gi',
+);
+
+export interface Attachment { label: string; url: string }
+
+export function attachmentsIn(markdown: string): Attachment[] {
+  const out: Attachment[] = [];
+  const seen = new Set<string>();
+  for (const m of markdown.matchAll(MD_ATTACHMENT)) {
+    if (!m[2] || seen.has(m[2])) continue;
+    seen.add(m[2]);
+    out.push({ label: m[1].trim() || fileNameOf(m[2]), url: m[2] });
+  }
+  return out;
+}
+
+/** The last path segment, which is what GitHub names the file. */
+function fileNameOf(url: string): string {
+  try {
+    const path = new URL(url).pathname;
+    return decodeURIComponent(path.slice(path.lastIndexOf('/') + 1)) || url;
+  } catch {
+    return url;
+  }
+}
 
 export function imagesIn(markdown: string): string[] {
   const out: string[] = [];
@@ -34,6 +85,7 @@ export function imagesIn(markdown: string): string[] {
 
 export function withoutImages(markdown: string): string {
   return markdown
+    .replace(MD_ATTACHMENT, '')
     .replace(MD_IMAGE, '')
     .replace(HTML_IMAGE, '')
     .replace(BARE_IMAGE, '')
@@ -120,6 +172,9 @@ export function GhProse({ content, gallery = true, height = 84, repo }: {
   height?: number;
 }) {
   const images = useMemo(() => (gallery ? imagesIn(content) : []), [content, gallery]);
+  /* Lifted out of the prose wherever the gallery is drawn, for the same reason
+     the images are: a file is a thing, not a sentence. */
+  const files = useMemo(() => (gallery ? attachmentsIn(content) : []), [content, gallery]);
   const prose = useMemo(
     () => linkIssueRefs(gallery ? withoutImages(content) : content, repo),
     [content, gallery, repo],
@@ -132,6 +187,25 @@ export function GhProse({ content, gallery = true, height = 84, repo }: {
         : images.length === 0
           ? <span style={{ color: 'var(--dk-faint)' }}>Nothing written.</span>
           : null}
+
+      {files.length > 0 && (
+        <div className="chips" style={{ marginTop: prose.trim() ? 8 : 0 }}>
+          {files.map(f => (
+            <a
+              key={f.url}
+              href={f.url}
+              target="_blank"
+              rel="noreferrer"
+              className="fct"
+              style={{ textDecoration: 'none', cursor: 'pointer' }}
+              title={f.url}
+            >
+              <Ico name="clip" />
+              <span>{f.label}</span>
+            </a>
+          ))}
+        </div>
+      )}
 
       {images.length > 0 && (
         <div className="gallery" style={{ marginTop: prose.trim() ? 8 : 0 }}>
