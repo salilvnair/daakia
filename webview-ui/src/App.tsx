@@ -514,10 +514,31 @@ export default function App() {
     });
   }, [sidebarSection, sidebarOpen, sidebarWidth]);
 
+  /*
+    Which tabs exist is saved the moment it changes. Everything else waits.
+
+    A 2s debounce is right for what people do continuously — typing a URL,
+    dragging a splitter, editing a body — where saving on every keystroke would be a
+    write per keystroke. It is wrong for opening and closing tabs, which is
+    discrete, rare, and the single thing a reader would notice being forgotten.
+
+    Closing three tabs and then closing the panel inside the window left the
+    snapshot describing a workspace that no longer existed, and all three came
+    back. The unload listeners below were supposed to cover it, but a webview
+    being disposed is not a page unloading: the panel can tear the message
+    channel down before a postMessage sent from `pagehide` is ever delivered.
+    There is no ordering guarantee to lean on, so the fix is not to need one.
+  */
+  const tabSignature = tabs.map(t => t.id).join(',');
+  const prevSignature = useRef(tabSignature);
+
   useEffect(() => {
+    const structural = tabSignature !== prevSignature.current;
+    prevSignature.current = tabSignature;
+    if (structural) { flushWorkspaceSnapshot(); return; }
     const timer = setTimeout(flushWorkspaceSnapshot, 2000);
     return () => clearTimeout(timer);
-  }, [tabs, activeTabId, activeProtocol, sidebarSection, sidebarOpen, sidebarWidth, debugBreakpoints, debugDisabledBps, debugConditions, flushWorkspaceSnapshot]);
+  }, [tabSignature, tabs, activeTabId, activeProtocol, sidebarSection, sidebarOpen, sidebarWidth, debugBreakpoints, debugDisabledBps, debugConditions, flushWorkspaceSnapshot]);
 
   // The debounced save above can be lost if the webview is disposed (window/panel
   // closed, VS Code quit) within the 2s window — leaving a stale snapshot (e.g. a
