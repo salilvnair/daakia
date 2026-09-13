@@ -143,6 +143,41 @@ export async function handleDk8sProbe(postMessage: PostMessage): Promise<void> {
     ? saved.context
     : list.current;
 
+  /*
+    A saved selection is a memory, not a fact.
+
+    Contexts come and go from a kubeconfig — a kind cluster is deleted, Docker
+    Desktop's Kubernetes is switched off, a colleague's context is removed after
+    an engagement ends. What was selected then is not necessarily selectable
+    now, and handing a stale name to the namespace query produces the one
+    failure nobody can act on: `context "docker-desktop" does not exist`,
+    repeated on every refresh, for a cluster the reader may not even remember
+    adding.
+
+    `chosen` above already checks itself against the kubeconfig. The multi-select
+    path did not, which is the whole bug — so it is filtered the same way here,
+    and what was dropped is reported rather than silently forgotten.
+  */
+  const known = new Set(list.contexts.map(c => c.name));
+  const savedContexts = saved.contexts ?? (chosen ? [chosen] : []);
+  const liveContexts = savedContexts.filter(c => known.has(c));
+  const droppedContexts = savedContexts.filter(c => !known.has(c));
+
+  const savedTargets = saved.targets ?? (chosen && saved.namespace
+    ? [{ context: chosen, namespace: saved.namespace }]
+    : []);
+  const liveTargets = savedTargets.filter(t => known.has(t.context));
+
+  /* Persist the pruning, so a context that has gone is gone for good rather
+     than coming back the next time the panel opens. */
+  if (droppedContexts.length) {
+    saveState({
+      contexts: liveContexts,
+      targets: liveTargets,
+      context: liveContexts.includes(saved.context ?? '') ? saved.context : liveContexts[0],
+    });
+  }
+
   let reachable;
   let namespace = saved.namespace;
   if (chosen) {
@@ -161,8 +196,13 @@ export async function handleDk8sProbe(postMessage: PostMessage): Promise<void> {
     reachable,
     sensitivity: saved.sensitivity ?? {},
     pinned: chosen ? pinnedFor(chosen) : [],
-    selectedContexts: saved.contexts ?? (chosen ? [chosen] : []),
-    targets: saved.targets ?? (chosen && namespace ? [{ context: chosen, namespace }] : []),
+    selectedContexts: liveContexts.length || !chosen ? liveContexts : [chosen],
+    targets: liveTargets.length || !(chosen && namespace)
+      ? liveTargets
+      : [{ context: chosen, namespace }],
+    /* Named once, so somebody who deleted a cluster on purpose is told rather
+       than left wondering where a name they no longer recognise came from. */
+    droppedContexts,
     // A context the user has not classified yet needs the one-time prompt.
     needsSensitivity: chosen ? !(saved.sensitivity ?? {})[chosen] : false,
     sensitivityGuess: chosen
@@ -207,7 +247,15 @@ export async function handleDk8sUseContexts(
   );
 }
 
-/** Namespaces for several contexts, each tagged with where it came from. */
+/**
+ * Namespaces for several contexts, each tagged with where it came from.
+ *
+ * This is also the only moment a saved namespace can be checked. A context can
+ * be validated against the kubeconfig for free, but a namespace only exists as
+ * far as the cluster is concerned — so a target saved months ago, for a
+ * namespace since deleted, survives every probe until somebody actually asks
+ * the cluster. Which is here.
+ */
 async function handleDk8sNamespacesFor(
   contexts: string[],
   postMessage: PostMessage,
@@ -218,6 +266,35 @@ async function handleDk8sNamespacesFor(
     ...(await listNamespaces(context)),
     pinned: pins[context] ?? [],
   })));
+
+  /*
+    Prune saved targets against what the cluster just said — and ONLY against a
+    cluster that actually answered.
+
+    The distinction is the whole point. A cluster that is unreachable has told
+    us nothing about its namespaces, and dropping a target because a VPN was
+    down would quietly discard a watch somebody set up deliberately. An answer
+    that does not contain the namespace is different: that is the cluster
+    saying it is gone.
+  */
+  const answered = per.filter(r => !r.error && r.namespaces.length > 0);
+  if (answered.length) {
+    const saved = state().targets ?? [];
+    const live = saved.filter(t => {
+      const said = answered.find(r => r.context === t.context);
+      if (!said) return true;                       // it did not answer; keep it
+      return said.namespaces.includes(t.namespace)
+        || (pins[t.context] ?? []).includes(t.namespace);  // pinned on purpose
+    });
+    const gone = saved.filter(t => !live.includes(t));
+    if (gone.length) {
+      saveState({ targets: live });
+      /* Named, not swallowed — a watch disappearing without explanation is
+         indistinguishable from dk8s losing it. */
+      postMessage({ type: 'dk8s:targetsPruned', gone, targets: live });
+    }
+  }
+
   postMessage({ type: 'dk8s:namespacesMulti', perContext: per });
 }
 
