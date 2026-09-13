@@ -253,6 +253,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
   const history = useDk8sSearchStore(s => s.history);
   const remember = useDk8sSearchStore(s => s.remember);
   const forget = useDk8sSearchStore(s => s.forget);
+  const clearHistory = useDk8sSearchStore(s => s.clearHistory);
 
   /**
    * Run a search over a given set of pods.
@@ -677,6 +678,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
               suggestionsLabel="Recent searches"
               onPick={rerun}
               onForget={forget}
+              onClearAll={clearHistory}
               placeholder={searchIn === 'logs'
                 ? 'Search across the selected pods’ logs — Enter to search'
                 : 'File name, glob or regex — *invoice*, \.ya?ml$ — Enter to search'}
