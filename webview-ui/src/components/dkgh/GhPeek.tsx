@@ -179,7 +179,7 @@ export function GhPeek({ repo, issue, onOpen, onClose }: {
         ) : detail.error ? (
           <div style={{ color: 'var(--dk-red)' }}>{detail.error}</div>
         ) : (
-          <Md content={trim(detail.body)} empty="This issue has an empty body." />
+          <Md content={trim(detail.body)} empty="This issue has an empty body." repo={repo} />
         )}
 
         {shots.length > 0 && (
@@ -206,7 +206,7 @@ export function GhPeek({ repo, issue, onOpen, onClose }: {
                   <b style={{ color: 'var(--dk-text)' }}>{last.author ?? 'someone'}</b>
                   {last.createdAt ? `, ${sinceIso(last.createdAt)}` : ''}
                 </div>
-                <Md content={trim(last.body, 400)} empty="An empty comment." />
+                <Md content={trim(last.body, 400)} empty="An empty comment." repo={repo} />
               </div>
             </div>
           </>
@@ -255,11 +255,11 @@ function CopyLink({ url }: { url: string }) {
   );
 }
 
-function Md({ content, empty }: { content: string; empty: string }) {
+function Md({ content, empty, repo }: { content: string; empty: string; repo?: string }) {
   if (!content.trim()) return <span style={{ color: 'var(--dk-faint)' }}>{empty}</span>;
   return (
     <div className="dkgh-md" style={{ fontSize: 'inherit' }}>
-      <GhProse content={content} height={64} />
+      <GhProse content={content} height={64} repo={repo} />
     </div>
   );
 }

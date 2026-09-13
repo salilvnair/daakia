@@ -41,16 +41,88 @@ export function withoutImages(markdown: string): string {
     .trim();
 }
 
-export function GhProse({ content, gallery = true, height = 84 }: {
+/**
+ * `#113`, `owner/repo#113`, and a bare GitHub issue URL, as links.
+ *
+ * GitHub turns these into links on its own site, so a body written there —
+ * "duplicate of #113" — arrives here as plain text and reads as a dead end.
+ * The reader has the number and no way to use it without leaving for a
+ * browser and searching.
+ *
+ * Deliberately narrow about what counts:
+ *
+ *   Inside a code span or fence, nothing is touched. `#1` in a shell snippet
+ *   is a comment, and a colour in CSS is `#113` exactly.
+ *
+ *   Only after a boundary. `sha#113` and `v2.4#113` are not issue references,
+ *   and neither is the fragment of a URL that already links somewhere.
+ *
+ *   Already-linked text is left alone — a markdown link whose text happens to
+ *   be `#113` must not gain a second link inside it.
+ */
+const ISSUE_URL_SRC = String.raw`https?:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/issues\/(\d+)`;
+const ISSUE_REF_SRC = String.raw`((?:[\w.-]+\/[\w.-]+)?)#(\d+)`;
+
+/*
+  One pass, not two.
+
+  Rewriting URLs and then references meant the second pass ran over text the
+  first had already turned into `[#7](url)` — and matched the `#7` inside it,
+  producing a link nested in a link that renders as neither. A single
+  alternation consumes each match once, and the URL alternative is first so a
+  full URL is never read as the bare reference at its end.
+*/
+const LINKABLE = new RegExp(
+  String.raw`(^|[\s([{,;:>])(?:` + ISSUE_URL_SRC + '|' + ISSUE_REF_SRC + ')\\b',
+  'g',
+);
+
+/**
+ * Everything markdown must not be rewritten inside.
+ *
+ * Fenced blocks and inline code, because `#1` in a shell snippet is a comment
+ * and `#113` in CSS is a colour. Existing links, because a second link inside
+ * one renders as neither. Raw HTML, because an attribute is not prose.
+ */
+const PROTECTED = /(```[\s\S]*?```|`[^`\n]*`|\[[^\]]*\]\([^)]*\)|<[^>]+>)/g;
+
+/**
+ * `#113`, `owner/repo#113` and a full GitHub issue URL, as links.
+ *
+ * GitHub linkifies these on its own site, so a body written there — "duplicate
+ * of #113" — arrives as plain text and reads as a dead end: the reader has the
+ * number and no way to use it without leaving for a browser.
+ *
+ * Without a repository a bare `#113` stays text, because a link that goes
+ * nowhere is worse than no link.
+ */
+export function linkIssueRefs(markdown: string, repo?: string): string {
+  return markdown.split(PROTECTED).map((chunk, i) => {
+    /* Odd indices are the protected captures themselves. */
+    if (i % 2 === 1) return chunk;
+    return chunk.replace(LINKABLE, (m, pre, urlSlug, urlNum, refSlug, refNum) => {
+      const slug = urlSlug || refSlug || repo;
+      const num = urlNum ?? refNum;
+      if (!slug || !num) return m;
+      /* A reference to this repository reads as `#7`; anywhere else has to
+         carry its slug or it is ambiguous. */
+      const label = slug === repo ? `#${num}` : `${slug}#${num}`;
+      return `${pre}[${label}](https://github.com/${slug}/issues/${num})`;
+    });
+  }).join('');
+}
+export function GhProse({ content, gallery = true, height = 84, repo }: {
   content: string;
+  /** Which repository a bare `#113` belongs to. Without it, `#113` stays text. */
+  repo?: string;
   /** False where the caller draws its own gallery — screen 14's body does. */
   gallery?: boolean;
   height?: number;
 }) {
   const images = useMemo(() => (gallery ? imagesIn(content) : []), [content, gallery]);
   const prose = useMemo(
-    () => (gallery ? withoutImages(content) : content),
-    [content, gallery],
+    () => linkIssueRefs(gallery ? withoutImages(content) : content, repo),
+    [content, gallery, repo],
   );
 
   return (
