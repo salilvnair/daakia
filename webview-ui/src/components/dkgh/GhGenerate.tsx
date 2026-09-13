@@ -27,7 +27,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SkeletonView } from '@salilvnair/dui';
 import { Ico } from './GhIcons';
-import { SpinnerIcon } from '../../icons';
 import { GhClose } from './GhClose';
 import { CopyWord, GhNote } from './GhShell';
 import { sendAiRequest, newAiRequestId } from '../../services/ai/ai-client';
@@ -110,6 +109,13 @@ export function GhGenerate({ repo, form, draft, onDraft, onClose, startOnOpen, o
     Built here rather than described, because a screen that says "we send the
     template and your description" is a claim, and this is the thing itself.
   */
+  const wrote = useMemo(() => {
+    const title = draft.title.trim();
+    const body = draft.description.trim();
+    return [title && `Title: ${title}`, body].filter(Boolean).join('\n\n')
+      || '(nothing written yet)';
+  }, [draft.title, draft.description]);
+
   const prompts = useMemo(() => {
     const system = templates['dkgh.compose.system'] ?? '';
     const user = (templates['dkgh.compose'] ?? '')
@@ -119,9 +125,13 @@ export function GhGenerate({ repo, form, draft, onDraft, onClose, startOnOpen, o
       .replace(/\{\{\s*repo\s*\}\}/g, repo)
       .replace(/\{\{\s*template\s*\}\}/g, form?.name ?? 'no template')
       .replace(/\{\{\s*fields\s*\}\}/g, fields.map(describeField).join('\n'))
-      .replace(/\{\{\s*description\s*\}\}/g, draft.description || '(nothing written yet)');
+      /* Both boxes, because either one on its own is what somebody wrote. The
+         title is labelled rather than run together with the body: "Checkout
+         hangs" followed by a paragraph reads as a heading and its text, which
+         is what it is. */
+      .replace(/\{\{\s*description\s*\}\}/g, wrote);
     return { system, user };
-  }, [templates, repo, form, fields, draft.description]);
+  }, [templates, repo, form, fields, wrote]);
 
   useEffect(() => {
     const handler = (evt: MessageEvent) => {
@@ -188,7 +198,8 @@ export function GhGenerate({ repo, form, draft, onDraft, onClose, startOnOpen, o
   const started = useRef(false);
   useEffect(() => {
     if (started.current || !startOnOpen) return;
-    if (!configured || fields.length === 0 || !draft.description.trim()) return;
+    if (!configured || fields.length === 0) return;
+    if (!draft.title.trim() && !draft.description.trim()) return;
     started.current = true;
     ask();
     // Mount only: re-running when the description changes would fire a request
@@ -239,26 +250,6 @@ export function GhGenerate({ repo, form, draft, onDraft, onClose, startOnOpen, o
             which of them your description already answers, and asks about the rest. It never
             fills in a value it could not find.
           </div>
-
-          {!proposal && (
-            <div className="actions" style={{ justifyContent: 'flex-start' }}>
-              <button
-                type="button"
-                className="btn ai"
-                disabled={running || !draft.description.trim()}
-                title={draft.description.trim()
-                  ? undefined
-                  : 'Write a sentence about what happened first — there is nothing to read yet'}
-                onClick={ask}
-              >
-                {/* Something that MOVES. The label changed on its own before,
-                    which is a difference you have to already be looking for —
-                    and the panel below it stayed empty for five seconds. */}
-                {running ? <SpinnerIcon size={13} /> : <Ico name="ai" />}
-                {running ? 'Reading what you wrote…' : 'Read what I wrote'}
-              </button>
-            </div>
-          )}
 
           {/*
             What it is working through, while it works through it.

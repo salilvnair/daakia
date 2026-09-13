@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { CopyButtonView, SplitPanelView, ChatInputView, IconSize } from '@salilvnair/dui';
 import {
   SparkleIcon, SpinnerIcon, TrashIcon, ChevronDownIcon, ChevronRightIcon, ShieldIcon,
-  SendIcon,
+  SendIcon, UserPromptIcon,
 } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { useDk8sAiStore, type Dk8sAnswer } from '../../store/dk8s-ai-store';
@@ -18,8 +18,73 @@ import { useAppSettingsStore } from '../../store/app-settings-store';
 
 import { AI as ACCENT } from './tone';
 
+/**
+ * One question and its answer, foldable.
+ *
+ * A thread of eight follow-ups is a column of prose with nothing to navigate
+ * by: the questions were a line of grey text with a chevron character in front
+ * of them, indistinguishable at a glance from the answers around them. So the
+ * question is a header you can press, the answer folds under it, and each side
+ * carries a mark saying who said it — a person asked, the model replied.
+ */
+function Turn({ turn }: { turn: Dk8sAnswer['turns'][number] }) {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <div style={{ borderTop: '1px solid var(--color-surface-border)' }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full px-3 py-2 text-[11.5px] flex items-start gap-2 text-left cursor-pointer border-none"
+        style={{ background: 'var(--color-surface-hover)' }}
+        title={open ? 'Fold this answer away' : 'Show this answer'}
+      >
+        <span style={{ flexShrink: 0, marginTop: 1, color: 'var(--color-text-muted)' }}>
+          {open ? <ChevronDownIcon size={IconSize.inline} /> : <ChevronRightIcon size={IconSize.inline} />}
+        </span>
+        <span style={{ flexShrink: 0, marginTop: 1, color: ACCENT }}>
+          <UserPromptIcon size={IconSize.inline} />
+        </span>
+        <span style={{ color: 'var(--color-text-primary)', overflowWrap: 'anywhere', flex: 1 }}>
+          {turn.question}
+        </span>
+        {!open && turn.streaming && <SpinnerIcon size={IconSize.inline} color={ACCENT} />}
+      </button>
+
+      {open && (turn.error ? (
+        <div className="px-3 py-2.5 text-[11.5px] flex items-start gap-2"
+             style={{ color: 'var(--color-error)' }}>
+          <span style={{ flexShrink: 0, marginTop: 1 }}><SparkleIcon size={IconSize.inline} /></span>
+          <span style={{ flex: 1 }}>{turn.error}</span>
+        </div>
+      ) : (
+        <div className="px-3 py-2.5 text-[12px] flex items-start gap-2"
+             style={{ color: 'var(--color-text-primary)' }}>
+          <span style={{ flexShrink: 0, marginTop: 2, color: ACCENT }}>
+            <SparkleIcon size={IconSize.inline} />
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {turn.text
+              ? <MdViewer content={turn.text} />
+              : <span className="text-[11.5px] text-[var(--color-text-muted)]">Thinking…</span>}
+            {turn.streaming && turn.text && (
+              <span style={{
+                display: 'inline-block', width: 6, height: 13, marginLeft: 2,
+                background: ACCENT, verticalAlign: 'text-bottom', opacity: 0.8,
+              }} />
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function AnswerCard({ answer }: { answer: Dk8sAnswer }) {
   const [showEvidence, setShowEvidence] = useState(false);
+  /* The whole card folds too: a panel holding four analyses is four screens of
+     prose, and the one being read is never the first. */
+  const [open, setOpen] = useState(true);
 
   return (
     <div className="flex flex-col rounded-lg overflow-hidden"
@@ -30,7 +95,18 @@ function AnswerCard({ answer }: { answer: Dk8sAnswer }) {
              : 'var(--color-surface-border)'}`,
          }}>
       <div className="flex items-center gap-2 px-3 py-2"
-           style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+           style={{ borderBottom: open ? '1px solid var(--color-surface-border)' : 'none' }}>
+        {/* The chevron folds the whole card. Four analyses in one panel is four
+            screens of prose, and the one being read is never the first. */}
+        <button
+          type="button"
+          onClick={() => setOpen(o => !o)}
+          className="flex items-center cursor-pointer border-none bg-transparent p-0 shrink-0"
+          style={{ color: 'var(--color-text-muted)' }}
+          title={open ? 'Fold this answer away' : 'Show this answer'}
+        >
+          {open ? <ChevronDownIcon size={IconSize.inline} /> : <ChevronRightIcon size={IconSize.inline} />}
+        </button>
         {answer.streaming
           ? <SpinnerIcon size={IconSize.action} color={ACCENT} />
           : <SparkleIcon size={IconSize.action} color={ACCENT} />}
@@ -59,12 +135,20 @@ function AnswerCard({ answer }: { answer: Dk8sAnswer }) {
         )}
       </div>
 
-      {answer.error ? (
+      {open && (answer.error ? (
         <div className="px-3 py-2.5 text-[11.5px]" style={{ color: 'var(--color-error)' }}>
           {answer.error}
         </div>
       ) : (
-        <div className="px-3 py-2.5 text-[12px]" style={{ color: 'var(--color-text-primary)' }}>
+        <div className="px-3 py-2.5 text-[12px] flex items-start gap-2"
+             style={{ color: 'var(--color-text-primary)' }}>
+          {/* Who replied. The question above carries a person; this carries the
+              model, so a thread reads as a conversation rather than as prose
+              that changes voice without saying so. */}
+          <span style={{ flexShrink: 0, marginTop: 2, color: ACCENT }}>
+            <SparkleIcon size={IconSize.inline} />
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
           {answer.text
             ? <MdViewer content={answer.text} />
             : <span className="text-[11.5px] text-[var(--color-text-muted)]">Thinking…</span>}
@@ -77,8 +161,9 @@ function AnswerCard({ answer }: { answer: Dk8sAnswer }) {
               background: ACCENT, verticalAlign: 'text-bottom', opacity: 0.8,
             }} />
           )}
+          </div>
         </div>
-      )}
+      ))}
 
       {/*
         The thread, under the answer it belongs to.
@@ -88,42 +173,16 @@ function AnswerCard({ answer }: { answer: Dk8sAnswer }) {
         meaningless away from the log it was asked about, and a flat list of
         loose questions could not tell you which evidence each one meant.
       */}
-      {answer.turns.map((t, i) => (
-        <div key={i} style={{ borderTop: '1px solid var(--color-surface-border)' }}>
-          <div className="px-3 py-2 text-[11.5px] flex items-start gap-2"
-               style={{ background: 'var(--color-surface-hover)' }}>
-            <span style={{ color: ACCENT, flexShrink: 0, lineHeight: '17px' }}>›</span>
-            <span style={{ color: 'var(--color-text-primary)', overflowWrap: 'anywhere' }}>
-              {t.question}
-            </span>
-          </div>
-          {t.error ? (
-            <div className="px-3 py-2.5 text-[11.5px]" style={{ color: 'var(--color-error)' }}>
-              {t.error}
-            </div>
-          ) : (
-            <div className="px-3 py-2.5 text-[12px]" style={{ color: 'var(--color-text-primary)' }}>
-              {t.text
-                ? <MdViewer content={t.text} />
-                : <span className="text-[11.5px] text-[var(--color-text-muted)]">Thinking…</span>}
-              {t.streaming && t.text && (
-                <span style={{
-                  display: 'inline-block', width: 6, height: 13, marginLeft: 2,
-                  background: ACCENT, verticalAlign: 'text-bottom', opacity: 0.8,
-                }} />
-              )}
-            </div>
-          )}
-        </div>
-      ))}
+      {open && answer.turns.map((t, i) => <Turn key={i} turn={t} />)}
 
       {/* Only once there is something to follow up ON. A composer under a
           card that is still producing its first answer invites a question
           about an answer nobody has read. */}
-      {!answer.streaming && !answer.error && answer.text && (
+      {open && !answer.streaming && !answer.error && answer.text && (
         <FollowUpBox answerId={answer.id} busy={answer.turns.some(t => t.streaming)} />
       )}
 
+      {open && (
       <button
         type="button"
         onClick={() => setShowEvidence(v => !v)}
@@ -141,6 +200,7 @@ function AnswerCard({ answer }: { answer: Dk8sAnswer }) {
           return `${n} line${n === 1 ? '' : 's'}`;
         })()}
       </button>
+      )}
 
       {/*
         What was taken out, next to what was sent.
@@ -349,7 +409,11 @@ export function AiAnswerPanel() {
 
       </div>
 
-      <div className="flex-1 overflow-auto px-3 py-3 flex flex-col gap-3 min-h-0">
+      {/* `scrollbar-gutter: stable` keeps the track reserved, so the bar is
+          visible the moment there is anything to scroll and the column does
+          not shift sideways when it appears. */}
+      <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-3 min-h-0"
+           style={{ scrollbarGutter: 'stable' }}>
         {answers.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-2 px-6 text-center">
             <SparkleIcon size={IconSize.medallion} color="var(--color-text-muted)" />

@@ -274,7 +274,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
       or not depending on which of the two controls you used. One chokepoint,
       so there is no second way to run something that skips it.
     */
-    remember(useDk8sSearchStore.getState().options.query, targets);
+    remember(useDk8sSearchStore.getState().options.query, targets, searchIn);
     if (searchIn === 'files') {
       /*
         Files search from `/`, not from a remembered path.
@@ -380,7 +380,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
     because that is the one thing about a remembered search that can have
     changed since — and it decides what clicking it will actually do.
   */
-  const suggestions = useMemo(() => history.map(h => {
+  const suggestions = useMemo(() => history.filter(h => h.where === searchIn).map(h => {
     const alive = survivorsOf(h).length;
     const meta = h.pods.length === 0
       ? undefined
@@ -388,7 +388,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
         ? `${alive} pod${alive === 1 ? '' : 's'}`
         : `${alive} of ${h.pods.length} pods still here`;
     return { value: h.query, meta };
-  }), [history, survivorsOf]);
+  }), [history, survivorsOf, searchIn]);
 
   /**
    * Running a remembered search.
@@ -402,7 +402,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
    * than searching nothing and reporting no matches.
    */
   const rerun = useCallback((query: string) => {
-    const entry = history.find(h => h.query === query);
+    const entry = history.find(h => h.query === query && h.where === searchIn);
     const alive = entry ? survivorsOf(entry) : [];
     const targets = alive.length ? alive : chosen;
 
@@ -415,7 +415,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
     }
     if (!query.trim() || targets.length === 0) return;
     submitWith(targets);
-  }, [history, survivorsOf, chosen, setOptions, setPicked, setPickerOpen, submitWith]);
+  }, [history, survivorsOf, chosen, setOptions, setPicked, setPickerOpen, submitWith, searchIn]);
 
   const canSearch = !!options.query.trim() && chosen.length > 0
     // The time window only constrains a log search; a bad one must not disable
@@ -675,10 +675,13 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                  URL bar has, rather than a row of chips taking width from a
                  dialog to show something wanted for one second. */
               suggestions={suggestions}
-              suggestionsLabel="Recent searches"
+              /* Named for the half it belongs to: the two lists live in one
+                 dropdown position and nothing else on screen says which one
+                 you are looking at. */
+              suggestionsLabel={searchIn === 'files' ? 'Recent file searches' : 'Recent log searches'}
               onPick={rerun}
-              onForget={forget}
-              onClearAll={clearHistory}
+              onForget={q => forget(q, searchIn)}
+              onClearAll={() => clearHistory(searchIn)}
               placeholder={searchIn === 'logs'
                 ? 'Search across the selected pods’ logs — Enter to search'
                 : 'File name, glob or regex — *invoice*, \.ya?ml$ — Enter to search'}

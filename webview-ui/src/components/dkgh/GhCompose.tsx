@@ -87,6 +87,16 @@ export function GhCompose({
   const [genRunning, setGenRunning] = useState(false);
 
   /*
+    Either box is enough.
+
+    A title is a sentence about what broke and so is a description; the model
+    is given whichever exist. Both empty is the one case with nothing to read,
+    and the button is plainly off for it rather than running and coming back
+    with a proposal built from nothing.
+  */
+  const canGenerate = !!(draft.title.trim() || draft.description.trim());
+
+  /*
     A draft left behind is offered, never silently reopened. Somebody who came
     here to file something else should not find last week's half-written issue
     already in the box.
@@ -200,21 +210,31 @@ export function GhCompose({
             pressed, it reads "Generating…" with a spinner and refuses a second
             press until the answer lands.
           */}
+          {/*
+            Two states, and nothing in between.
+
+            Solid accent when it can run, grey when it cannot. The outlined
+            middle state it used to wear said "secondary action" about the one
+            button on the screen that does the most, and gave no clue whether
+            pressing it would do anything.
+
+            It can run on either box: a title alone is a sentence about what
+            broke, and so is a description. Both empty is the only case with
+            nothing to read, and then it is plainly off.
+          */}
           <button
             type="button"
-            className={`btn ai${generating ? ' go' : ''}`}
-            disabled={genRunning}
+            className={`btn${canGenerate || genRunning ? ' go' : ''}`}
+            disabled={!canGenerate || genRunning}
             title={genRunning
-              ? 'Reading your description against the template'
-              : aiFailed()
-                ? aiFailed()
-                : "Reads this repository's own form fields and asks about what you left out"}
-            style={aiFailed() && !generating && !genRunning
-              ? { borderColor: 'color-mix(in srgb, var(--dk-amber) 55%, transparent)',
-                  color: 'var(--dk-amber)' }
-              : undefined}
+              ? 'Reading what you wrote against the template'
+              : !canGenerate
+                ? 'Write a title or a sentence about what happened first — there is nothing to read yet'
+                : aiFailed()
+                  ? aiFailed()
+                  : "Reads this repository's own form fields and asks about what you left out"}
             onClick={() => {
-              if (genRunning) return;
+              if (genRunning || !canGenerate) return;
               /* Closed → open and ask. Open → ask again, which is what a
                  button called Generate should do when you press it twice. */
               if (generating) setGenerating(false);
@@ -223,9 +243,10 @@ export function GhCompose({
           >
             {genRunning
               ? <SpinnerIcon size={13} />
-              : <Ico name={aiFailed() ? 'warn' : 'ai'} />}
+              : <Ico name={aiFailed() && canGenerate ? 'warn' : 'ai'} />}
             {genRunning ? 'Generating…' : 'Generate with AI'}
-            {aiFailed() && !generating && !genRunning && <span className="chip c-stale">failed</span>}
+            {aiFailed() && canGenerate && !generating && !genRunning
+              && <span className="chip c-stale">failed</span>}
           </button>
           <span className="sp" />
           <button

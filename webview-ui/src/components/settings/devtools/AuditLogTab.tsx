@@ -19,10 +19,20 @@ interface CeAuditEntry {
   conversation_id: string;
   stage: string;
   model?: string;
+  /**
+   * Set by almost nothing.
+   *
+   * The `ai:send` path — which is every AI feature in the product — writes the
+   * whole exchange into `request_payload` and leaves these two null. This
+   * screen read only these, so an AI row showed a response and no question:
+   * the audit was recording the request and the audit log was not showing it.
+   */
   user_prompt?: string;
   system_prompt?: string;
   request_payload?: string;
   response_payload?: string;
+  headers?: string;
+  meta?: string;
   duration_ms?: number;
   error?: string;
   created_at: string;
@@ -182,6 +192,49 @@ function StageBadge({ label, color }: { label: string; color: string }) {
 const DEFAULT_PAYLOAD_HEIGHT = 120;
 const MIN_PAYLOAD_HEIGHT = 80;
 const MAX_PAYLOAD_HEIGHT = 600;
+
+/**
+ * The prompts, out of the request when the columns are empty.
+ *
+ * `request_payload` holds the full OpenAI-shaped body, and its `messages` are
+ * the question — split by role so the system block and the turn that carries
+ * the evidence can be read separately, the way they were written.
+ */
+/** Between two system blocks, so they read as two rather than one long one. */
+const SPLIT = '\n\n---\n\n';
+
+function promptsOf(entry: CeAuditEntry): { system?: string; user?: string } {
+  if (entry.system_prompt || entry.user_prompt) {
+    return { system: entry.system_prompt, user: entry.user_prompt };
+  }
+  try {
+    const body = JSON.parse(entry.request_payload ?? '') as {
+      messages?: { role?: string; content?: unknown }[];
+    };
+    const text = (c: unknown) => (typeof c === 'string'
+      ? c
+      : Array.isArray(c)
+        ? c.map(part => (part as { text?: string })?.text ?? '').join(' ')
+        : '');
+    const msgs = Array.isArray(body.messages) ? body.messages : [];
+    const system = msgs.filter(m => m.role === 'system').map(m => text(m.content)).join(SPLIT);
+    const users = msgs.filter(m => m.role === 'user');
+    return {
+      system: system || undefined,
+      user: users.length ? text(users[users.length - 1].content) : undefined,
+    };
+  } catch {
+    /* Not JSON, or not the shape we know. The raw request is shown whole
+       below either way, so nothing is lost by failing quietly here. */
+    return {};
+  }
+}
+
+/** Pretty when it is JSON, verbatim when it is not. */
+function pretty(value: string | undefined): string | undefined {
+  if (!value) return value;
+  try { return JSON.stringify(JSON.parse(value), null, 2); } catch { return value; }
+}
 
 function PayloadBlock({ label, value, color, lang = 'plaintext' }: {
   label: string; value: string | null | undefined; color: string; lang?: string;
@@ -435,9 +488,32 @@ export function AuditLogTab() {
                                   {e.conversation_id}
                                 </span>
                               </div>
-                              {e.system_prompt && <PayloadBlock label="System Prompt" value={e.system_prompt} color="#818cf8" />}
-                              {e.user_prompt && <PayloadBlock label="User Prompt" value={e.user_prompt} color="#06b6d4" />}
-                              {e.response_payload && <PayloadBlock label="Response" value={e.response_payload} color="#10b981" />}
+                              {/*
+                                The whole exchange: what was asked, in the two
+                                halves it was written in, then the request and
+                                the response verbatim. The prompts are a
+                                convenience view of the request — the blocks
+                                under them are the record.
+                              */}
+                              {(() => {
+                                const { system, user } = promptsOf(e);
+                                return (
+                                  <>
+                                    {system && <PayloadBlock label="System Prompt" value={system} color="#818cf8" />}
+                                    {user && <PayloadBlock label="User Prompt" value={user} color="#06b6d4" />}
+                                  </>
+                                );
+                              })()}
+                              {e.request_payload && (
+                                <PayloadBlock label="Request" value={pretty(e.request_payload)}
+                                              color="#f59e0b" lang="json" />
+                              )}
+                              {e.response_payload && (
+                                <PayloadBlock label="Response" value={pretty(e.response_payload)}
+                                              color="#10b981" lang="json" />
+                              )}
+                              {e.headers && <PayloadBlock label="Headers" value={pretty(e.headers)} color="#94a3b8" lang="json" />}
+                              {e.meta && <PayloadBlock label="Metadata" value={pretty(e.meta)} color={color} lang="json" />}
                               {e.error && (
                                 <div className="flex flex-col gap-1">
                                   <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded self-start text-[#ef4444] bg-[rgba(239,68,68,0.1)]">Error</span>

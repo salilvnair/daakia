@@ -30,16 +30,16 @@ const pod = (name: string, namespace = 'checkout', context = 'kind-dk8s-prod') =
 beforeEach(() => localStorage.clear());
 
 describe('reading what is already stored', () => {
-  it('reads the old string list as entries that do not remember their pods', async () => {
+  it('reads the old string list as log searches that do not remember their pods', async () => {
     const store = await load(JSON.stringify(['tesy', 'timeout']));
     expect(store.getState().history).toEqual([
-      { query: 'tesy', pods: [], at: 0 },
-      { query: 'timeout', pods: [], at: 0 },
+      { query: 'tesy', pods: [], at: 0, where: 'logs' },
+      { query: 'timeout', pods: [], at: 0, where: 'logs' },
     ]);
   });
 
   it('reads the new shape back whole', async () => {
-    const entry = { query: 'oom', pods: [pod('checkout-api-1')], at: 1700000000000 };
+    const entry = { query: 'oom', pods: [pod('checkout-api-1')], at: 1700000000000, where: 'files' as const };
     const store = await load(JSON.stringify([entry]));
     expect(store.getState().history).toEqual([entry]);
   });
@@ -56,7 +56,7 @@ describe('reading what is already stored', () => {
 
   it('keeps an entry whose pods are malformed, without the pods', async () => {
     const store = await load(JSON.stringify([{ query: 'q', pods: [null, 7, { name: 'a' }] }]));
-    expect(store.getState().history).toEqual([{ query: 'q', pods: [], at: 0 }]);
+    expect(store.getState().history).toEqual([{ query: 'q', pods: [], at: 0, where: 'logs' }]);
   });
 });
 
@@ -66,7 +66,7 @@ describe('remembering', () => {
     /* A whole pod, the way the caller hands one over — uid and all. It is the
        uid NOT surviving that this test is about. */
     const live = { name: 'checkout-api-1', namespace: 'checkout', context: 'kind-dk8s-prod', uid: 'abc' };
-    store.getState().remember('timeout', [live]);
+    store.getState().remember('timeout', [live], 'logs');
     expect(store.getState().history[0].pods).toEqual([
       { name: 'checkout-api-1', namespace: 'checkout', context: 'kind-dk8s-prod' },
     ]);
@@ -74,9 +74,9 @@ describe('remembering', () => {
 
   it('is one entry, moved to the front, when the same search runs twice', async () => {
     const store = await load();
-    store.getState().remember('a', [pod('p1')]);
-    store.getState().remember('b', [pod('p2')]);
-    store.getState().remember('a', [pod('p3')]);
+    store.getState().remember('a', [pod('p1')], 'logs');
+    store.getState().remember('b', [pod('p2')], 'logs');
+    store.getState().remember('a', [pod('p3')], 'logs');
 
     expect(store.getState().history.map(h => h.query)).toEqual(['a', 'b']);
     /* The pods come from the latest run: those are the ones re-running it
@@ -86,20 +86,20 @@ describe('remembering', () => {
 
   it('ignores a blank query, which is not a search anybody ran', async () => {
     const store = await load();
-    store.getState().remember('   ', [pod('p1')]);
+    store.getState().remember('   ', [pod('p1')], 'logs');
     expect(store.getState().history).toEqual([]);
   });
 
   it('trims, so the same search typed with a trailing space is the same entry', async () => {
     const store = await load();
-    store.getState().remember('oom ', [pod('p1')]);
-    store.getState().remember('oom', [pod('p1')]);
+    store.getState().remember('oom ', [pod('p1')], 'logs');
+    store.getState().remember('oom', [pod('p1')], 'logs');
     expect(store.getState().history.map(h => h.query)).toEqual(['oom']);
   });
 
   it('keeps twelve, and forgets the thirteenth from the far end', async () => {
     const store = await load();
-    for (let i = 1; i <= 15; i++) store.getState().remember(`q${i}`, []);
+    for (let i = 1; i <= 15; i++) store.getState().remember(`q${i}`, [], 'logs');
     const kept = store.getState().history.map(h => h.query);
     expect(kept).toHaveLength(12);
     expect(kept[0]).toBe('q15');
@@ -108,7 +108,7 @@ describe('remembering', () => {
 
   it('survives a reload', async () => {
     const store = await load();
-    store.getState().remember('oom', [pod('checkout-api-1')]);
+    store.getState().remember('oom', [pod('checkout-api-1')], 'logs');
 
     const reopened = await load(localStorage.getItem(KEY)!);
     expect(reopened.getState().history[0]).toMatchObject({
@@ -121,26 +121,73 @@ describe('remembering', () => {
 describe('forgetting', () => {
   it('drops the one named and leaves the rest', async () => {
     const store = await load();
-    store.getState().remember('a', []);
-    store.getState().remember('b', []);
-    store.getState().forget('a');
+    store.getState().remember('a', [], 'logs');
+    store.getState().remember('b', [], 'logs');
+    store.getState().forget('a', 'logs');
     expect(store.getState().history.map(h => h.query)).toEqual(['b']);
   });
 
   it('reaches the stored copy too, not just the one on screen', async () => {
     const store = await load();
-    store.getState().remember('a', []);
-    store.getState().forget('a');
+    store.getState().remember('a', [], 'logs');
+    store.getState().forget('a', 'logs');
     expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual([]);
   });
 
   it('clears the lot', async () => {
     const store = await load();
-    store.getState().remember('a', []);
-    store.getState().remember('b', []);
-    store.getState().clearHistory();
+    store.getState().remember('a', [], 'logs');
+    store.getState().remember('b', [], 'logs');
+    store.getState().clearHistory('logs');
     expect(store.getState().history).toEqual([]);
     expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual([]);
+  });
+});
+
+describe('logs and files are two lists', () => {
+  /*
+    Two different questions asked of the same pods: one is a string in a
+    stream, the other a name on a filesystem. A glob offered under the log box
+    matches nothing, and the Files box was offering every log search anybody
+    had ever run.
+  */
+  it('keeps the same word twice when it was run on both sides', async () => {
+    const store = await load();
+    store.getState().remember('invoice', [pod('p1')], 'logs');
+    store.getState().remember('invoice', [pod('p2')], 'files');
+
+    const h = store.getState().history;
+    expect(h).toHaveLength(2);
+    expect(h.map(e => e.where).sort()).toEqual(['files', 'logs']);
+  });
+
+  it('forgets it on one side only', async () => {
+    const store = await load();
+    store.getState().remember('invoice', [], 'logs');
+    store.getState().remember('invoice', [], 'files');
+    store.getState().forget('invoice', 'files');
+
+    expect(store.getState().history.map(e => e.where)).toEqual(['logs']);
+  });
+
+  it('clears one side and leaves the other', async () => {
+    const store = await load();
+    store.getState().remember('a', [], 'logs');
+    store.getState().remember('b', [], 'logs');
+    store.getState().remember('*.yaml', [], 'files');
+    store.getState().clearHistory('logs');
+
+    expect(store.getState().history.map(e => e.query)).toEqual(['*.yaml']);
+  });
+
+  it('caps each side separately, so a busy log week cannot evict every glob', async () => {
+    const store = await load();
+    store.getState().remember('*.yaml', [], 'files');
+    for (let i = 1; i <= 15; i++) store.getState().remember(`q${i}`, [], 'logs');
+
+    const h = store.getState().history;
+    expect(h.filter(e => e.where === 'logs')).toHaveLength(12);
+    expect(h.filter(e => e.where === 'files').map(e => e.query)).toEqual(['*.yaml']);
   });
 });
 

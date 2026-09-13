@@ -200,9 +200,15 @@ interface SearchState {
    * Only searches that ran — not every keystroke on the way to one.
    */
   history: SearchHistoryEntry[];
-  remember: (query: string, pods: { name: string; namespace: string; context?: string }[]) => void;
-  forget: (query: string) => void;
-  clearHistory: () => void;
+  remember: (
+    query: string,
+    pods: { name: string; namespace: string; context?: string }[],
+    where: 'logs' | 'files',
+  ) => void;
+  /** Forgets that query in that half — the same word in the other half stays. */
+  forget: (query: string, where: 'logs' | 'files') => void;
+  /** Clears one half. The other is a different question and is left alone. */
+  clearHistory: (where: 'logs' | 'files') => void;
   /** Opening a pod from a hit — records the way back. */
   jumpedToPod: (scrollTop: number) => void;
   /** Back from that pod: reopens the results where they were. */
@@ -265,6 +271,17 @@ export interface SearchHistoryEntry {
   pods: PodIdentity[];
   /** When it last ran, so the list can say how long ago that was. */
   at: number;
+  /**
+   * Which half of the dialog ran it.
+   *
+   * Logs and Files are two different questions asked of the same pods — one
+   * is a string in a stream, the other a name on a filesystem — and a glob
+   * offered under a log box matches nothing. They shared one list, so the
+   * Files box offered every log search anybody had run. Entries written
+   * before this field existed were log searches, which is what the default
+   * reads them as.
+   */
+  where: 'logs' | 'files';
 }
 
 function identity(p: { name: string; namespace: string; context?: string }): PodIdentity {
@@ -284,7 +301,7 @@ function loadHistory(): SearchHistoryEntry[] {
     const raw = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]');
     if (!Array.isArray(raw)) return [];
     return raw.flatMap((e: unknown): SearchHistoryEntry[] => {
-      if (typeof e === 'string') return e.trim() ? [{ query: e, pods: [], at: 0 }] : [];
+      if (typeof e === 'string') return e.trim() ? [{ query: e, pods: [], at: 0, where: 'logs' }] : [];
       if (!e || typeof e !== 'object') return [];
       const o = e as Partial<SearchHistoryEntry>;
       if (typeof o.query !== 'string' || !o.query.trim()) return [];
@@ -292,7 +309,10 @@ function loadHistory(): SearchHistoryEntry[] {
         ? o.pods.filter((p): p is PodIdentity =>
             !!p && typeof p.name === 'string' && typeof p.namespace === 'string')
         : [];
-      return [{ query: o.query, pods, at: typeof o.at === 'number' ? o.at : 0 }];
+      return [{
+        query: o.query, pods, at: typeof o.at === 'number' ? o.at : 0,
+        where: o.where === 'files' ? 'files' : 'logs',
+      }];
     }).slice(0, HISTORY_MAX);
   } catch {
     /* Private mode, cleared storage, or something else wrote the key. An empty
@@ -308,27 +328,39 @@ function saveHistory(list: SearchHistoryEntry[]): void {
 export const useDk8sSearchStore = create<SearchState>((set, get) => ({
   history: loadHistory(),
 
-  remember: (query, pods) => {
+  remember: (query, pods, where) => {
     const q = query.trim();
     if (!q) return;
     set(s => {
       /* Moved to the front rather than duplicated — the same search run twice
          is one entry that is now more recent, not two. The pods come from the
-         latest run, because those are the ones re-running it would mean. */
-      const entry: SearchHistoryEntry = { query: q, pods: pods.map(identity), at: Date.now() };
-      const next = [entry, ...s.history.filter(h => h.query !== q)].slice(0, HISTORY_MAX);
+         latest run, because those are the ones re-running it would mean.
+         Matched on the query AND which half ran it: the same word can be a
+         line in a log and a file name, and they are not the same search. */
+      const entry: SearchHistoryEntry = {
+        query: q, pods: pods.map(identity), at: Date.now(), where,
+      };
+      const next = [entry, ...s.history.filter(h => !(h.query === q && h.where === where))]
+        /* Capped per half, so a busy week of log searches cannot push every
+           remembered glob off the end of a list the Files box never shows. */
+        .filter((h, _i, all) =>
+          all.filter(x => x.where === h.where).indexOf(h) < HISTORY_MAX);
       saveHistory(next);
       return { ...s, history: next };
     });
   },
 
-  forget: (query) => set(s => {
-    const next = s.history.filter(h => h.query !== query);
+  forget: (query, where) => set(s => {
+    const next = s.history.filter(h => !(h.query === query && h.where === where));
     saveHistory(next);
     return { ...s, history: next };
   }),
 
-  clearHistory: () => { saveHistory([]); return set(s => ({ ...s, history: [] })); },
+  clearHistory: (where) => set(s => {
+    const next = s.history.filter(h => h.where !== where);
+    saveHistory(next);
+    return { ...s, history: next };
+  }),
 
   open: false,
   resultScroll: 0,
