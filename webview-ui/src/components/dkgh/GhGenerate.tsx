@@ -25,7 +25,9 @@
  * disclosure. Not a paraphrase of the prompt: the prompt.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { SkeletonView } from '@salilvnair/dui';
 import { Ico } from './GhIcons';
+import { SpinnerIcon } from '../../icons';
 import { GhClose } from './GhClose';
 import { CopyWord, GhNote } from './GhShell';
 import { sendAiRequest, newAiRequestId } from '../../services/ai/ai-client';
@@ -213,8 +215,42 @@ export function GhGenerate({ repo, form, draft, onDraft, onClose }: {
                   : 'Write a sentence about what happened first — there is nothing to read yet'}
                 onClick={ask}
               >
-                <Ico name="ai" />{running ? 'Reading what you wrote…' : 'Read what I wrote'}
+                {/* Something that MOVES. The label changed on its own before,
+                    which is a difference you have to already be looking for —
+                    and the panel below it stayed empty for five seconds. */}
+                {running ? <SpinnerIcon size={13} /> : <Ico name="ai" />}
+                {running ? 'Reading what you wrote…' : 'Read what I wrote'}
               </button>
+            </div>
+          )}
+
+          {/*
+            What it is working through, while it works through it.
+
+            The wait was a disabled button over an empty panel, which is
+            indistinguishable from a button that did not register the click —
+            the complaint this answers, in those words. The rows are the
+            repository's own field labels, so this is not a decorative
+            skeleton: it is the list of questions being asked, with a bar where
+            each answer is about to land. When the answer arrives the bar is
+            replaced by the value in the same row, in the same place.
+          */}
+          {running && !proposal && (
+            <div className="opt" style={{ gap: 2, padding: 4 }} aria-live="polite">
+              {fields.slice(0, 9).map((f, i) => (
+                <div key={f.label} className="fct" style={{ cursor: 'default' }}>
+                  <span className="bx" />
+                  <b style={{ color: 'var(--dk-text)' }}>{f.label}</b>
+                  {/* Fixed widths rather than random: a skeleton that reshuffles
+                      every render is a second animation fighting the pulse. */}
+                  <SkeletonView
+                    variant="text"
+                    height={7}
+                    width={['62%', '38%', '80%', '48%', '70%'][i % 5]}
+                    style={{ flex: 1 }}
+                  />
+                </div>
+              ))}
             </div>
           )}
 

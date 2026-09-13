@@ -6,7 +6,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { postMsg } from '../../../vscode';
 import { CodeEditor } from '../../shared';
-import { RefreshIcon, TrashIcon, ChevronRightIcon, ServerIcon, CloseIcon } from '../../../icons';
+import {
+  RefreshIcon, TrashIcon, ChevronRightIcon, ServerIcon, CloseIcon, WrapLinesIcon,
+} from '../../../icons';
 import { ModalView, ButtonView } from '@salilvnair/dui';
 import { logUiEvent } from '../../../store/ui-audit-store';
 
@@ -35,6 +37,9 @@ function tableColor(name: string): string {
 // ─── JSON popup modal ─────────────────────────────────────────────────────────
 
 function JsonPopupModal({ value, accentColor, onClose }: { value: string; accentColor: string; onClose: () => void }) {
+  /* On, because the reason to open this is to read the value. */
+  const [wrap, setWrap] = useState(true);
+
   let pretty = value;
   try { pretty = JSON.stringify(JSON.parse(value), null, 2); } catch { /* raw */ }
 
@@ -62,6 +67,33 @@ function JsonPopupModal({ value, accentColor, onClose }: { value: string; accent
           <span className="text-[11px] font-semibold" style={{ color: accentColor }}>JSON Viewer</span>
           <div className="flex items-center gap-3">
             <span className="text-[10px] font-mono text-[var(--color-text-muted)]">{pretty.length.toLocaleString()} chars</span>
+            {/*
+              Wrapping, on by default.
+
+              A stored payload is one long line per string — a prompt, a pod
+              description, a response body — and without wrapping the viewer
+              showed the first 90 characters of each and hid the rest off the
+              right edge. The reason to open this dialog is to read the value,
+              so the setting that lets you read it is the one to start on. The
+              button is here for the case wrapping gets in the way: comparing
+              indentation down a long structure, where a line that wraps stops
+              lining up with the one above it.
+            */}
+            <button
+              type="button"
+              onClick={() => setWrap(w => !w)}
+              aria-pressed={wrap}
+              className="w-6 h-6 flex items-center justify-center rounded cursor-pointer transition-colors"
+              style={{
+                color: wrap ? accentColor : 'var(--color-text-muted)',
+                background: wrap
+                  ? `color-mix(in srgb, ${accentColor} 14%, transparent)`
+                  : 'transparent',
+              }}
+              title={wrap ? 'Wrapping long lines — click for one line each' : 'Long lines run off the edge — click to wrap'}
+            >
+              <WrapLinesIcon size={13} />
+            </button>
             <button
               type="button"
               onClick={onClose}
@@ -74,7 +106,8 @@ function JsonPopupModal({ value, accentColor, onClose }: { value: string; accent
         </div>
         {/* Monaco editor */}
         <div className="flex-1 min-h-0">
-          <CodeEditor value={pretty.slice(0, 50000)} language="json" readOnly height="100%" />
+          <CodeEditor value={pretty.slice(0, 50000)} language="json" readOnly height="100%"
+                      wordWrap={wrap} />
         </div>
       </div>
     </div>,

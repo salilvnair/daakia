@@ -175,7 +175,8 @@ function Probing() {
   return (
     <div className="flex-1 grid place-items-center">
       <LoadingStateView
-        icon={<TerminalIcon size={IconSize.medallion} />}
+        icon={<TerminalIcon size={IconSize.hero} />}
+        medallionSize={84}
         title="Looking for kubectl"
         message="Checking PATH and the places each platform's package managers put it."
         accentColor={ACCENT}

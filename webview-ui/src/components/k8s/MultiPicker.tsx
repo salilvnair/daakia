@@ -14,7 +14,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ButtonView, SearchInputView, TextInputView, FilterInputView,
   ContextMenuView, LoadingStateView, IconSize, type ContextMenuItem,
 } from '@salilvnair/dui';
-import { LayersIcon } from '../../icons';
+import { LayersIcon, Dk8sIcon } from '../../icons';
 import { useK8sStore, type WatchTarget, type NamespaceOffer } from '../../store/k8s-store';
 import { postMsg } from '../../vscode';
 import { softPrimary } from './button-style';
@@ -139,6 +139,34 @@ export function ClusterPicker() {
       onClick: () => navigator.clipboard?.writeText(`kubectl --context ${ctx} get pods`),
     },
   ];
+
+  /*
+    Connecting takes the screen, rather than greying the button.
+
+    Checking a cluster is a round trip that can take seconds behind a VPN, and
+    the only sign of it was "Connecting…" on a disabled button at the bottom of
+    a full list. Whatever came back next — namespaces, or a cluster that did
+    not answer — arrived with no warning, which is the "this screen came all of
+    a sudden" complaint. The wait now looks like every other wait in dk8s.
+  */
+  if (busy && checked.length > 0) {
+    const many = checked.length > 1;
+    return (
+      <div className="flex-1 grid place-items-center px-8">
+        <LoadingStateView
+          icon={<Dk8sIcon size={IconSize.hero} />}
+          medallionSize={84}
+          title={many ? `Reaching ${checked.length} clusters` : `Reaching ${checked[0]}`}
+          message={many
+            ? 'One call per cluster, in parallel — then the namespaces each of them holds.'
+            : 'Checking the API server answers, then reading the namespaces it holds.'}
+          accentColor={ACCENT}
+          slowAfterSeconds={8}
+          slowMessage="Taking longer than usual. A cluster in another region, or one behind a VPN that is not up, answers in seconds rather than milliseconds."
+        />
+      </div>
+    );
+  }
 
   return (
     <Shell
@@ -383,7 +411,7 @@ function OfferBlock({ offer, checked, toggle, query, multiCluster }: {
 export function NamespaceMultiPicker() {
   const {
     offers, offersLoaded, selectedContexts, contextResults, pinNamespace, openContextPicker,
-    pendingTargets, setPendingTargets, commitPendingTargets,
+    pendingTargets, setPendingTargets, commitPendingTargets, busy,
   } = useK8sStore();
 
   const checked = pendingTargets;
@@ -476,6 +504,34 @@ export function NamespaceMultiPicker() {
         : [...prev, { context, namespace: trimmed }]);
     setQuery('');
   };
+
+  /*
+    A retry takes the screen, the way the first attempt does.
+
+    Try again left the previous failure on screen — the banner naming the
+    cluster that did not answer, and the panel saying there is nothing to
+    choose from — while the new probe ran behind it. When the answer was the
+    same failure, nothing changed, so the button looked broken; when it
+    succeeded, the error flickered out as the list came in. Neither is a state
+    anybody should be shown. The stale result goes the moment a new one is
+    asked for.
+  */
+  if (busy) {
+    const many = selectedContexts.length > 1;
+    return (
+      <div className="flex-1 grid place-items-center px-8">
+        <LoadingStateView
+          icon={<Dk8sIcon size={IconSize.hero} />}
+          medallionSize={84}
+          title={many ? `Reaching ${selectedContexts.length} clusters` : `Reaching ${selectedContexts[0] ?? 'the cluster'}`}
+          message="Checking the API server answers, then reading the namespaces it holds."
+          accentColor={ACCENT}
+          slowAfterSeconds={8}
+          slowMessage="Taking longer than usual. A cluster in another region, or one behind a VPN that is not up, answers in seconds rather than milliseconds."
+        />
+      </div>
+    );
+  }
 
   return (
     <Shell
@@ -600,7 +656,8 @@ export function NamespaceMultiPicker() {
           </div>
         ) : (
           <LoadingStateView
-            icon={<LayersIcon size={IconSize.medallion} />}
+            icon={<LayersIcon size={IconSize.hero} />}
+            medallionSize={84}
             title={multiCluster ? 'Reading namespaces' : `Reading namespaces in ${selectedContexts[0] ?? 'the cluster'}`}
             message="One call per cluster, in parallel."
             accentColor={ACCENT}

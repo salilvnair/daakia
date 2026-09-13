@@ -6,8 +6,9 @@
  * a control in the breadcrumb that can be changed at any time.
  */
 import { useState } from 'react';
-import { ButtonView, TextInputView, FilterInputView,
+import { ButtonView, TextInputView, FilterInputView, LoadingStateView, IconSize,
 } from '@salilvnair/dui';
+import { Dk8sIcon } from '../../icons';
 import { useK8sStore, type KubeContext } from '../../store/k8s-store';
 import { softPrimary } from './button-style';
 
@@ -292,27 +293,67 @@ export function NamespacePicker() {
   );
 }
 
-/** The context was chosen but the API server did not answer. */
+/**
+ * The context was chosen but the API server did not answer.
+ *
+ * Retrying replaces this screen rather than decorating it. Leaving the old
+ * error up with the button reading "Retrying…" shows a reader the reason it
+ * failed LAST time while this time is still running — and when the new answer
+ * is the same error, nothing on screen changes, so the retry looks like it did
+ * nothing. The wait gets the same loader the first attempt got, and the error
+ * comes back only once there is a new one to show.
+ */
 export function UnreachableNotice() {
   const { context, reachable, openContextPicker, probe, busy } = useK8sStore();
+
+  if (busy) {
+    return (
+      <div className="flex-1 grid place-items-center px-8">
+        <LoadingStateView
+          icon={<Dk8sIcon size={IconSize.hero} />}
+          medallionSize={84}
+          title={`Reaching ${context}`}
+          message="Asking the API server again. A cluster behind a VPN answers in seconds rather than milliseconds."
+          accentColor={ACCENT}
+          slowAfterSeconds={8}
+          slowMessage="Still waiting. kubectl bounds this itself, so it will come back either way — with an answer or with the reason."
+        />
+      </div>
+    );
+  }
+
   return (
     <Shell
       title={`${context} did not answer`}
       subtitle="The context is valid — kubectl could not reach the cluster behind it. A VPN that is not connected is the usual cause."
     >
       {reachable?.error && (
+        /*
+          Wrapped, not scrolled.
+
+          kubectl's reason is one long line, and in a fixed box it became a
+          horizontal scrollbar hiding the half of the sentence that says what
+          actually happened. Nobody drags a scrollbar to read an error.
+        */
         <pre
-          className="text-[11px] font-mono m-0 p-3 rounded overflow-auto"
-          style={{ background: 'var(--color-surface-hover)', color: 'var(--color-error)', maxHeight: 160 }}
+          className="text-[11px] font-mono m-0 p-3 rounded"
+          style={{
+            background: 'var(--color-surface-hover)', color: 'var(--color-error)',
+            maxHeight: 200, overflowX: 'hidden', overflowY: 'auto',
+            whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6,
+          }}
         >
           {reachable.error}
         </pre>
       )}
       <div className="flex items-center gap-2">
-        <ButtonView label={busy ? 'Retrying…' : 'Retry'} size="sm" variant="secondary"
-                    accentColor={ACCENT} color={busy ? 'var(--color-text-muted)' : ACCENT}
-                    disabled={busy} onClick={probe} style={softPrimary(ACCENT, !busy)} />
-        <ButtonView label="Pick another cluster" size="sm" variant="secondary" onClick={openContextPicker} />
+        <ButtonView label="Retry" size="sm" variant="secondary"
+                    accentColor={ACCENT} color={ACCENT}
+                    onClick={probe} style={softPrimary(ACCENT)} />
+        {/* Locked while a retry is in flight — picking a different cluster
+            mid-probe races the answer that is already coming. */}
+        <ButtonView label="Pick another cluster" size="sm" variant="secondary"
+                    disabled={busy} onClick={openContextPicker} />
       </div>
     </Shell>
   );

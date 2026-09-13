@@ -712,7 +712,7 @@ export function PodGrid() {
 
   const {
     pods, filter, view, setFilter, setView, startWatch, openDetail, setDetailTab, watchStatus,
-    capped, selectMode, selected, exportOpen, exportState,
+    capped, selectMode, selected, exportOpen, exportState, busy,
     toggleSelectMode, selectAllVisible, openExport, closeExport,
   } = useK8sStore();
   /* Silence is not a state a reader can act on. The host bounds its own calls,
@@ -1045,7 +1045,21 @@ export function PodGrid() {
               not a state the reader can act on; after the host's own timeouts
               have had their chance, it becomes one.
             */}
-            {watchNeverCame ? (
+            {/* A retry replaces the report of the last failure rather than
+                sitting under it: the same rule as the pickers, and the reason
+                is the same — when the answer is the same failure, nothing on
+                screen changes and the button looks dead. */}
+            {busy ? (
+              <LoadingStateView
+                icon={<Dk8sIcon size={IconSize.hero} />}
+                medallionSize={84}
+                title="Reaching the cluster"
+                message="Checking the API server answers, then opening the watch again."
+                accentColor={ACCENT}
+                slowAfterSeconds={8}
+                slowMessage="Taking longer than usual. A cluster in another region, or one behind a VPN that is not up, answers in seconds rather than milliseconds."
+              />
+            ) : watchNeverCame ? (
               <div className="flex flex-col items-center gap-2 text-center px-4">
                 <span className="text-[12.5px] font-semibold" style={{ color: 'var(--color-warning)' }}>
                   No pods, and no answer from the cluster
@@ -1056,7 +1070,14 @@ export function PodGrid() {
                   not up looks like this; a namespace that is genuinely empty says so instead.
                 </span>
                 <ButtonView label="Try again" size="sm" variant="secondary"
-                            onClick={() => useK8sStore.getState().probe()} />
+                            onClick={() => {
+                              /* Clears the local verdict too — without this the
+                                 25-second timer stays fired and the failure
+                                 comes back the instant the probe ends, whatever
+                                 it found. */
+                              setWatchNeverCame(false);
+                              useK8sStore.getState().probe();
+                            }} />
               </div>
             ) : (
               watchStatus === 'connected' ? (
@@ -1067,7 +1088,11 @@ export function PodGrid() {
                 </span>
               ) : (
                 <LoadingStateView
-                  icon={<Dk8sIcon size={IconSize.medallion} />}
+                  /* Panel-filling, like the file browser's. A 22px glyph
+                     centred in an empty grid reads as something that failed to
+                     load rather than as the thing being waited for. */
+                  icon={<Dk8sIcon size={IconSize.hero} />}
+                  medallionSize={84}
                   title={watchStatus === 'reconnecting' ? 'Reconnecting to the cluster' : 'Reading pods'}
                   message={watchStatus === 'reconnecting'
                     ? 'The watch dropped. Picking it up from where it left off.'
