@@ -12,7 +12,7 @@
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
     "@salilvnair/convengine-chat": "^1.6.4",
-    "@salilvnair/dui": "file:../../dui",
+    "@salilvnair/dui": "1.0.8",
     "@salilvnair/state-machine": "^1.0.1",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-search": "^0.16.0",
