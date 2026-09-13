@@ -323,6 +323,35 @@ async function handleDk8sNamespacesFor(
   postMessage({ type: 'dk8s:namespacesMulti', perContext: per });
 }
 
+/**
+ * Make a context the kubeconfig default — the one thing dk8s does to your
+ * kubeconfig, and only ever because you asked for it from the menu.
+ *
+ * It changes nothing about dk8s, which names the context on every command and
+ * would behave identically either way. It is here because the rest of your
+ * tools do not: a bare `kubectl get pods` in a terminal, a Helm invocation, a
+ * script somebody wrote years ago. Setting it from the cluster you are already
+ * looking at saves switching windows to run one command.
+ */
+export async function handleDk8sSetDefaultContext(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const context = String(msg.context ?? '').trim();
+  if (!context) return;
+
+  const r = await run(['config', 'use-context', context], { timeoutMs: 10_000 });
+  postMessage({
+    type: 'dk8s:defaultContextSet',
+    context,
+    ok: r.ok,
+    error: r.ok ? undefined : (r.stderr || r.failure || '').trim(),
+  });
+  /* The picker draws a badge on whichever context is current, so it has to be
+     told — nothing else would make that badge move. */
+  if (r.ok) await handleDk8sProbe(postMessage);
+}
+
 /** Select a context for this tab. Does NOT touch the global kubeconfig. */
 export async function handleDk8sUseContext(
   msg: Record<string, unknown>,

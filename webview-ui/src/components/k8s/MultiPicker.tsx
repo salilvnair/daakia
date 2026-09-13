@@ -12,8 +12,10 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { ButtonView, SearchInputView, TextInputView, FilterInputView,
+  ContextMenuView, type ContextMenuItem,
 } from '@salilvnair/dui';
 import { useK8sStore, type WatchTarget, type NamespaceOffer } from '../../store/k8s-store';
+import { postMsg } from '../../vscode';
 import { softPrimary } from './button-style';
 
 import { ACCENT, ACCENT_MUTED as ACCENT_FILL } from './tone';
@@ -85,10 +87,62 @@ export function ClusterPicker() {
   const toggle = (name: string) =>
     setChecked(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]);
 
+  /*
+    Right-click, on the row it was aimed at.
+
+    One menu rather than controls on every row: all of this is occasional — you
+    set a default once a week and copy a name when you are pasting it into a
+    terminal — and four buttons per row would bury the thing the screen exists
+    for, which is ticking a box.
+  */
+  const [menu, setMenu] = useState<{ ctx: string; x: number; y: number } | null>(null);
+  const current = contexts.find(c => c.current)?.name;
+
+  const menuItems = (ctx: string): ContextMenuItem[] => [
+    {
+      id: 'only', label: 'Select only this',
+      description: 'Untick every other cluster',
+      onClick: () => setChecked([ctx]),
+    },
+    {
+      id: 'all', label: 'Select all', onClick: () => setChecked(contexts.map(c => c.name)),
+      disabled: checked.length === contexts.length,
+    },
+    { id: 'none', label: 'Clear selection', onClick: () => setChecked([]),
+      disabled: !checked.length },
+    { id: 's1', label: '', separator: true },
+    {
+      id: 'default',
+      label: 'Set as kubeconfig default',
+      /*
+        The one thing on this screen that reaches outside dk8s, which is why it
+        says so. dk8s itself does not care — it names the context on every
+        command either way — but a bare `kubectl get pods`, a Helm chart or an
+        old script all read the default, and setting it from the cluster you are
+        already looking at beats switching windows to run one command.
+      */
+      description: ctx === current
+        ? 'Already the default'
+        : 'Runs kubectl config use-context. Affects your other tools, not dk8s.',
+      disabled: ctx === current,
+      onClick: () => postMsg({ type: 'dk8s:setDefaultContext', context: ctx }),
+    },
+    { id: 's2', label: '', separator: true },
+    {
+      id: 'copy', label: 'Copy context name',
+      onClick: () => navigator.clipboard?.writeText(ctx),
+    },
+    {
+      id: 'copy-cmd', label: 'Copy kubectl command',
+      description: `kubectl --context ${ctx} get pods`,
+      onClick: () => navigator.clipboard?.writeText(`kubectl --context ${ctx} get pods`),
+    },
+  ];
+
   return (
     <Shell
       title="Which clusters?"
-      subtitle="Tick as many as you need. dk8s passes the context on every command and never touches your kubeconfig, so this cannot repoint a terminal you have open elsewhere."
+      subtitle="Tick as many as you need. dk8s names the context on every command, so nothing here repoints a terminal you have open elsewhere. Right-click a cluster for the one action that deliberately does."
       footer={
         <>
           <span className="text-[11.5px] text-[var(--color-text-muted)] flex-1">
@@ -119,6 +173,10 @@ export function ClusterPicker() {
               key={c.name}
               type="button"
               onClick={() => toggle(c.name)}
+              onContextMenu={e => {
+                e.preventDefault();
+                setMenu({ ctx: c.name, x: e.clientX, y: e.clientY });
+              }}
               className="flex items-center gap-3.5 px-4 py-4 text-left cursor-pointer transition-colors"
               style={{
                 background: on ? `color-mix(in srgb, ${ACCENT} 10%, transparent)` : 'transparent',
@@ -160,6 +218,14 @@ export function ClusterPicker() {
       {contextError && (
         <p className="text-[11.5px] m-0" style={{ color: 'var(--color-error)' }}>{contextError}</p>
       )}
+
+      <ContextMenuView
+        open={!!menu}
+        anchorEl={null}
+        position={menu ? { x: menu.x, y: menu.y } : undefined}
+        items={menu ? menuItems(menu.ctx) : []}
+        onClose={() => setMenu(null)}
+      />
     </Shell>
   );
 }
@@ -175,6 +241,55 @@ function OfferBlock({ offer, checked, toggle, query, multiCluster }: {
   multiCluster: boolean;
 }) {
   const isOn = (ns: string) => checked.some(t => t.context === offer.context && t.namespace === ns);
+
+  const { pinNamespace, unpinNamespace } = useK8sStore();
+  const [menu, setMenu] = useState<{ ns: string; x: number; y: number } | null>(null);
+
+  /*
+    Pinning is the one that earns its place here. A cluster with eighty
+    namespaces buries the three you actually watch, and the alternative to a
+    pin is scrolling past kube-system every single time.
+  */
+  const items = (ns: string): ContextMenuItem[] => {
+    const pinned = offer.pinned.includes(ns);
+    return [
+      {
+        id: 'only', label: 'Select only this',
+        description: multiCluster ? `In ${offer.context}` : undefined,
+        onClick: () => {
+          const others = checked.filter(t => t.context !== offer.context);
+          useK8sStore.getState().setPendingTargets(
+            [...others, { context: offer.context, namespace: ns }]);
+        },
+      },
+      {
+        id: 'all', label: 'Select every namespace here',
+        onClick: () => {
+          const others = checked.filter(t => t.context !== offer.context);
+          useK8sStore.getState().setPendingTargets([
+            ...others,
+            ...offer.namespaces.map(n => ({ context: offer.context, namespace: n })),
+          ]);
+        },
+      },
+      { id: 's1', label: '', separator: true },
+      {
+        id: 'pin',
+        label: pinned ? 'Unpin from the top' : 'Pin to the top',
+        description: pinned ? undefined : 'Kept above the rest, in every cluster this one appears in',
+        onClick: () => (pinned ? unpinNamespace(ns) : pinNamespace(ns)),
+      },
+      { id: 's2', label: '', separator: true },
+      { id: 'copy', label: 'Copy namespace name',
+        onClick: () => navigator.clipboard?.writeText(ns) },
+      {
+        id: 'copy-cmd', label: 'Copy kubectl command',
+        description: `kubectl --context ${offer.context} -n ${ns} get pods`,
+        onClick: () => navigator.clipboard?.writeText(
+          `kubectl --context ${offer.context} -n ${ns} get pods`),
+      },
+    ];
+  };
 
   // Pinned first, then the rest — the ones you chose beat the ones you were given.
   const all = useMemo(() => {
@@ -224,6 +339,10 @@ function OfferBlock({ offer, checked, toggle, query, multiCluster }: {
             return (
               <button
                 key={ns}
+                onContextMenu={e => {
+                  e.preventDefault();
+                  setMenu({ ns, x: e.clientX, y: e.clientY });
+                }}
                 type="button"
                 onClick={() => toggle({ context: offer.context, namespace: ns })}
                 className="flex items-center gap-3 px-3.5 py-2.5 text-left cursor-pointer transition-colors"
@@ -248,6 +367,14 @@ function OfferBlock({ offer, checked, toggle, query, multiCluster }: {
           })}
         </div>
       )}
+
+      <ContextMenuView
+        open={!!menu}
+        anchorEl={null}
+        position={menu ? { x: menu.x, y: menu.y } : undefined}
+        items={menu ? items(menu.ns) : []}
+        onClose={() => setMenu(null)}
+      />
     </div>
   );
 }
@@ -397,7 +524,7 @@ export function NamespaceMultiPicker() {
               onClick={() => addTo(o.context)}
             />
           ))}
-        </div>
+    </div>
       )}
 
       {offers.map(offer => (

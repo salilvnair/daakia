@@ -93,7 +93,7 @@ import { handleDebugMessage } from './handlers/debug-handler';
 import { noteProtocolSend, auditProtocolResponse } from '../../services/protocol-audit';
 import { noteSessionConnect, auditSessionMessage, flushOpenSessions } from '../../services/session-audit';
 import {
-  handleDk8sProbe, handleDk8sUseContext, handleDk8sNamespaces,
+  handleDk8sProbe, handleDk8sUseContext, handleDk8sSetDefaultContext, handleDk8sNamespaces,
   handleDk8sSetNamespace, handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSetLogLineNumbers, handleDk8sSearchLogs, handleDk8sCancelSearch, handleDk8sCancelExport,
   handleDk8sProbePv, handleDk8sSavePv, handleDk8sOpenLogFile, handleDk8sProbeAccess,
   handleDk8sGetFormats, handleDk8sSaveFormat, handleDk8sDeleteFormat,
@@ -573,6 +573,9 @@ export class MainPanel {
         break;
       case 'dk8s:useContext':
         handleDk8sUseContext(msg, this._post);
+        break;
+      case 'dk8s:setDefaultContext':
+        handleDk8sSetDefaultContext(msg, this._post);
         break;
       case 'dk8s:useContexts':
         handleDk8sUseContexts(msg, this._post);
