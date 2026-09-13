@@ -14,7 +14,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   SparklineView, SearchInputView, SegmentedControlView, CheckSquareIcon, EmptySquareIcon,
-  ModalView, ButtonView, FilterInputView, IconSize, EmptyStateView } from '@salilvnair/dui';
+  ModalView, ButtonView, FilterInputView, IconSize, EmptyStateView,
+  LoadingStateView } from '@salilvnair/dui';
 import { useLongPress } from './use-long-press';
 import { PodContextMenu } from './PodContextMenu';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
@@ -27,7 +28,7 @@ import { LogSearchModal } from './LogSearchModal';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import {
   FolderExportIcon, CloseIcon, SearchIcon, LayersIcon, ChevronDownIcon, ChevronRightIcon,
-  StarIcon,
+  StarIcon, Dk8sIcon,
 } from '../../icons';
 import {
   sortPods, severityOf, severityColor, matchesFilter, shortAge,
@@ -1058,11 +1059,24 @@ export function PodGrid() {
                             onClick={() => useK8sStore.getState().probe()} />
               </div>
             ) : (
-              <span className="text-[12px] text-[var(--color-text-muted)]">
-                {watchStatus === 'reconnecting' ? 'Reconnecting to the cluster…'
-                  : watchStatus === 'connected' ? 'No pods in this namespace.'
-                  : 'Loading pods…'}
-              </span>
+              watchStatus === 'connected' ? (
+                /* Connected and genuinely empty is not a wait — it is an
+                   answer, and it gets the empty state rather than a loader. */
+                <span className="text-[12px] text-[var(--color-text-muted)]">
+                  No pods in this namespace.
+                </span>
+              ) : (
+                <LoadingStateView
+                  icon={<Dk8sIcon size={IconSize.medallion} />}
+                  title={watchStatus === 'reconnecting' ? 'Reconnecting to the cluster' : 'Reading pods'}
+                  message={watchStatus === 'reconnecting'
+                    ? 'The watch dropped. Picking it up from where it left off.'
+                    : 'Opening a watch, so the grid updates as pods change rather than on a timer.'}
+                  accentColor={ACCENT}
+                  slowAfterSeconds={8}
+                  slowMessage="Taking longer than usual. A cluster in another region, or one behind a VPN, answers in seconds rather than milliseconds."
+                />
+              )
             )}
           </div>
         ) : (

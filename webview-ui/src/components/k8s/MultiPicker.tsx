@@ -12,8 +12,9 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { ButtonView, SearchInputView, TextInputView, FilterInputView,
-  ContextMenuView, type ContextMenuItem,
+  ContextMenuView, LoadingStateView, IconSize, type ContextMenuItem,
 } from '@salilvnair/dui';
+import { LayersIcon } from '../../icons';
 import { useK8sStore, type WatchTarget, type NamespaceOffer } from '../../store/k8s-store';
 import { postMsg } from '../../vscode';
 import { softPrimary } from './button-style';
@@ -586,7 +587,17 @@ export function NamespaceMultiPicker() {
             </div>
           </div>
         ) : (
-          <span className="text-[12px] text-[var(--color-text-muted)]">Loading namespaces…</span>
+          <LoadingStateView
+            icon={<LayersIcon size={IconSize.medallion} />}
+            title={multiCluster ? 'Reading namespaces' : `Reading namespaces in ${selectedContexts[0] ?? 'the cluster'}`}
+            message="One call per cluster, in parallel."
+            accentColor={ACCENT}
+            /* A cluster in another region answers in seconds rather than
+               milliseconds, and the reader cannot tell that from a hang. */
+            slowAfterSeconds={6}
+            slowMessage="Taking longer than usual. A cluster in another region, or one behind a VPN, answers in seconds rather than milliseconds."
+            action={{ label: 'Choose other clusters', onClick: openContextPicker }}
+          />
         )
       )}
     </Shell>

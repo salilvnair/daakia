@@ -565,6 +565,17 @@ export function LogViewer() {
     pod that is talking.
   */
   const SETTLE_MS = 900;
+  /*
+    A short window that smooths the common case, and nothing more.
+
+    900ms is the right length for a local cluster, where the lines are already
+    on their way — it stops the view flickering through an empty state on the
+    way to a full one. It is the wrong length for a cluster in another region:
+    the timer expires, the skeleton goes, and the rest of the wait is drawn as
+    plain text on an empty pane. So the skeleton below is shown for this window
+    OR while the store still says the read is in flight, whichever lasts
+    longer.
+  */
   const [settling, setSettling] = useState(false);
   /*
     The rail is on by default and remembered.
@@ -574,11 +585,26 @@ export function LogViewer() {
     208px is a lot of it. Stored per person rather than per pod: whether you
     want a facet rail is a preference about how you read.
   */
-  const [facetsOpen, setFacetsOpen] = useState(() => {
+  const [facetsWanted, setFacetsWanted] = useState(() => {
     try { return localStorage.getItem('dk8s.logs.facets') !== 'off'; }
     catch { return true; }
   });
-  const toggleFacets = () => setFacetsOpen(v => {
+
+  /*
+    The rail only exists when there are fields to put in it.
+
+    Its contents come from a configured log FORMAT — thread, logger, MDC — and
+    nothing is ever guessed. A pod whose lines are plain text, which is most of
+    them, has no fields at all, so the rail was 330 pixels of empty panel taking
+    a sixth of the width away from the lines somebody came to read. Worse, the
+    toggle looked broken: pressing it did nothing visible either way.
+
+    So it is opened by what is there, and the preference only decides whether to
+    show a rail that has something in it.
+  */
+  const hasFacets = useMemo(() => buildFacets(logs).length > 0, [logs]);
+  const facetsOpen = facetsWanted && hasFacets;
+  const toggleFacets = () => setFacetsWanted(v => {
     try { localStorage.setItem('dk8s.logs.facets', v ? 'off' : 'on'); } catch { /* private mode */ }
     return !v;
   });
@@ -1121,8 +1147,11 @@ export function LogViewer() {
         <button
           type="button"
           onClick={toggleFacets}
-          title={facetsOpen ? 'Hide the field panel' : 'Show the field panel'}
+          title={!hasFacets
+            ? 'No fields on these lines — the panel appears when a log format names some'
+            : facetsOpen ? 'Hide the field panel' : 'Show the field panel'}
           aria-pressed={facetsOpen}
+          disabled={!hasFacets}
           className="flex items-center justify-center rounded shrink-0 border-none cursor-pointer"
           /* Sized to the chips beside it rather than to its glyph. It was the
              smallest control in the toolbar and it governs a whole column. */
@@ -1404,7 +1433,7 @@ export function LogViewer() {
             meant the loading state had one column and the loaded state had
             two, so the rail arrived from nowhere and pushed the lines you had
             started reading sideways. */}
-        {settling && logs.length === 0 ? (
+        {(settling || logStatus === 'loading') && logs.length === 0 ? (
           <LogSkeleton railOpen={facetsOpen} rowHeight={ROW_HEIGHT} />
         ) : (
         <>

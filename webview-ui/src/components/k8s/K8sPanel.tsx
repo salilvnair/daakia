@@ -10,8 +10,8 @@
  * dead-end when a cluster says no.
  */
 import { useEffect, useRef } from 'react';
-import { IconSize } from '@salilvnair/dui';
-import { Dk8sIcon, EyeIcon, StethoscopeIcon } from '../../icons';
+import { IconSize, LoadingStateView } from '@salilvnair/dui';
+import { Dk8sIcon, EyeIcon, StethoscopeIcon, TerminalIcon } from '../../icons';
 import { useK8sStore, type Dk8sView } from '../../store/k8s-store';
 import { KubectlSetupGuide } from './KubectlSetupGuide';
 import { SensitivityPrompt, UnreachableNotice } from './ContextPicker';
@@ -173,8 +173,18 @@ function Breadcrumb() {
 
 function Probing() {
   return (
-    <div className="flex-1 flex items-center justify-center">
-      <span className="text-[12px] text-[var(--color-text-muted)]">Looking for kubectl…</span>
+    <div className="flex-1 grid place-items-center">
+      <LoadingStateView
+        icon={<TerminalIcon size={IconSize.medallion} />}
+        title="Looking for kubectl"
+        message="Checking PATH and the places each platform's package managers put it."
+        accentColor={ACCENT}
+        /* Finding a binary is filesystem work and should be instant. Past a few
+           seconds it is not the search that is slow — it is a credential plugin
+           the kubeconfig runs, or a mount that is not responding. */
+        slowAfterSeconds={6}
+        slowMessage="Still looking. A kubeconfig that runs a credential plugin, or a network drive on PATH, can hold this up."
+      />
     </div>
   );
 }
