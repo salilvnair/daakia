@@ -125,7 +125,7 @@ const ISSUE_REF_SRC = String.raw`((?:[\w.-]+\/[\w.-]+)?)#(\d+)`;
   full URL is never read as the bare reference at its end.
 */
 const LINKABLE = new RegExp(
-  String.raw`(^|[\s([{,;:>])(?:` + ISSUE_URL_SRC + '|' + ISSUE_REF_SRC + ')\\b',
+  String.raw`(^|[\s([{,;:>])\\?(?:` + ISSUE_URL_SRC + '|' + ISSUE_REF_SRC + ')\\b',
   'g',
 );
 
@@ -163,10 +163,29 @@ export function linkIssueRefs(markdown: string, repo?: string): string {
     });
   }).join('');
 }
-export function GhProse({ content, gallery = true, height = 84, repo }: {
+export function GhProse({ content, gallery = true, height = 84, repo, onOpenIssue, full = false }: {
   content: string;
+  /**
+   * Draw evidence at its own size rather than as a fixed-height strip.
+   *
+   * True in an issue body and a comment, where the screenshot IS the report.
+   * False on a card, where a consistent row of thumbnails is the point.
+   */
+  full?: boolean;
   /** Which repository a bare `#113` belongs to. Without it, `#113` stays text. */
   repo?: string;
+  /**
+   * Open a reference to this repository inside dkgh instead of a browser.
+   *
+   * A duplicate-of link is the one case where leaving the app is exactly wrong:
+   * the issue being pointed at is already on the board behind this panel, and
+   * the reader wants to glance at it and come back, not lose their place to a
+   * browser tab.
+   *
+   * References to other repositories still open externally — dkgh is looking at
+   * one repository, and there is nothing here to show for a different one.
+   */
+  onOpenIssue?: (number: number) => void;
   /** False where the caller draws its own gallery — screen 14's body does. */
   gallery?: boolean;
   height?: number;
@@ -183,7 +202,31 @@ export function GhProse({ content, gallery = true, height = 84, repo }: {
   return (
     <>
       {prose.trim()
-        ? <div className="dkgh-md"><MarkdownView content={prose} /></div>
+        ? (
+          <div
+            className="dkgh-md"
+            /*
+              Caught on the way up rather than rewritten into every anchor:
+              MarkdownView owns its own rendering, and a click handler on the
+              container needs no cooperation from it.
+            */
+            onClick={e => {
+              if (!onOpenIssue || !repo) return;
+              const a = (e.target as HTMLElement).closest('a');
+              const href = a?.getAttribute('href');
+              if (!href) return;
+              const m = href.match(/^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/issues\/(\d+)$/);
+              /* Only this repository, and only a left click with no modifier —
+                 ctrl-click and middle-click still mean "open it over there". */
+              if (!m || m[1] !== repo) return;
+              if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+              e.preventDefault();
+              onOpenIssue(Number(m[2]));
+            }}
+          >
+            <MarkdownView content={prose} />
+          </div>
+        )
         : images.length === 0
           ? <span style={{ color: 'var(--dk-faint)' }}>Nothing written.</span>
           : null}
@@ -210,7 +253,7 @@ export function GhProse({ content, gallery = true, height = 84, repo }: {
       {images.length > 0 && (
         <div className="gallery" style={{ marginTop: prose.trim() ? 8 : 0 }}>
           {images.map(url => (
-            <GhEvidence key={url} url={url} height={height} />
+            <GhEvidence key={url} url={url} height={height} full={full} />
           ))}
         </div>
       )}

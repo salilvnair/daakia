@@ -19,6 +19,7 @@
 import { useEffect, useState } from 'react';
 import { postMsg } from '../../vscode';
 import { Ico } from './GhIcons';
+import { GhLightbox } from './GhLightbox';
 
 export interface Answer { dataUri?: string; error?: string }
 
@@ -73,12 +74,22 @@ function request(url: string, done: (a: Answer) => void): () => void {
   return () => waiting.get(url)?.delete(done);
 }
 
-export function GhEvidence({ url, height, alt }: {
+export function GhEvidence({ url, height, alt, full = false }: {
   url: string;
   height: number;
   alt?: string;
+  /**
+   * Draw it at its own shape rather than as a fixed-height thumbnail.
+   *
+   * A card wants a strip — consistent rows, a hint that evidence exists. An
+   * issue body wants the screenshot: `object-fit: cover` at 84px showed the
+   * top-left corner of somebody's screen and cut off the error they attached
+   * it for.
+   */
+  full?: boolean;
 }) {
   const [answer, setAnswer] = useState<Answer | undefined>(() => answers.get(url));
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     setAnswer(answers.get(url));
@@ -93,14 +104,36 @@ export function GhEvidence({ url, height, alt }: {
   } as const;
 
   if (answer?.dataUri) {
+    if (full) {
+      return (
+        <>
+          <img
+            className="dkgh-shot"
+            src={answer.dataUri}
+            alt={alt ?? 'Evidence attached to this issue'}
+            style={{ maxHeight: 520 }}
+            onClick={() => setOpen(true)}
+            title="Click to open it full size"
+          />
+          {open && (
+            <GhLightbox src={answer.dataUri} alt={alt} onClose={() => setOpen(false)} />
+          )}
+        </>
+      );
+    }
     return (
-      <div style={frame}>
-        <img
-          src={answer.dataUri}
-          alt={alt ?? 'Evidence attached to this issue'}
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-        />
-      </div>
+      <>
+        <div style={{ ...frame, cursor: 'zoom-in' }} onClick={() => setOpen(true)}>
+          <img
+            src={answer.dataUri}
+            alt={alt ?? 'Evidence attached to this issue'}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        </div>
+        {open && (
+          <GhLightbox src={answer.dataUri} alt={alt} onClose={() => setOpen(false)} />
+        )}
+      </>
     );
   }
 

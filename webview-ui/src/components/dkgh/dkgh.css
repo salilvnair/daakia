@@ -2996,3 +2996,57 @@ body.dkgh-dragging .kcard:hover { transform: none; box-shadow: none; }
   for every component that comes along. The reset is in a cascade layer now —
   see header.css — so dui's own unlayered rules beat it without help.
 */
+
+/* ── The evidence lightbox ────────────────────────────────────────────────
+   A screenshot on a bug report is the evidence, not decoration. Inline it is
+   drawn at its own aspect ratio; this is what opens when somebody wants to
+   read the stack trace inside it. */
+.dkgh .ghlb, .ghlb {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: color-mix(in srgb, #000 82%, transparent);
+  backdrop-filter: blur(2px);
+}
+.ghlb-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  flex-shrink: 0;
+  background: var(--dk-panel);
+  border-bottom: 1px solid var(--dk-border);
+}
+.ghlb-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dk-text);
+  max-width: 42ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ghlb-dim { font-family: var(--mono); font-size: 10.5px; color: var(--dk-faint); }
+/* The stage scrolls past 100% rather than shrinking the image — reading a
+   stack trace in a screenshot needs real pixels. */
+.ghlb-stage {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+.ghlb-stage img { display: block; border-radius: 4px; }
+
+/* Inline evidence: its own shape, up to a ceiling, never a cropped strip. */
+.dkgh-shot {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  border-radius: 5px;
+  border: 1px solid var(--dk-border);
+  cursor: zoom-in;
+}

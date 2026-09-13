@@ -456,7 +456,7 @@ ${quoted}` : quoted));
                   />
                 ) : detail
                   ? (body.trim()
-                    ? <GhProse content={body} gallery={false} repo={repo} />
+                    ? <GhProse content={body} gallery={false} repo={repo} onOpenIssue={onOpen} full />
                     : <span style={{ color: 'var(--dk-faint)' }}>No description.</span>)
                   : <span style={{ color: 'var(--dk-faint)' }}>Reading it…</span>}
               </Comment>
@@ -648,7 +648,7 @@ ${quoted}` : quoted));
                         /* A comment's screenshots are blocked by the webview's
                            own content policy, so they come through the host —
                            see GhProse. */
-                        <GhProse content={c.body} repo={repo} />
+                        <GhProse content={c.body} repo={repo} onOpenIssue={onOpen} full />
                       )}
                     </Comment>
                   );

@@ -142,3 +142,20 @@ describe('images uploaded to GitHub since 2023', () => {
     expect(imagesIn(md)).toEqual(['https://github.com/user-attachments/assets/9f3c-uuid']);
   });
 });
+
+describe('a reference a rich-text editor escaped', () => {
+  it('is linked, with the backslash dropped', () => {
+    /* `\#14` is what a comment box stores when it escapes markdown on the way
+       out. GitHub does not linkify it either, so the reference is dead at both
+       ends until the composer stops escaping it. */
+    expect(linkIssueRefs('\#14', REPO)).toBe(`[#14](${link(14)})`);
+  });
+
+  it('is linked mid-sentence too', () => {
+    expect(linkIssueRefs('dupe of \#14 here', REPO)).toContain(`[#14](${link(14)})`);
+  });
+
+  it('still leaves an escaped hash inside code alone', () => {
+    expect(linkIssueRefs('`\#14`', REPO)).toBe('`\#14`');
+  });
+});

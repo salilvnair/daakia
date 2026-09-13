@@ -240,9 +240,18 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
   const [pattern, setPattern] = useState('');
   const [busy, setBusy] = useState(false);
 
-  /* The first listing has not landed yet — distinct from a listing that came
-     back empty, which is a directory with nothing in it and says so. */
-  const settlingPath = !path && busy;
+  /*
+    The first listing has not landed yet.
+
+    Not `!path && busy`: an effect runs after the first paint, so on that paint
+    `busy` is still false and the browser rendered once at an empty path before
+    anything had been asked. That first frame is the flicker — it was there
+    before the probe even started.
+
+    A flag that starts false and is only ever set true has no such gap.
+  */
+  const [resolved, setResolved] = useState(false);
+  const settlingPath = !resolved;
   const [open, setOpen] = useState<{ path: string; name: string; size?: number } | null>(null);
   const [selected, setSelected] = useState<string | undefined>();
   /*
@@ -356,6 +365,7 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
         if (cancelled) return;
         setPath(initialPath);
         setListing(r);
+        setResolved(true);
         setBusy(false);
         return;
       }
@@ -380,6 +390,7 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
         const r = await request<Listing>('files:list', { path: '/' });
         setPath('/');
         setListing(r);
+        setResolved(true);
         setBusy(false);
       }
     })();
