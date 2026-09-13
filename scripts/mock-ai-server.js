@@ -231,6 +231,17 @@ async function handle(req, res) {
   const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
   const path = url.pathname.replace(/\/+$/, '') || '/';
 
+  /*
+    `?delay=1500` on anything.
+
+    Every slow-path screen in the product — a skeleton, a loader, a "this is
+    taking a while" — is unreachable on a machine where the answer comes back
+    in two milliseconds. This is the cheapest way to see them, and it is the
+    only reason some of them have ever been looked at.
+  */
+  const delay = Math.min(Number(url.searchParams.get('delay')) || 0, 60_000);
+  if (delay > 0) await new Promise(r => setTimeout(r, delay));
+
   if (req.method === 'GET' && (path === '/models' || path === '/v1/models')) {
     return json(res, 200, {
       object: 'list',

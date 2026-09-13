@@ -296,6 +296,17 @@
 
   /* Text on accent-colored (primary/method/protocol) backgrounds */
   --color-btn-primary-text: #ffffff;
+
+  /*
+    The chip's recess.
+
+    dui's `recessed` chip is a well cut into the surface, and "darker than the
+    surface" is a different colour on a near-black panel than on a white one.
+    The component asks for these rather than deciding; without them it falls
+    back to the dark pair, which is these.
+  */
+  --dui-chip-sunken-bg: rgba(0, 0, 0, 0.32);
+  --dui-chip-sunken-shadow: rgba(0, 0, 0, 0.5);
 }
 
 /* ─── Light theme — VS Code Light+ / GitHub Light / Atom One Light blend ─── */
@@ -436,6 +447,21 @@
   /* Inverse surface — dark slate pill on light background */
   --color-inverse-surface: #1f2328;
   --color-inverse-text: #ffffff;
+
+  /* A pill-tab track has to be visible against a white panel, which
+     `--color-surface` is not. */
+  --color-pilltab-track-bg: #ececec;
+
+  /*
+    The chip's recess, on white.
+
+    The dark theme's wash is a third of the way to black, which on a white
+    panel is a grey slab rather than a dent. A recess in paper is a few
+    percent of shadow and a soft inner edge; more than that and the chip reads
+    as filled, which is a different variant.
+  */
+  --dui-chip-sunken-bg: rgba(0, 0, 0, 0.055);
+  --dui-chip-sunken-shadow: rgba(0, 0, 0, 0.16);
 }
 
 :root {
@@ -1586,8 +1612,23 @@ input[type="number"] {
    near-white panel (#f9fafb). We need a subtle elevated appearance so tabs are
    visually separate from the surrounding panel.
    ─────────────────────────────────────────────────────────────────────────── */
-[data-theme="light"] [role="tablist"] {
-  background-color: #ececec !important;
+/*
+  A track belongs to the tab strips that HAVE one.
+
+  This was `[role="tablist"]` with `!important`, which is every tab strip in
+  the product — so the response panel's underline tabs, which are a row of
+  words with a moving rule under them, were drawn inside a grey box with a
+  border in light mode and nothing of the sort in dark. A blanket role
+  selector cannot tell the variants apart; the class dui puts on the two
+  variants that are meant to sit on a track can.
+
+  The colour itself belongs in the variable dui already reads, not in a rule
+  fighting it: `--color-pilltab-track-bg` resolves to `--color-surface`, which
+  is white on white here, and that is the actual bug the override was papering
+  over.
+*/
+[data-theme="light"] .dui_tab__pill,
+[data-theme="light"] .dui_tab__picker {
   border: 1px solid #d1d5db;
 }
 
