@@ -257,15 +257,33 @@ export const useDk8sAiStore = create<Dk8sAiState>((set, get) => ({
     switch (msg.type) {
       // What the host actually sent, which is not always what was handed to
       // `ask` — a connection snapshot is summarised on the way out.
-      case 'dk8s:aiEvidence':
+      case 'dk8s:aiEvidence': {
+        /*
+          An empty echo is a follow-up, not an erasure.
+
+          A follow-up carries no artifact — the model has already been shown
+          the log — so the host echoes an empty string for it. `?? a.evidence`
+          did not catch that, because '' is not nullish: the first follow-up on
+          a thread replaced two hundred lines of evidence with nothing, and
+          "Show what was sent · 1 line" then expanded to an empty box. The
+          thing it exists to prove disappeared the moment the conversation
+          continued.
+
+          The note travels with the text for the same reason: it describes that
+          text, and carrying one without the other says the wrong thing about
+          what left the machine.
+        */
+        const echoed = typeof msg.evidence === 'string' ? msg.evidence : '';
+        if (!echoed.trim()) break;
         patch(a => ({
           ...a,
-          evidence: String(msg.evidence ?? a.evidence),
+          evidence: echoed,
           // What the host removed on the way out, so "show what was sent" is
           // literally true and the person can see the difference.
           redactionNote: msg.redactionNote as string | undefined,
         }));
         break;
+      }
 
       case 'ai:chunk':
         patchTarget(t => ({ ...t, text: t.text + String(msg.delta ?? '') }));
