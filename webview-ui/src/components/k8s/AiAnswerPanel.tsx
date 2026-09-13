@@ -230,8 +230,16 @@ function FollowUpBox({ answerId, busy }: { answerId: string; busy: boolean }) {
         disabled={busy}
         placeholder={busy ? 'waiting for the answer…' : 'Ask a follow-up — Enter to send'}
         size="sm"
-        /* Round, like the AI tab's. */
-        borderRadius="full"
+        /*
+          A box, not a capsule.
+
+          It was pill-shaped to match the Daakia AI tab, but that tab's
+          composer is the whole width of a chat column and carries the shape
+          well. Here it is a narrow field in a side panel stacked under square
+          answer cards, and a capsule among them reads as a stray control from
+          somewhere else. The default radius is the one every other input in
+          this panel already uses.
+        */
         color={ACCENT}
       />
     </div>
