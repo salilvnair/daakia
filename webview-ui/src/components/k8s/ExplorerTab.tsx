@@ -375,6 +375,7 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
         if (!r.error && r.entries?.length) {
           setPath(candidate);
           setListing(r);
+          setResolved(true);
           setBusy(false);
           return;
         }
@@ -382,6 +383,7 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
         if (!r.error && candidate !== '/') {
           setPath(candidate);
           setListing(r);
+          setResolved(true);
           setBusy(false);
           return;
         }
