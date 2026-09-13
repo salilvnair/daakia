@@ -214,7 +214,11 @@ export class MainPanel {
     this._extensionUri = extensionUri;
 
     this._panel.webview.html = this._getHtml();
-    this._panel.iconPath = vscode.Uri.joinPath(extensionUri, 'media', 'icon.svg');
+    /* images/, not media/ — .vscodeignore excludes the whole of media/ to keep the
+       27 MB of README GIFs out of the package, and an icon living there ships as
+       a broken path: present in the repo, absent once installed, and the tab
+       silently loses its mark. */
+    this._panel.iconPath = vscode.Uri.joinPath(extensionUri, 'images', 'daakia-tab.svg');
 
     this._panel.webview.onDidReceiveMessage(
       (msg) => this._handleMessage(msg),
