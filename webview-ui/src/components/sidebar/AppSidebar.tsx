@@ -4,7 +4,7 @@ import { HistoryPanel } from '../rest/sidebar/HistoryPanel';
 import { EnvironmentsPanel } from '../rest/sidebar/EnvironmentsPanel';
 import { GraphQLDocumentationPanel, GraphQLSchemaExplorer } from '../graphql';
 import { RunAndDebugPanel } from '../shared/debugger';
-import { CollectionsFolderIcon, ClockIcon, LayersIcon, SettingsIcon, DocumentIcon, CodeIcon, BugIcon, GrpcIcon, SoapIcon, SparkleIcon, GeneralAssistantIcon, BookOpenIcon, GitHubIcon, RefreshIcon } from '../../icons';
+import { CollectionsFolderIcon, ClockIcon, LayersIcon, SettingsIcon, DocumentIcon, CodeIcon, BugIcon, GrpcIcon, SoapIcon, SparkleIcon, GeneralAssistantIcon, BookOpenIcon, GitHubIcon, RefreshIcon, InfoCircleIcon } from '../../icons';
 import { useTabsStore } from '../../store/tabs-store';
 import { useDebugStore } from '../../store/debug-store';
 import { useAiProvidersStore } from '../../store/ai-providers-store';
@@ -396,6 +396,23 @@ export function AppSidebar({ activeSection, onSectionChange, onOpenChange, sideb
           title="Settings"
         >
           <SettingsIcon size={18} strokeWidth={1.8} style={{ color: settingsActive || settingsOpen ? 'var(--color-settings)' : undefined }} />
+        </SidebarIcon>
+
+        {/*
+          About, under the gear.
+
+          Which version am I on, and what changed in it, is a question people
+          ask from anywhere — and answering it by way of Settings → General →
+          About is three clicks for one fact. It opens the same screen; it just
+          says where to land.
+        */}
+        <SidebarIcon
+          active={false}
+          accentColor="var(--color-settings)"
+          onClick={() => useTabsStore.getState().openSettingsTab('about')}
+          title="About Daakia"
+        >
+          <InfoCircleIcon size={18} strokeWidth={1.8} />
         </SidebarIcon>
       </div>
     </div>

@@ -6,8 +6,9 @@ import type { TabItem } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, GitHubIcon, LockIcon, TrashIcon, KeyboardIcon, Dk8sIcon, TerminalIcon,
          CookieIcon, NetworkIcon, ShieldIcon, UptimeIcon, FilterIcon, LayersIcon, BulkEditIcon, GaugeIcon,
-         DocumentIcon, ConnectIcon, ClipboardCompareIcon, FolderIcon, BugIcon, IssueOpenedIcon } from '../../icons';
+         DocumentIcon, ConnectIcon, ClipboardCompareIcon, FolderIcon, BugIcon, IssueOpenedIcon, InfoCircleIcon } from '../../icons';
 import { useAiFeaturesStore, type AiFeatureKey } from '../../store/ai-features-store';
+import { useTabsStore } from '../../store/tabs-store';
 import { AiSchemaDiffModal } from '../ai/AiSchemaDiffModal';
 import { AiOpenApiGeneratorModal } from '../ai/AiOpenApiGeneratorModal';
 import { AiSecurityAuditModal } from '../ai/AiSecurityAuditModal';
@@ -46,8 +47,9 @@ import { DbExplorerTab } from '../settings/devtools/DbExplorerTab';
 import { DebugSnapshotTab } from '../settings/devtools/DebugSnapshotTab';
 import { AuditConfigTab } from '../settings/devtools/AuditConfigTab';
 import { setFixedPortEnabled, useFixedPortEnabled } from '../mock/fixed-port';
+import { AboutPanel } from '../settings/AboutPanel';
 
-type SettingsSection = 'general' | 'theme' | 'keymap' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-cluster' | 'dk8s-terminal' | 'dkgh';
+type SettingsSection = 'general' | 'theme' | 'keymap' | 'about' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-cluster' | 'dk8s-terminal' | 'dkgh';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
 type PowerSubtab = 'cookies' | 'proxy' | 'certs' | 'monitor' | 'interceptor' | 'diff' | 'bulk' | 'load'
   | 'schema-diff' | 'openapi' | 'security' | 'webhook' | 'postman' | 'clustering'
@@ -59,6 +61,7 @@ const SETTINGS_SECTION_META: Record<SettingsSection, { label: string; icon: Reac
   'general':         { label: 'General',        icon: <SettingsIcon size={14} /> },
   'theme':           { label: 'Theme',           icon: <SunIcon size={14} /> },
   'keymap':          { label: 'Keymap',          icon: <KeyboardIcon size={14} /> },
+  'about':           { label: 'About',           icon: <InfoCircleIcon size={14} /> },
   'mock-server':     { label: 'Mock Server',     icon: <ServerIcon size={14} /> },
   'git-sync':        { label: 'Git Sync',        icon: <GitHubIcon size={14} /> },
   'vault':           { label: 'Vault',           icon: <LockIcon size={14} /> },
@@ -79,6 +82,7 @@ const SETTINGS_NAV_ITEMS: SideNavItem[] = [
     { id: 'general', label: SETTINGS_SECTION_META.general.label, icon: SETTINGS_SECTION_META.general.icon },
     { id: 'theme', label: SETTINGS_SECTION_META.theme.label, icon: SETTINGS_SECTION_META.theme.icon },
     { id: 'keymap', label: SETTINGS_SECTION_META.keymap.label, icon: SETTINGS_SECTION_META.keymap.icon },
+    { id: 'about', label: SETTINGS_SECTION_META.about.label, icon: SETTINGS_SECTION_META.about.icon },
   ] },
   { id: 'g-server', label: 'Server', isGroup: true, children: [
     { id: 'mock-server', label: SETTINGS_SECTION_META['mock-server'].label, icon: SETTINGS_SECTION_META['mock-server'].icon },
@@ -121,6 +125,20 @@ export function SettingsPanel() {
     'settings.section', 'general', [...ALL_SECTION_IDS] as ActiveNavId[],
   );
   const [promptTarget, setPromptTarget] = useState<AiPromptTemplateKey | null>(null);
+
+  /*
+    A deep link wins over the remembered section, once.
+
+    Settings reopens where you left it, which is right for the gear in the rail
+    and wrong for the `i` beside it — that one is asking for About specifically.
+    The request is consumed here so a later visit goes back to remembering.
+  */
+  const settingsTarget = useTabsStore(s => s.settingsTarget);
+  useEffect(() => {
+    if (!settingsTarget) return;
+    if (ALL_SECTION_IDS.has(settingsTarget)) setActiveSection(settingsTarget as ActiveNavId);
+    useTabsStore.getState().clearSettingsTarget();
+  }, [settingsTarget, setActiveSection]);
 
   const handleNavigateToPrompt = (key: AiPromptTemplateKey) => {
     setPromptTarget(key);
@@ -190,6 +208,8 @@ export function SettingsPanel() {
               <DevToolsSettingsPage />
             ) : activeSection === 'theme' ? (
               <ThemeSettings />
+            ) : activeSection === 'about' ? (
+              <AboutPanel />
             ) : null}
           </div>
         }

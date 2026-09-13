@@ -112,10 +112,21 @@ function parseFields(text) {
   return out;
 }
 
-/** What the reporter wrote, for quoting back at them. */
+/**
+ * What the reporter wrote, for quoting back at them.
+ *
+ * The composer labels the title line — "Title: checkout hangs" — so the model
+ * can tell the heading from the body. Quoting that label back as a field value
+ * is a mock artefact and reads as a bug: every answered field came back saying
+ * "Title: test". The label is dropped and the two parts joined, which is what
+ * a real model would do with them anyway.
+ */
 function describedIn(text) {
   const m = /What the reporter wrote:\n([\s\S]*)$/.exec(text);
-  return (m ? m[1] : '').trim();
+  return (m ? m[1] : '')
+    .replace(/^\s*Title:\s*/i, '')
+    .replace(/\n{2,}/g, ' — ')
+    .trim();
 }
 
 /**

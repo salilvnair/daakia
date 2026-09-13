@@ -527,7 +527,13 @@ interface TabsState {
 
   // Actions
   addTab: (partial?: Partial<RequestTab>) => void;
-  openSettingsTab: () => void;
+  /**
+   * @param section  A settings section to land on. Settings remembers the
+   *                 section you were last in, so a deep link has to say where
+   *                 it wants to go; it is parked in `settingsTarget` and
+   *                 cleared by the panel once read.
+   */
+  openSettingsTab: (section?: string) => void;
   openMockServerTab: () => void;
   openDk8sTab: () => void;
   openDkghTab: () => void;
@@ -541,6 +547,9 @@ interface TabsState {
   openDaakiaWikiTab: (page?: string) => void;
   /** Set by a deep link, consumed by the wiki page, then cleared. */
   wikiTarget?: string;
+  /** Set by a deep link into Settings, consumed by the panel, then cleared. */
+  settingsTarget?: string;
+  clearSettingsTarget: () => void;
   clearWikiTarget: () => void;
   openStateMachineTab: (serverId?: string) => void;
   switchProtocol: (protocol: Protocol) => void;
@@ -577,8 +586,11 @@ export const useTabsStore = create<TabsState>((set, get) => {
       }));
     },
 
-    openSettingsTab: () => {
+    clearSettingsTarget: () => set({ settingsTarget: undefined }),
+
+    openSettingsTab: (section?: string) => {
       const { tabs, activeTabId } = get();
+      if (section) set({ settingsTarget: section });
       const existing = tabs.find(t => t.type === 'settings');
       if (existing) {
         set({ activeTabId: existing.id, previousTabId: activeTabId });

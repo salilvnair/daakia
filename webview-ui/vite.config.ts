@@ -2,11 +2,27 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { SHARED_ALIASES } from './shared-aliases';
+
+/*
+  The version the About screen reports.
+
+  Read from the extension manifest at build time rather than restated in the
+  webview: a version typed in two places is a version that will eventually
+  disagree with itself, and the one place people check it is the screen that
+  would be wrong.
+*/
+const EXTENSION_VERSION = JSON.parse(
+  readFileSync(resolve(__dirname, '..', 'package.json'), 'utf8'),
+).version as string;
 
 export default defineConfig({
   root: resolve(__dirname),
   base: './',
+  define: {
+    __APP_VERSION__: JSON.stringify(EXTENSION_VERSION),
+  },
   resolve: {
     dedupe: ['react', 'react-dom', 'monaco-editor', '@monaco-editor/react'],
     alias: SHARED_ALIASES,
