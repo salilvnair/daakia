@@ -142,7 +142,15 @@ const numOf = (a: Args, k: string): number | undefined =>
 function scope(a: Args): string[] {
   const ctx = str(a, 'context');
   const ns = str(a, 'namespace');
-  return [...(ctx ? ['--context', ctx] : []), ...(ns ? ['-n', ns] : [])];
+  /*
+    The context is not optional here either.
+
+    Left conditional, an agent that forgot to pass one would have its command
+    run against whatever cluster kubectl defaults to and get a confident answer
+    about the wrong place. run() refuses that now, but saying so here means the
+    tool's own contract is honest rather than relying on a guard further down.
+  */
+  return ['--context', ctx ?? '', ...(ns ? ['-n', ns] : [])];
 }
 
 function bytes(v: number): string {

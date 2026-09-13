@@ -71,3 +71,17 @@ describe('a cluster call that names its context', () => {
     expect(r.failure ?? '').not.toMatch(/dk8s refused/);
   });
 });
+
+describe('--context with nothing after it', () => {
+  it('is refused, because kubectl reads an empty value as unset', async () => {
+    /* The subtler half of the same bug: the flag is present, so a guard that
+       only looked for the flag would pass it through to the default cluster. */
+    const r = await run(['--context', '', 'get', 'pods']);
+    expect(r.ok).toBe(false);
+    expect(r.failure).toMatch(/--context/);
+  });
+
+  it('is refused for whitespace too', async () => {
+    expect((await run(['--context', '   ', 'get', 'pods'])).ok).toBe(false);
+  });
+});

@@ -174,7 +174,13 @@ const CLUSTERLESS = new Set(['config', 'version', 'completion', 'help', 'options
 function requireContext(args: string[]): RunResult | undefined {
   const verb = args.find(a => !a.startsWith('-'));
   if (verb && CLUSTERLESS.has(verb)) return undefined;
-  if (args.includes('--context')) return undefined;
+  /*
+    Present AND non-empty. `--context ''` is not a context: kubectl treats an
+    empty value as unset and falls straight back to the default, so checking
+    only for the flag would wave through the exact failure this exists to stop.
+  */
+  const at = args.indexOf('--context');
+  if (at >= 0 && (args[at + 1] ?? '').trim() !== '') return undefined;
 
   const shown = args.slice(0, 6).join(' ');
   return {
