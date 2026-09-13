@@ -188,6 +188,21 @@ interface SearchState {
   setPickerOpen: (open: boolean) => void;
   /** Search across pods, starting from a term highlighted in one pod's log. */
   searchEverywhere: (query: string) => void;
+
+  /**
+   * The queries that were actually run, most recent first.
+   *
+   * Searching a cluster is not like searching a document: you try a stack
+   * frame, then a request id, then the same stack frame again an hour later
+   * when the next report comes in. Retyping a UUID from memory is the part
+   * nobody should be doing.
+   *
+   * Only queries that ran — not every keystroke on the way to one.
+   */
+  history: string[];
+  remember: (query: string) => void;
+  forget: (query: string) => void;
+  clearHistory: () => void;
   /** Opening a pod from a hit — records the way back. */
   jumpedToPod: (scrollTop: number) => void;
   /** Back from that pod: reopens the results where they were. */
@@ -225,7 +240,48 @@ const NO_FILE_SEARCH = {
   collapsed: [] as string[], selected: undefined as string | undefined,
 };
 
+/** Survives a reload; scoped to dk8s so it cannot collide with anything else. */
+const HISTORY_KEY = 'dk8s.search.history';
+const HISTORY_MAX = 12;
+
+function loadHistory(): string[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]');
+    return Array.isArray(raw) ? raw.filter(q => typeof q === 'string').slice(0, HISTORY_MAX) : [];
+  } catch {
+    /* Private mode, cleared storage, or something else wrote the key. An empty
+       history is a perfectly good history. */
+    return [];
+  }
+}
+
+function saveHistory(list: string[]): void {
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); } catch { /* private mode */ }
+}
+
 export const useDk8sSearchStore = create<SearchState>((set, get) => ({
+  history: loadHistory(),
+
+  remember: (query) => {
+    const q = query.trim();
+    if (!q) return;
+    set(s => {
+      /* Moved to the front rather than duplicated — the same search run twice
+         is one entry that is now more recent, not two. */
+      const next = [q, ...s.history.filter(h => h !== q)].slice(0, HISTORY_MAX);
+      saveHistory(next);
+      return { ...s, history: next };
+    });
+  },
+
+  forget: (query) => set(s => {
+    const next = s.history.filter(h => h !== query);
+    saveHistory(next);
+    return { ...s, history: next };
+  }),
+
+  clearHistory: () => { saveHistory([]); return set(s => ({ ...s, history: [] })); },
+
   open: false,
   resultScroll: 0,
   cameFromSearch: false,
@@ -321,7 +377,7 @@ export const useDk8sSearchStore = create<SearchState>((set, get) => ({
   setPicked: (picked) => set({ picked }),
   setPickerOpen: (pickerOpen) => set({ pickerOpen }),
 
-  searchEverywhere: (query) => set(s => ({
+  searchEverywhere: (query) => (get().remember(query), set(s => ({
     open: true,
     // Starts from nothing chosen and the table open: you came here from one
     // pod's log, so the grid's selection — if any — is not what you meant.
@@ -329,7 +385,7 @@ export const useDk8sSearchStore = create<SearchState>((set, get) => ({
     pickerOpen: true,
     options: { ...s.options, query },
     groups: [], summary: undefined,
-  })),
+  }))),
 
   jumpedToPod: (scrollTop) => set({ open: false, resultScroll: scrollTop, cameFromSearch: true }),
   returnToSearch: () => set({ open: true, cameFromSearch: false }),

@@ -6,7 +6,7 @@
  * reader to choose between the explanation and the thing being explained.
  */
 import { useState } from 'react';
-import { CopyButtonView, SplitPanelView, MultilineInputView, IconSize } from '@salilvnair/dui';
+import { CopyButtonView, SplitPanelView, ChatInputView, IconSize } from '@salilvnair/dui';
 import {
   SparkleIcon, SpinnerIcon, TrashIcon, ChevronDownIcon, ChevronRightIcon, ShieldIcon,
   SendIcon,
@@ -210,44 +210,30 @@ function FollowUpBox({ answerId, busy }: { answerId: string; busy: boolean }) {
     followUp(answerId, q, historyTurns);
   };
 
+  /*
+    The app's own chat composer, not a textarea with a button bolted beside it.
+
+    The follow-up box was a two-row `MultilineInputView` with a 26px square
+    button next to it — two rectangles with a gap down the middle, where the
+    Daakia AI tab has one rounded composer with the send inside it. Same
+    question being asked in both places, so it should be the same object.
+
+    `ChatInputView` is that shape and already handles the auto-grow and the
+    Enter-to-send, so this is less code as well as the right one.
+  */
   return (
-    <div className="flex items-end gap-1.5 px-2 py-2"
-         style={{ borderTop: '1px solid var(--color-surface-border)' }}>
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <MultilineInputView
-          value={text}
-          onChange={e => setText(e.target.value)}
-          placeholder={busy ? 'waiting for the answer…' : 'Ask a follow-up — Enter to send'}
-          rows={2}
-          size="sm"
-          width="fw"
-          accentColor={ACCENT}
-          onKeyDown={(e: React.KeyboardEvent) => {
-            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
-          }}
-        />
-      </span>
-      <button
-        type="button"
-        onClick={send}
-        disabled={!text.trim() || busy}
-        title="Send — carries the last few turns with it"
-        aria-label="Send the follow-up"
-        className="flex items-center justify-center rounded-md shrink-0"
-        style={{
-          width: 26, height: 26,
-          cursor: text.trim() && !busy ? 'pointer' : 'default',
-          color: text.trim() && !busy ? ACCENT : 'var(--color-text-muted)',
-          background: text.trim() && !busy
-            ? `color-mix(in srgb, ${ACCENT} 15%, transparent)`
-            : 'transparent',
-          border: `1px solid ${text.trim() && !busy
-            ? `color-mix(in srgb, ${ACCENT} 34%, transparent)`
-            : 'var(--color-surface-border)'}`,
-        }}
-      >
-        <SendIcon size={IconSize.action} />
-      </button>
+    <div className="px-2 py-2" style={{ borderTop: '1px solid var(--color-surface-border)' }}>
+      <ChatInputView
+        value={text}
+        onChange={setText}
+        onSend={send}
+        disabled={busy}
+        placeholder={busy ? 'waiting for the answer…' : 'Ask a follow-up — Enter to send'}
+        size="sm"
+        /* Round, like the AI tab's. */
+        borderRadius="full"
+        color={ACCENT}
+      />
     </div>
   );
 }

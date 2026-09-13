@@ -288,7 +288,7 @@ export function GhRelations({ rel, issues, end, onOpen }: {
                       onClick={() => onOpen(m.number)} style={{ width: '100%' }}>
                 <Ico name={m.pr ? 'code' : 'cmt'} />
                 {m.actor ? `${m.actor} linked this from ` : 'linked from '}
-                <b>#{m.number}</b>
+                <span className="ghref">#{m.number}</span>
                 <span className="sp" />
                 {m.at && (
                   <span style={{ fontSize: 11.4, color: 'var(--dk-faint)' }}>{since(m.at)}</span>

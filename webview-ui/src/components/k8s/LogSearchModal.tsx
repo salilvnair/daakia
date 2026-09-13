@@ -332,6 +332,10 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
   }, []);
 
   const allPicked = pickable.length > 0 && pickable.every(p => picked.includes(p.uid));
+  const history = useDk8sSearchStore(s => s.history);
+  const remember = useDk8sSearchStore(s => s.remember);
+  const forget = useDk8sSearchStore(s => s.forget);
+
   const canSearch = !!options.query.trim() && chosen.length > 0
     // The time window only constrains a log search; a bad one must not disable
     // a file search that never reads it.
@@ -425,6 +429,63 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                     style={{ color: chosen.length ? ACCENT : 'var(--color-text-muted)' }}>
                 {chosen.length}
               </span>
+
+          {/*
+            What you searched before, one click from running again.
+
+            Searching a cluster is not like searching a document: you try a
+            stack frame, then a request id, then the same stack frame an hour
+            later when the next report lands. Retyping a UUID from memory is
+            the part nobody should be doing.
+
+            Hidden once there is a query in the box — at that point the row is
+            competing with the thing it was meant to save you typing.
+          */}
+          {history.length > 0 && !options.query.trim() && (
+            <div className="flex items-center gap-1.5 flex-wrap px-0.5">
+              <span className="text-[9.5px] font-bold uppercase tracking-[.09em]"
+                    style={{ color: 'var(--color-text-muted)' }}>
+                Recent
+              </span>
+              {history.slice(0, 8).map(q => (
+                <span key={q} className="flex items-center">
+                  <button
+                    type="button"
+                    onClick={() => setOptions({ query: q })}
+                    title={`Search for ${q} again`}
+                    className="text-[10.5px] px-2 py-0.5 rounded-l-md cursor-pointer"
+                    style={{
+                      maxWidth: 220,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      fontFamily: 'monospace',
+                      color: 'var(--color-text-secondary)',
+                      background: 'var(--color-surface)',
+                      border: '1px solid var(--color-surface-border)',
+                      borderRight: 'none',
+                    }}
+                  >
+                    {q}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => forget(q)}
+                    title="Forget this search"
+                    aria-label={`Forget ${q}`}
+                    className="text-[10px] px-1.5 py-0.5 rounded-r-md cursor-pointer"
+                    style={{
+                      color: 'var(--color-text-muted)',
+                      background: 'var(--color-surface)',
+                      border: '1px solid var(--color-surface-border)',
+                    }}
+                  >
+                    &times;
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
               <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>of</span>
               <span className="text-[14px] font-bold tabular-nums"
                     style={{ color: 'var(--color-text-secondary)' }}>
@@ -585,7 +646,14 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
             <SearchFieldView
               value={options.query}
               onChange={(v: string) => setOptions({ query: v })}
-              onSearch={() => { if (canSearch) submit(); }}
+              onSearch={() => {
+                if (!canSearch) return;
+                /* Recorded here rather than in the store's setter: this is the
+                   moment a query becomes one somebody ran, and everything
+                   before it is typing. */
+                remember(options.query);
+                submit();
+              }}
               placeholder={searchIn === 'logs'
                 ? 'Search across the selected pods’ logs — Enter to search'
                 : 'File name, glob or regex — *invoice*, \.ya?ml$ — Enter to search'}

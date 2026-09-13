@@ -3050,3 +3050,14 @@ body.dkgh-dragging .kcard:hover { transform: none; box-shadow: none; }
   border: 1px solid var(--dk-border);
   cursor: zoom-in;
 }
+
+/* ── An issue reference, wherever it appears ──────────────────────────────
+   The same blue prose links use, so `#15` in a relations row and `#15` in a
+   comment read as the same thing: a number you can go to. It was bold black
+   in the relations panel, which said "important" where it meant "clickable" —
+   the row was already clickable and nothing on it said so. */
+.dkgh .ghref {
+  color: var(--dk-blue);
+  font-weight: 600;
+}
+.dkgh .vrow:hover .ghref { text-decoration: underline; }
