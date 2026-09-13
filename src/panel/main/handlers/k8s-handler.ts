@@ -139,9 +139,24 @@ export async function handleDk8sProbe(postMessage: PostMessage): Promise<void> {
   // Prefer what the user chose here before falling back to the kubeconfig's
   // current-context: dk8s never changes the global default, so the two can
   // legitimately differ and ours wins inside the tab.
-  const chosen = saved.context && list.contexts.some(c => c.name === saved.context)
-    ? saved.context
-    : list.current;
+  /*
+    What the reader picked beats what kubectl happens to be pointing at.
+
+    This used to fall straight from `saved.context` to `list.current`, skipping
+    the multi-select entirely — so somebody whose selection was kind-dk8s-lab
+    had every single-context operation run against kubectl's current-context
+    instead. Reachability was checked on the wrong cluster, came back refused,
+    and the tab reported that you could not get pods on a cluster you could
+    read perfectly well from k9s in the next window.
+
+    kubectl's own current-context is the LAST resort now, not the second. It
+    describes what somebody's shell is doing, which has nothing to do with
+    what they asked this tab for.
+  */
+  const valid = (c?: string) => !!c && list.contexts.some(x => x.name === c);
+  const selection = (saved.contexts ?? []).find(valid);
+  const chosen = valid(saved.context) ? saved.context
+    : selection ?? (valid(list.current) ? list.current : list.contexts[0]?.name);
 
   /*
     A saved selection is a memory, not a fact.
