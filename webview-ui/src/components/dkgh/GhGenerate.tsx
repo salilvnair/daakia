@@ -97,10 +97,13 @@ export function GhGenerate({ repo, form, draft, onDraft, onClose }: {
   const prompts = useMemo(() => {
     const system = templates['dkgh.compose.system'] ?? '';
     const user = (templates['dkgh.compose'] ?? '')
-      .replace('{{repo}}', repo)
-      .replace('{{template}}', form?.name ?? 'no template')
-      .replace('{{fields}}', fields.map(describeField).join('\n'))
-      .replace('{{description}}', draft.description || '(nothing written yet)');
+      /* Every occurrence, not the first. `String.replace` with a string
+         argument substitutes once, so a prompt somebody edited to mention
+         {{fields}} twice would ship the second one as literal text. */
+      .replace(/\{\{\s*repo\s*\}\}/g, repo)
+      .replace(/\{\{\s*template\s*\}\}/g, form?.name ?? 'no template')
+      .replace(/\{\{\s*fields\s*\}\}/g, fields.map(describeField).join('\n'))
+      .replace(/\{\{\s*description\s*\}\}/g, draft.description || '(nothing written yet)');
     return { system, user };
   }, [templates, repo, form, fields, draft.description]);
 
