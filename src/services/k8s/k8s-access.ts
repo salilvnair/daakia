@@ -96,7 +96,19 @@ async function canI(
   if (res.ok) return true;
   const err = `${res.stderr ?? ''} ${res.failure ?? ''}`.toLowerCase();
   if (err.includes('unknown command') || err.includes('unable to connect')
-      || err.includes('timed out') || err.includes('enoent')) {
+      || err.includes('timed out') || err.includes('enoent')
+      /*
+        A context kubectl does not have is not a denial.
+
+        Without these, `auth can-i --context gone` fails, falls through to the
+        hard `false` below, and every capability is reported as refused — so a
+        pod shows a padlock and "you cannot exec here" to somebody whose access
+        is fine and who can prove it with k9s in the next window. Not knowing
+        and being told no are different answers, and only one of them should
+        take a button away.
+      */
+      || err.includes('does not exist') || err.includes('no such context')
+      || err.includes('context was not found') || err.includes('current-context is not set')) {
     return undefined;
   }
   return false;
