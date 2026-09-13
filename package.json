@@ -1,7 +1,7 @@
 {
   "name": "daakia",
   "displayName": "Daakia — REST API Client",
-  "description": "REST API client and HTTP client for VS Code — REST, GraphQL, gRPC, SOAP, WebSocket, SSE and MQTT — with a Kubernetes dashboard (k8s pods, logs, shell), a GitHub dashboard for issues, mock servers, and AI you can switch off.",
+  "description": "REST client and API client for VS Code — REST, GraphQL, gRPC, SOAP, WebSocket, SSE and MQTT — with a Kubernetes dashboard (k8s pods, logs, shell), a GitHub dashboard for issues, mock servers, and AI you can switch off. An alternative to Postman, Thunder Client, Insomnia, Bruno and Hoppscotch.",
   "version": "3.0.2",
   "license": "MIT",
   "publisher": "salilvnair",
@@ -23,15 +23,23 @@
     "Other"
   ],
   "keywords": [
-    "api client",
     "rest client",
+    "rest-client",
     "rest api client",
+    "api client",
     "http client",
     "api testing",
     "api",
     "rest",
     "http",
     "client",
+    "endpoint",
+    "postman",
+    "thunder client",
+    "insomnia",
+    "bruno",
+    "hoppscotch",
+    "curl",
     "graphql",
     "grpc",
     "soap",
@@ -53,6 +61,7 @@
     "openapi",
     "swagger",
     "collections",
+    "environments",
     "ai",
     "mcp"
   ],
@@ -383,7 +392,8 @@
     "demo-video:gif": "node scripts/demo-video/gif.js",
     "demo-video:gif:short": "node scripts/demo-video/gif.js --highlights",
     "demo-video": "npm run demo-video:record && npm run demo-video:compose",
-    "showcase": "npm run demo-video && npm run demo-video:gif:short"
+    "showcase": "npm run demo-video && npm run demo-video:gif:short",
+    "rank": "node scripts/marketplace-rank.js"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.14.4",
