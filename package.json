@@ -108,6 +108,7 @@
           "id": "daakia.welcome",
           "name": "Daakia",
           "type": "webview",
+          "icon": "images/daakia-side.svg",
           "visibility": "visible"
         }
       ]
