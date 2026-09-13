@@ -1246,18 +1246,31 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         break;
 
       case 'dk8s:contextsSet':
-        set({
+        set(s => ({
           busy: false,
           selectedContexts: (msg.contexts as string[]) ?? [],
           contextResults: (msg.results as { context: string; reachable: Reachability }[]) ?? [],
-          stage: 'pick-namespace',
+          /*
+            A late answer must not undo a choice already made.
+
+            The host allows 15 seconds per context, so with a dead cluster in
+            the selection this reply can land well after the reader has ticked
+            their namespaces and pressed Watch. It set the stage unconditionally
+            — so the pod grid they were looking at was replaced by the namespace
+            picker, fifteen seconds after they had finished with it, for no
+            reason they could see.
+
+            The results are still worth taking: they are what the picker will
+            show the next time it is opened. The stage is not.
+          */
+          stage: s.stage === 'ready' ? s.stage : 'pick-namespace',
           /* The namespaces for these contexts have not been asked for yet, let
              alone answered. Clearing the previous cluster's offers as well:
              showing one cluster's namespaces under another cluster's name is
              worse than showing none. */
           offers: [],
           offersLoaded: false,
-        });
+        }));
         break;
 
       case 'dk8s:namespacesMulti':

@@ -20,6 +20,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { SplitPanelView } from '@salilvnair/dui';
 import { Ico } from './GhIcons';
+import { SpinnerIcon } from '../../icons';
 import { GhAvatar } from './GhAvatar';
 import { GhClose } from './GhClose';
 import { GhPicker } from './GhPicker';
@@ -81,6 +82,9 @@ export function GhCompose({
   const [saved, setSaved] = useState(false);
   /** Screen 11 — open while the AI composer is being used. */
   const [generating, setGenerating] = useState(false);
+  /* Whether a read is actually in flight, as opposed to the panel merely being
+     open. The button that starts it has to say which. */
+  const [genRunning, setGenRunning] = useState(false);
 
   /*
     A draft left behind is offered, never silently reopened. Somebody who came
@@ -168,7 +172,9 @@ export function GhCompose({
               form={forms.find(f => f.file === draft.templateFile) ?? forms[0]}
               draft={draft}
               onDraft={patch}
-              onClose={() => setGenerating(false)}
+              onClose={() => { setGenerating(false); setGenRunning(false); }}
+              startOnOpen
+              onRunning={setGenRunning}
             />
           )}
 
@@ -184,20 +190,42 @@ export function GhCompose({
             needs to know while it is. Otherwise the audit knows and nobody
             else does.
           */}
+          {/*
+            One button, and it does what it says.
+
+            It used to open a panel whose own differently-worded button —
+            "Read what I wrote" — was the thing that actually ran. Two controls
+            for one action, and the one you pressed first did nothing visible
+            beyond revealing the other. It starts the read now, and reports it:
+            pressed, it reads "Generating…" with a spinner and refuses a second
+            press until the answer lands.
+          */}
           <button
             type="button"
             className={`btn ai${generating ? ' go' : ''}`}
-            title={aiFailed()
-              ? aiFailed()
-              : "Reads this repository's own form fields and asks about what you left out"}
-            style={aiFailed() && !generating
+            disabled={genRunning}
+            title={genRunning
+              ? 'Reading your description against the template'
+              : aiFailed()
+                ? aiFailed()
+                : "Reads this repository's own form fields and asks about what you left out"}
+            style={aiFailed() && !generating && !genRunning
               ? { borderColor: 'color-mix(in srgb, var(--dk-amber) 55%, transparent)',
                   color: 'var(--dk-amber)' }
               : undefined}
-            onClick={() => setGenerating(g => !g)}
+            onClick={() => {
+              if (genRunning) return;
+              /* Closed → open and ask. Open → ask again, which is what a
+                 button called Generate should do when you press it twice. */
+              if (generating) setGenerating(false);
+              window.setTimeout(() => setGenerating(true), 0);
+            }}
           >
-            <Ico name={aiFailed() && !generating ? 'warn' : 'ai'} />Generate with AI
-            {aiFailed() && !generating && <span className="chip c-stale">failed</span>}
+            {genRunning
+              ? <SpinnerIcon size={13} />
+              : <Ico name={aiFailed() ? 'warn' : 'ai'} />}
+            {genRunning ? 'Generating…' : 'Generate with AI'}
+            {aiFailed() && !generating && !genRunning && <span className="chip c-stale">failed</span>}
           </button>
           <span className="sp" />
           <button

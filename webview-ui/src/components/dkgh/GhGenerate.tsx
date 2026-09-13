@@ -60,18 +60,32 @@ interface Proposal {
   notes?: string;
 }
 
-export function GhGenerate({ repo, form, draft, onDraft, onClose }: {
+export function GhGenerate({ repo, form, draft, onDraft, onClose, startOnOpen, onRunning }: {
   repo: string;
   /** The template this issue is being filed against. */
   form?: IssueForm;
   draft: Draft;
   onDraft: (change: Partial<Draft>) => void;
   onClose: () => void;
+  /**
+   * Ask as soon as the panel opens.
+   *
+   * The button that opens this says "Generate with AI", and it used to open a
+   * panel with a second, differently-worded button inside it — so the answer
+   * to "what do I press" was "the other one". Pressing the first one now does
+   * what it says.
+   */
+  startOnOpen?: boolean;
+  /** So the button that started it can say it is still going. */
+  onRunning?: (running: boolean) => void;
 }) {
   const providers = useAiProvidersStore(s => s.providers);
   const templates = useAiPromptTemplatesStore(s => s.templates);
 
   const [running, setRunning] = useState(false);
+  /* Told to whoever opened this, so the footer button can carry the same
+     state rather than looking idle while the panel below it works. */
+  useEffect(() => { onRunning?.(running); }, [running, onRunning]);
   const [error, setError] = useState(lastFailure);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [asking, setAsking] = useState(0);
@@ -159,6 +173,28 @@ export function GhGenerate({ repo, form, draft, onDraft, onClose }: {
       settings: { responseFormat: 'json_object', temperature: 0.1, maxTokens: 1200 },
     });
   };
+
+  /*
+    Opened by the button that says "Generate with AI", so generate.
+
+    Once per mount, and only when there is something to read: with an empty
+    description the panel opens and explains itself instead, which is the one
+    case where the second button earns its place.
+
+    `configured` is checked too — without a provider this would fire a request
+    that cannot be sent and replace the "no model is configured" note with a
+    failure about a socket.
+  */
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current || !startOnOpen) return;
+    if (!configured || fields.length === 0 || !draft.description.trim()) return;
+    started.current = true;
+    ask();
+    // Mount only: re-running when the description changes would fire a request
+    // on every keystroke behind the panel.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** Take one answer into the draft. 11C — and out again. */
   const answer = (label: string, value: string) => onDraft({
