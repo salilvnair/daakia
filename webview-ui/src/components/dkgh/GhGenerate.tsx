@@ -59,7 +59,9 @@ interface Proposal {
   notes?: string;
 }
 
-export function GhGenerate({ repo, form, draft, onDraft, onClose, startOnOpen, onRunning }: {
+export function GhGenerate({
+  repo, form, draft, onDraft, onClose, startOnOpen, onRunning, onProposal,
+}: {
   repo: string;
   /** The template this issue is being filed against. */
   form?: IssueForm;
@@ -77,6 +79,15 @@ export function GhGenerate({ repo, form, draft, onDraft, onClose, startOnOpen, o
   startOnOpen?: boolean;
   /** So the button that started it can say it is still going. */
   onRunning?: (running: boolean) => void;
+  /**
+   * A proposal arrived.
+   *
+   * Told to the caller so the button can stop offering to do again what it
+   * has just done — until the reader changes what it would be reading.
+   * Failures do not fire this: a run that came back empty is exactly one you
+   * want to be able to retry.
+   */
+  onProposal?: () => void;
 }) {
   const providers = useAiProvidersStore(s => s.providers);
   const templates = useAiPromptTemplatesStore(s => s.templates);
@@ -91,6 +102,10 @@ export function GhGenerate({ repo, form, draft, onDraft, onClose, startOnOpen, o
   const [showPrompt, setShowPrompt] = useState(false);
   const acc = useRef('');
   const id = useRef('');
+  /* The message handler is registered once, so anything it calls has to be
+     reached through a ref or it is whatever was passed on the first render. */
+  const onProposalRef = useRef(onProposal);
+  onProposalRef.current = onProposal;
 
   /*
     11D — configured means an enabled provider with a model on it.
@@ -162,6 +177,7 @@ export function GhGenerate({ repo, form, draft, onDraft, onClose, startOnOpen, o
       setError('');
       setProposal(parsed);
       setAsking(0);
+      onProposalRef.current?.();
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);

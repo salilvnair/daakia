@@ -17,7 +17,7 @@
  * validation error at the end — but they are also exactly what the next screen
  * is about to fill in, so shouting about them would be premature.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SplitPanelView } from '@salilvnair/dui';
 import { Ico } from './GhIcons';
 import { SpinnerIcon } from '../../icons';
@@ -94,7 +94,27 @@ export function GhCompose({
     and the button is plainly off for it rather than running and coming back
     with a proposal built from nothing.
   */
-  const canGenerate = !!(draft.title.trim() || draft.description.trim());
+  /**
+   * What a generation would be reading.
+   *
+   * Two boxes, so a change to either is a different question — and the same
+   * two boxes unchanged is a question that has already been answered.
+   */
+  const asked = `${draft.title.trim()}\u0000${draft.description.trim()}`;
+  const askedRef = useRef(asked);
+  askedRef.current = asked;
+
+  /**
+   * The last input a proposal came back for.
+   *
+   * Without this the button went on offering to generate from text it had
+   * just generated from — pressing it again spent a call to produce the same
+   * answer over the top of the one on screen.
+   */
+  const [answered, setAnswered] = useState<string | null>(null);
+
+  const hasInput = !!(draft.title.trim() || draft.description.trim());
+  const canGenerate = hasInput && asked !== answered;
 
   /*
     A draft left behind is offered, never silently reopened. Somebody who came
@@ -185,6 +205,9 @@ export function GhCompose({
               onClose={() => { setGenerating(false); setGenRunning(false); }}
               startOnOpen
               onRunning={setGenRunning}
+              /* Read at the moment it lands, not at the moment this was
+                 passed: the reader may have typed on while it was running. */
+              onProposal={() => setAnswered(askedRef.current)}
             />
           )}
 
@@ -228,8 +251,10 @@ export function GhCompose({
             disabled={!canGenerate || genRunning}
             title={genRunning
               ? 'Reading what you wrote against the template'
-              : !canGenerate
+              : !hasInput
                 ? 'Write a title or a sentence about what happened first — there is nothing to read yet'
+                : !canGenerate
+                  ? 'Already generated from this — change the title or what went wrong to run it again'
                 : aiFailed()
                   ? aiFailed()
                   : "Reads this repository's own form fields and asks about what you left out"}
