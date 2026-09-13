@@ -71,6 +71,8 @@ export interface DkghState {
   repoByWorkspace?: Record<string, string>;
   /** The last few, per workspace. Most recent first. */
   recentByWorkspace?: Record<string, string[]>;
+  /** Which linked project each repository's board is built from. */
+  projectByRepo?: Record<string, string>;
   /** Kept above the recents, in the order they were pinned. */
   pinnedByWorkspace?: Record<string, string[]>;
   /**
@@ -1068,7 +1070,20 @@ export async function handleDkghProject(
   await answering(postMessage, 'dkgh:project:result', msg, async () => {
     const repo = String(msg.repo ?? currentRepo() ?? '').trim();
     if (!repo) return;
-    postMessage({ type: 'dkgh:project:result', ...(await fetchProject(repo)) });
+    /*
+      Which project, when the repository links more than one.
+
+      Remembered per repository rather than globally: a team's delivery board
+      and their bug board are different answers for different repositories, and
+      one setting for all of them would be wrong everywhere but the first.
+    */
+    const chosen = String(msg.projectId ?? '').trim()
+      || (state().projectByRepo ?? {})[repo];
+    const board = await fetchProject(repo, chosen || undefined);
+    if (board.id && board.id !== chosen) {
+      saveState({ projectByRepo: { ...(state().projectByRepo ?? {}), [repo]: board.id } });
+    }
+    postMessage({ type: 'dkgh:project:result', ...board });
   });
 }
 

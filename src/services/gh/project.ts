@@ -63,6 +63,14 @@ export interface ProjectBoard {
   fields: ProjectField[];
   items: ProjectItem[];
   /**
+   * Every project this repository links, with how many issues sit on each.
+   *
+   * A board is built from one of them, but the reader has to be able to see
+   * that there are others and switch — a team with a delivery board and a bug
+   * board was previously shown one at random and told nothing about the rest.
+   */
+  available?: { id: string; number?: number; title?: string; items: number }[];
+  /**
    * Why there is nothing here.
    *
    * `none` — the repository has no project, which is ordinary.
@@ -75,7 +83,7 @@ export interface ProjectBoard {
 const QUERY = `
 query($owner:String!,$name:String!){
   repository(owner:$owner,name:$name){
-    projectsV2(first:1){ nodes {
+    projectsV2(first:20){ nodes {
       id number title
       fields(first:50){ nodes {
         ... on ProjectV2FieldCommon { id name dataType }
@@ -86,7 +94,7 @@ query($owner:String!,$name:String!){
       number
       trackedIssues(first:20){ nodes { number title state } }
       trackedInIssues(first:5){ nodes { number title } }
-      projectItems(first:2){ nodes {
+      projectItems(first:20){ nodes {
         id
         project { id }
         fieldValues(first:30){ nodes {
@@ -154,7 +162,11 @@ function textOf(v: RawValue): string | undefined {
   return undefined;
 }
 
-export async function fetchProject(repo: string): Promise<ProjectBoard> {
+export async function fetchProject(
+  repo: string,
+  /** Which linked project to build from. Defaults to the most populated one. */
+  preferProjectId?: string,
+): Promise<ProjectBoard> {
   const [owner, name] = repo.split('/');
   const empty: ProjectBoard = { repo, fields: [], items: [] };
   if (!owner || !name) return { ...empty, absent: 'none' };
@@ -185,15 +197,54 @@ export async function fetchProject(repo: string): Promise<ProjectBoard> {
     return { ...empty, absent: 'gh returned something that is not JSON.' };
   }
 
-  const project = raw.data?.repository?.projectsV2?.nodes?.[0];
+  /*
+    A repository can link several projects, and taking the first was wrong.
+
+    `projectsV2(first:1)` asked for one and this read `nodes[0]`, so a team
+    with a delivery board and a bug board saw whichever GitHub happened to
+    return first and no indication the other existed. Issues living only on
+    the second one had no Status, no dates, and no row on the roadmap — they
+    were simply absent, which is the worst way for data to be wrong.
+
+    All of them are fetched now. `preferProjectId` picks, and without one the
+    choice is the project the most issues actually sit on — a board somebody
+    made once and abandoned should not outrank the one they use daily.
+  */
+  const all = (raw.data?.repository?.projectsV2?.nodes ?? []).filter(p => !!p?.id);
+  if (all.length === 0) return { ...empty, absent: 'none' };
+
+  const issueNodes = raw.data?.repository?.issues?.nodes ?? [];
+  const population = new Map<string, number>();
+  for (const issue of issueNodes) {
+    for (const item of issue.projectItems?.nodes ?? []) {
+      const id = item.project?.id;
+      if (id) population.set(id, (population.get(id) ?? 0) + 1);
+    }
+  }
+
+  const preferred = preferProjectId
+    ? all.find(p => p.id === preferProjectId)
+    : undefined;
+  const busiest = [...all].sort((a, b) =>
+    (population.get(b.id ?? '') ?? 0) - (population.get(a.id ?? '') ?? 0))[0];
+  const project = preferred ?? busiest;
   if (!project?.id) return { ...empty, absent: 'none' };
+
+  /* Every project the repository links, so the UI can offer the choice rather
+     than silently making it. */
+  const available = all.map(p => ({
+    id: p.id ?? '',
+    number: p.number,
+    title: p.title,
+    items: population.get(p.id ?? '') ?? 0,
+  }));
 
   const fields = (project.fields?.nodes ?? [])
     .filter((f): f is ProjectField => !!(f as ProjectField)?.name)
     .map(f => ({ id: f.id, name: f.name, dataType: f.dataType, options: f.options }));
 
   const items: ProjectItem[] = [];
-  for (const issue of raw.data?.repository?.issues?.nodes ?? []) {
+  for (const issue of issueNodes) {
     if (typeof issue.number !== 'number') continue;
     /* An issue can sit on several projects. This screen is about the one the
        repository links, so the others are not read into the board. */
@@ -231,7 +282,10 @@ export async function fetchProject(repo: string): Promise<ProjectBoard> {
     });
   }
 
-  return { repo, id: project.id, number: project.number, title: project.title, fields, items };
+  return {
+    repo, id: project.id, number: project.number, title: project.title,
+    fields, items, available,
+  };
 }
 
 export interface ProjectEdit {

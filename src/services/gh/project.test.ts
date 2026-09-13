@@ -244,3 +244,65 @@ describe('planProjectItem', () => {
     expect(planProjectItem('P', 'I', 1, 'archive').refusal).toBeUndefined();
   });
 });
+
+/*
+  A repository can link more than one project.
+
+  The bug: `projectsV2(first:1)` and `nodes[0]`. A team with a delivery board
+  and a bug board saw whichever GitHub returned first, and issues living only
+  on the other one had no Status, no dates and no roadmap row — absent rather
+  than wrong, which is the harder kind to notice.
+*/
+describe('a repository with two projects', () => {
+  const two = (issues: { number: number; projectId: string }[]) => JSON.stringify({
+    data: {
+      repository: {
+        projectsV2: { nodes: [
+          { id: 'P_quiet', number: 1, title: 'Abandoned board', fields: { nodes: [] } },
+          { id: 'P_busy', number: 2, title: 'The one they use', fields: { nodes: [] } },
+        ] },
+        issues: { nodes: issues.map(i => ({
+          number: i.number,
+          projectItems: { nodes: [{ id: `I_${i.number}`, project: { id: i.projectId },
+                                    fieldValues: { nodes: [] } }] },
+        })) },
+      },
+    },
+  });
+
+  it('offers every linked project, not just the first', async () => {
+    const board = (run.mockResolvedValue({ ok: true, stdout: two([{ number: 1, projectId: 'P_busy' }]) }), await fetchProject('acme/app'));
+    expect(board.available?.map(p => p.id).sort()).toEqual(['P_busy', 'P_quiet']);
+  });
+
+  it('builds from the one the issues are actually on', async () => {
+    /* Not the first GitHub happens to return. A board somebody made once and
+       abandoned should not outrank the one they use daily. */
+    const board = (run.mockResolvedValue({ ok: true, stdout: two([
+      { number: 1, projectId: 'P_busy' },
+      { number: 2, projectId: 'P_busy' },
+      { number: 3, projectId: 'P_quiet' },
+    ]) }), await fetchProject('acme/app'));
+    expect(board.id).toBe('P_busy');
+    expect(board.items.map(i => i.number).sort()).toEqual([1, 2]);
+  });
+
+  it('honours an explicit choice over the count', async () => {
+    const board = (run.mockResolvedValue({ ok: true, stdout: two([
+      { number: 1, projectId: 'P_busy' },
+      { number: 2, projectId: 'P_quiet' },
+    ]) }), await fetchProject('acme/app', 'P_quiet'));
+    expect(board.id).toBe('P_quiet');
+    expect(board.items.map(i => i.number)).toEqual([2]);
+  });
+
+  it('counts how many issues sit on each, so the picker can say', async () => {
+    const board = (run.mockResolvedValue({ ok: true, stdout: two([
+      { number: 1, projectId: 'P_busy' },
+      { number: 2, projectId: 'P_busy' },
+      { number: 3, projectId: 'P_quiet' },
+    ]) }), await fetchProject('acme/app'));
+    const byId = Object.fromEntries((board.available ?? []).map(p => [p.id, p.items]));
+    expect(byId).toEqual({ P_busy: 2, P_quiet: 1 });
+  });
+});
