@@ -154,7 +154,17 @@ export function PromptLibraryPanel({ externalTarget, onTargetConsumed }: { exter
   const [sidebarWidth, setSidebarWidth] = useState(PL_DEFAULT_W);
   const [isDraggingMain, setIsDraggingMain] = useState(false);
   const mainDragRef = useRef({ active: false, startX: 0, startW: PL_DEFAULT_W });
-  const [agentSplit, setAgentSplit] = useState(50); // % of sidebar height for Agent section
+  /*
+    How the two sections share the sidebar.
+
+    `null` means nobody has dragged it, and the Agent section is then sized by
+    its own content up to a ceiling. It used to default to a flat 50%, which is
+    a number that has nothing to do with either list: six agent prompts sat in
+    half a sidebar with the bottom third of it empty, while ninety AI actions
+    scrolled through the other half. Content first, and the drag handle for
+    when you disagree.
+  */
+  const [agentSplit, setAgentSplit] = useState<number | null>(null); // % of sidebar height, once dragged
   const [agentCollapsed, setAgentCollapsed] = useState(false);
   const [aiCollapsed, setAiCollapsed] = useState(false);
   const [isDraggingSidebar, setIsDraggingSidebar] = useState(false);
@@ -404,7 +414,14 @@ export function PromptLibraryPanel({ externalTarget, onTargetConsumed }: { exter
           {/* Agent Prompts section */}
           <div
             className="flex flex-col overflow-hidden flex-shrink-0"
-            style={agentCollapsed ? { height: 30 } : { height: `${agentSplit}%`, minHeight: 60 }}
+            style={agentCollapsed
+              ? { height: 30 }
+              : agentSplit === null
+                /* Its content, and no more than half the sidebar. The inner
+                   list scrolls once it hits that, which is what the ceiling is
+                   for — a long list must not push AI Actions off the bottom. */
+                ? { maxHeight: '50%', minHeight: 60 }
+                : { height: `${agentSplit}%`, minHeight: 60 }}
           >
             {/* Section header */}
             <button type="button" onClick={() => setAgentCollapsed(c => !c)}
@@ -418,7 +435,11 @@ export function PromptLibraryPanel({ externalTarget, onTargetConsumed }: { exter
             </button>
 
             {!agentCollapsed && (
-              <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] py-1">
+              /* `0 1 auto` while the section is sized by content — `flex-1` is
+                 `flex-basis: 0`, which in an auto-height parent resolves the
+                 parent's height to zero and collapses the list entirely. */
+              <div className="overflow-y-auto [scrollbar-gutter:stable] py-1"
+                   style={{ flex: agentSplit === null ? '0 1 auto' : '1 1 0%' }}>
                 {AGENT_CATEGORIES.map(cat => {
                   const catScenarios = cat.scenarios.filter(s => filteredScenarios.includes(s));
                   if (catScenarios.length === 0) return null;

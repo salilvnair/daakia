@@ -250,7 +250,30 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
     return () => ro.disconnect();
   }, []);
 
-  const submit = useCallback(() => {
+  const history = useDk8sSearchStore(s => s.history);
+  const remember = useDk8sSearchStore(s => s.remember);
+  const forget = useDk8sSearchStore(s => s.forget);
+
+  /**
+   * Run a search over a given set of pods.
+   *
+   * Takes its targets rather than reading `chosen`, because picking a remembered
+   * search restores the pods and runs it in one gesture — and the state holding
+   * that selection has not re-rendered yet at the moment the search starts. The
+   * query is read from the store by `run`, so callers that change it must do so
+   * before calling this; `setOptions` is synchronous, so that is enough.
+   */
+  const submitWith = useCallback((targets: typeof pods) => {
+    if (targets.length === 0) return;
+    /*
+      Recorded here, where every search actually starts.
+
+      It began at the Enter handler, which meant the footer's own Search button
+      ran searches the history never heard about — the same search, remembered
+      or not depending on which of the two controls you used. One chokepoint,
+      so there is no second way to run something that skips it.
+    */
+    remember(useDk8sSearchStore.getState().options.query, targets);
     if (searchIn === 'files') {
       /*
         Files search from `/`, not from a remembered path.
@@ -260,21 +283,23 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
         honest rather than expensive.
       */
       fileSearch.run(
-        chosen.map(p => ({
+        targets.map(p => ({
           uid: p.uid, name: p.name, namespace: p.namespace, context: p.context!,
         })),
-        options.query, '/', options.caseSensitive, fileDepth,
+        useDk8sSearchStore.getState().options.query, '/', options.caseSensitive, fileDepth,
       );
       return;
     }
-    run(chosen.map(p => ({
+    run(targets.map(p => ({
       context: p.context!, namespace: p.namespace, pod: p.name,
       containers: p.containers.map(c => c.name),
       // Kubernetes' own answer for what this pod belongs to, so the archive
       // search does not have to guess it back out of the pod name.
       workload: p.workload?.name,
     })));
-  }, [chosen, run, searchIn, fileSearch, options.query, options.caseSensitive]);
+  }, [run, searchIn, fileSearch, options.caseSensitive, fileDepth, remember]);
+
+  const submit = useCallback(() => submitWith(chosen), [submitWith, chosen]);
 
   /*
     Enter searches — once.
@@ -332,9 +357,64 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
   }, []);
 
   const allPicked = pickable.length > 0 && pickable.every(p => picked.includes(p.uid));
-  const history = useDk8sSearchStore(s => s.history);
-  const remember = useDk8sSearchStore(s => s.remember);
-  const forget = useDk8sSearchStore(s => s.forget);
+
+  /**
+   * Which of a remembered search's pods are still here.
+   *
+   * A search run an hour ago names pods, and some of them have since been
+   * replaced — that is usually the reason it is being run again. The ones that
+   * survived are restored and the rest are dropped silently; the count in the
+   * dropdown is what says so, rather than an error about pods nobody asked
+   * about by name.
+   */
+  const survivorsOf = useCallback((entry: { pods: { name: string; namespace: string; context: string }[] }) =>
+    pods.filter(p => entry.pods.some(
+      x => x.name === p.name && x.namespace === p.namespace && x.context === (p.context ?? ''))),
+  [pods]);
+
+  /*
+    The history, as the box offers it.
+
+    The right-hand detail is how many of the pods it ran over are still here,
+    because that is the one thing about a remembered search that can have
+    changed since — and it decides what clicking it will actually do.
+  */
+  const suggestions = useMemo(() => history.map(h => {
+    const alive = survivorsOf(h).length;
+    const meta = h.pods.length === 0
+      ? undefined
+      : alive === h.pods.length
+        ? `${alive} pod${alive === 1 ? '' : 's'}`
+        : `${alive} of ${h.pods.length} pods still here`;
+    return { value: h.query, meta };
+  }), [history, survivorsOf]);
+
+  /**
+   * Running a remembered search.
+   *
+   * Restores what it was run against as well as what it said, which is the
+   * whole difference between a history and a list of strings: the pods are
+   * most of the work of setting a search up, and re-picking twenty-eight of
+   * them by hand is not a shortcut.
+   *
+   * Falls back to the current selection when nothing it named is left, rather
+   * than searching nothing and reporting no matches.
+   */
+  const rerun = useCallback((query: string) => {
+    const entry = history.find(h => h.query === query);
+    const alive = entry ? survivorsOf(entry) : [];
+    const targets = alive.length ? alive : chosen;
+
+    setOptions({ query });
+    if (alive.length) {
+      setPicked(alive.map(p => p.uid));
+      // The strip says what is selected, and it is now right — nothing to open
+      // the table for.
+      setPickerOpen(false);
+    }
+    if (!query.trim() || targets.length === 0) return;
+    submitWith(targets);
+  }, [history, survivorsOf, chosen, setOptions, setPicked, setPickerOpen, submitWith]);
 
   const canSearch = !!options.query.trim() && chosen.length > 0
     // The time window only constrains a log search; a bad one must not disable
@@ -429,63 +509,6 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                     style={{ color: chosen.length ? ACCENT : 'var(--color-text-muted)' }}>
                 {chosen.length}
               </span>
-
-          {/*
-            What you searched before, one click from running again.
-
-            Searching a cluster is not like searching a document: you try a
-            stack frame, then a request id, then the same stack frame an hour
-            later when the next report lands. Retyping a UUID from memory is
-            the part nobody should be doing.
-
-            Hidden once there is a query in the box — at that point the row is
-            competing with the thing it was meant to save you typing.
-          */}
-          {history.length > 0 && !options.query.trim() && (
-            <div className="flex items-center gap-1.5 flex-wrap px-0.5">
-              <span className="text-[9.5px] font-bold uppercase tracking-[.09em]"
-                    style={{ color: 'var(--color-text-muted)' }}>
-                Recent
-              </span>
-              {history.slice(0, 8).map(q => (
-                <span key={q} className="flex items-center">
-                  <button
-                    type="button"
-                    onClick={() => setOptions({ query: q })}
-                    title={`Search for ${q} again`}
-                    className="text-[10.5px] px-2 py-0.5 rounded-l-md cursor-pointer"
-                    style={{
-                      maxWidth: 220,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      fontFamily: 'monospace',
-                      color: 'var(--color-text-secondary)',
-                      background: 'var(--color-surface)',
-                      border: '1px solid var(--color-surface-border)',
-                      borderRight: 'none',
-                    }}
-                  >
-                    {q}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => forget(q)}
-                    title="Forget this search"
-                    aria-label={`Forget ${q}`}
-                    className="text-[10px] px-1.5 py-0.5 rounded-r-md cursor-pointer"
-                    style={{
-                      color: 'var(--color-text-muted)',
-                      background: 'var(--color-surface)',
-                      border: '1px solid var(--color-surface-border)',
-                    }}
-                  >
-                    &times;
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
               <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>of</span>
               <span className="text-[14px] font-bold tabular-nums"
                     style={{ color: 'var(--color-text-secondary)' }}>
@@ -646,14 +669,14 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
             <SearchFieldView
               value={options.query}
               onChange={(v: string) => setOptions({ query: v })}
-              onSearch={() => {
-                if (!canSearch) return;
-                /* Recorded here rather than in the store's setter: this is the
-                   moment a query becomes one somebody ran, and everything
-                   before it is typing. */
-                remember(options.query);
-                submit();
-              }}
+              onSearch={() => { if (canSearch) submit(); }}
+              /* What you searched before, under the box — the same gesture a
+                 URL bar has, rather than a row of chips taking width from a
+                 dialog to show something wanted for one second. */
+              suggestions={suggestions}
+              suggestionsLabel="Recent searches"
+              onPick={rerun}
+              onForget={forget}
               placeholder={searchIn === 'logs'
                 ? 'Search across the selected pods’ logs — Enter to search'
                 : 'File name, glob or regex — *invoice*, \.ya?ml$ — Enter to search'}

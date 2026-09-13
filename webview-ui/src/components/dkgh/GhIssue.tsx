@@ -434,6 +434,8 @@ ${quoted}` : quoted));
                     onChange={setEditingBody}
                     minHeight={120}
                     issues={all}
+                    repo={repo}
+                    onOpenIssue={onOpen}
                     placeholder="What this issue is about."
                     footer={
                       <>
@@ -622,6 +624,8 @@ ${quoted}` : quoted));
                           onChange={body => setEditing({ id: editing.id, body })}
                           minHeight={96}
                           issues={all}
+                          repo={repo}
+                          onOpenIssue={onOpen}
                           footer={
                             <>
                               <button type="button" className="btn"
@@ -692,6 +696,8 @@ ${quoted}` : quoted));
                 minHeight={84}
                 placeholder="Leave a comment…"
                 issues={all}
+                repo={repo}
+                onOpenIssue={onOpen}
                 right={<span className="sub">Type <b>#</b> to link another issue</span>}
                 footer={
                   /*

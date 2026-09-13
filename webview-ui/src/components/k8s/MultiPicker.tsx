@@ -382,7 +382,7 @@ function OfferBlock({ offer, checked, toggle, query, multiCluster }: {
 
 export function NamespaceMultiPicker() {
   const {
-    offers, selectedContexts, contextResults, pinNamespace, openContextPicker,
+    offers, offersLoaded, selectedContexts, contextResults, pinNamespace, openContextPicker,
     pendingTargets, setPendingTargets, commitPendingTargets,
   } = useK8sStore();
 
@@ -410,7 +410,19 @@ export function NamespaceMultiPicker() {
     and hold nothing. Spinning forever on a cluster that already said no is the
     one outcome that tells the reader nothing and gives them nothing to press.
   */
-  const heardBack = contextResults.length >= selectedContexts.length
+  /*
+    Heard back means the NAMESPACES are in, not that the cluster is up.
+
+    `contextResults` answers a different question and arrives a round trip
+    earlier — it says each context was reachable. Reading it as "everything has
+    arrived" put "No namespaces were returned" on screen for the two or three
+    seconds the listing actually takes, every time the picker was opened. The
+    reader is told the cluster is empty while the call that will fill it is
+    still running, which is the same bug as an empty file browser drawn during
+    its own probe.
+  */
+  const heardBack = offersLoaded
+    && contextResults.length >= selectedContexts.length
     && selectedContexts.length > 0;
   const allUnreachable = heardBack && unreachable.length === selectedContexts.length;
 

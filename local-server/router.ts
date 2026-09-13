@@ -32,6 +32,9 @@
 import {
   getSqliteStatus, getDbPath, getHistory, clearHistory, deleteHistoryById, getSetting, setSetting, getCookies,
   getAllPrompts, upsertPrompt, resetPrompt,
+  getAiPromptTemplates, setAiPromptTemplates,
+  loadAiConversation, saveAiConversation, clearAiConversation,
+  type AiConversationMessage,
   getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries,
   getUiAuditEntries, clearUiAuditEntries, insertUiAudit,
   getDbTables, getDbTableRows, deleteDbRow,
@@ -1058,6 +1061,42 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
     case 'promptLibrary:reset':
       resetPrompt(msg.scenario as string);
       post({ type: 'promptLibrary:data', prompts: getAllPrompts() });
+      break;
+
+    /*
+      ── AI Prompt Templates ──
+
+      Unwired here, these logged "no handler wired" and the Prompt Library then
+      showed the built-in defaults with no sign that anything was missing —
+      every edit made in the browser was accepted, posted, and dropped. Which
+      is the worse half of the failure: not that it did not work, but that it
+      looked exactly like it had.
+    */
+    case 'aiPromptTemplates:load':
+      post({ type: 'aiPromptTemplates:data', templates: getAiPromptTemplates() });
+      break;
+    case 'aiPromptTemplates:save': {
+      const templates = msg.templates as Record<string, string> | undefined;
+      if (templates && typeof templates === 'object') setAiPromptTemplates(templates);
+      break;
+    }
+
+    // ── Daakia AI conversation ──
+    case 'aiConversation:load':
+      post({ type: 'aiConversation:data', messages: loadAiConversation() });
+      break;
+    case 'aiConversation:save': {
+      const messages = msg.messages as AiConversationMessage[] | undefined;
+      if (Array.isArray(messages)) {
+        // The same cap the extension applies, read from the same setting.
+        const general = getSetting<Record<string, unknown>>('general') ?? {};
+        const maxAiChat = (general.maxAiChatMessages as number) ?? 200;
+        saveAiConversation(maxAiChat > 0 ? messages.slice(-maxAiChat) : messages);
+      }
+      break;
+    }
+    case 'aiConversation:clear':
+      clearAiConversation();
       break;
 
     // ── AI Audit ──

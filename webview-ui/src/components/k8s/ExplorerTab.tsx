@@ -647,9 +647,19 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
   */
   if (settlingPath) {
     return (
-      <div className="flex-1 grid place-items-center">
+      /*
+        Centred in the tab, not parked under the tab strip.
+
+        This was `flex-1 grid place-items-center` inside a parent that is a
+        plain block — so `flex-1` resolved to nothing, the box took its content
+        height, and the loader sat at the top of an otherwise empty panel with
+        the whole tab below it blank. `h-full` is what actually fills a block
+        parent, and once it fills it the centring works.
+      */
+      <div className="h-full grid place-items-center px-8">
         <LoadingStateView
-          icon={<FolderOpenIcon size={IconSize.medallion} />}
+          icon={<FolderOpenIcon size={IconSize.hero} />}
+          medallionSize={84}
           title="Opening the file browser"
           message="Looking for a sensible directory to start in — /data, /var/lib, /mnt, then the root."
           accentColor={ACCENT}

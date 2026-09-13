@@ -190,17 +190,17 @@ interface SearchState {
   searchEverywhere: (query: string) => void;
 
   /**
-   * The queries that were actually run, most recent first.
+   * The searches that were actually run, most recent first.
    *
    * Searching a cluster is not like searching a document: you try a stack
    * frame, then a request id, then the same stack frame again an hour later
    * when the next report comes in. Retyping a UUID from memory is the part
    * nobody should be doing.
    *
-   * Only queries that ran — not every keystroke on the way to one.
+   * Only searches that ran — not every keystroke on the way to one.
    */
-  history: string[];
-  remember: (query: string) => void;
+  history: SearchHistoryEntry[];
+  remember: (query: string, pods: { name: string; namespace: string; context?: string }[]) => void;
   forget: (query: string) => void;
   clearHistory: () => void;
   /** Opening a pod from a hit — records the way back. */
@@ -244,10 +244,56 @@ const NO_FILE_SEARCH = {
 const HISTORY_KEY = 'dk8s.search.history';
 const HISTORY_MAX = 12;
 
-function loadHistory(): string[] {
+/**
+ * A remembered search restores its pods as well as its text.
+ *
+ * By identity rather than by uid. A uid dies with the pod, and the reason to
+ * run the same search again an hour later is usually that something restarted
+ * — so keying on the uid would have made "the same pods" mean "none of them"
+ * in exactly the case the history exists for. Name, namespace and context are
+ * what a person means by "those pods", and what survives everything short of
+ * the rollout that renames them.
+ */
+export interface PodIdentity {
+  name: string;
+  namespace: string;
+  context: string;
+}
+
+export interface SearchHistoryEntry {
+  query: string;
+  pods: PodIdentity[];
+  /** When it last ran, so the list can say how long ago that was. */
+  at: number;
+}
+
+function identity(p: { name: string; namespace: string; context?: string }): PodIdentity {
+  return { name: p.name, namespace: p.namespace, context: p.context ?? '' };
+}
+
+/**
+ * Reads back what was stored, including what an older build stored.
+ *
+ * This key held a bare `string[]` one version ago. Dropping those on sight
+ * would have emptied the history of everyone who had one, so they are read as
+ * entries that simply do not remember their pods — which is true, and degrades
+ * to exactly the old behaviour.
+ */
+function loadHistory(): SearchHistoryEntry[] {
   try {
     const raw = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]');
-    return Array.isArray(raw) ? raw.filter(q => typeof q === 'string').slice(0, HISTORY_MAX) : [];
+    if (!Array.isArray(raw)) return [];
+    return raw.flatMap((e: unknown): SearchHistoryEntry[] => {
+      if (typeof e === 'string') return e.trim() ? [{ query: e, pods: [], at: 0 }] : [];
+      if (!e || typeof e !== 'object') return [];
+      const o = e as Partial<SearchHistoryEntry>;
+      if (typeof o.query !== 'string' || !o.query.trim()) return [];
+      const pods = Array.isArray(o.pods)
+        ? o.pods.filter((p): p is PodIdentity =>
+            !!p && typeof p.name === 'string' && typeof p.namespace === 'string')
+        : [];
+      return [{ query: o.query, pods, at: typeof o.at === 'number' ? o.at : 0 }];
+    }).slice(0, HISTORY_MAX);
   } catch {
     /* Private mode, cleared storage, or something else wrote the key. An empty
        history is a perfectly good history. */
@@ -255,27 +301,29 @@ function loadHistory(): string[] {
   }
 }
 
-function saveHistory(list: string[]): void {
+function saveHistory(list: SearchHistoryEntry[]): void {
   try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); } catch { /* private mode */ }
 }
 
 export const useDk8sSearchStore = create<SearchState>((set, get) => ({
   history: loadHistory(),
 
-  remember: (query) => {
+  remember: (query, pods) => {
     const q = query.trim();
     if (!q) return;
     set(s => {
       /* Moved to the front rather than duplicated — the same search run twice
-         is one entry that is now more recent, not two. */
-      const next = [q, ...s.history.filter(h => h !== q)].slice(0, HISTORY_MAX);
+         is one entry that is now more recent, not two. The pods come from the
+         latest run, because those are the ones re-running it would mean. */
+      const entry: SearchHistoryEntry = { query: q, pods: pods.map(identity), at: Date.now() };
+      const next = [entry, ...s.history.filter(h => h.query !== q)].slice(0, HISTORY_MAX);
       saveHistory(next);
       return { ...s, history: next };
     });
   },
 
   forget: (query) => set(s => {
-    const next = s.history.filter(h => h !== query);
+    const next = s.history.filter(h => h.query !== query);
     saveHistory(next);
     return { ...s, history: next };
   }),
@@ -377,7 +425,7 @@ export const useDk8sSearchStore = create<SearchState>((set, get) => ({
   setPicked: (picked) => set({ picked }),
   setPickerOpen: (pickerOpen) => set({ pickerOpen }),
 
-  searchEverywhere: (query) => (get().remember(query), set(s => ({
+  searchEverywhere: (query) => set(s => ({
     open: true,
     // Starts from nothing chosen and the table open: you came here from one
     // pod's log, so the grid's selection — if any — is not what you meant.
@@ -385,7 +433,7 @@ export const useDk8sSearchStore = create<SearchState>((set, get) => ({
     pickerOpen: true,
     options: { ...s.options, query },
     groups: [], summary: undefined,
-  }))),
+  })),
 
   jumpedToPod: (scrollTop) => set({ open: false, resultScroll: scrollTop, cameFromSearch: true }),
   returnToSearch: () => set({ open: true, cameFromSearch: false }),

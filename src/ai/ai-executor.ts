@@ -11,6 +11,7 @@ import type {
   AiRequestPayload, AiResponseComplete, AiStreamChunk, AiTokenUsage,
 } from './ai-types';
 import { AI_PROVIDERS } from './ai-providers';
+import { describeConnectionError, connectionErrorCode } from '../services/net-error';
 
 // ────────────── Request Building ──────────────
 
@@ -346,10 +347,18 @@ export function executeAiRequest(options: ExecuteOptions): void {
       },
     };
     console.error('[AI Network Error]', JSON.stringify(diagnostics, null, 2));
+    /*
+      `err.message` was passed straight through, and for the commonest failure
+      of all it is the empty string: a refused connection to a host with both
+      an A and an AAAA record — `localhost` — arrives as an AggregateError
+      whose own message is ''. That empty string reached the audit row and the
+      screen, and the screen filled the gap with its own sentence about a model
+      that had not answered. Nothing had been asked of it.
+    */
     onError({
       tabId: payload.tabId,
-      message: err.message,
-      code: (err as NodeJS.ErrnoException).code || 'NETWORK_ERROR',
+      message: describeConnectionError(err as NodeJS.ErrnoException, request.url),
+      code: connectionErrorCode(err as NodeJS.ErrnoException) || 'NETWORK_ERROR',
       diagnostics,
     });
   });
@@ -545,7 +554,13 @@ function handleStreamingResponse(
   });
 
   res.on('error', (err) => {
-    onError({ tabId, message: err.message, code: 'STREAM_ERROR' });
+    // Same rule as the connect path: never hand on an empty message.
+    onError({
+      tabId,
+      message: err.message?.trim()
+        || 'The connection dropped while the answer was still streaming.',
+      code: connectionErrorCode(err as NodeJS.ErrnoException) || 'STREAM_ERROR',
+    });
   });
 }
 

@@ -63,6 +63,7 @@ const FLOOR = 64;
 
 export function GhMarkdown({
   value, onChange, placeholder, minHeight = 120, onPaste, right, id, issues, footer,
+  repo, onOpenIssue,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -75,6 +76,17 @@ export function GhMarkdown({
   id?: string;
   /** The board, so `#` offers the issues instead of asking for a number. */
   issues?: BoardIssue[];
+  /**
+   * Which repository a bare `#15` in the Preview belongs to.
+   *
+   * Preview claims to render exactly what the thread will, and without this it
+   * did not: `#15` was a link once posted and plain text in the Preview of the
+   * very comment that would post it. The one thing a preview must not do is
+   * disagree with the thing it is previewing.
+   */
+  repo?: string;
+  /** Opens a previewed reference in dkgh, the same as one in a posted comment. */
+  onOpenIssue?: (number: number) => void;
   /**
    * The buttons, on the box's own bottom edge.
    *
@@ -180,7 +192,7 @@ export function GhMarkdown({
         ) : (
           <div key="preview" className="dkgh-cmp-prev">
             {value.trim()
-              ? <GhProse content={value} />
+              ? <GhProse content={value} repo={repo} onOpenIssue={onOpenIssue} full />
               : <span className="sub">Nothing to preview yet.</span>}
           </div>
         )}

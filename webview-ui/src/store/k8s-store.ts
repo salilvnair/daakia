@@ -359,6 +359,17 @@ interface K8sState {
   contextResults: { context: string; reachable: Reachability }[];
   /** Namespaces on offer, per cluster. */
   offers: NamespaceOffer[];
+  /**
+   * Whether the namespace listing itself has come back.
+   *
+   * Separate from `contextResults`, which answers a different question: that
+   * one says the cluster is REACHABLE, and it arrives a round trip before the
+   * namespaces do. The picker read it as "we have heard everything" and, in
+   * the two or three seconds between the two messages, told the reader that no
+   * namespaces were returned — while the call that would return them was still
+   * running.
+   */
+  offersLoaded: boolean;
   /** Everything being watched. */
   targets: WatchTarget[];
   /**
@@ -623,6 +634,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   selectedContexts: [],
   contextResults: [],
   offers: [],
+  offersLoaded: false,
   targets: [],
   pendingTargets: [],
   sensitivity: {},
@@ -1239,11 +1251,21 @@ export const useK8sStore = create<K8sState>((set, get) => ({
           selectedContexts: (msg.contexts as string[]) ?? [],
           contextResults: (msg.results as { context: string; reachable: Reachability }[]) ?? [],
           stage: 'pick-namespace',
+          /* The namespaces for these contexts have not been asked for yet, let
+             alone answered. Clearing the previous cluster's offers as well:
+             showing one cluster's namespaces under another cluster's name is
+             worse than showing none. */
+          offers: [],
+          offersLoaded: false,
         });
         break;
 
       case 'dk8s:namespacesMulti':
-        set({ busy: false, offers: (msg.perContext as NamespaceOffer[]) ?? [] });
+        set({
+          busy: false,
+          offers: (msg.perContext as NamespaceOffer[]) ?? [],
+          offersLoaded: true,
+        });
         break;
 
       case 'dk8s:targetsSet':
