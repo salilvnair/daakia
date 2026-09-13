@@ -2,7 +2,7 @@
   "name": "daakia",
   "displayName": "Daakia — REST API Client",
   "description": "REST API client and HTTP client for VS Code — REST, GraphQL, gRPC, SOAP, WebSocket, SSE and MQTT — with a Kubernetes dashboard (k8s pods, logs, shell), a GitHub dashboard for issues, mock servers, and AI you can switch off.",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "license": "MIT",
   "publisher": "salilvnair",
   "repository": {

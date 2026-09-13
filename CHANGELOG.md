@@ -4,6 +4,39 @@ All notable changes to the Daakia API Client extension are documented here.
 
 ---
 
+## [3.0.2] — 2026-09-13
+
+Five things that were quietly wrong.
+
+**The editor tab has its icon back.** It pointed at a file in `media/`, which
+3.0.0 started excluding from the package so the README's GIFs would stop
+shipping inside the extension. The path stayed valid in the repository and
+dangled once installed.
+
+**dk8s no longer offers clusters you deleted.** A context picked once and later
+removed from your kubeconfig was remembered forever and queried on every
+refresh, producing an error about a cluster you may not remember adding. Saved
+namespaces are checked too, but only against a cluster that actually answered —
+one that is unreachable has said nothing, and forgetting a watch because a VPN
+was down would throw away something you set up on purpose.
+
+**Nothing in dk8s spins forever.** "Loading namespaces" and "Loading pods" were
+drawn whenever a list was empty, so a cluster that had already refused looked
+identical to one still being asked. Both now say which it is, and offer
+somewhere to go. Silence gets its own answer after twenty-five seconds, because
+a reply that never arrives is a state too.
+
+**Closing a tab is remembered.** The workspace snapshot was written two seconds
+after a change, and closing the panel inside that window took the pending save
+with it — so tabs you had closed came back. Which tabs exist is now saved the
+moment it changes.
+
+**Builds are reproducible.** The design system was resolved through a path on
+one machine rather than from the registry. Nothing shipped differently; it
+simply could not be rebuilt anywhere else.
+
+---
+
 ## [3.0.0] — 2026-09-12
 
 Two surfaces that are not an API client at all.
