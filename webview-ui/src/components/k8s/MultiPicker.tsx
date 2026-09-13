@@ -273,6 +273,39 @@ export function NamespaceMultiPicker() {
   const multiCluster = selectedContexts.length > 1;
   const unreachable = contextResults.filter(r => !r.reachable.reachable);
 
+  /*
+    Three states, not two.
+
+    "No namespaces yet" was being rendered as "Loading namespaces…", which is
+    true exactly once — before the reply arrives. After it, an empty list means
+    something specific and actionable: every cluster refused, or they answered
+    and hold nothing. Spinning forever on a cluster that already said no is the
+    one outcome that tells the reader nothing and gives them nothing to press.
+  */
+  const heardBack = contextResults.length >= selectedContexts.length
+    && selectedContexts.length > 0;
+  const allUnreachable = heardBack && unreachable.length === selectedContexts.length;
+
+  /*
+    And the fourth state: no answer at all.
+
+    The host bounds its own calls — 15s to check a context, 20s to list
+    namespaces — so a reply should always arrive. "Should" is doing work in that
+    sentence: a dropped message, a host that died, a kubectl wedged past its
+    own timeout, and the screen waits forever on a promise nobody is keeping.
+
+    This is deliberately longer than the host's own bound. Firing first would
+    accuse a cluster of being unreachable while the call that would have proved
+    otherwise is still in flight, which is worse than the spinner.
+  */
+  const [timedOut, setTimedOut] = useState(false);
+  useEffect(() => {
+    if (heardBack) { setTimedOut(false); return; }
+    setTimedOut(false);
+    const id = window.setTimeout(() => setTimedOut(true), 25_000);
+    return () => window.clearTimeout(id);
+  }, [heardBack, selectedContexts.join(',')]);
+
   const toggle = (t: WatchTarget) =>
     setChecked(prev =>
       prev.some(x => x.context === t.context && x.namespace === t.namespace)
@@ -379,7 +412,55 @@ export function NamespaceMultiPicker() {
       ))}
 
       {!offers.length && (
-        <span className="text-[12px] text-[var(--color-text-muted)]">Loading namespaces…</span>
+        allUnreachable ? (
+          /* Every cluster refused. The errors are already named in the banner
+             above, so this says what to DO rather than repeating them. */
+          <div className="flex flex-col items-center gap-2 py-6 px-4 text-center">
+            <span className="text-[12.5px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+              {selectedContexts.length === 1
+                ? 'That cluster is not answering'
+                : 'None of these clusters are answering'}
+            </span>
+            <span className="text-[11.5px]" style={{ color: 'var(--color-text-muted)', maxWidth: '52ch', lineHeight: 1.6 }}>
+              There are no namespaces to choose from until one of them responds. A cluster that
+              has been stopped, a VPN that is not up, or a context left over from a cluster that
+              no longer exists all look like this.
+            </span>
+            <div className="flex gap-2 mt-1">
+              <ButtonView label="Choose other clusters" size="sm" variant="secondary"
+                          accentColor={ACCENT_FILL} color={ACCENT}
+                          style={softPrimary(ACCENT)} onClick={openContextPicker} />
+              <ButtonView label="Try again" size="sm" variant="secondary"
+                          onClick={() => useK8sStore.getState().probe()} />
+            </div>
+          </div>
+        ) : heardBack ? (
+          /* Reachable, and genuinely holding nothing — rare, and not an error.
+             The filter box above still accepts a name, which is the way out. */
+          <span className="text-[12px] text-[var(--color-text-muted)]">
+            No namespaces were returned. Type a name above to watch it anyway.
+          </span>
+        ) : timedOut ? (
+          <div className="flex flex-col items-center gap-2 py-6 px-4 text-center">
+            <span className="text-[12.5px] font-semibold" style={{ color: 'var(--color-warning)' }}>
+              No answer from {selectedContexts.length === 1 ? 'that cluster' : 'these clusters'}
+            </span>
+            <span className="text-[11.5px]" style={{ color: 'var(--color-text-muted)', maxWidth: '52ch', lineHeight: 1.6 }}>
+              kubectl has not replied in 25 seconds. It is usually a cluster that is stopped or
+              behind a VPN that is not up — an API server that is merely slow answers well
+              inside this.
+            </span>
+            <div className="flex gap-2 mt-1">
+              <ButtonView label="Choose other clusters" size="sm" variant="secondary"
+                          accentColor={ACCENT_FILL} color={ACCENT}
+                          style={softPrimary(ACCENT)} onClick={openContextPicker} />
+              <ButtonView label="Try again" size="sm" variant="secondary"
+                          onClick={() => useK8sStore.getState().probe()} />
+            </div>
+          </div>
+        ) : (
+          <span className="text-[12px] text-[var(--color-text-muted)]">Loading namespaces…</span>
+        )
       )}
     </Shell>
   );

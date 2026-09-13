@@ -714,6 +714,16 @@ export function PodGrid() {
     capped, selectMode, selected, exportOpen, exportState,
     toggleSelectMode, selectAllVisible, openExport, closeExport,
   } = useK8sStore();
+  /* Silence is not a state a reader can act on. The host bounds its own calls,
+     so past 25s with nothing connected the cluster is the answer, not the wait. */
+  const [watchNeverCame, setWatchNeverCame] = useState(false);
+  useEffect(() => {
+    if (pods.length || watchStatus === 'connected') { setWatchNeverCame(false); return; }
+    setWatchNeverCame(false);
+    const id = window.setTimeout(() => setWatchNeverCame(true), 25_000);
+    return () => window.clearTimeout(id);
+  }, [pods.length, watchStatus]);
+
   const { collapsed, toggle } = useCollapsedGroups();
   const searchOpen = useDk8sSearchStore(s => s.open);
   const openSearch = useDk8sSearchStore(s => s.openSearch);
@@ -1027,11 +1037,33 @@ export function PodGrid() {
       <div className="flex-1 overflow-auto px-4 pt-3 pb-4">
         {!pods.length ? (
           <div className="flex items-center justify-center h-full">
-            <span className="text-[12px] text-[var(--color-text-muted)]">
-              {watchStatus === 'reconnecting' ? 'Reconnecting to the cluster…'
-                : watchStatus === 'connected' ? 'No pods in this namespace.'
-                : 'Loading pods…'}
-            </span>
+            {/*
+              WatchStatus has no failure state — idle, connected, reconnecting,
+              stopped — so a watch that never comes up stays 'idle' and this
+              said "Loading pods…" for as long as the tab was open. Silence is
+              not a state the reader can act on; after the host's own timeouts
+              have had their chance, it becomes one.
+            */}
+            {watchNeverCame ? (
+              <div className="flex flex-col items-center gap-2 text-center px-4">
+                <span className="text-[12.5px] font-semibold" style={{ color: 'var(--color-warning)' }}>
+                  No pods, and no answer from the cluster
+                </span>
+                <span className="text-[11.5px]"
+                      style={{ color: 'var(--color-text-muted)', maxWidth: '48ch', lineHeight: 1.6 }}>
+                  The watch has not connected in 25 seconds. A stopped cluster or a VPN that is
+                  not up looks like this; a namespace that is genuinely empty says so instead.
+                </span>
+                <ButtonView label="Try again" size="sm" variant="secondary"
+                            onClick={() => useK8sStore.getState().probe()} />
+              </div>
+            ) : (
+              <span className="text-[12px] text-[var(--color-text-muted)]">
+                {watchStatus === 'reconnecting' ? 'Reconnecting to the cluster…'
+                  : watchStatus === 'connected' ? 'No pods in this namespace.'
+                  : 'Loading pods…'}
+              </span>
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-3">
