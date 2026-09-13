@@ -62,6 +62,20 @@ async function search(text) {
         criteria: [
           { filterType: 8, value: 'Microsoft.VisualStudio.Code' },
           { filterType: 10, value: text },
+          /*
+            What the Marketplace website itself excludes, and the reason this
+            script's numbers are worth trusting.
+
+            Without it the query returns extensions the public search does not:
+            unpublished, unvalidated, and those failing their installation
+            target. For "k9s" that meant reporting Daakia at #3 behind a
+            nine-install extension that no reader can actually see — a rank
+            that was wrong in the pessimistic direction, which is the worse
+            way to be wrong when you are deciding whether a change worked.
+
+            4096 is Unpublished; 12 is the excludeWithFlags criterion.
+          */
+          { filterType: 12, value: '4096' },
         ],
         pageNumber: 1,
         /* Fifty, not ten: "not in the top ten" and "nowhere at all" are
