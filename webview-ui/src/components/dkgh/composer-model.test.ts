@@ -9,8 +9,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  assembleBody, asks, completionsFor, emptyDraft, hasContent, missing,
-  proposeTemplate, sidebarFields, type Draft, type IssueForm,
+  assembleBody, asks, attachShot, completionsFor, dropShot, emptyDraft,
+  formInForce, hasContent, missing, proposeTemplate, retargetEvidence,
+  shotsFor, sidebarFields, unassignedShots, type Draft, type IssueForm,
 } from './composer-model';
 import type { BoardIssue } from './board-types';
 
@@ -88,6 +89,125 @@ describe('assembleBody', () => {
     );
     expect(body).toContain('### Evidence');
     expect(body).toContain('![screenshot](https://example.invalid/a.png)');
+  });
+
+  it('writes a screenshot under the field it was pasted into', () => {
+    /*
+      The whole point of attaching to a field. A picture in a pile at the
+      bottom has lost the sentence it belonged to, and whoever reads the issue
+      next has to work out which of four images the paragraph is about.
+    */
+    const body = assembleBody(draft({
+      answers: { Steps: 'Click Pay.' },
+      evidence: ['https://example.invalid/steps.png'],
+      evidenceOn: { 'https://example.invalid/steps.png': 'Steps' },
+    }), BUG);
+
+    const steps = body.slice(body.indexOf('### Steps'));
+    expect(steps).toContain('Click Pay.');
+    expect(steps).toContain('![screenshot](https://example.invalid/steps.png)');
+    // …and it is not also repeated in a trailing pile.
+    expect(body.match(/### Evidence/g)).toBeNull();
+  });
+
+  it('does not call a field empty when it holds only a picture', () => {
+    const body = assembleBody(draft({
+      evidence: ['https://example.invalid/a.png'],
+      evidenceOn: { 'https://example.invalid/a.png': 'Steps' },
+    }), BUG);
+    const steps = body.slice(body.indexOf('### Steps'));
+    expect(steps).not.toContain('_No response_');
+    expect(steps).toContain('![screenshot](https://example.invalid/a.png)');
+  });
+
+  it('still piles up the ones pasted into the description', () => {
+    const body = assembleBody(draft({
+      answers: { Steps: 'Click Pay.' },
+      evidence: ['https://example.invalid/loose.png', 'https://example.invalid/steps.png'],
+      evidenceOn: { 'https://example.invalid/steps.png': 'Steps' },
+    }), BUG);
+    const tail = body.slice(body.indexOf('### Evidence'));
+    expect(tail).toContain('loose.png');
+    expect(tail).not.toContain('steps.png');
+  });
+});
+
+describe('the template in force', () => {
+  it('is the one that was picked', () => {
+    expect(formInForce([BUG, TRACK], draft({ templateFile: 'track.yml' }))?.file)
+      .toBe('track.yml');
+  });
+
+  it('is the one being proposed when nobody has picked', () => {
+    /*
+      This is the whole of the bug it was written for. The composer showed the
+      proposal's fields, called them required, and let the AI step fill them
+      in — and the body was assembled from `templateFile`, which nothing ever
+      set. Every answer on the screen was dropped on the way to GitHub.
+    */
+    const d = draft({ description: 'a piece of planned work for a team and a release' });
+    expect(formInForce([BUG, TRACK], d)?.file).toBe('track.yml');
+    expect(assembleBody({ ...d, answers: { Team: 'Payments' } },
+      formInForce([BUG, TRACK], d))).toContain('### Team');
+  });
+
+  it('is nothing when the repository has no forms', () => {
+    expect(formInForce([], draft())).toBeUndefined();
+  });
+});
+
+describe('screenshots and their fields', () => {
+  it('adds one against a field, and finds it again', () => {
+    const d = { ...draft(), ...attachShot(draft(), 'a.png', 'Steps') } as Draft;
+    expect(shotsFor(d, 'Steps')).toEqual(['a.png']);
+    expect(unassignedShots(d)).toEqual([]);
+  });
+
+  it('adds one against nothing when no field is named', () => {
+    const d = { ...draft(), ...attachShot(draft(), 'a.png') } as Draft;
+    expect(unassignedShots(d)).toEqual(['a.png']);
+    expect(shotsFor(d, 'Steps')).toEqual([]);
+  });
+
+  it('refuses to add the same image twice', () => {
+    const once = { ...draft(), ...attachShot(draft(), 'a.png', 'Steps') } as Draft;
+    expect(attachShot(once, 'a.png', 'Steps')).toEqual({});
+  });
+
+  it('forgets the field when the image goes', () => {
+    const d = { ...draft(), ...attachShot(draft(), 'a.png', 'Steps') } as Draft;
+    const gone = { ...d, ...dropShot(d, 'a.png') } as Draft;
+    expect(gone.evidence).toEqual([]);
+    expect(gone.evidenceOn).toEqual({});
+  });
+
+  it('keeps each image with its field when the URLs are rewritten', () => {
+    /*
+      Uploading swaps a data URL for the blob URL it landed at. The field map
+      is keyed by URL, so a plain map over the list would upload the screenshot
+      and silently orphan it from the heading it was pasted under — the issue
+      would be filed with the picture back in the pile.
+    */
+    const d = draft({
+      evidence: ['data:image/png;base64,AAA', 'data:image/png;base64,BBB'],
+      evidenceOn: { 'data:image/png;base64,AAA': 'Steps' },
+    });
+    const hosted = { 'data:image/png;base64,AAA': 'https://gh/a.png' } as Record<string, string>;
+    const next = retargetEvidence(d, u => hosted[u] ?? u);
+
+    expect(next.evidence).toEqual(['https://gh/a.png', 'data:image/png;base64,BBB']);
+    expect(next.evidenceOn).toEqual({ 'https://gh/a.png': 'Steps' });
+    // The order is the order of the story — see 12A.
+    expect(shotsFor({ ...d, ...next } as Draft, 'Steps')).toEqual(['https://gh/a.png']);
+  });
+
+  it('survives a draft that predates any of this', () => {
+    // Drafts are persisted; one saved last week has no `evidenceOn` at all.
+    const old = draft({ evidence: ['a.png'] });
+    delete (old as Partial<Draft>).evidenceOn;
+    expect(unassignedShots(old)).toEqual(['a.png']);
+    expect(shotsFor(old, 'Steps')).toEqual([]);
+    expect(assembleBody(old, BUG)).toContain('### Evidence');
   });
 });
 

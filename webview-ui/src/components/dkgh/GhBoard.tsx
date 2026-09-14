@@ -89,7 +89,7 @@ import {
 } from './project-store';
 import { Ico, type IcoName } from './GhIcons';
 import {
-  assembleBody, discardDraft, emptyDraft, type Draft,
+  assembleBody, discardDraft, emptyDraft, formInForce, type Draft,
 } from './composer-model';
 import { colourMap } from './field-colour';
 import {
@@ -1277,9 +1277,12 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
           request={{
             repo,
             title: draft.title,
-            body: assembleBody(draft, (data?.forms ?? []).find(f => f.file === draft.templateFile)),
+            /* The same template the composer was showing — see `formInForce`.
+               Looking it up by `templateFile` alone filed the description and
+               threw away every field on the screen. */
+            body: assembleBody(draft, formInForce(data?.forms ?? [], draft)),
             labels: [...new Set([
-              ...((data?.forms ?? []).find(f => f.file === draft.templateFile)?.labels ?? []),
+              ...(formInForce(data?.forms ?? [], draft)?.labels ?? []),
               ...draft.labels,
             ])],
             assignees: draft.assignees,

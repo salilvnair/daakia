@@ -25,7 +25,7 @@ import { useEffect, useState } from 'react';
 import { postMsg } from '../../vscode';
 import { Ico } from './GhIcons';
 import { CopyWord, GhNote } from './GhShell';
-import type { Draft } from './composer-model';
+import { retargetEvidence, type Draft } from './composer-model';
 
 interface Step { kind: 'branch' | 'file'; name: string; does: string; display: string }
 interface Plan {
@@ -74,15 +74,16 @@ export function GhUpload({ repo, draft, onDraft }: {
         In place, because the order of the gallery is the order of the story —
         see 12A — and an upload that reshuffled it would be rewriting what
         somebody meant to say.
+
+        Through `retargetEvidence`, because an image now belongs to a field and
+        that map is keyed by URL: a plain `map` over the list would upload the
+        screenshot and quietly orphan it from the heading it was pasted under.
       */
       const byName = new Map(answers.filter(o => o.ok && o.url).map(o => [o.name, o.url!]));
       if (byName.size === 0) return;
-      onDraft({
-        evidence: draft.evidence.map(u => {
-          if (!u.startsWith('data:')) return u;
-          return byName.get(nameOf(u)) ?? u;
-        }),
-      });
+      onDraft(retargetEvidence(draft, u => (
+        u.startsWith('data:') ? byName.get(nameOf(u)) ?? u : u
+      )));
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
@@ -101,11 +102,15 @@ export function GhUpload({ repo, draft, onDraft }: {
   /** 12D — recompress the oversized ones, in the browser, and say what it did. */
   const shrink = async () => {
     setBusy('Recompressing…');
-    const next = await Promise.all(draft.evidence.map(async u => (
-      u.startsWith('data:') && bytesOf(bodyOf(u)) > COMFORTABLE_BYTES ? recompress(u) : u
-    )));
+    /* Resolved first, then retargeted: the swap has to be synchronous for the
+       field map to move with it. */
+    const smaller = new Map<string, string>();
+    await Promise.all(draft.evidence.map(async u => {
+      if (!u.startsWith('data:') || bytesOf(bodyOf(u)) <= COMFORTABLE_BYTES) return;
+      smaller.set(u, await recompress(u));
+    }));
     setBusy('');
-    onDraft({ evidence: next });
+    onDraft(retargetEvidence(draft, u => smaller.get(u) ?? u));
   };
 
   return (

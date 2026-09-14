@@ -42,6 +42,24 @@ export interface Draft {
   milestone?: string;
   /** Image URLs pasted in. Held here, and nowhere else — see `draftNote`. */
   evidence: string[];
+  /**
+   * Which template field a screenshot was pasted into, by URL.
+   *
+   * A screenshot belongs to something. GitHub's own form lets you paste one
+   * into the field you are writing — the stack trace under Logs, the broken
+   * layout under Evidence — and dkgh had one pile at the bottom instead, so
+   * every image arrived separated from the sentence it belonged to.
+   *
+   * Kept beside the list rather than folded into it, because the list is what
+   * gets uploaded and that has one job. A URL missing from this map is an
+   * image nobody assigned, which is the old behaviour and still the right
+   * answer for one pasted into the description.
+   *
+   * The keys are URLs, and URLs change when an image is uploaded or
+   * recompressed — so both places that rewrite one go through
+   * `retargetEvidence`, which moves this map with it.
+   */
+  evidenceOn?: Record<string, string>;
   savedAt: number;
 }
 
@@ -110,6 +128,24 @@ export function asks(form: IssueForm): string {
   return `Asks for ${shown.join(', ')}${rest > 0 ? `, and ${rest} more` : ''}.`;
 }
 
+/**
+ * The template in force: the one chosen, else the one proposed.
+ *
+ * The composer's screen has always run on the proposal — the sidebar's fields,
+ * the AI step's field list, what "required" means — while the body was
+ * assembled from `templateFile` alone, and nothing in the composer ever set
+ * `templateFile`. So every answer somebody typed into a template field was
+ * shown on screen, counted as required, filled in by the AI step, and then
+ * dropped: the issue went to GitHub as the description and nothing else.
+ *
+ * One function, used by both, so the body is the screen. A template a person
+ * picks still wins over the one that was proposed to them.
+ */
+export function formInForce(forms: IssueForm[], draft: Draft): IssueForm | undefined {
+  return forms.find(f => f.file === draft.templateFile)
+    ?? proposeTemplate(forms, `${draft.title} ${draft.description}`)[0]?.form;
+}
+
 // ── The body ────────────────────────────────────────────────────────────────
 
 /**
@@ -134,14 +170,85 @@ export function assembleBody(draft: Draft, form: IssueForm | undefined): string 
   for (const field of form.fields) {
     if (field.type === 'markdown') continue;
     const answer = (draft.answers[field.label] ?? '').trim();
-    blocks.push(`### ${field.label}\n\n${answer || '_No response_'}`);
+    /* A screenshot pasted into this field is written under this field's
+       heading, below whatever was typed — which is where the reporter put it,
+       and where GitHub's own form would have put it. */
+    const said = [answer, ...shotsFor(draft, field.label).map(image)]
+      .filter(Boolean).join('\n\n');
+    blocks.push(`### ${field.label}\n\n${said || '_No response_'}`);
   }
-  if (draft.evidence.length) blocks.push(evidenceBlock(draft.evidence));
+  /* Whatever went into the description rather than into a field. The trailing
+     heading is for those alone now; an image with a home goes home. */
+  const loose = unassignedShots(draft);
+  if (loose.length) blocks.push(evidenceBlock(loose));
   return blocks.join('\n\n');
 }
 
+const image = (url: string) => `![screenshot](${url})`;
+
 function evidenceBlock(urls: string[]): string {
-  return ['### Evidence', '', ...urls.map(u => `![screenshot](${u})`)].join('\n');
+  return ['### Evidence', '', ...urls.map(image)].join('\n');
+}
+
+// ── Screenshots, and the field each one belongs to ──────────────────────────
+
+/** The screenshots pasted into one field, in the order they were pasted. */
+export function shotsFor(draft: Draft, label: string): string[] {
+  const on = draft.evidenceOn ?? {};
+  return draft.evidence.filter(u => on[u] === label);
+}
+
+/** The ones nobody assigned — pasted into the description, or into no box. */
+export function unassignedShots(draft: Draft): string[] {
+  const on = draft.evidenceOn ?? {};
+  return draft.evidence.filter(u => !on[u]);
+}
+
+/**
+ * Add a screenshot, optionally against a field.
+ *
+ * Returns a patch rather than a draft: every caller is a component holding an
+ * `onDraft`, and handing back a whole draft invites one of them to write back
+ * a stale copy of everything else on it.
+ */
+export function attachShot(draft: Draft, url: string, label?: string): Partial<Draft> {
+  const clean = url.trim();
+  if (!clean || draft.evidence.includes(clean)) return {};
+  return {
+    evidence: [...draft.evidence, clean],
+    evidenceOn: label ? { ...draft.evidenceOn, [clean]: label } : draft.evidenceOn,
+  };
+}
+
+/** Take one off, and forget where it was. */
+export function dropShot(draft: Draft, url: string): Partial<Draft> {
+  const on = { ...draft.evidenceOn };
+  delete on[url];
+  return { evidence: draft.evidence.filter(u => u !== url), evidenceOn: on };
+}
+
+/**
+ * Rewrite the screenshot URLs, keeping each one's field.
+ *
+ * Uploading swaps a data URL for the blob URL it landed at; recompressing
+ * swaps one data URL for a smaller one. Both were a `map` over the list, which
+ * is right while the list is all there is — and silently orphans every image
+ * from its field now that it is not. One helper, so there is one place to get
+ * this wrong rather than two.
+ */
+export function retargetEvidence(
+  draft: Draft,
+  swap: (url: string) => string,
+): Pick<Draft, 'evidence' | 'evidenceOn'> {
+  const was = draft.evidenceOn ?? {};
+  const evidence: string[] = [];
+  const evidenceOn: Record<string, string> = {};
+  for (const url of draft.evidence) {
+    const now = swap(url);
+    evidence.push(now);
+    if (was[url]) evidenceOn[now] = was[url];
+  }
+  return { evidence, evidenceOn };
 }
 
 /**

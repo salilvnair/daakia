@@ -29,9 +29,11 @@ import { GhUpload } from './GhUpload';
 import { GhGenerate, aiFailed } from './GhGenerate';
 import { GhMarkdown } from './GhMarkdown';
 import {
-  discardDraft, draftNote, hasContent, loadDraft, proposeTemplate, saveDraft,
+  attachShot, discardDraft, draftNote, dropShot, formInForce, hasContent,
+  loadDraft, proposeTemplate, saveDraft, unassignedShots,
   type Draft, type FormField, type IssueForm,
 } from './composer-model';
+import { GhFieldShots, shotHandlers } from './GhFieldShots';
 import type { BoardIssue } from './board-types';
 import type { RepoMeta } from './types';
 
@@ -132,7 +134,7 @@ export function GhCompose({
     () => proposeTemplate(forms, `${draft.title} ${draft.description}`),
     [forms, draft.title, draft.description],
   );
-  const form = forms.find(f => f.file === draft.templateFile) ?? ranked[0]?.form;
+  const form = formInForce(forms, draft);
 
   const fieldFor = (match?: RegExp): FormField | undefined => match
     ? form?.fields.find(f => f.type !== 'markdown' && match.test(f.label))
@@ -199,7 +201,7 @@ export function GhCompose({
           {generating && (
             <GhGenerate
               repo={repo}
-              form={forms.find(f => f.file === draft.templateFile) ?? forms[0]}
+              form={form}
               draft={draft}
               onDraft={patch}
               onClose={() => { setGenerating(false); setGenRunning(false); }}
@@ -497,10 +499,14 @@ export function GhCompose({
                 className="mdbody"
                 style={{ minHeight: 52, borderRadius: 7, marginTop: 6 }}
                 value={value}
+                {...shotHandlers(field.label, draft, patch)}
                 onChange={e => patch({
                   answers: { ...draft.answers, [field.label]: e.target.value },
                 })}
               />
+              {/* The screenshot goes under this heading, not in a pile at the
+                  bottom of the issue — which is where the reporter put it. */}
+              <GhFieldShots label={field.label} draft={draft} onDraft={patch} compact />
             </Msec>
           );
         })}
@@ -593,11 +599,11 @@ function Dropzone({ draft, onChange }: {
   const [hot, setHot] = useState(false);
   const [typing, setTyping] = useState(false);
   const [url, setUrl] = useState('');
+  /* The ones with a field of their own are shown under that field. */
+  const loose = unassignedShots(draft);
 
-  const add = (v: string) => {
-    const clean = v.trim();
-    if (clean) onChange({ evidence: [...draft.evidence, clean] });
-  };
+  /* No label: pasted into the description, not into a field. */
+  const add = (v: string) => onChange(attachShot(draft, v));
 
   const takeFiles = (files: FileList | null | undefined) => {
     for (const file of Array.from(files ?? [])) {
@@ -610,9 +616,9 @@ function Dropzone({ draft, onChange }: {
 
   return (
     <>
-      {draft.evidence.length > 0 && (
+      {loose.length > 0 && (
         <div className="gallery">
-          {draft.evidence.map(u => (
+          {loose.map(u => (
             <div key={u} style={{ position: 'relative' }}>
               <div
                 className="shot"
@@ -630,7 +636,7 @@ function Dropzone({ draft, onChange }: {
                 <GhClose
                   size={20}
                   title="Take this screenshot off"
-                  onClick={() => onChange({ evidence: draft.evidence.filter(x => x !== u) })}
+                  onClick={() => onChange(dropShot(draft, u))}
                 />
               </span>
             </div>

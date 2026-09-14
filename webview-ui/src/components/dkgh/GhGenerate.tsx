@@ -44,7 +44,8 @@ import {
   reviewRows, untaken, takeAll, filledCount, missingRequired, titleState,
   type ReviewRow, type Proposal,
 } from './proposal-review';
-import type { Draft } from './composer-model';
+import { shotsFor, type Draft } from './composer-model';
+import { GhFieldShots, shotHandlers } from './GhFieldShots';
 import type { FormField, IssueForm } from './board-types';
 
 /**
@@ -442,6 +443,8 @@ export function GhGenerate({
                       editing={editing === r.label}
                       onEdit={() => setEditing(e => (e === r.label ? '' : r.label))}
                       onSet={v => answer(r.label, v)}
+                      draft={draft}
+                      onDraft={onDraft}
                     />
                   ))}
                 </div>
@@ -512,14 +515,19 @@ function Tag({ state }: { state: ReviewRow['state'] }) {
  * leave it whole sends people to the sidebar to fix one word, which is the
  * complaint this row exists to answer.
  */
-function Row({ row, editing, onEdit, onSet }: {
+function Row({ row, editing, onEdit, onSet, draft, onDraft }: {
   row: ReviewRow;
   editing: boolean;
   onEdit: () => void;
   onSet: (value: string) => void;
+  draft: Draft;
+  onDraft: (change: Partial<Draft>) => void;
 }) {
   const on = row.state === 'taken' || row.state === 'edited' || row.state === 'yours';
   const canTick = row.state === 'taken' || row.state === 'offered';
+  /* A dropdown holds one of the template's values and nothing else; a written
+     field is the one that can want a picture with it. */
+  const shots = row.options.length === 0 ? shotsFor(draft, row.label) : [];
 
   return (
     <div className={`fct${on ? ' on' : ''}`}
@@ -550,6 +558,17 @@ function Row({ row, editing, onEdit, onSet }: {
           <Tag state={row.state} />
         </div>
 
+        {/* What is attached, even shut — an image nobody can see from the row
+            is an image nobody remembers pasting. */}
+        {!editing && shots.length > 0 && (
+          <div className="sub" style={{ marginTop: 1 }}>
+            {/* `display: inline-block`, because Tailwind's reset makes an
+                `svg` a block and the icon would take a line of its own. */}
+            <Ico name="img" style={{ display: 'inline-block', marginRight: 4, verticalAlign: '-2px' }} />
+            {shots.length} screenshot{shots.length === 1 ? '' : 's'} under this heading
+          </div>
+        )}
+
         {/* What is there now — or, when there is nothing, why there is nothing. */}
         {!editing && (
           <div className="sub" style={{ marginTop: 1, whiteSpace: 'pre-wrap' }}>
@@ -576,14 +595,18 @@ function Row({ row, editing, onEdit, onSet }: {
             ))}
           </div>
         ) : (
-          <textarea
-            className="mdbody"
-            autoFocus
-            style={{ minHeight: 54, borderRadius: 7, marginTop: 4, width: '100%' }}
-            value={row.value}
-            placeholder={row.proposed || `What goes under “${row.label}”`}
-            onChange={e => onSet(e.target.value)}
-          />
+          <>
+            <textarea
+              className="mdbody"
+              autoFocus
+              style={{ minHeight: 54, borderRadius: 7, marginTop: 4, width: '100%' }}
+              value={row.value}
+              placeholder={row.proposed || `What goes under “${row.label}”`}
+              {...shotHandlers(row.label, draft, onDraft)}
+              onChange={e => onSet(e.target.value)}
+            />
+            <GhFieldShots label={row.label} draft={draft} onDraft={onDraft} compact />
+          </>
         ))}
 
         {/* The original is never lost, so changing your mind twice is free. */}
