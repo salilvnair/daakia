@@ -340,6 +340,7 @@ export function ScanModal() {
               createEnv={createEnv}
               onCreateEnv={setCreateEnv}
               baseUrl={s.baseUrl?.url}
+              defaultName={s.collectionName}
             />
           </div>
           <div style={{

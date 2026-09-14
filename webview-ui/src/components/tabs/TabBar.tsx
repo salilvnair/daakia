@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import type { Protocol } from '../../store/tabs-store';
 import { useEnvStore, GLOBAL_ENV_ID } from '../../store/env-store';
+import { selectedEnvId } from './env-selector';
 import { getProtocolAccent } from '../../colors';
 import { MethodBadge, ConfirmDialog, ContextMenu, type ContextMenuItem, type ContextMenuSubItem } from '../shared';
 import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, GeneralAssistantIcon, FilterIcon, BookOpenIcon, Dk8sIcon, IssueOpenedIcon, StethoscopeIcon, LayoutGridIcon, PinIcon, UnpinIcon } from '../../icons';
@@ -98,7 +99,7 @@ function FilterBar({ filter, onClear, onClearOne }: { filter: Set<Protocol>; onC
 
 export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps) {
   const { tabs: allTabs, activeTabId, activeProtocol, setActiveTab, closeTab, addTab, updateTab, duplicateTab, closeOtherTabs, closeAllTabs, closeTabsToRight, closeTabsToLeft, closeSavedTabs, pinTab, unpinTab, reorderTabs } = useTabsStore();
-  const { environments, setActiveEnvironment, requestEditEnv } = useEnvStore();
+  const { environments, activeEnvId, setActiveEnvironment, requestEditEnv } = useEnvStore();
 
   // Tab protocol filter — Set of protocols to show (empty = show all)
   const [tabProtocolFilter, setTabProtocolFilter] = useState<Set<Protocol>>(new Set());
@@ -595,7 +596,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
           ) : (
             <SelectInputView
               options={envOptions}
-              value={(activeTab.envId && activeTab.envId !== GLOBAL_ENV_ID) ? activeTab.envId : envOptions[0]?.value || ''}
+              value={selectedEnvId({ tabEnvId: activeTab.envId, activeEnvId, options: envOptions })}
               onChange={(v) => {
                 updateTab(activeTab.id, { envId: v });
                 setActiveEnvironment(v);

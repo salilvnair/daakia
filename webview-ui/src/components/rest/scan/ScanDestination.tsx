@@ -19,7 +19,7 @@
  * should eventually move here and both should use this — the picker is now in
  * two places, which is one more than it should be in.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FolderIcon, FolderOpenIcon, ChevronRightIcon, ChevronDownIcon, CheckIcon, LayoutGridIcon } from '../../../icons';
 import { useWorkspaceStore } from '../../../store/workspace-store';
 import { postMsg } from '../../../vscode';
@@ -39,7 +39,7 @@ export type Destination =
   | { kind: 'existing'; id: string; name: string };
 
 export function ScanDestination({
-  destination, onDestination, envName, createEnv, onCreateEnv, baseUrl,
+  destination, onDestination, envName, createEnv, onCreateEnv, baseUrl, defaultName,
 }: {
   destination: Destination;
   onDestination: (d: Destination) => void;
@@ -47,10 +47,22 @@ export function ScanDestination({
   createEnv: boolean;
   onCreateEnv: (on: boolean) => void;
   baseUrl?: string;
+  /** What a new collection would be called — the repository's own name. */
+  defaultName: string;
 }) {
   const [tree, setTree] = useState<CollectionNode[]>([]);
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  /*
+    Creating a folder, and where.
+
+    `null` means the root — a new collection. An id means inside that folder,
+    which is the case the first version could not express at all: you could
+    make a collection but never a folder inside one, so a scan could only ever
+    land at the top level of the tree.
+  */
+  const [creatingIn, setCreatingIn] = useState<string | null | undefined>(undefined);
+  const [newName, setNewName] = useState('');
 
   /* The collections of the workspace that is active right now — switching
      workspace reloads them, which is why this listens rather than reads once. */
@@ -66,6 +78,20 @@ export function ScanDestination({
   }, []);
 
   const shown = useMemo(() => filterTree(tree, query.trim().toLowerCase()), [tree, query]);
+
+  /** Create it, select it, and open its parent so it can be seen. */
+  const create = () => {
+    const name = newName.trim();
+    if (!name) return;
+    const id = crypto.randomUUID();
+    postMsg({ type: 'createFolder', id, name, parentId: creatingIn ?? null, protocol: 'rest' });
+    if (creatingIn) setExpanded(prev => new Set(prev).add(creatingIn));
+    onDestination({ kind: 'existing', id, name });
+    setCreatingIn(undefined);
+    setNewName('');
+    /* The tree is the host's; ask for it again rather than patching a copy. */
+    postMsg({ type: 'getCollections', protocol: 'rest' });
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -89,12 +115,31 @@ export function ScanDestination({
             />
           </div>
 
-          {/* A new collection, named after the repository — the usual answer. */}
-          <NewRow
-            selected={destination.kind === 'new'}
-            name={destination.kind === 'new' ? destination.name : ''}
-            onSelect={(name) => onDestination({ kind: 'new', name })}
-          />
+          {/* A new collection at the root. Each folder below has its own `+`
+              for creating inside it. */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 9, padding: '6px 12px',
+            borderBottom: '1px solid var(--color-surface-border)',
+          }}>
+            <button
+              type="button"
+              onClick={() => { setCreatingIn(null); setNewName(defaultName); }}
+              style={{
+                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                fontSize: 12.5, color: ACCENT,
+              }}
+            >+ New collection</button>
+          </div>
+
+          {creatingIn !== undefined && (
+            <CreateRow
+              parentName={creatingIn ? nameOfId(tree, creatingIn) : undefined}
+              value={newName}
+              onChange={setNewName}
+              onCommit={create}
+              onCancel={() => { setCreatingIn(undefined); setNewName(''); }}
+            />
+          )}
 
           <div style={{ maxHeight: 180, overflowY: 'auto' }}>
             {shown.map(node => (
@@ -110,6 +155,11 @@ export function ScanDestination({
                 })}
                 selectedId={destination.kind === 'existing' ? destination.id : undefined}
                 onSelect={(n) => onDestination({ kind: 'existing', id: n.id, name: n.name })}
+                onCreateInside={(n) => {
+                  setCreatingIn(n.id);
+                  setNewName('');
+                  setExpanded(prev => new Set(prev).add(n.id));
+                }}
               />
             ))}
             {shown.length === 0 && (
@@ -239,35 +289,70 @@ function WorkspaceRow() {
   );
 }
 
-function NewRow({ selected, name, onSelect }: {
-  selected: boolean; name: string; onSelect: (name: string) => void;
+/**
+ * The inline "name it" row, for a new collection or a new folder inside one.
+ *
+ * It says which parent it is going into, because `+ New` at the top and `+` on
+ * a folder produce the same-looking input and the difference is the whole
+ * point of having both.
+ */
+function CreateRow({ parentName, value, onChange, onCommit, onCancel }: {
+  parentName?: string;
+  value: string;
+  onChange: (v: string) => void;
+  onCommit: () => void;
+  onCancel: () => void;
 }) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => { ref.current?.focus(); ref.current?.select(); }, []);
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 9, padding: '7px 12px',
+      display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px',
       borderBottom: '1px solid var(--color-surface-border)',
-      background: selected ? `color-mix(in srgb, ${ACCENT} 10%, transparent)` : undefined,
+      background: 'var(--color-item-hover-bg)',
     }}>
-      <span style={{ color: ACCENT, fontSize: 12.5, whiteSpace: 'nowrap' }}>+ New</span>
+      <FolderIcon size={13} color="var(--color-text-muted)" />
       <input
-        value={name}
-        onFocus={() => onSelect(name)}
-        onChange={e => onSelect(e.target.value)}
-        placeholder="Collection name"
+        ref={ref}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); onCommit(); }
+          if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+        }}
+        placeholder={parentName ? `Folder inside ${parentName}…` : 'Collection name…'}
         style={{
           flex: 1, minWidth: 0, height: 24, background: 'transparent', border: 'none',
           outline: 'none', fontSize: 12, color: 'var(--color-text-primary)',
         }}
       />
-      {selected && <CheckIcon size={12} color={ACCENT} />}
+      <button type="button" onClick={onCommit} disabled={!value.trim()}
+              style={{
+                background: 'none', border: 'none', cursor: value.trim() ? 'pointer' : 'default',
+                fontSize: 11.5, color: value.trim() ? ACCENT : 'var(--color-text-muted)', padding: 0,
+              }}>Create</button>
+      <button type="button" onClick={onCancel}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11.5,
+                       color: 'var(--color-text-muted)', padding: 0 }}>Cancel</button>
     </div>
   );
 }
 
-function TreeRow({ node, depth, expanded, onToggleExpand, selectedId, onSelect }: {
+/** A folder's name, by id, anywhere in the tree. */
+export function nameOfId(nodes: CollectionNode[], id: string): string | undefined {
+  for (const n of nodes) {
+    if (n.id === id) return n.name;
+    const inner = nameOfId(n.children ?? [], id);
+    if (inner) return inner;
+  }
+  return undefined;
+}
+
+function TreeRow({ node, depth, expanded, onToggleExpand, selectedId, onSelect, onCreateInside }: {
   node: CollectionNode; depth: number;
   expanded: Set<string>; onToggleExpand: (id: string) => void;
   selectedId?: string; onSelect: (n: CollectionNode) => void;
+  onCreateInside: (n: CollectionNode) => void;
 }) {
   const kids = node.children ?? [];
   const isOpen = expanded.has(node.id);
@@ -298,13 +383,25 @@ function TreeRow({ node, depth, expanded, onToggleExpand, selectedId, onSelect }
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {node.name}
         </span>
-        {selected && <CheckIcon size={12} color={ACCENT} style={{ marginLeft: 'auto' }} />}
+        <span style={{ flex: 1 }} />
+        {selected && <CheckIcon size={12} color={ACCENT} />}
+        {/* A folder inside this one. Without it the picker can only ever offer
+            the tree as it already is, which is not a picker so much as a list. */}
+        <button
+          type="button"
+          title={`New folder inside ${node.name}`}
+          onClick={e => { e.stopPropagation(); onCreateInside(node); }}
+          style={{
+            background: 'none', border: 'none', padding: '0 2px', cursor: 'pointer',
+            fontSize: 13, lineHeight: 1, color: 'var(--color-text-muted)',
+          }}
+        >+</button>
       </div>
       {isOpen && kids.map(k => (
         <TreeRow
           key={k.id} node={k} depth={depth + 1}
           expanded={expanded} onToggleExpand={onToggleExpand}
-          selectedId={selectedId} onSelect={onSelect}
+          selectedId={selectedId} onSelect={onSelect} onCreateInside={onCreateInside}
         />
       ))}
     </>
