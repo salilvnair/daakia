@@ -61,9 +61,20 @@ export function Dk8sOverviewView() {
       <div>
         <SectionTitle id="dk-connect" icon="connect">Getting connected</SectionTitle>
         <p className="dw-p">
-          The binary comes from the dk8s setting if one is set, otherwise from <Code>PATH</Code>.
-          Then four cheap calls establish what you can actually do, before you are offered anything.
+          The binary comes from the dk8s setting if one is set, otherwise from <Code>PATH</Code>,
+          then from the usual places for the platform. Then four cheap calls establish what you can
+          actually do, before you are offered anything.
         </p>
+
+        <Callout type="tip" title="If it is not there — or not the one you want">
+          dk8s shows an install guide rather than an error: every route each platform
+          actually has, on a tab per platform, with the one this machine reports opening
+          first. It is also where you point dk8s at a binary it could not find —
+          &ldquo;works in my terminal, not in the extension&rdquo; is a <Code>PATH</Code> a
+          GUI-launched editor did not inherit, and the answer is the path itself. The same
+          setting lives in <b>Settings → DK8S → General</b>, for the machine with two
+          kubectls where nothing is broken enough to raise the guide.
+        </Callout>
 
         <WikiFigure
           label="dk8s locates kubectl, confirms it reaches the cluster with a version call, lists namespaces, then runs one auth can-i per capability; allowed capabilities become working buttons and refused ones become disabled buttons carrying the reason."

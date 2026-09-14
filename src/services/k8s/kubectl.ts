@@ -55,6 +55,18 @@ export function kubectlBinary(): string | undefined {
   return resolved;
 }
 
+/**
+ * The path somebody set by hand, if any.
+ *
+ * Reported to the setup screen so it can say *only this was tried* — an
+ * explicit path that does not work is the likeliest reason to be looking at an
+ * install list on a machine that already has kubectl, and an install list is
+ * advice for a problem you do not have.
+ */
+export function kubectlOverride(): string | undefined {
+  return binaryOverride ?? process.env.DAAKIA_KUBECTL ?? undefined;
+}
+
 export class KubectlMissing extends Error {
   readonly tried: string[];
   constructor(tried: string[]) {
@@ -229,6 +241,10 @@ export interface KubectlEnv {
   platform: string;
   triedPaths?: string[];
   error?: string;
+  /** A path set by hand — see `kubectlOverride`. */
+  override?: string;
+  /** `DAAKIA_KUBECTL` rather than the setting, which is not editable here. */
+  overrideFromEnv?: boolean;
 }
 
 /** What the setup guide needs to know before showing anything. */
@@ -243,7 +259,11 @@ export async function probeEnvironment(): Promise<KubectlEnv> {
       // A kubectl too old for -o json still counts as present.
       clientVersion = r.stdout.trim().split('\n')[0] || undefined;
     }
-    return { present: true, binary: bin, clientVersion, platform: platform() };
+    return {
+      present: true, binary: bin, clientVersion, platform: platform(),
+      override: kubectlOverride(),
+      overrideFromEnv: !binaryOverride && !!process.env.DAAKIA_KUBECTL,
+    };
   } catch (err) {
     const missing = err as KubectlMissing;
     return {
@@ -251,6 +271,8 @@ export async function probeEnvironment(): Promise<KubectlEnv> {
       platform: platform(),
       triedPaths: missing.tried,
       error: missing.message,
+      override: kubectlOverride(),
+      overrideFromEnv: !binaryOverride && !!process.env.DAAKIA_KUBECTL,
     };
   }
 }

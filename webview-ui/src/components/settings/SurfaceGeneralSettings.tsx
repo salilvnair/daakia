@@ -12,6 +12,7 @@
 import { Dk8sIcon, IssueOpenedIcon, KeyboardIcon } from '../../icons';
 import { useTabsStore } from '../../store/tabs-store';
 import { useShowOnToolbar, type ToolbarSurface } from '../../store/toolbar-visibility';
+import { KubectlBinarySetting } from './KubectlBinarySetting';
 
 function Toggle({ on, onChange, label, description, accent }: {
   on: boolean;
@@ -45,7 +46,7 @@ function Toggle({ on, onChange, label, description, accent }: {
   );
 }
 
-function SurfaceGeneral({ surface, name, what, accent, icon, open }: {
+function SurfaceGeneral({ surface, name, what, accent, icon, open, children }: {
   surface: ToolbarSurface;
   name: string;
   /** One line: what this surface is, for somebody deciding whether to keep it. */
@@ -53,6 +54,8 @@ function SurfaceGeneral({ surface, name, what, accent, icon, open }: {
   accent: string;
   icon: React.ReactNode;
   open: () => void;
+  /** Anything else about the surface itself rather than about what it does. */
+  children?: React.ReactNode;
 }) {
   const [shown, setShown] = useShowOnToolbar(surface);
 
@@ -103,6 +106,8 @@ function SurfaceGeneral({ surface, name, what, accent, icon, open }: {
         </div>
       )}
 
+      {children}
+
       <div>
         <button
           type="button"
@@ -132,7 +137,11 @@ export function Dk8sGeneralSettings() {
         + 'logs, opens a shell in a container, browses its filesystem, and reads heap, '
         + 'thread and flight-recorder dumps in place.'}
       open={() => useTabsStore.getState().openDk8sTab()}
-    />
+    >
+      {/* Which binary it drives is a fact about dk8s itself, not about how it
+          behaves against a cluster — so it is here rather than on Cluster. */}
+      <KubectlBinarySetting />
+    </SurfaceGeneral>
   );
 }
 

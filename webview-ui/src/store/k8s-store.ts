@@ -47,6 +47,17 @@ export interface KubectlEnv {
   platform: string;
   triedPaths?: string[];
   error?: string;
+  /**
+   * A path somebody set by hand, when there is one.
+   *
+   * The setup screen leads with it: an explicit path that does not work is the
+   * likeliest reason to be looking at an install list on a machine that
+   * already has kubectl, and until it is said the list is advice for a problem
+   * you do not have.
+   */
+  override?: string;
+  /** Set through `DAAKIA_KUBECTL`, which the UI cannot clear. */
+  overrideFromEnv?: boolean;
 }
 
 export interface Reachability {
