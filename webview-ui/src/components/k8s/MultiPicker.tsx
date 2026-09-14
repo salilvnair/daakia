@@ -20,6 +20,7 @@ import { postMsg } from '../../vscode';
 import { softPrimary } from './button-style';
 
 import { ACCENT, ACCENT_MUTED as ACCENT_FILL } from './tone';
+import { RunningCommand } from './RunningCommand';
 /** For filled areas. The same cyan that reads well as a small glyph is
  *  glaring across a whole button, so anything with a solid fill uses the
  *  muted tone and keeps the bright one for strokes and text. */
@@ -164,6 +165,8 @@ export function ClusterPicker() {
           slowAfterSeconds={8}
           slowMessage="Taking longer than usual. A cluster in another region, or one behind a VPN that is not up, answers in seconds rather than milliseconds."
         />
+        {/* The line it is waiting on — copy it and run it yourself. */}
+        <RunningCommand />
       </div>
     );
   }
@@ -529,6 +532,7 @@ export function NamespaceMultiPicker() {
           slowAfterSeconds={8}
           slowMessage="Taking longer than usual. A cluster in another region, or one behind a VPN that is not up, answers in seconds rather than milliseconds."
         />
+        <RunningCommand />
       </div>
     );
   }

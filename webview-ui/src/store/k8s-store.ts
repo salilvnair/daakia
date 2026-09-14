@@ -27,10 +27,61 @@ export interface Access {
   probed: boolean;
 }
 
+/** One kubectl invocation, as the host reported it. Mirrors kubectl-audit. */
+export interface KubectlCommand {
+  command: string;
+  what: string;
+  context?: string;
+  namespace?: string;
+  kind: 'run' | 'stream';
+  ms?: number;
+  ok?: boolean;
+  code?: number | null;
+  said?: string;
+  bytes?: number;
+  at: number;
+}
+
 export const ALL_ACCESS: Access = {
   logs: true, exec: true, get: true, events: true,
   portForward: true, delete: true, patch: true, probed: false,
 };
+
+/**
+ * What stops being true the moment you point at a different cluster.
+ *
+ * A namespace belongs to the cluster it was chosen in. Carrying it across a
+ * context switch is not a convenience — it is a wrong answer that looks like a
+ * right one: the breadcrumb says the new cluster and the old namespace, the
+ * watch asks the new cluster for pods in a namespace it may not have, and the
+ * permission probe asks "can I read logs in `payments`?" of a cluster where
+ * `payments` is somebody else's. That is how a padlock and "ask an
+ * administrator for get on pods/log" appeared on a cluster where the account
+ * was an admin.
+ *
+ * Everything downstream of the namespace goes with it: the pods on screen, what
+ * they were using, what the last cluster said you could do, and the offers the
+ * picker had cached.
+ */
+function leavingCluster() {
+  return {
+    namespace: undefined,
+    pods: [],
+    usage: {},
+    usageHistory: {},
+    targets: [],
+    offers: [],
+    offersLoaded: false,
+    namespaces: [],
+    namespacesForbidden: false,
+    detail: undefined,
+    logs: [],
+    watchStatus: 'idle' as const,
+    /* Not "denied" and not "allowed": unknown until the new cluster answers. */
+    access: ALL_ACCESS,
+    reachable: undefined,
+  };
+}
 
 export interface KubeContext {
   name: string;
@@ -399,6 +450,16 @@ interface K8sState {
 
   busy: boolean;
 
+  /**
+   * The kubectl commands dk8s has run, newest last.
+   *
+   * Held so a wait can say what it is waiting on. A spinner that names the
+   * command it is blocked on is the difference between "this is slow" and
+   * "this is broken", and it is the same line the audit records — so what a
+   * loading state claims and what actually ran cannot drift apart.
+   */
+  commands: KubectlCommand[];
+
   pods: PodSummary[];
   usage: Record<string, PodUsage>;
   usageHistory: UsageHistory;
@@ -690,6 +751,8 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   guardHeapDump: true,
   logLineNumbers: true,
   access: ALL_ACCESS,
+  /* What has been run, for the waits that name it. */
+  commands: [],
 
   probe: () => {
     set({ busy: true });
@@ -698,7 +761,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
 
   useContext: (name) => {
     logUiEvent('dk8s.context_switch', { context: name, from: get().context });
-    set({ busy: true, context: name });
+    set({ busy: true, context: name, ...leavingCluster() });
     postMsg({ type: 'dk8s:useContext', context: name });
   },
 
@@ -715,7 +778,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
 
   useContexts: (names) => {
     if (!names.length) return;
-    set({ busy: true, selectedContexts: names, context: names[0] });
+    set({ busy: true, selectedContexts: names, context: names[0], ...leavingCluster() });
     postMsg({ type: 'dk8s:useContexts', contexts: names });
   },
 
@@ -1462,6 +1525,19 @@ export const useK8sStore = create<K8sState>((set, get) => ({
 
       case 'dk8s:access':
         set({ access: msg.access as Access });
+        break;
+
+      /* One command, as it happens — see kubectl-audit on the host. Capped:
+         this is a window on what is running, not a second audit log. */
+      case 'dk8s:command':
+        set(s => ({
+          commands: [...s.commands, msg.event as KubectlCommand].slice(-40),
+        }));
+        break;
+
+      /* The backlog, for a panel that opened after the commands had run. */
+      case 'dk8s:commands':
+        set({ commands: ((msg.events as KubectlCommand[]) ?? []).slice(-40) });
         break;
 
       case 'dk8s:logLineNumbers':

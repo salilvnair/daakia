@@ -13,6 +13,7 @@ import { useK8sStore, type KubeContext } from '../../store/k8s-store';
 import { softPrimary } from './button-style';
 
 import { ACCENT } from './tone';
+import { RunningCommand } from './RunningCommand';
 
 function Shell({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
@@ -318,6 +319,8 @@ export function UnreachableNotice() {
           slowAfterSeconds={8}
           slowMessage="Still waiting. kubectl bounds this itself, so it will come back either way — with an answer or with the reason."
         />
+        {/* The line it is waiting on — copy it and run it yourself. */}
+        <RunningCommand />
       </div>
     );
   }
@@ -346,6 +349,15 @@ export function UnreachableNotice() {
           {reachable.error}
         </pre>
       )}
+      {/*
+        What it ran to find that out.
+
+        This screen is where "it works in my terminal" starts, so the line to
+        try in that terminal belongs on it — the same command, copyable, with
+        what the cluster said underneath.
+      */}
+      <RunningCommand width={720} />
+
       <div className="flex items-center gap-2">
         <ButtonView label="Retry" size="sm" variant="secondary"
                     accentColor={ACCENT} color={ACCENT}

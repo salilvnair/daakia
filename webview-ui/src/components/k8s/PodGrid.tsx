@@ -38,6 +38,7 @@ import {
 
 import { ACCENT, OK, MUTED, MATCH } from './tone';
 import { isTypingTarget } from '../../utils/typing-target';
+import { RunningCommand } from './RunningCommand';
 /* Amber, not the dk8s accent: a star is a personal mark, not a status, and
    reusing the accent made starred rows look selected. */
 const FAV_COLOR = 'var(--color-warning)';
@@ -1050,6 +1051,7 @@ export function PodGrid() {
                 is the same — when the answer is the same failure, nothing on
                 screen changes and the button looks dead. */}
             {busy ? (
+              <>
               <LoadingStateView
                 icon={<Dk8sIcon size={IconSize.hero} />}
                 medallionSize={84}
@@ -1059,6 +1061,8 @@ export function PodGrid() {
                 slowAfterSeconds={8}
                 slowMessage="Taking longer than usual. A cluster in another region, or one behind a VPN that is not up, answers in seconds rather than milliseconds."
               />
+              <RunningCommand />
+              </>
             ) : watchNeverCame ? (
               <div className="flex flex-col items-center gap-2 text-center px-4">
                 <span className="text-[12.5px] font-semibold" style={{ color: 'var(--color-warning)' }}>
@@ -1069,6 +1073,9 @@ export function PodGrid() {
                   The watch has not connected in 25 seconds. A stopped cluster or a VPN that is
                   not up looks like this; a namespace that is genuinely empty says so instead.
                 </span>
+                {/* What it opened and what came back — the whole point of the
+                    complaint this state exists for. */}
+                <RunningCommand match="get pods" />
                 <ButtonView label="Try again" size="sm" variant="secondary"
                             onClick={() => {
                               /* Clears the local verdict too — without this the
@@ -1087,6 +1094,7 @@ export function PodGrid() {
                   No pods in this namespace.
                 </span>
               ) : (
+                <>
                 <LoadingStateView
                   /* Panel-filling, like the file browser's. A 22px glyph
                      centred in an empty grid reads as something that failed to
@@ -1101,6 +1109,8 @@ export function PodGrid() {
                   slowAfterSeconds={8}
                   slowMessage="Taking longer than usual. A cluster in another region, or one behind a VPN, answers in seconds rather than milliseconds."
                 />
+                  <RunningCommand match="get pods" />
+                </>
               )
             )}
           </div>

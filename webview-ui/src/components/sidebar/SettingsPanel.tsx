@@ -49,8 +49,9 @@ import { AuditConfigTab } from '../settings/devtools/AuditConfigTab';
 import { setFixedPortEnabled, useFixedPortEnabled } from '../mock/fixed-port';
 import { AboutPanel } from '../settings/AboutPanel';
 import { Dk8sGeneralSettings, DkghGeneralSettings } from '../settings/SurfaceGeneralSettings';
+import { Dk8sCommandAudit } from '../settings/Dk8sCommandAudit';
 
-type SettingsSection = 'general' | 'theme' | 'keymap' | 'about' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-general' | 'dk8s-cluster' | 'dk8s-terminal' | 'dkgh-general' | 'dkgh';
+type SettingsSection = 'general' | 'theme' | 'keymap' | 'about' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-general' | 'dk8s-cluster' | 'dk8s-terminal' | 'dk8s-commands' | 'dkgh-general' | 'dkgh';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
 type PowerSubtab = 'cookies' | 'proxy' | 'certs' | 'monitor' | 'interceptor' | 'diff' | 'bulk' | 'load'
   | 'schema-diff' | 'openapi' | 'security' | 'webhook' | 'postman' | 'clustering'
@@ -75,6 +76,7 @@ const SETTINGS_SECTION_META: Record<SettingsSection, { label: string; icon: Reac
   'dk8s-general':    { label: 'General',         icon: <SettingsIcon size={14} /> },
   'dk8s-cluster':    { label: 'Cluster',         icon: <Dk8sIcon size={14} /> },
   'dk8s-terminal':   { label: 'Terminal',        icon: <TerminalIcon size={14} /> },
+  'dk8s-commands':   { label: 'Commands',        icon: <CodeBracketsIcon size={14} /> },
   'dkgh-general':    { label: 'General',         icon: <SettingsIcon size={14} /> },
   'dkgh':            { label: 'GitHub CLI',      icon: <IssueOpenedIcon size={14} /> },
   'power-features':  { label: 'Power Features',  icon: <CodeBracketsIcon size={14} /> },
@@ -112,6 +114,7 @@ const SETTINGS_NAV_ITEMS: SideNavItem[] = [
     { id: 'dk8s-general', label: SETTINGS_SECTION_META['dk8s-general'].label, icon: SETTINGS_SECTION_META['dk8s-general'].icon },
     { id: 'dk8s-cluster', label: SETTINGS_SECTION_META['dk8s-cluster'].label, icon: SETTINGS_SECTION_META['dk8s-cluster'].icon },
     { id: 'dk8s-terminal', label: SETTINGS_SECTION_META['dk8s-terminal'].label, icon: SETTINGS_SECTION_META['dk8s-terminal'].icon },
+    { id: 'dk8s-commands', label: SETTINGS_SECTION_META['dk8s-commands'].label, icon: SETTINGS_SECTION_META['dk8s-commands'].icon },
   ] },
   { id: 'g-dkgh', label: 'DKGH', isGroup: true, children: [
     { id: 'dkgh-general', label: SETTINGS_SECTION_META['dkgh-general'].label, icon: SETTINGS_SECTION_META['dkgh-general'].icon },
@@ -207,6 +210,8 @@ export function SettingsPanel() {
               <Dk8sGeneralSettings />
             ) : activeSection === 'dkgh-general' ? (
               <DkghGeneralSettings />
+            ) : activeSection === 'dk8s-commands' ? (
+              <Dk8sCommandAudit />
             ) : activeSection === 'dk8s-cluster' ? (
               <Dk8sClusterSettings />
             ) : activeSection === 'dk8s-terminal' ? (

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { forbiddenReason, ACCESS_RULE } from './k8s-access';
+import { forbiddenReason, readCanI, ACCESS_RULE } from './k8s-access';
 
 describe('forbiddenReason', () => {
   it('reads the real message the API server sends for a denied exec', () => {
@@ -33,5 +33,49 @@ describe('forbiddenReason', () => {
     for (const v of Object.values(ACCESS_RULE)) {
       expect(v).toMatch(/^(get|list|create|delete|patch|watch) on /);
     }
+  });
+});
+
+describe('reading auth can-i', () => {
+  it('takes exit 0 as yes', () => {
+    expect(readCanI({ ok: true })).toBe(true);
+  });
+
+  it('takes a silent non-zero as no', () => {
+    // `--quiet` prints nothing for a real refusal. That is the only "no".
+    expect(readCanI({ ok: false, stderr: '' })).toBe(false);
+    expect(readCanI({ ok: false })).toBe(false);
+    expect(readCanI({ ok: false, stderr: ' 	 ' })).toBe(false);
+  });
+
+  it('takes anything it said as could-not-tell, not as a refusal', () => {
+    /*
+      The bug this replaced: every one of these exits 1, and every one of them
+      was read as "your account cannot do this" — so a cluster where the user
+      was an admin showed a padlock and told them to go and ask for a role they
+      already had.
+    */
+    const talked = [
+      'error: You must be logged in to the server (Unauthorized)',
+      'Error from server (Forbidden): selfsubjectaccessreviews.authorization.k8s.io is forbidden',
+      'error: unknown command "can-i"',
+      'Unable to connect to the server: dial tcp: i/o timeout',
+      'error: current-context is not set',
+      'E0914 02:11:04.118203 exec: executable kubelogin not found',
+      'Error: webhook authorizer does not support user impersonation',
+      /* Observed on a real cluster: kubectl cannot resolve the resource
+         because discovery failed or is restricted, warns, and exits 1. The
+         account's actual permission on pods/log is untouched by any of
+         that — and the old code called it a refusal. */
+      "Warning: the server doesn't have a resource type 'pods'",
+    ];
+    for (const stderr of talked) {
+      expect(readCanI({ ok: false, stderr }), stderr).toBeUndefined();
+    }
+  });
+
+  it('treats a spawn failure as could-not-tell', () => {
+    expect(readCanI({ ok: false, failure: 'spawn kubectl ENOENT' })).toBeUndefined();
+    expect(readCanI({ ok: false, failure: 'Command failed: timed out' })).toBeUndefined();
   });
 });

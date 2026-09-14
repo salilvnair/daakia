@@ -13,6 +13,7 @@
  */
 import { execFile, spawn, type ChildProcess } from 'child_process';
 import { platform } from 'os';
+import { kubectlEvent, recordKubectl } from './kubectl-audit';
 
 export interface RunOptions {
   /** Working directory — the kubectl cp drive-letter workaround needs this. */
@@ -219,12 +220,26 @@ export async function run(args: string[], opts: RunOptions = {}): Promise<RunRes
     return refusal;
   }
   const bin = await resolveBinary();
-  return runRaw(bin, args, opts);
+  /*
+    Timed and written down — see kubectl-audit.
+    Every cluster call goes through here, which is the only reason the audit can
+    claim to be complete.
+  */
+  const started = Date.now();
+  const res = await runRaw(bin, args, opts);
+  recordKubectl(kubectlEvent(bin, args, {
+    ok: res.ok, code: res.code, stderr: res.stderr, failure: res.failure,
+    bytes: res.stdout?.length,
+  }, Date.now() - started));
+  return res;
 }
 
 /** Long-lived kubectl (watch, logs --follow, cp). The caller owns the process. */
 export async function spawnKubectl(args: string[], opts: RunOptions = {}): Promise<ChildProcess> {
   const bin = await resolveBinary();
+  /* A stream has no exit code to wait for — it is recorded when it starts,
+     which is the moment worth knowing about for a watch that never delivers. */
+  recordKubectl(kubectlEvent(bin, args, {}, undefined, 'stream'));
   return spawn(bin, args, {
     cwd: opts.cwd,
     env: opts.env ? { ...process.env, ...opts.env } : process.env,

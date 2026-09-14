@@ -19,7 +19,8 @@ import { searchPvForPod, type PvMatch } from '../../../services/k8s/pv-search';
 import {
   listContexts, checkReachable, listNamespaces, defaultNamespace, looksLikeProduction,
 } from '../../../services/k8s/kube-context';
-import { getSetting, setSetting } from '../../../storage/db';
+import { getSetting, setSetting, insertUiAudit } from '../../../storage/db';
+import { onKubectl, recentKubectl, type KubectlEvent } from '../../../services/k8s/kubectl-audit';
 import { watchPods, topPods, type WatchHandle } from '../../../services/k8s/k8s-watch';
 import {
   exportPodLogs, exportVisibleLines, summariseExport,
@@ -139,7 +140,52 @@ function saveState(patch: Partial<Dk8sState>): Dk8sState {
  * So an explicit probe drops it. Not the periodic ones — only the ones a
  * person asked for.
  */
+/**
+ * Write every kubectl dk8s runs into the audit, and show it to the panel.
+ *
+ * Installed once, from wherever the handler is first used. Two destinations,
+ * for two different questions: the audit row is the record you go back to
+ * ("what did it actually pass?"), and the live message is what a loading state
+ * uses to say what it is waiting on rather than spinning anonymously.
+ *
+ * The subscription lives here rather than in the recorder because reaching the
+ * database from `services/k8s` would drag the VS Code API into every test that
+ * touches a cluster call — see kubectl-audit.
+ */
+let auditInstalled = false;
+let postForAudit: PostMessage | undefined;
+
+export function installKubectlAudit(postMessage: PostMessage): void {
+  postForAudit = postMessage;
+  if (auditInstalled) return;
+  auditInstalled = true;
+  onKubectl((event: KubectlEvent) => {
+    try {
+      insertUiAudit({
+        event_type: event.kind === 'stream' ? 'dk8s.kubectl.stream' : 'dk8s.kubectl',
+        module: 'dk8s',
+        button: event.what,
+        action: event.command,
+        metadata: JSON.stringify({
+          context: event.context, namespace: event.namespace,
+          ms: event.ms, exit: event.code, ok: event.ok,
+          said: event.said, bytes: event.bytes,
+        }),
+      });
+    } catch { /* auditing must never be why a cluster call fails */ }
+    try {
+      postForAudit?.({ type: 'dk8s:command', event });
+    } catch { /* same */ }
+  });
+}
+
+/** The last few commands, for a panel that opened after they ran. */
+export function handleDk8sCommands(postMessage: PostMessage): void {
+  postMessage({ type: 'dk8s:commands', events: recentKubectl() });
+}
+
 export async function handleDk8sProbe(postMessage: PostMessage): Promise<void> {
+  installKubectlAudit(postMessage);
   const saved = state();
   if (saved.kubectlPath) setKubectlPath(saved.kubectlPath);
 

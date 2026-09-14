@@ -75,7 +75,39 @@ export function clearAccessCache(): void {
   cache.clear();
 }
 
-/** One `kubectl auth can-i`. Never throws; a failure reads as allowed. */
+/**
+ * What one `auth can-i --quiet` result means.
+ *
+ * ── A refusal is silent. Anything that talks is an error. ──
+ *
+ * With `--quiet`, a genuine "no" prints nothing at all and exits 1. kubectl
+ * also exits 1 when the *check itself* could not be made — the cluster refused
+ * the SelfSubjectAccessReview, the credential had expired, a proxy mangled it,
+ * an admission webhook answered instead of RBAC — and in every one of those
+ * cases it says so on stderr first.
+ *
+ * This used to be a list of sentences that meant "could not tell", which is
+ * the wrong way round: the list can never be complete, and everything it
+ * missed was read as a denial. So a padlock appeared on a cluster where the
+ * account had every permission, and dk8s told somebody to ask an administrator
+ * for a role they already had — while `kubectl logs` in the next window worked,
+ * and dk8s's own log search, which never asks permission, worked too.
+ *
+ * Separated from the call so it can be held to that rule by a test.
+ */
+export function readCanI(
+  res: { ok: boolean; stderr?: string; failure?: string },
+): boolean | undefined {
+  if (res.ok) return true;
+  const said = `${res.stderr ?? ''}${res.failure ?? ''}`.trim();
+  /* It spoke, so it did not answer: unknown, and unknown restricts nothing. */
+  if (said) return undefined;
+  /* Silent and non-zero: the API server evaluated the rules and said no. That
+     is the one case worth taking a button away for. */
+  return false;
+}
+
+/** One `kubectl auth can-i`. Never throws; anything unclear reads as allowed. */
 async function canI(
   context: string, namespace: string, check: Check,
 ): Promise<boolean | undefined> {
@@ -89,29 +121,7 @@ async function canI(
     ],
     { timeoutMs: 10_000 },
   );
-
-  // `--quiet` makes this purely an exit code: 0 yes, 1 no. Anything else —
-  // the subcommand missing on an old kubectl, a network failure — is unknown,
-  // and unknown means do not restrict.
-  if (res.ok) return true;
-  const err = `${res.stderr ?? ''} ${res.failure ?? ''}`.toLowerCase();
-  if (err.includes('unknown command') || err.includes('unable to connect')
-      || err.includes('timed out') || err.includes('enoent')
-      /*
-        A context kubectl does not have is not a denial.
-
-        Without these, `auth can-i --context gone` fails, falls through to the
-        hard `false` below, and every capability is reported as refused — so a
-        pod shows a padlock and "you cannot exec here" to somebody whose access
-        is fine and who can prove it with k9s in the next window. Not knowing
-        and being told no are different answers, and only one of them should
-        take a button away.
-      */
-      || err.includes('does not exist') || err.includes('no such context')
-      || err.includes('context was not found') || err.includes('current-context is not set')) {
-    return undefined;
-  }
-  return false;
+  return readCanI(res);
 }
 
 export async function probeAccess(

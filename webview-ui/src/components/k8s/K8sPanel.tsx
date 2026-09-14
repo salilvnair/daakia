@@ -28,6 +28,7 @@ import { openArtifactIn, type AnalyzerId } from '../../store/dk8s-analyze-store'
 import { useUiStateStore } from '../../store/ui-state-store';
 
 import { ACCENT, ACCENT_MUTED as ACCENT_FILL } from './tone';
+import { RunningCommand } from './RunningCommand';
 /** Dimmer tone for anything filled or bordered — see MultiPicker. */
 
 
@@ -186,6 +187,7 @@ function Probing() {
         slowAfterSeconds={6}
         slowMessage="Still looking. A kubeconfig that runs a credential plugin, or a network drive on PATH, can hold this up."
       />
+      <RunningCommand />
     </div>
   );
 }
