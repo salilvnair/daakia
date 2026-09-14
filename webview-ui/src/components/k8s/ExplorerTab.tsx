@@ -657,7 +657,7 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
         the whole tab below it blank. `h-full` is what actually fills a block
         parent, and once it fills it the centring works.
       */
-      <div className="h-full flex flex-col items-center justify-center px-8">
+      <div className="h-full flex flex-col items-center justify-center px-8" style={{ paddingBottom: '14%' }}>
         <LoadingStateView
           icon={<FolderOpenIcon size={IconSize.hero} />}
           medallionSize={84}

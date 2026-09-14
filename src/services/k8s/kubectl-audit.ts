@@ -37,6 +37,15 @@
  */
 
 export interface KubectlEvent {
+  /**
+   * Identifies the call, so the start and the finish are one row.
+   *
+   * A `run` is reported twice — once when it is fired, so a screen waiting on
+   * it can say what it is waiting on, and once when it comes back with a
+   * duration and what the cluster said. Without an id the second report would
+   * be a second row, and the audit would double.
+   */
+  id: string;
   /** The command as you would type it, redacted. */
   command: string;
   /** Just the verb and resource — `get pods`, `auth can-i` — for grouping. */
@@ -172,14 +181,24 @@ export function recordKubectl(event: KubectlEvent): void {
 }
 
 /** Build the event for one finished call. */
+let seq = 0;
+
+/** A fresh id for one call. Monotonic within a session, which is all it needs. */
+export function nextKubectlId(): string {
+  seq += 1;
+  return `k${seq}`;
+}
+
 export function kubectlEvent(
   bin: string,
   args: string[],
   outcome: { ok?: boolean; code?: number | null; stderr?: string; failure?: string; bytes?: number },
   ms: number | undefined,
   kind: 'run' | 'stream' = 'run',
+  id: string = nextKubectlId(),
 ): KubectlEvent {
   return {
+    id,
     command: commandLine(bin, args),
     what: describeArgs(args),
     context: flagValue(args, '--context'),

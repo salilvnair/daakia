@@ -99,7 +99,7 @@ function Mark({ verdict }: { verdict: Verdict }) {
  */
 function CommandCard({ line, note }: { line: string; note: string }) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg px-3 py-2.5"
+    <div className="flex flex-col gap-2 rounded-lg px-4 py-3.5"
          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)' }}>
       <div className="flex items-center gap-2">
         <span className="text-[9.5px] uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>
@@ -108,10 +108,19 @@ function CommandCard({ line, note }: { line: string; note: string }) {
         <span className="flex-1" />
         <CopyButtonView text={line} title="Copy this command" accentColor={ACCENT} />
       </div>
-      <div className="flex items-start gap-2 px-2.5 py-1.5 rounded font-mono text-[11px]"
-           style={{ background: 'var(--color-surface-hover)', color: 'var(--color-text-primary)' }}>
+      {/*
+        One line, with room around it, scrolled rather than wrapped — the same
+        block the loaders use, for the same reason: a line you are about to
+        copy reads as one line.
+      */}
+      <div className="flex items-start gap-2.5 px-3.5 py-2.5 rounded-md font-mono text-[11.5px]"
+           data-nobar="true"
+           style={{
+             background: 'var(--color-surface-hover)', color: 'var(--color-text-primary)',
+             overflowX: 'auto', whiteSpace: 'nowrap', scrollbarWidth: 'none',
+           }}>
         <span style={{ color: ACCENT, userSelect: 'none' }}>$</span>
-        <span className="break-all">{line}</span>
+        <span>{line}</span>
       </div>
       <span className="text-[10.5px] leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
         {note}
@@ -226,8 +235,17 @@ export function AccessTab({ context, namespace }: { context: string; namespace: 
                   </span>
                 </button>
 
+                {/*
+                  The panel is inset the same amount on both sides.
+
+                  It was `paddingLeft: 49` to line the card up under the row's
+                  text, and flush on the right — so it read as a block that had
+                  slipped rather than a panel belonging to the row above it.
+                  Even inset now, and the same 14px the row header uses, so the
+                  whole tab sits on one rhythm.
+                */}
                 {isOpen && (
-                  <div className="flex flex-col gap-2.5 px-3.5 pb-3.5" style={{ paddingLeft: 49 }}>
+                  <div className="flex flex-col gap-2.5 px-3.5 pb-3.5">
                     <CommandCard
                       line={line}
                       note={verdict === 'denied'

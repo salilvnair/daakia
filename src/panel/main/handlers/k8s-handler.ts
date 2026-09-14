@@ -171,7 +171,14 @@ export function installKubectlAudit(postMessage: PostMessage): void {
   if (auditInstalled) return;
   auditInstalled = true;
   onKubectl((event: KubectlEvent) => {
-    try {
+    /*
+      The webview hears about a call twice — when it is fired and when it comes
+      back — because a screen waiting on one needs to name it while the wait is
+      happening. The audit log wants one row, written when there is an outcome
+      to write, so the announcement is posted and not stored.
+    */
+    const announcement = event.kind === 'run' && event.ms === undefined;
+    if (!announcement) try {
       insertUiAudit({
         event_type: event.kind === 'stream' ? 'dk8s.kubectl.stream' : 'dk8s.kubectl',
         module: 'dk8s',

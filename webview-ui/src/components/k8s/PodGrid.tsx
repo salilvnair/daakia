@@ -1072,7 +1072,7 @@ export function PodGrid() {
             command belongs *below* the loader, and the loader belongs in the
             middle of the space.
           */
-          <div className="flex flex-col items-center justify-center h-full">
+          <div className="flex flex-col items-center justify-center h-full" style={{ paddingBottom: '14%' }}>
             {/*
               WatchStatus has no failure state — idle, connected, reconnecting,
               stopped — so a watch that never comes up stays 'idle' and this

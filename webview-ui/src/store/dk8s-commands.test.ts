@@ -12,7 +12,9 @@ vi.mock('../vscode', () => ({ postMsg: vi.fn() }));
 
 import { useK8sStore, type KubectlCommand } from './k8s-store';
 
+let seq = 0;
 const CMD = (over: Partial<KubectlCommand> = {}): KubectlCommand => ({
+  id: `k${++seq}`,
   command: 'kubectl --context prod -n payments get pods -o json',
   what: 'get pods',
   context: 'prod',
@@ -41,6 +43,27 @@ describe('the command feed', () => {
       events: [CMD({ what: 'config view' }), CMD()],
     });
     expect(useK8sStore.getState().commands).toHaveLength(2);
+  });
+
+  it('completes a call rather than listing it twice', () => {
+    /*
+      A call is reported when it is fired — so a screen waiting on it can name
+      what it is waiting on, which it could not do while the only report came
+      on completion — and again when it comes back. Same id, one row.
+    */
+    const started = CMD({ id: 'k99', ms: undefined, ok: undefined, code: undefined, at: 1_000 });
+    useK8sStore.getState().apply({ type: 'dk8s:command', event: started });
+    useK8sStore.getState().apply({
+      type: 'dk8s:command',
+      event: { ...started, ms: 9_400, ok: false, code: 1, said: 'Unable to connect', at: 10_400 },
+    });
+    const feed = useK8sStore.getState().commands;
+    expect(feed).toHaveLength(1);
+    expect(feed[0].ms).toBe(9_400);
+    expect(feed[0].ok).toBe(false);
+    /* The moment it STARTED is kept: taking the completion's own timestamp
+       would make every finished command look like it had just begun. */
+    expect(feed[0].at).toBe(1_000);
   });
 
   it('keeps a window, not a second audit log', () => {

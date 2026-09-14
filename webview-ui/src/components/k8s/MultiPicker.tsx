@@ -154,7 +154,7 @@ export function ClusterPicker() {
   if (busy && checked.length > 0) {
     const many = checked.length > 1;
     return (
-      <div className="flex-1 w-full h-full flex flex-col items-center justify-center px-8">
+      <div className="flex-1 w-full h-full flex flex-col items-center justify-center px-8" style={{ paddingBottom: '14%' }}>
         <LoadingStateView
           icon={<Dk8sIcon size={IconSize.hero} />}
           medallionSize={84}
@@ -527,7 +527,7 @@ export function NamespaceMultiPicker() {
   if (busy) {
     const many = selectedContexts.length > 1;
     return (
-      <div className="flex-1 w-full h-full flex flex-col items-center justify-center px-8">
+      <div className="flex-1 w-full h-full flex flex-col items-center justify-center px-8" style={{ paddingBottom: '14%' }}>
         <LoadingStateView
           icon={<Dk8sIcon size={IconSize.hero} />}
           medallionSize={84}
@@ -654,7 +654,7 @@ export function NamespaceMultiPicker() {
             {/* And what it ran to find that out — this is a screen somebody
                 reads before saying "but it works in my terminal", so the line
                 to try in that terminal belongs on it. */}
-            <RunningCommand width={640} mode="settled" />
+            <RunningCommand mode="settled" match="version" />
             <div className="flex gap-2 mt-1">
               <ButtonView label="Choose other clusters" size="sm" variant="secondary"
                           accentColor={ACCENT_FILL} color={ACCENT}
@@ -681,7 +681,7 @@ export function NamespaceMultiPicker() {
               The wait is yours to change in Settings → DK8S → General.
             </span>
             {/* And the line it is waiting on, to try in a terminal. */}
-            <RunningCommand width={640} mode="settled" />
+            <RunningCommand mode="settled" match="version" />
             <div className="flex gap-2 mt-1">
               <ButtonView label="Choose other clusters" size="sm" variant="secondary"
                           accentColor={ACCENT_FILL} color={ACCENT}

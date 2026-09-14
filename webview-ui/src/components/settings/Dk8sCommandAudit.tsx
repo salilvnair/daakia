@@ -17,6 +17,8 @@
  */
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { postMsg } from '../../vscode';
+import { useUiStateStore } from '../../store/ui-state-store';
+import { COMMAND_AUDIT_LIMIT_KEY, commandAuditLimit } from './CommandAuditLimit';
 import { CopyButtonView } from '@salilvnair/dui';
 import {
   RefreshIcon, TrashIcon, SearchIcon, CloseIcon, ChevronRightIcon, ChevronDownIcon,
@@ -88,7 +90,11 @@ export function Dk8sCommandAudit() {
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState<number | null>(null);
 
-  const load = useCallback(() => postMsg({ type: 'uiAudit:load', limit: 500 }), []);
+  /* How far back to read — Settings → DK8S → General. The audit keeps
+     everything; this is only how much of it this screen asks for. */
+  const stored = useUiStateStore(s2 => s2.prefs[COMMAND_AUDIT_LIMIT_KEY]);
+  const limit = commandAuditLimit(stored);
+  const load = useCallback(() => postMsg({ type: 'uiAudit:load', limit }), [limit]);
 
   useEffect(() => {
     load();

@@ -9,11 +9,12 @@
  * a setting that reads as "turn dk8s off" and in fact only hides a shortcut
  * would send somebody hunting for a feature they still have.
  */
-import { Dk8sIcon, IssueOpenedIcon, KeyboardIcon } from '../../icons';
+import { Dk8sIcon, IssueOpenedIcon, KeyboardIcon, ExternalLinkIcon } from '../../icons';
 import { useTabsStore } from '../../store/tabs-store';
 import { useShowOnToolbar, type ToolbarSurface } from '../../store/toolbar-visibility';
 import { KubectlBinarySetting } from './KubectlBinarySetting';
 import { ClusterTimeoutSetting } from './ClusterTimeoutSetting';
+import { CommandAuditLimitSetting } from './CommandAuditLimit';
 
 function Toggle({ on, onChange, label, description, accent }: {
   on: boolean;
@@ -67,6 +68,29 @@ function SurfaceGeneral({ surface, name, what, accent, icon, open, children }: {
         <span className="text-[14px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
           General
         </span>
+        <span className="flex-1" />
+        {/*
+          Up here as an icon, rather than a labelled button at the foot of the
+          page. It is a shortcut out of settings, not a setting — sitting last
+          in the column it read as the conclusion of everything above it, and
+          on a page of switches a full-width button is the loudest thing on
+          screen for the least important reason to be here.
+        */}
+        <button
+          type="button"
+          onClick={open}
+          title={`Open ${name}`}
+          aria-label={`Open ${name}`}
+          className="flex items-center justify-center rounded-md cursor-pointer transition-colors"
+          style={{
+            width: 28, height: 28,
+            color: accent,
+            background: `color-mix(in srgb, ${accent} 10%, transparent)`,
+            border: `1px solid color-mix(in srgb, ${accent} 26%, transparent)`,
+          }}
+        >
+          <ExternalLinkIcon size={14} />
+        </button>
       </div>
       <span className="text-[11.5px] leading-relaxed"
             style={{ color: 'var(--color-text-muted)', maxWidth: '72ch' }}>
@@ -108,21 +132,6 @@ function SurfaceGeneral({ surface, name, what, accent, icon, open, children }: {
       )}
 
       {children}
-
-      <div>
-        <button
-          type="button"
-          onClick={open}
-          className="text-[12px] px-3 py-1.5 rounded-md cursor-pointer"
-          style={{
-            color: accent,
-            background: `color-mix(in srgb, ${accent} 12%, transparent)`,
-            border: `1px solid color-mix(in srgb, ${accent} 32%, transparent)`,
-          }}
-        >
-          Open {name}
-        </button>
-      </div>
     </div>
   );
 }
@@ -145,6 +154,7 @@ export function Dk8sGeneralSettings() {
       {/* And how long to wait for one, which is a property of your network
           rather than of dk8s. */}
       <ClusterTimeoutSetting />
+      <CommandAuditLimitSetting />
     </SurfaceGeneral>
   );
 }

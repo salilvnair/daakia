@@ -36,7 +36,7 @@ function took(cmd: KubectlCommand, now: number): string {
   return cmd.ms === undefined ? `${shown} so far` : shown;
 }
 
-export function RunningCommand({ match, now: pinnedNow, width = 460, mode = 'waiting' }: {
+export function RunningCommand({ match, now: pinnedNow, width = 1040, mode = 'waiting' }: {
   /**
    * Only show a command whose verb starts with this — `get pods`, `auth can-i`.
    *
@@ -68,6 +68,14 @@ export function RunningCommand({ match, now: pinnedNow, width = 460, mode = 'wai
     expired on its own either. A second is the right grain for a number that is
     read as "is this taking a while".
   */
+  /*
+    When this wait began.
+
+    Fixed at mount, which is when the loader appeared, and it is what lets a
+    command that has finished stay on screen for the wait it belongs to while
+    the backlog the host replays at panel open stays off it.
+  */
+  const [since] = useState(() => Date.now());
   const [tick, setTick] = useState(0);
   useEffect(() => {
     if (pinnedNow !== undefined) return;    // a test pinned the clock
@@ -89,7 +97,7 @@ export function RunningCommand({ match, now: pinnedNow, width = 460, mode = 'wai
 
     The rule itself is in `running-command-pick.ts`, where a test can reach it.
   */
-  const cmd = showable({ commands, context, now, match, mode });
+  const cmd = showable({ commands, context, now, match, mode, since });
   if (!cmd) return null;
 
   const failed = cmd.ok === false;
@@ -98,7 +106,16 @@ export function RunningCommand({ match, now: pinnedNow, width = 460, mode = 'wai
     <div
       className="flex flex-col gap-2 rounded-lg px-3.5 py-3 mt-2.5 mx-auto text-left"
       style={{
-        maxWidth: width, width: '100%',
+        /*
+          Grows with the panel rather than sitting at a fixed cap.
+
+          A fixed width meant a long line — `auth can-i create pods/portforward`
+          against a long context and namespace — scrolled inside a box with
+          plenty of empty panel either side of it. `width` is now the ceiling,
+          not the size: the card takes what the panel can spare up to it, so
+          most commands fit outright and only a genuinely long one scrolls.
+        */
+        width: `min(94%, ${width}px)`,
         background: 'var(--color-surface)',
         border: '1px solid var(--color-surface-border)',
       }}
@@ -128,7 +145,14 @@ export function RunningCommand({ match, now: pinnedNow, width = 460, mode = 'wai
         style={{
           background: 'var(--color-surface-hover)', color: 'var(--color-text-primary)',
           overflowX: 'auto', whiteSpace: 'nowrap',
+          /* Scrollable, but without the bar. A horizontal scrollbar under a
+             single line of text reads as a layout mistake, and the copy button
+             is how the whole line is actually taken. */
+          scrollbarWidth: 'none',
         }}
+        /* Firefox and Chromium disagree about how to hide it; the class carries
+           the WebKit half. */
+        data-nobar="true"
       >
         <span style={{ color: ACCENT, userSelect: 'none' }}>$</span>
         <span>{cmd.command}</span>

@@ -1930,3 +1930,10 @@ input[type="number"] {
   transform: scale(0.88);
   transition: background 60ms, transform 60ms;
 }
+
+/*
+  A one-line command block scrolls sideways when it has to, but never shows a
+  bar for it. Firefox takes `scrollbar-width: none` from the element's own
+  style; WebKit needs this.
+*/
+[data-nobar="true"]::-webkit-scrollbar { display: none; }

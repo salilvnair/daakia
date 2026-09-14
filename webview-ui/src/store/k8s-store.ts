@@ -29,6 +29,8 @@ export interface Access {
 
 /** One kubectl invocation, as the host reported it. Mirrors kubectl-audit. */
 export interface KubectlCommand {
+  /** Same id for the call's start and its completion — see kubectl-audit. */
+  id: string;
   command: string;
   what: string;
   context?: string;
@@ -40,6 +42,19 @@ export interface KubectlCommand {
   said?: string;
   bytes?: number;
   at: number;
+}
+
+/** Replace the row with this id, or append it. Capped at what a card can use. */
+export function mergeCommand(
+  commands: KubectlCommand[], event: KubectlCommand,
+): KubectlCommand[] {
+  const at = commands.findIndex(c => c.id === event.id);
+  if (at === -1) return [...commands, event].slice(-40);
+  const next = commands.slice();
+  /* Keep the moment it STARTED. The completion carries its own `at`, and
+     taking that one would make every finished command look instantaneous. */
+  next[at] = { ...event, at: commands[at].at };
+  return next;
 }
 
 export const ALL_ACCESS: Access = {
@@ -1590,7 +1605,13 @@ export const useK8sStore = create<K8sState>((set, get) => ({
          this is a window on what is running, not a second audit log. */
       case 'dk8s:command':
         set(s => ({
-          commands: [...s.commands, msg.event as KubectlCommand].slice(-40),
+          /*
+            A call is reported when it is fired and again when it comes back,
+            so the second report completes the first row rather than adding a
+            second. Without this the feed would show every command twice — once
+            with no duration and once with one.
+          */
+          commands: mergeCommand(s.commands, msg.event as KubectlCommand),
         }));
         break;
 

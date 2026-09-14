@@ -13,7 +13,7 @@
  */
 import { execFile, spawn, type ChildProcess } from 'child_process';
 import { platform } from 'os';
-import { kubectlEvent, recordKubectl } from './kubectl-audit';
+import { kubectlEvent, recordKubectl, nextKubectlId } from './kubectl-audit';
 
 export interface RunOptions {
   /** Working directory — the kubectl cp drive-letter workaround needs this. */
@@ -226,11 +226,22 @@ export async function run(args: string[], opts: RunOptions = {}): Promise<RunRes
     claim to be complete.
   */
   const started = Date.now();
+  /*
+    Reported twice, and the first one is the point.
+
+    It used to be recorded only on completion, which meant a screen waiting on
+    a ten-second reach had nothing to show for those ten seconds — the card
+    named "the command it is waiting on" could only ever appear once the wait
+    was over. Now the call announces itself, and the same row is completed when
+    it comes back.
+  */
+  const id = nextKubectlId();
+  recordKubectl(kubectlEvent(bin, args, {}, undefined, 'run', id));
   const res = await runRaw(bin, args, opts);
   recordKubectl(kubectlEvent(bin, args, {
     ok: res.ok, code: res.code, stderr: res.stderr, failure: res.failure,
     bytes: res.stdout?.length,
-  }, Date.now() - started));
+  }, Date.now() - started, 'run', id));
   return res;
 }
 

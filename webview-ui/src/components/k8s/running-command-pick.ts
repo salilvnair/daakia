@@ -32,7 +32,16 @@ export const SETTLED_GRACE_MS = 4_000;
  */
 export type CommandMode = 'waiting' | 'settled';
 
-export function showable({ commands, context, now, match, mode = 'waiting' }: {
+/**
+ * A command may have started a moment before the screen waiting on it did.
+ *
+ * The host fires it, then the state flips to busy and the loader mounts, so a
+ * strict comparison against the mount time would drop the very command the
+ * screen exists to show.
+ */
+const START_SLACK_MS = 2_000;
+
+export function showable({ commands, context, now, match, mode = 'waiting', since }: {
   commands: KubectlCommand[];
   /** The cluster the screen is about. */
   context?: string;
@@ -40,16 +49,40 @@ export function showable({ commands, context, now, match, mode = 'waiting' }: {
   /** Only commands whose verb starts with this — `get pods`, `auth can-i`. */
   match?: string;
   mode?: CommandMode;
+  /**
+   * When this wait began — the loader's mount time.
+   *
+   * It is what separates "ran during this wait" from "was in the backlog the
+   * host replayed when the panel opened". A clock window cannot do that job:
+   * too short and a long wait loses its card the moment the command finishes,
+   * which is exactly when somebody is staring at the screen wondering what it
+   * is doing; too long and a panel that has just opened shows a command from
+   * before it existed.
+   */
+  since?: number;
 }): KubectlCommand | undefined {
   const fits = commands.filter(c => {
     if (match && !c.what.startsWith(match)) return false;
-    /* A command with no context belongs to no cluster — `config get-contexts`
-       is the honest answer on the screen that lists them — so it is never
-       filtered out by one. */
-    if (context && c.context && c.context !== context) return false;
+    /*
+      A screen about a cluster shows that cluster's commands, and nothing else.
+
+      Contextless commands used to be exempt, on the reasoning that
+      `config get-contexts` belongs to no cluster and is the honest answer on
+      the screen that lists them. True there — but those screens pass no
+      context at all, so they never needed the exemption, and on a screen that
+      DOES name a cluster it did real damage: "slow-lab did not answer" showed
+      `kubectl config view -o json`, a contextless command that ran after the
+      failure and won simply by being newest.
+    */
+    if (context && c.context !== context) return false;
     if (mode === 'settled') return true;
-    /* Still running, or only just finished. */
-    return c.ms === undefined || now - c.at <= SETTLED_GRACE_MS;
+    /* Still running: always. */
+    if (c.ms === undefined) return true;
+    /* Finished: only if it ran during this wait. A reach that completes while
+       the screen is still waiting for what comes after it should keep its line
+       on screen — that gap is most of a slow wait. */
+    if (since !== undefined) return c.at >= since - START_SLACK_MS;
+    return now - c.at <= SETTLED_GRACE_MS;
   });
   return fits[fits.length - 1];
 }

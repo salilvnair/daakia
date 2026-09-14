@@ -174,7 +174,7 @@ function Breadcrumb() {
 
 function Probing() {
   return (
-    <div className="flex-1 w-full h-full flex flex-col items-center justify-center">
+    <div className="flex-1 w-full h-full flex flex-col items-center justify-center" style={{ paddingBottom: '14%' }}>
       <LoadingStateView
         icon={<TerminalIcon size={IconSize.hero} />}
         medallionSize={84}

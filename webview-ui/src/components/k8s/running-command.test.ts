@@ -14,7 +14,9 @@ import { describe, it, expect } from 'vitest';
 import { showable, SETTLED_GRACE_MS } from './running-command-pick';
 
 const NOW = 1_000_000;
+let n = 0;
 const cmd = (over: Partial<Parameters<typeof showable>[0]['commands'][number]> = {}) => ({
+  id: `k${++n}`,
   command: 'kubectl --context prod -n payments get pods -o json',
   what: 'get pods',
   context: 'prod',
@@ -36,11 +38,22 @@ describe('whose command it is', () => {
     expect(pick([cmd({ context: 'restricted-lab', what: 'top pods' })])).toBeUndefined();
   });
 
-  it('shows a command with no context at all', () => {
-    // `kubectl config get-contexts` belongs to no cluster and is still the
-    // honest answer to "what is it doing" on the screen that lists them.
-    expect(pick([cmd({ context: undefined, what: 'config get-contexts' })])?.what)
-      .toBe('config get-contexts');
+  it('will not show a contextless one either, on a screen about a cluster', () => {
+    /*
+      This was exempt, on the reasoning that `config get-contexts` belongs to
+      no cluster. It cost: "slow-lab did not answer" showed
+      `kubectl config view -o json` — a contextless command that ran after the
+      failure and won simply by being newest.
+    */
+    expect(pick([cmd({ context: undefined, what: 'config view' })])).toBeUndefined();
+  });
+
+  it('shows anything at all where no cluster is named', () => {
+    // The kubectl setup screen is about the binary, not a cluster.
+    expect(showable({
+      commands: [cmd({ context: undefined, what: 'config get-contexts' })],
+      now: NOW,
+    })?.what).toBe('config get-contexts');
   });
 });
 
@@ -92,5 +105,28 @@ describe('when a screen names what it is waiting on', () => {
       cmd({ what: 'get pods', at: NOW - 100, ms: 10 }),
     ], { match: 'get pods' });
     expect(picked?.at).toBe(NOW - 100);
+  });
+});
+
+describe('a command that finished while the wait went on', () => {
+  /*
+    A slow wait is mostly gap: the reach returns, and the screen keeps waiting
+    for what comes after it. The card went blank there, which is exactly when
+    somebody is staring at the screen wondering what it is doing.
+  */
+  it('stays while the wait it belongs to is still running', () => {
+    const c = cmd({ ms: 400, at: NOW - 30_000 });
+    expect(pick([c], { since: NOW - 60_000 })).toBeDefined();
+  });
+
+  it('does not show one from before this screen existed', () => {
+    // The backlog the host replays into a panel that has just opened.
+    const c = cmd({ ms: 400, at: NOW - 60_000 });
+    expect(pick([c], { since: NOW - 1_000 })).toBeUndefined();
+  });
+
+  it('allows for a command fired a moment before the loader mounted', () => {
+    const c = cmd({ ms: 400, at: NOW - 1_200 });
+    expect(pick([c], { since: NOW })).toBeDefined();
   });
 });
