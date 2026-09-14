@@ -21,6 +21,7 @@ import { softPrimary } from './button-style';
 
 import { ACCENT, ACCENT_MUTED as ACCENT_FILL } from './tone';
 import { RunningCommand } from './RunningCommand';
+import { enterIntent } from './picker-enter';
 /** For filled areas. The same cyan that reads well as a small glyph is
  *  glaring across a whole button, so anything with a solid fill uses the
  *  muted tone and keeps the bright one for strokes and text. */
@@ -153,10 +154,11 @@ export function ClusterPicker() {
   if (busy && checked.length > 0) {
     const many = checked.length > 1;
     return (
-      <div className="flex-1 grid place-items-center px-8">
+      <div className="flex-1 w-full h-full flex flex-col items-center justify-center px-8">
         <LoadingStateView
           icon={<Dk8sIcon size={IconSize.hero} />}
           medallionSize={84}
+          messageWidth="72ch"
           title={many ? `Reaching ${checked.length} clusters` : `Reaching ${checked[0]}`}
           message={many
             ? 'One call per cluster, in parallel — then the namespaces each of them holds.'
@@ -525,10 +527,11 @@ export function NamespaceMultiPicker() {
   if (busy) {
     const many = selectedContexts.length > 1;
     return (
-      <div className="flex-1 grid place-items-center px-8">
+      <div className="flex-1 w-full h-full flex flex-col items-center justify-center px-8">
         <LoadingStateView
           icon={<Dk8sIcon size={IconSize.hero} />}
           medallionSize={84}
+          messageWidth="72ch"
           title={many ? `Reaching ${selectedContexts.length} clusters` : `Reaching ${selectedContexts[0] ?? 'the cluster'}`}
           message="Checking the API server answers, then reading the namespaces it holds."
           accentColor={ACCENT}
@@ -577,6 +580,25 @@ export function NamespaceMultiPicker() {
       <TextInputView
         value={query}
         onChange={e => setQuery(e.target.value)}
+        onKeyDown={e => {
+          /* Enter finishes the typing. On a cluster that will not list its
+             namespaces this box is the only way in, and the key everybody
+             presses at the end of a name did nothing. `enterIntent` decides
+             what it can mean here; where it is ambiguous the buttons answer. */
+          if (e.key !== 'Enter') return;
+          const intent = enterIntent(query, offers);
+          if (intent.kind === 'add') { e.preventDefault(); addTo(intent.context); }
+          else if (intent.kind === 'tick') {
+            e.preventDefault();
+            /* Select, never deselect. `toggle` would untick a namespace that
+               is already chosen, which is not what pressing Enter on its name
+               asks for. */
+            const already = checked.some(x => x.context === intent.context
+                                           && x.namespace === intent.namespace);
+            if (!already) toggle({ context: intent.context, namespace: intent.namespace });
+            setQuery('');
+          }
+        }}
         placeholder="Filter namespaces, or type one that is not listed"
         size="md"
         accentColor={ACCENT}
@@ -629,6 +651,10 @@ export function NamespaceMultiPicker() {
               has been stopped, a VPN that is not up, or a context left over from a cluster that
               no longer exists all look like this.
             </span>
+            {/* And what it ran to find that out — this is a screen somebody
+                reads before saying "but it works in my terminal", so the line
+                to try in that terminal belongs on it. */}
+            <RunningCommand width={640} mode="settled" />
             <div className="flex gap-2 mt-1">
               <ButtonView label="Choose other clusters" size="sm" variant="secondary"
                           accentColor={ACCENT_FILL} color={ACCENT}
@@ -655,7 +681,7 @@ export function NamespaceMultiPicker() {
               The wait is yours to change in Settings → DK8S → General.
             </span>
             {/* And the line it is waiting on, to try in a terminal. */}
-            <RunningCommand width={640} />
+            <RunningCommand width={640} mode="settled" />
             <div className="flex gap-2 mt-1">
               <ButtonView label="Choose other clusters" size="sm" variant="secondary"
                           accentColor={ACCENT_FILL} color={ACCENT}
@@ -668,6 +694,7 @@ export function NamespaceMultiPicker() {
           <LoadingStateView
             icon={<LayersIcon size={IconSize.hero} />}
             medallionSize={84}
+            messageWidth="72ch"
             title={multiCluster ? 'Reading namespaces' : `Reading namespaces in ${selectedContexts[0] ?? 'the cluster'}`}
             message="One call per cluster, in parallel."
             accentColor={ACCENT}

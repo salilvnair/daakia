@@ -174,10 +174,11 @@ function Breadcrumb() {
 
 function Probing() {
   return (
-    <div className="flex-1 grid place-items-center">
+    <div className="flex-1 w-full h-full flex flex-col items-center justify-center">
       <LoadingStateView
         icon={<TerminalIcon size={IconSize.hero} />}
         medallionSize={84}
+        messageWidth="72ch"
         title="Looking for kubectl"
         message="Checking PATH and the places each platform's package managers put it."
         accentColor={ACCENT}

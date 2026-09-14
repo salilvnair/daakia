@@ -309,10 +309,11 @@ export function UnreachableNotice() {
 
   if (busy) {
     return (
-      <div className="flex-1 grid place-items-center px-8">
+      <div className="flex-1 w-full h-full flex flex-col items-center justify-center px-8">
         <LoadingStateView
           icon={<Dk8sIcon size={IconSize.hero} />}
           medallionSize={84}
+          messageWidth="72ch"
           title={`Reaching ${context}`}
           message="Asking the API server again. A cluster behind a VPN answers in seconds rather than milliseconds."
           accentColor={ACCENT}
@@ -356,7 +357,7 @@ export function UnreachableNotice() {
         try in that terminal belongs on it — the same command, copyable, with
         what the cluster said underneath.
       */}
-      <RunningCommand width={720} />
+      <RunningCommand width={720} mode="settled" />
 
       <div className="flex items-center gap-2">
         <ButtonView label="Retry" size="sm" variant="secondary"

@@ -29,6 +29,7 @@ import { useK8sStore } from '../../store/k8s-store';
 import { FileViewer } from './FileViewer';
 import { DownloadsPanel } from './DownloadsPanel';
 import { CapabilityPanel, capabilitiesFrom } from './CapabilityPanel';
+import { RunningCommand } from './RunningCommand';
 import { useDk8sFilesStore, listenForDownloads } from '../../store/dk8s-files-store';
 
 export interface ExplorerEntry {
@@ -656,16 +657,22 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
         the whole tab below it blank. `h-full` is what actually fills a block
         parent, and once it fills it the centring works.
       */
-      <div className="h-full grid place-items-center px-8">
+      <div className="h-full flex flex-col items-center justify-center px-8">
         <LoadingStateView
           icon={<FolderOpenIcon size={IconSize.hero} />}
           medallionSize={84}
+          messageWidth="72ch"
           title="Opening the file browser"
           message="Looking for a sensible directory to start in — /data, /var/lib, /mnt, then the root."
           accentColor={ACCENT}
           slowAfterSeconds={8}
           slowMessage="Still asking the container. Each probe is an exec, and a pod under load answers them slowly."
         />
+        {/* The line it is waiting on. Every other loader in dk8s shows it, and
+            this one is the slowest of them — it is a run of execs against a
+            container, and "looking for a sensible directory" says what dk8s is
+            doing without saying what it is running. */}
+        <RunningCommand />
       </div>
     );
   }

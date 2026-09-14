@@ -1062,7 +1062,17 @@ export function PodGrid() {
 
       <div className="flex-1 overflow-auto px-4 pt-3 pb-4">
         {!pods.length ? (
-          <div className="flex items-center justify-center h-full">
+          /*
+            A column, not a row.
+
+            Every branch below is two blocks — the loader and the kubectl line
+            under it — and a plain `flex` laid them side by side, then centred
+            the PAIR. So the spinner sat left of centre with the command beside
+            it, which is neither of the two things it should look like. The
+            command belongs *below* the loader, and the loader belongs in the
+            middle of the space.
+          */
+          <div className="flex flex-col items-center justify-center h-full">
             {/*
               WatchStatus has no failure state — idle, connected, reconnecting,
               stopped — so a watch that never comes up stays 'idle' and this
@@ -1079,6 +1089,7 @@ export function PodGrid() {
               <LoadingStateView
                 icon={<Dk8sIcon size={IconSize.hero} />}
                 medallionSize={84}
+                messageWidth="72ch"
                 title="Reaching the cluster"
                 message="Checking the API server answers, then opening the watch again."
                 accentColor={ACCENT}
@@ -1104,7 +1115,7 @@ export function PodGrid() {
                 </span>
                 {/* What it opened and what came back — the whole point of the
                     complaint this state exists for. */}
-                <RunningCommand match="get pods" />
+                <RunningCommand match="get pods" mode="settled" />
                 <ButtonView label="Try again" size="sm" variant="secondary"
                             onClick={() => {
                               /* Clears the local verdict too — without this the
@@ -1131,6 +1142,7 @@ export function PodGrid() {
                      load rather than as the thing being waited for. */
                   icon={<Dk8sIcon size={IconSize.hero} />}
                   medallionSize={84}
+                  messageWidth="72ch"
                   title={watchStatus === 'reconnecting' ? 'Reconnecting to the cluster' : 'Reading pods'}
                   message={watchStatus === 'reconnecting'
                     ? 'The watch dropped. Picking it up from where it left off.'

@@ -70,6 +70,20 @@ export const ALL_ACCESS: Access = {
  * it.
  */
 function leavingCluster() {
+  /*
+    Tell the host to let go of the old cluster.
+
+    Clearing `targets` here only changed what this store believes. The host
+    keeps a watch process and a metrics interval per target, and it is only
+    ever asked to reconcile them when a watch is *started* — `watchPods` with
+    an empty list returns without stopping anything. So the previous cluster
+    kept being polled the whole time somebody stood on the picker choosing the
+    next one: `top pods --no-headers` against a namespace nobody was looking
+    at, once every interval, which is what put another cluster's command under
+    "slow-lab did not answer".
+  */
+  postMsg({ type: 'dk8s:stopWatch' });
+
   return {
     stage: 'pick-namespace' as const,
     namespace: undefined,
@@ -87,6 +101,16 @@ function leavingCluster() {
     /* Not "denied" and not "allowed": unknown until the new cluster answers. */
     access: ALL_ACCESS,
     reachable: undefined,
+    /*
+      The command feed deliberately survives. It is the record of what dk8s ran
+      for the cluster being left, which is usually the reason somebody is
+      leaving it, and Settings -> DK8S -> Commands is not the only place that
+      should be readable from.
+
+      What must not survive is a loader on the NEXT screen quoting it, and that
+      is fixed where it belongs -- `running-command-pick.ts` shows a command
+      only for the cluster on screen and only while it is current.
+    */
   };
 }
 
@@ -271,7 +295,7 @@ export interface PodAction {
   mutatesPod?: boolean;
 }
 
-export type DetailTab = 'overview' | 'logs' | 'terminal' | 'doctor' | 'explorer' | 'yaml' | 'describe';
+export type DetailTab = 'overview' | 'logs' | 'terminal' | 'doctor' | 'explorer' | 'yaml' | 'describe' | 'access';
 
 export interface MemoryProfile {
   limitBytes?: number;

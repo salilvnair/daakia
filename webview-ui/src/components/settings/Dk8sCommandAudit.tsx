@@ -58,15 +58,24 @@ function clock(at: string): string {
   return Number.isNaN(d.getTime()) ? at : d.toISOString().slice(11, 19);
 }
 
+/**
+ * The same chip the Developer Tools audit uses, to the pixel.
+ *
+ * This had its own: a hairline at 40% of the accent, no weight on the text, no
+ * vertical padding. Beside the audit it was meant to match it read as a
+ * different control — the hard outline pulled the eye to the border instead of
+ * the word. Two screens listing the same kind of thing should not look like
+ * two products, so the numbers here are copied from `StageBadge` in
+ * settings/devtools/AuditLogTab.tsx rather than re-guessed.
+ */
 function Badge({ label, color }: { label: string; color: string }) {
   return (
     <span
-      className="text-[9.5px] uppercase tracking-wider px-1.5 rounded whitespace-nowrap"
+      className="text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wide shrink-0 whitespace-nowrap"
       style={{
         color,
-        border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`,
-        background: `color-mix(in srgb, ${color} 10%, transparent)`,
-        lineHeight: '15px',
+        backgroundColor: `color-mix(in srgb, ${color} 14%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${color} 20%, transparent)`,
       }}
     >
       {label}
