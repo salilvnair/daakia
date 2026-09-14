@@ -29,6 +29,7 @@
  * (logged, not a crash) — add handlers here the same way as the mock-server
  * block below when needed.
  */
+import { handleScanPickFolder, handleScanInspect, handleScanRun } from '../src/panel/main/handlers/scan-handler';
 import {
   getSqliteStatus, getDbPath, getHistory, clearHistory, deleteHistoryById, getSetting, setSetting, getCookies,
   getAllPrompts, upsertPrompt, resetPrompt,
@@ -464,6 +465,15 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dk8s:setClusterTimeout':
       await handleDk8sSetClusterTimeout(msg, post);
+      break;
+    case 'scan:pickFolder':
+      await handleScanPickFolder(msg, post);
+      break;
+    case 'scan:inspect':
+      await handleScanInspect(msg, post);
+      break;
+    case 'scan:run':
+      await handleScanRun(msg, post);
       break;
     case 'dk8s:watchPods':
       handleDk8sWatchPods(msg, post);

@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { TagChips } from '../../shared/tags/TagChips';
 import { tagsFromData } from '../../shared/tags/request-tags';
 import { postMsg } from '../../../vscode';
+import { useScanStore } from '../../../store/scan-store';
+import { ScanModal } from '../scan/ScanModal';
 import { useTabsStore } from '../../../store/tabs-store';
 import type { Protocol, RequestTab } from '../../../store/tabs-store';
 import { getDisplayMethod } from '../../../services/request/request-service';
@@ -986,6 +988,20 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
             position={headerMenu?.kind === 'more' ? { x: headerMenu.x, y: headerMenu.y } : undefined}
             onClose={() => setHeaderMenu(null)}
             items={[
+              /*
+                Not under Import, deliberately. Import takes a file somebody
+                exported — Postman, OpenAPI, HAR — and this reads a codebase.
+                Filing it with the importers would send people looking for a
+                file to choose.
+              */
+              {
+                id: 'scan-code',
+                label: 'Scan code for requests…',
+                description: 'Read routes out of a repository and build a collection',
+                icon: <SearchIcon size={14} />,
+                onClick: () => { useScanStore.getState().openScan(); setHeaderMenu(null); },
+              },
+              { id: 'scan-sep', label: '', separator: true },
               { id: 'delete-all', label: 'Delete all collections', danger: true, shortcut: 'D', icon: <TrashIcon size={14} />, onClick: () => { setShowDeleteAllConfirm(true); setHeaderMenu(null); } },
             ] as DuiContextMenuItem[]}
           />
@@ -1323,6 +1339,13 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
           onClose={() => setShowInsomniaImport(false)}
         />
       )}
+
+      {/*
+        The scan's own modal. It owns its whole conversation with the host —
+        pick, inspect, run, review — so it takes no props and closes itself;
+        the panel's only part in it is the menu item that opens it.
+      */}
+      <ScanModal />
 
       {/* Sprint 11 modals */}
       {collectionOptimizerNode && (

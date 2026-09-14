@@ -2,6 +2,7 @@
  * MainPanel — core panel shell + message router.
  * All domain logic is delegated to handler modules in ./handlers/.
  */
+import { handleScanPickFolder, handleScanInspect, handleScanRun } from './handlers/scan-handler';
 import * as vscode from 'vscode';
 import {
   handleTerminalOpen, handleTerminalInput, handleTerminalResize,
@@ -665,6 +666,15 @@ export class MainPanel {
         break;
       case 'dk8s:setClusterTimeout':
         handleDk8sSetClusterTimeout(msg, this._post);
+        break;
+      case 'scan:pickFolder':
+        void handleScanPickFolder(msg, this._post);
+        break;
+      case 'scan:inspect':
+        void handleScanInspect(msg, this._post);
+        break;
+      case 'scan:run':
+        void handleScanRun(msg, this._post);
         break;
       case 'dk8s:watchPods':
         handleDk8sWatchPods(msg, this._post);
