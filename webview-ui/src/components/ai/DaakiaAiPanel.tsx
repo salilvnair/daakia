@@ -446,7 +446,9 @@ export function DaakiaAiPanel() {
     showEngineStatus: false,
     showHeaderDot: false,
     defaultDark: true,
-    composerShape: 'round' as const,
+    /* Rectangular, like every other box you type into in this app — the
+       capsule was the library's default, not a choice. */
+    composerShape: 'rect' as const,
     landingChips: SUGGESTION_CHIPS,
     stream: { enabled: true, transport: 'sse' as const },
     renderers: DAAKIA_RENDERER_PROVIDERS,
@@ -619,13 +621,21 @@ export function DaakiaAiPanel() {
           theme={chatTheme}
         />
 
-        {/* Suggestion chips — float above the composer after each response */}
-        {showChips && (
+        {/*
+          Suggestion chips — float above the composer after each response.
+
+          Only when there is something to suggest. Every chip in this row acts
+          on the tab the conversation is about, so with no such tab the row
+          rendered anyway and the only thing left in it was its own dismiss
+          button: a bare ✕ in a circle, floating over the composer, attached to
+          nothing and explaining nothing.
+        */}
+        {showChips && contextTab?.url && (
           <div
             className="absolute bottom-[72px] left-0 right-0 flex items-center gap-1.5 px-3 py-1.5 flex-wrap pointer-events-none"
             style={{ zIndex: 10 }}
           >
-            {contextTab?.url && (
+            {(
               <>
                 <button
                   type="button"

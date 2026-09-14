@@ -1,31 +1,40 @@
 /**
- * A switch that hides an icon has one way to go badly wrong: defaulting to
- * hidden. Every existing install has nothing stored, and `prefs` arrives from
- * the database a moment after the first render — so "nothing stored" and "not
- * loaded yet" both have to mean shown, or the rail blinks on every launch and
- * an upgrade looks like a feature being removed.
+ * Two things this must never get wrong.
+ *
+ * A stored answer is obeyed — somebody who turned an icon on does not find it
+ * off after an upgrade. And "nothing stored" is not an answer: `prefs` arrives
+ * from the database a moment after the first render, so unknown has to resolve
+ * to the surface's default rather than to hidden, or the rail blinks on every
+ * launch and dk8s looks like a feature that was removed.
  */
 import { describe, it, expect } from 'vitest';
 import { showsOnToolbar, toolbarPrefKey } from './toolbar-visibility';
 
-describe('showsOnToolbar', () => {
-  it('shows when nothing is stored', () => {
-    expect(showsOnToolbar(undefined)).toBe(true);
+describe('the defaults', () => {
+  it('keeps dk8s on the rail for a fresh install', () => {
+    expect(showsOnToolbar(undefined, 'dk8s')).toBe(true);
   });
 
-  it('shows when the stored value says yes', () => {
-    expect(showsOnToolbar('yes')).toBe(true);
+  it('keeps dkgh off it', () => {
+    // An issue tracker is a place you go deliberately, and most installs are
+    // here for the API client. It is one switch away in Settings → DKGH.
+    expect(showsOnToolbar(undefined, 'dkgh')).toBe(false);
+  });
+});
+
+describe('a stored answer', () => {
+  it('is obeyed, whichever way it goes', () => {
+    expect(showsOnToolbar('no', 'dk8s')).toBe(false);
+    expect(showsOnToolbar('yes', 'dkgh')).toBe(true);
   });
 
-  it('hides only on an explicit no', () => {
-    expect(showsOnToolbar('no')).toBe(false);
-  });
-
-  it('shows on anything it does not recognise', () => {
-    // A pref written by a future version, or corrupted. The safe reading of an
-    // unknown value is the one that leaves the feature reachable.
-    expect(showsOnToolbar('')).toBe(true);
-    expect(showsOnToolbar('maybe')).toBe(true);
+  it('falls back to the default when it says nothing recognisable', () => {
+    // Empty is what an un-hydrated pref looks like; "maybe" is what a pref
+    // from some future version might. Neither is a decision.
+    for (const odd of ['', 'maybe', 'true']) {
+      expect(showsOnToolbar(odd, 'dk8s')).toBe(true);
+      expect(showsOnToolbar(odd, 'dkgh')).toBe(false);
+    }
   });
 });
 

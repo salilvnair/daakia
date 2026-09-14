@@ -16,7 +16,7 @@ import {
 } from '@salilvnair/dui';
 import {
   Dk8sIcon, GitHubIcon, SparkleIcon, GlobeIcon, BookOpenIcon, ChevronDownIcon,
-  ChevronRightIcon, CheckIcon, BugIcon, LayersIcon,
+  ChevronRightIcon, CheckIcon, BugIcon, DaakiaMarkIcon,
 } from '../../icons';
 import { RELEASES, CURRENT_RELEASE, formatReleaseDate, type ReleaseKind } from './release-notes';
 
@@ -90,16 +90,26 @@ export function AboutPanel() {
 
         {/* ── What you are running ── */}
         <div className="flex items-start gap-4">
+          {/*
+            The product's own mark, not an icon that stands for it.
+
+            This was a Layers glyph in the accent colour, which is the drawing
+            you reach for when you have not got the real one — and the real one
+            is right there in the repository, on the Marketplace listing and in
+            the activity bar. An About screen showing something other than the
+            icon the reader clicked to get here is the one place that cannot
+            afford a stand-in. The tile behind it is neutral, because the mark
+            brings its own colours.
+          */}
           <div
             className="grid place-items-center shrink-0"
             style={{
               width: 72, height: 72, borderRadius: 20,
-              color: ACCENT,
-              background: `color-mix(in srgb, ${ACCENT} 12%, transparent)`,
-              border: `1px solid color-mix(in srgb, ${ACCENT} 26%, transparent)`,
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-surface-border)',
             }}
           >
-            <LayersIcon size={34} />
+            <DaakiaMarkIcon size={46} />
           </div>
 
           <div className="flex flex-col gap-1.5 min-w-0">
