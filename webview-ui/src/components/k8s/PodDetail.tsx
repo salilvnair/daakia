@@ -19,6 +19,7 @@ import { LogViewer } from './LogViewer';
 import { AiSplit } from './AiAnswerPanel';
 import { DoctorTab } from './DoctorTab';
 import { ExplorerTab } from './ExplorerTab';
+import { AccessTab } from './AccessTab';
 import { PodTerminal } from './PodTerminal';
 import { tokenizeDescribeLine, tokenColor, tokenWeight } from './describe-highlight';
 import { CodeEditor } from '../shared/editors/CodeEditor';
@@ -29,18 +30,12 @@ import { AI as AI_ACCENT } from './tone';
 
 // Order from the mock: Overview, Logs, Terminal, Doctor, YAML — with Describe
 // alongside YAML, since they answer the same kind of question.
-type AccessKey = 'logs' | 'exec' | 'get' | 'events' | 'portForward' | 'delete' | 'patch';
-
-/** What to ask an administrator for, in the words an RBAC rule uses. */
-const ACCESS_RULE: Record<AccessKey, string> = {
-  logs: 'get on pods/log',
-  exec: 'create on pods/exec',
-  get: 'get on pods',
-  events: 'list on events',
-  portForward: 'create on pods/portforward',
-  delete: 'delete on pods',
-  patch: 'patch on pods',
-};
+/*
+  Both of these come from `access-checks.ts`, which the host probes from. They
+  were typed out again here, which is how a padlock ends up naming a rule
+  nobody checked.
+*/
+import { ACCESS_RULE, type AccessKey } from '@daakia/access-checks';
 
 /**
  * `needs` is the permission the tab cannot work without.
@@ -60,6 +55,14 @@ const TABS: {
   { id: 'explorer', label: 'Explorer', Icon: FolderOpenIcon, needs: 'exec' },
   { id: 'describe', label: 'Describe', Icon: CodeIcon, needs: 'get' },
   { id: 'yaml', label: 'YAML', Icon: CodeIcon, needs: 'get' },
+  /*
+    Last, and gated on nothing.
+
+    It is the tab you want precisely when another one is shut, so it cannot
+    require the permission it exists to explain. It renders an answer dk8s
+    already has and makes no call of its own.
+  */
+  { id: 'access', label: 'Access', Icon: LockIcon },
 ];
 
 /**
@@ -396,6 +399,9 @@ export function PodDetail() {
 
           <div className="flex-1 min-h-0">
             {detailTab === 'overview' && <OverviewTab />}
+            {detailTab === 'access' && detail?.context && (
+              <AccessTab context={detail.context} namespace={detail.namespace} />
+            )}
             {denied ? (
               <NoAccess what={denied.label} needs={denied.needs} />
             ) : (

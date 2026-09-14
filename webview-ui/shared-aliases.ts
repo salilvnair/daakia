@@ -38,4 +38,16 @@ export const SHARED_ALIASES = {
     of the app and wrong in the other.
   */
   '@daakia/pv-layouts': resolve(__dirname, '..', 'src', 'services', 'k8s', 'pv-layouts.ts'),
+
+  /*
+    The permissions dk8s asks a cluster about, shared for the third time on the
+    same terms — `src/services/k8s/access-checks.ts` has no imports either.
+
+    The host probes them and the webview explains them: the Access tab lists
+    every one, says whether this account has it, and shows the exact
+    `kubectl auth can-i` line that produced the answer. Both sides naming the
+    same seven permissions from two lists is how a padlocked tab ends up
+    quoting a rule the host never checked.
+  */
+  '@daakia/access-checks': resolve(__dirname, '..', 'src', 'services', 'k8s', 'access-checks.ts'),
 };

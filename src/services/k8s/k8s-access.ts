@@ -22,31 +22,19 @@
  */
 
 import { run } from './kubectl';
+import {
+  ACCESS_CHECKS, canIArgs, type AccessCheck, type AccessKey,
+} from './access-checks';
 
-/** The verbs dk8s needs, named by what they let you do. */
-export type AccessKey =
-  | 'logs'       // read a pod's log
-  | 'exec'       // open a shell, and everything the Doctor collects
-  | 'get'        // describe and YAML
-  | 'events'     // the event list under Describe
-  | 'portForward'
-  | 'delete'
-  | 'patch';     // label a pod — the detach-before-heap-dump flow
-
-interface Check {
-  verb: string;
-  resource: string;
-}
-
-const CHECKS: Record<AccessKey, Check> = {
-  logs: { verb: 'get', resource: 'pods/log' },
-  exec: { verb: 'create', resource: 'pods/exec' },
-  get: { verb: 'get', resource: 'pods' },
-  events: { verb: 'list', resource: 'events' },
-  portForward: { verb: 'create', resource: 'pods/portforward' },
-  delete: { verb: 'delete', resource: 'pods' },
-  patch: { verb: 'patch', resource: 'pods' },
-};
+/*
+  The list itself lives in `access-checks.ts`, which the webview also reads
+  through an alias. There were three copies of it — the verbs probed here, the
+  rule strings reported here, and a hand-typed duplicate of those rules in the
+  webview — and three lists that have to agree stay agreed only for as long as
+  somebody remembers all three.
+*/
+export type { AccessKey } from './access-checks';
+export { ACCESS_RULE } from './access-checks';
 
 export type Access = Record<AccessKey, boolean> & {
   /**
@@ -109,18 +97,9 @@ export function readCanI(
 
 /** One `kubectl auth can-i`. Never throws; anything unclear reads as allowed. */
 async function canI(
-  context: string, namespace: string, check: Check,
+  context: string, namespace: string, check: AccessCheck,
 ): Promise<boolean | undefined> {
-  const res = await run(
-    [
-      '--context', context, '-n', namespace,
-      'auth', 'can-i', check.verb, check.resource,
-      // Without this kubectl prints a warning and still exits 0 on "no",
-      // which would read as allowed.
-      '--quiet',
-    ],
-    { timeoutMs: 10_000 },
-  );
+  const res = await run(canIArgs(check, context, namespace), { timeoutMs: 10_000 });
   return readCanI(res);
 }
 
@@ -133,12 +112,12 @@ export async function probeAccess(
   const hit = cache.get(key);
   if (hit && now - hit.at < CACHE_TTL_MS) return hit.access;
 
-  const keys = Object.keys(CHECKS) as AccessKey[];
+  const keys = ACCESS_CHECKS.map(c => c.key);
   let results: (boolean | undefined)[];
   try {
     // In parallel: seven SelfSubjectAccessReviews are cheap, and doing them in
     // turn would put a visible pause in front of the first pod you open.
-    results = await Promise.all(keys.map(k => canI(context, namespace, CHECKS[k])));
+    results = await Promise.all(ACCESS_CHECKS.map(c => canI(context, namespace, c)));
   } catch {
     return ALL_ALLOWED(false);
   }
@@ -187,14 +166,3 @@ export function forbiddenReason(stderr: string): string | undefined {
   }
   return 'Your account does not have permission for this.';
 }
-
-/** What to tell someone an action needs, in RBAC terms they can pass on. */
-export const ACCESS_RULE: Record<AccessKey, string> = {
-  logs: 'get on pods/log',
-  exec: 'create on pods/exec',
-  get: 'get on pods',
-  events: 'list on events',
-  portForward: 'create on pods/portforward',
-  delete: 'delete on pods',
-  patch: 'patch on pods',
-};

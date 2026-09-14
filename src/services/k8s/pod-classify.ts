@@ -12,6 +12,7 @@
  * work on the most common production Java image there is.
  */
 import { run } from './kubectl';
+import { probeAccess } from './k8s-access';
 
 export type PodRuntime = 'java' | 'python' | 'node' | 'go' | 'dotnet' | 'unknown';
 
@@ -199,6 +200,26 @@ export async function probeCapabilities(
     shell: null, tar: false, python3: false,
     jcmd: false, jstack: false, jmap: false, jfr: false,
   };
+
+  /*
+    Ask permission before spending an exec on it.
+
+    This probe is an exec, and on an account without `create pods/exec` the
+    cluster's answer is known before the call is made — dk8s asked, in the
+    access probe, and the answer is cached. It was firing anyway: the audit
+    showed `exec … -- sh -c "for s in bash sh ash busybox…"` returning exit 1
+    beside the `auth can-i create pods/exec` that had already said no, on every
+    pod opened.
+
+    Failing open is still the rule: only a definite no stops it. An account
+    where the check could not be made (`probed: false`) gets the exec, because
+    hiding something that would have worked is the worse mistake.
+  */
+  const access = await probeAccess(ctx, namespace);
+  if (access.probed && !access.exec) {
+    caps.unreachable = 'this account cannot create on pods/exec in this namespace';
+    return caps;
+  }
 
   // Try each shell until one execs. A distroless pod fails all of them, and
   // that is a finding rather than an error.
