@@ -26,11 +26,13 @@ import type {
 } from './api-detector';
 import { springDetector } from './spring/spring-detector';
 import { expressDetector } from './js/express-detector';
+import { hapiDetector } from './js/hapi-detector';
 
 /** Every detector that ships. Adding one is a line here and a file beside it. */
 export const DETECTORS: readonly ApiDetector[] = [
   springDetector,
   expressDetector,
+  hapiDetector,
 ];
 
 /**

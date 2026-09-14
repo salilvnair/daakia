@@ -18,6 +18,8 @@ import { useWorkspaceStore } from '../../../store/workspace-store';
 import { importRequestsAsCollection } from '../../../services/collections/import-to-collection';
 import { useToastStore } from '../../../store/toast-store';
 import { SearchIcon, FolderOpenIcon, RefreshIcon } from '../../../icons';
+import { ScanDestination, type Destination } from './ScanDestination';
+import { useEnvStore } from '../../../store/env-store';
 
 /** Collections is purple everywhere else in daakia; this lives under it. */
 const ACCENT = 'var(--color-sidebar-collections)';
@@ -148,6 +150,16 @@ export function ScanModal() {
   const activeWorkspace = useWorkspaceStore(w => w.activeId);
   const addToast = useToastStore(t => t.addToast);
   const [writing, setWriting] = useState(false);
+  /*
+    Where it goes, decided before it is written and not in a footer field.
+
+    A new collection named after the repository is the usual answer, so it is
+    the default — but a scan of a service you already have a collection for
+    should go into that collection, and that was not expressible at all.
+  */
+  const [destination, setDestination] = useState<Destination>({ kind: 'new', name: '' });
+  const [createEnv, setCreateEnv] = useState(true);
+  const [step, setStep] = useState<'review' | 'destination'>('review');
 
   /* The host's replies all land here. */
   useEffect(() => {
@@ -160,6 +172,13 @@ export function ScanModal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (s.collectionName && destination.kind === 'new' && !destination.name) {
+      setDestination({ kind: 'new', name: s.collectionName });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.collectionName]);
+
   const groups = useMemo(() => byFolder(s.requests), [s.requests]);
   const focused = s.requests.find(r => r.scan.identity === s.focused);
 
@@ -170,9 +189,35 @@ export function ScanModal() {
     if (!picked.length) return;
     setWriting(true);
     try {
+      const name = destination.kind === 'new'
+        ? (destination.name.trim() || 'Scanned API')
+        : destination.name;
+
+      /*
+        The environment first, and made active.
+
+        Every request is written against {{baseUrl}}, so a collection that
+        arrives before the variable that resolves it is a collection that
+        cannot be run — which is the state the first version shipped in.
+      */
+      if (createEnv && s.baseUrl?.url) {
+        const env = useEnvStore.getState();
+        const id = env.addEnvironment(name);
+        env.updateVariables(id, [{
+          id: crypto.randomUUID(),
+          key: 'baseUrl',
+          initialValue: s.baseUrl.url,
+          currentValue: s.baseUrl.url,
+          isSecret: false,
+        }]);
+        env.setActiveEnvironment(id);
+      }
+
       const saved = await importRequestsAsCollection({
-        name: s.collectionName.trim() || 'Scanned API',
+        name,
         protocol: 'rest',
+        /* Into the collection that was chosen, when one was. */
+        ...(destination.kind === 'existing' ? { collectionId: destination.id } : {}),
         requests: picked.map(r => ({
           name: r.name,
           method: r.method,
@@ -188,7 +233,8 @@ export function ScanModal() {
       });
       addToast({
         type: 'success',
-        message: `${saved} request${saved === 1 ? '' : 's'} in ${s.collectionName}`,
+        message: `${saved} request${saved === 1 ? '' : 's'} in ${name}`
+          + (createEnv && s.baseUrl?.url ? ` · environment ${name} is active` : ''),
       });
       s.close();
     } finally {
@@ -198,6 +244,7 @@ export function ScanModal() {
 
   return (
     <ModalView open onClose={s.close} title="Scan code for requests" size="xxl">
+      <div style={{ position: 'relative' }}>
       {s.stage === 'source' && <SourceStep />}
       {s.stage === 'scanning' && <ScanningStep />}
       {s.stage === 'error' && (
@@ -252,14 +299,54 @@ export function ScanModal() {
             display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
             borderTop: '1px solid var(--color-surface-border)',
           }}>
-            <span style={{ fontSize: 11.5, color: 'var(--color-text-muted)' }}>Collection</span>
-            <span style={{ width: 200 }}>
-              <TextInputView value={s.collectionName} size="sm" width="fullWidth" accentColor={ACCENT}
-                             onChange={e => s.setCollectionName(e.target.value)} />
-            </span>
             <span style={{ fontSize: 11.5, color: 'var(--color-text-muted)' }}>
-              in {useWorkspaceStore.getState().workspaces.find(w => w.id === activeWorkspace)?.name ?? 'this workspace'}
+              {s.chosen.size} of {s.requests.length} selected
             </span>
+            <span style={{ flex: 1 }} />
+            <ButtonView label="Cancel" size="sm" variant="secondary" onClick={s.close} />
+            <ButtonView
+              label="Choose where…"
+              size="sm" variant="secondary" accentColor={ACCENT} color={ACCENT}
+              disabled={s.chosen.size === 0}
+              onClick={() => setStep('destination')}
+            />
+          </div>
+        </div>
+      )}
+
+      {/*
+        Where it goes, as its own step.
+
+        It was three controls crammed into the review's footer, which left no
+        room to show the collection tree or the environment — so neither
+        existed, and the workspace was a word rather than a choice.
+      */}
+      {s.stage === 'review' && step === 'destination' && (
+        <div style={{
+          position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+          background: 'var(--color-panel)',
+        }}>
+          <div style={{ padding: '16px 18px', overflowY: 'auto', flex: 1 }}>
+            <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 600 }}>
+              {s.chosen.size} request{s.chosen.size === 1 ? '' : 's'} — where should they go?
+            </p>
+            <p style={{ margin: '0 0 16px', fontSize: 12, color: 'var(--color-text-muted)' }}>
+              Nothing has been written yet.
+            </p>
+            <ScanDestination
+              destination={destination}
+              onDestination={setDestination}
+              envName={destination.kind === 'new' ? (destination.name || s.collectionName) : destination.name}
+              createEnv={createEnv}
+              onCreateEnv={setCreateEnv}
+              baseUrl={s.baseUrl?.url}
+            />
+          </div>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+            borderTop: '1px solid var(--color-surface-border)',
+          }}>
+            <ButtonView label="Back" size="sm" variant="secondary" onClick={() => setStep('review')} />
             <span style={{ flex: 1 }} />
             <ButtonView label="Cancel" size="sm" variant="secondary" onClick={s.close} />
             <ButtonView
@@ -271,6 +358,7 @@ export function ScanModal() {
           </div>
         </div>
       )}
+      </div>
     </ModalView>
   );
 }
