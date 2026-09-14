@@ -28,6 +28,7 @@ export const SECTIONS = {
   'mock-server': { prefix: 'mok', suite: 'Mock Server', dir: 'mock-server' },
   platform:      { prefix: 'plt', suite: 'Platform',    dir: 'platform' },
   dk8s:          { prefix: 'dk8', suite: 'dk8s',        dir: 'dk8s' },
+  dkgh:          { prefix: 'dgh', suite: 'dkgh',        dir: 'dkgh' },
 };
 
 /**
@@ -146,6 +147,13 @@ export const SCREENS = [
   ['dk807', 'dk8s-explorer',            'dk8s — File explorer'],
   ['dk808', 'dk8s-doctor',              'dk8s — Doctor'],
   ['dk809', 'dk8s-artifacts',           'dk8s — Artifacts'],
+
+  // ── dkgh ──────────────────────────────────────────────────────────────────
+  ['dgh01', 'dkgh-board',               'dkgh — Board'],
+  ['dgh02', 'dkgh-table',               'dkgh — Table'],
+  ['dgh03', 'dkgh-team',                'dkgh — Team'],
+  ['dgh04', 'dkgh-compose',             'dkgh — New issue'],
+  ['dgh05', 'dkgh-insights',            'dkgh — Insights'],
 ];
 
 /**

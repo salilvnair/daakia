@@ -21,6 +21,7 @@ import { REST_CAPTURES } from '../rest/captures';
 import { PLATFORM_CAPTURES } from '../platform/captures';
 import { MOCK_SERVER_CAPTURES } from '../mock-server/captures';
 import { DK8S_CAPTURES } from '../dk8s/captures';
+import { DKGH_CAPTURES } from '../dkgh/captures';
 import { GQL_CAPTURES } from '../gql/captures';
 import { GRPC_CAPTURES } from '../grpc/captures';
 import { SOAP_CAPTURES } from '../soap/captures';
@@ -53,6 +54,7 @@ const CHAPTER_COLOR: Record<string, string> = {
   'DevTools & AI': 'var(--color-protocol-ai)',
   'Settings': 'var(--color-settings)',
   'dk8s': 'var(--color-dk8s)',
+  'dkgh': 'var(--color-dkgh)',
 };
 
 const DESIGN_WIDTH = 1280;
@@ -63,6 +65,7 @@ const BY_SECTION: Record<TourStop['section'], CaptureEntry[]> = {
   platform: PLATFORM_CAPTURES,
   'mock-server': MOCK_SERVER_CAPTURES,
   dk8s: DK8S_CAPTURES,
+  dkgh: DKGH_CAPTURES,
   graphql: GQL_CAPTURES,
   grpc: GRPC_CAPTURES,
   soap: SOAP_CAPTURES,

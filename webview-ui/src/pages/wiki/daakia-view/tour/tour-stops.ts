@@ -60,7 +60,7 @@ export interface TourStop {
   /** Capture id — the filename in `plan/daakia_live/<section>/` without .html. */
   capture: string;
   /** Which section's captures module holds it. */
-  section: 'rest' | 'graphql' | 'grpc' | 'soap' | 'realtime' | 'mock-server' | 'platform' | 'dk8s';
+  section: 'rest' | 'graphql' | 'grpc' | 'soap' | 'realtime' | 'mock-server' | 'platform' | 'dk8s' | 'dkgh';
   chapter: string;
   title: string;
   blurb: string;
@@ -1682,6 +1682,109 @@ export const TOUR_STOPS: TourStop[] = [
         body: 'Containers, workload, image, node, age and restarts - what the pod is, before you go into its logs.' },
       { anchor: 'Logs', title: 'Logs',
         body: 'A live stream with levels and facets built from fields your format actually names, so "only this thread" is a click rather than a grep.' },
+    ],
+  },
+
+  /*
+    dkgh — the last chapter, because it is where the work goes after the other
+    ten have found something.
+
+    These captures are seeded with a fixture repository: a capture run has no
+    GitHub login, and a tour that could only be rebuilt on a machine signed in
+    to the right account is a tour nobody rebuilds.
+  */
+  {
+    id: 'tour-dkgh-board',
+    capture: 'dkgh-board',
+    section: 'dkgh',
+    chapter: 'dkgh',
+    title: 'One repository’s issues, beside the code',
+    blurb: 'dkgh is a board over the issues of the thing you are working on — read and written through the gh CLI you already have signed in, so no token ever reaches Daakia. Cards, a table, status columns and a roadmap are four renderings of the same filter.',
+    hotspots: [
+      { anchor: '8 open', title: 'The repository, and what it holds',
+        body: 'One repository at a time, not a dashboard over an organisation. Switch changes it, and says what you are leaving behind.' },
+      { anchor: '7', title: 'Saved views, with live counts',
+        body: 'All open, Stale & unowned, My plate, This sprint, Closed this week — and your own. Each carries its own count, so the rail answers "is there anything for me today?" without being opened.' },
+      { anchor: 'Group: Nothing', title: 'Group by anything the repository declares',
+        body: 'Module, Environment, Type — these come from the repository’s own issue-form YAML, so a repository that adds a field gets a grouping for it without dkgh changing.' },
+      { anchor: '#481', title: 'A card carries the answer, not a link to it',
+        body: 'Number, the template’s own dimensions as chips, age, comment count, and whether anybody owns it.' },
+      { anchor: 'stale 15d', title: 'Quiet is a fact worth showing',
+        body: 'Nothing has happened on this one for a fortnight. The footer counts them, because a board that shows only what is open hides what is stuck.' },
+      { anchor: '3 unassigned', title: 'The pile nobody has picked up',
+        body: 'Counted where you can see it, and first in every grouping — that is the row a lead needs, and alphabetical order would bury it.' },
+    ],
+  },
+  {
+    id: 'tour-dkgh-table',
+    capture: 'dkgh-table',
+    section: 'dkgh',
+    chapter: 'dkgh',
+    title: 'The same filter, as a table',
+    blurb: 'Cards are for scanning a small repository. The table is for comparing many issues on one field — same issues, same filter, sortable columns, and the same actions on each row.',
+    hotspots: [
+      { anchor: 'Title', title: 'Columns you choose',
+        body: 'What a row shows is picked from what the repository actually declares, so a table here and a table in another repository are not forced into the same shape.' },
+      /* Nudged left: the column sits at the frame's right edge, and a marker
+         centred on it is half outside the picture. */
+      { anchor: 'Quiet', dx: -3, title: 'Age and quiet, kept apart',
+        body: 'How old it is and how long since anybody touched it are different questions. An issue opened yesterday and ignored since is not the same as a month-old one being worked on.' },
+      { anchor: 'priority: high', title: 'Labels, in their own colours',
+        body: 'GitHub’s colours, the ones the reporter already recognises — not a palette dkgh invented.' },
+    ],
+  },
+  {
+    id: 'tour-dkgh-team',
+    capture: 'dkgh-team',
+    section: 'dkgh',
+    chapter: 'dkgh',
+    title: 'Who is carrying what',
+    blurb: 'The question asked immediately after "what is the state of this", and before anybody writes anything new.',
+    hotspots: [
+      { anchor: 'Unassigned', title: 'Unassigned is first, on purpose',
+        body: 'The pile nobody has picked up is what a standup is for. Sorting it by name would hide it behind whoever is called Aaron.' },
+      { anchor: 'jchen', title: 'One person, everything they hold',
+        body: 'Open the row and it is their issues, with the same columns the table uses — not a count you have to go and interpret.' },
+      { anchor: '3 issues', title: 'A count you can act on',
+        body: 'Counted from the issues already loaded. No extra calls, and no server between you and GitHub.' },
+    ],
+  },
+  {
+    id: 'tour-dkgh-compose',
+    capture: 'dkgh-compose',
+    section: 'dkgh',
+    chapter: 'dkgh',
+    title: 'Filing one, without leaving',
+    blurb: 'The composer opens with one box — not eleven fields with one of them focused — because that is the shape of what you have in your head when you arrive. The repository’s own template fields sit beside it.',
+    hotspots: [
+      { anchor: 'What went wrong', title: 'One box',
+        body: 'Write the whole thing here. Everything else is beside it rather than in front of it, and the draft is kept against this repository until you file it.' },
+      { anchor: 'Required by the template', title: 'Amber, not red',
+        body: 'What the repository’s form requires and nobody has filled yet — said up front rather than as a validation error at the end, and exactly what Generate with AI is about to fill in.' },
+      { anchor: 'Needs the project scope', title: 'A field says where it writes',
+        body: 'Nine controls write to four different places. Priority and dates are Project fields, not issue fields, and saying so is the only honest answer to "why did my priority not save".' },
+      { anchor: 'Review and create', title: 'Nothing is sent until this',
+        body: 'The next screen shows the exact Markdown that will be posted and the commands that will run — built from the command itself, so it cannot describe an action other than the one about to happen.' },
+    ],
+  },
+  {
+    id: 'tour-dkgh-insights',
+    capture: 'dkgh-insights',
+    section: 'dkgh',
+    chapter: 'dkgh',
+    title: 'Four questions, from what is already loaded',
+    blurb: 'No extra calls and no server: every chart here is counted from the issues the board already read.',
+    hotspots: [
+      { anchor: 'Open issues over time', title: 'Is the pile growing?',
+        body: 'Opened against closed over the window you pick, with the period before it there for comparison.' },
+      { anchor: 'Where the issues are', title: 'By module, split by environment',
+        body: 'Both dimensions come from the repository’s own form, so this chart means something specific to your repository rather than to GitHub in general.' },
+      { anchor: 'How long they sit', title: 'Before anybody touches them',
+        body: 'Age buckets rather than an average — one issue open for a year does not get to hide behind twenty opened yesterday.' },
+      { anchor: 'Unassigned is first on purpose', title: 'Said out loud, again',
+        body: 'The same rule as the Team view, stated on the chart so nobody reads the order as alphabetical.' },
+      { anchor: 'What these cannot tell you.', title: 'What it refuses to claim',
+        body: 'The limits of counting issues are written under the charts, because a dashboard that lists only what it can prove is how a number gets over-read.' },
     ],
   },
 ];
