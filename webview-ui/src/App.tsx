@@ -42,6 +42,7 @@ import { useEnvStore } from './store/env-store';
 import { useCollectionsStore } from './store/collections-store';
 import { useUrlSuggestionsStore } from './store/url-suggestions-store';
 import { useUiStateStore } from './store/ui-state-store';
+import { useShowOnToolbar } from './store/toolbar-visibility';
 import { useDevToolsStore } from './store/devtools-store';
 import { useMockStore } from './store/mock-store';
 import { useDebugStore } from './store/debug-store';
@@ -229,6 +230,9 @@ export default function App() {
       && useTabsStore.getState().updateTab(activeTab.id, { bodyRaw }),
   }));
   const standaloneActive = !!activeTab?.type && STANDALONE_TABS.includes(activeTab.type);
+  /* Each can be taken off the rail — see Settings → DK8S / DKGH → General. */
+  const [showDk8s] = useShowOnToolbar('dk8s');
+  const [showDkgh] = useShowOnToolbar('dkgh');
   const activeWorkspaceName = useWorkspaceStore(s => s.workspaces.find(w => w.id === s.activeId)?.name);
   // Subscribe to breakpoint changes for snapshot persistence
   const debugBreakpoints = useDebugStore(s => s.breakpoints);
@@ -694,28 +698,38 @@ export default function App() {
         {/* dkgh — GitHub issues. Above dk8s because that is the order the work
             happens in: dk8s is where you go when the thing under test is
             misbehaving, dkgh is where you go once you have decided it is a
-            defect. */}
-        <ProtocolIcon
-          active={activeTab?.type === 'dkgh'}
-          open={tabs.some(t => t.type === 'dkgh')}
-          accentColor="var(--color-dkgh)"
-          onClick={() => useTabsStore.getState().openDkghTab()}
-          title="DkGH — Daakia GitHub"
-        >
-          <IssueOpenedIcon size={16} strokeWidth={1.8} />
-        </ProtocolIcon>
+            defect.
+
+            Both of these can be taken off the rail — Settings → DKGH → General,
+            and the same under DK8S. They are whole products inside an API
+            client, and two icons somebody will never press are clutter in the
+            one strip they use constantly. A tab already open keeps its icon:
+            hiding a way in should not hide where you are. */}
+        {(showDkgh || activeTab?.type === 'dkgh') && (
+          <ProtocolIcon
+            active={activeTab?.type === 'dkgh'}
+            open={tabs.some(t => t.type === 'dkgh')}
+            accentColor="var(--color-dkgh)"
+            onClick={() => useTabsStore.getState().openDkghTab()}
+            title="DkGH — Daakia GitHub"
+          >
+            <IssueOpenedIcon size={16} strokeWidth={1.8} />
+          </ProtocolIcon>
+        )}
 
         {/* dk8s — Kubernetes. Sits above Doctor because that is the workflow:
             dk8s collects the artifact, Doctor analyses it. */}
-        <ProtocolIcon
-          active={activeTab?.type === 'dk8s'}
-          open={tabs.some(t => t.type === 'dk8s')}
-          accentColor="var(--color-dk8s)"
-          onClick={() => useTabsStore.getState().openDk8sTab()}
-          title="Dk8s — Daakia K8s"
-        >
-          <Dk8sIcon size={16} strokeWidth={1.8} />
-        </ProtocolIcon>
+        {(showDk8s || activeTab?.type === 'dk8s') && (
+          <ProtocolIcon
+            active={activeTab?.type === 'dk8s'}
+            open={tabs.some(t => t.type === 'dk8s')}
+            accentColor="var(--color-dk8s)"
+            onClick={() => useTabsStore.getState().openDk8sTab()}
+            title="Dk8s — Daakia K8s"
+          >
+            <Dk8sIcon size={16} strokeWidth={1.8} />
+          </ProtocolIcon>
+        )}
 
         {/* Mock Server icon — bg stays while tab is open, iOS badge when servers running */}
         <div className="relative">

@@ -16,7 +16,7 @@ import {
   SunIcon, CpuIcon, AgentIcon, CodeBracketsIcon, FolderImportIcon,
   ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge,
   ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, BookOpenIcon,
-  Dk8sIcon, StethoscopeIcon, RefreshIcon, LayoutGridIcon, TableIcon,
+  Dk8sIcon, StethoscopeIcon, RefreshIcon, LayoutGridIcon, TableIcon, IssueOpenedIcon,
   CheckCircleIcon, DownloadIcon,
 } from '../../../icons';
 import './CommandPaletteView.css';
@@ -220,6 +220,10 @@ export function CommandPaletteView({ open, onClose, onOpenSidebarSection }: Comm
         { id: 'nav-environments', iconColor: 'var(--color-success)', icon: <LayersIcon size={15} />, label: 'Environments', keywords: ['env', 'variables'], run: openSection('collections') },
         { id: 'nav-mock-server', iconColor: 'var(--color-mock-server)', icon: <ServerIcon size={15} />, label: 'Mock Server', keywords: ['mock', 'routes'], run: () => useTabsStore.getState().openMockServerTab() },
         { id: 'nav-daakia-ai', iconColor: 'var(--color-protocol-ai)', icon: <SparkleIcon size={15} />, label: 'Daakia AI Assistant', keywords: ['ai', 'chat', 'tools'], run: () => useTabsStore.getState().openDaakiaAiTab() },
+        /* dkgh had no entry here at all, which only showed once its rail icon
+           became something you can turn off: the palette is what that switch
+           tells you to use instead. */
+        { id: 'nav-dkgh', iconColor: 'var(--color-dkgh)', icon: <IssueOpenedIcon size={15} />, label: 'DkGH — GitHub issues', keywords: ['dkgh', 'github', 'issues', 'board', 'roadmap', 'repository'], run: () => useTabsStore.getState().openDkghTab() },
         { id: 'nav-settings', iconColor: 'var(--color-settings)', icon: <SettingsIcon size={15} />, label: 'Settings', keywords: ['preferences', 'theme', 'llm'], run: () => useTabsStore.getState().openSettingsTab() },
         {
           id: 'search-collections',

@@ -48,8 +48,9 @@ import { DebugSnapshotTab } from '../settings/devtools/DebugSnapshotTab';
 import { AuditConfigTab } from '../settings/devtools/AuditConfigTab';
 import { setFixedPortEnabled, useFixedPortEnabled } from '../mock/fixed-port';
 import { AboutPanel } from '../settings/AboutPanel';
+import { Dk8sGeneralSettings, DkghGeneralSettings } from '../settings/SurfaceGeneralSettings';
 
-type SettingsSection = 'general' | 'theme' | 'keymap' | 'about' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-cluster' | 'dk8s-terminal' | 'dkgh';
+type SettingsSection = 'general' | 'theme' | 'keymap' | 'about' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-general' | 'dk8s-cluster' | 'dk8s-terminal' | 'dkgh-general' | 'dkgh';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
 type PowerSubtab = 'cookies' | 'proxy' | 'certs' | 'monitor' | 'interceptor' | 'diff' | 'bulk' | 'load'
   | 'schema-diff' | 'openapi' | 'security' | 'webhook' | 'postman' | 'clustering'
@@ -71,8 +72,10 @@ const SETTINGS_SECTION_META: Record<SettingsSection, { label: string; icon: Reac
   'prompt-library':  { label: 'Prompt Library',  icon: <AgentIcon size={14} /> },
   'ai-audit':        { label: 'AI Audit',        icon: <SparkleIcon size={14} /> },
   'devtools':        { label: 'Developer Tools', icon: <CodeBracketsIcon size={14} /> },
+  'dk8s-general':    { label: 'General',         icon: <SettingsIcon size={14} /> },
   'dk8s-cluster':    { label: 'Cluster',         icon: <Dk8sIcon size={14} /> },
   'dk8s-terminal':   { label: 'Terminal',        icon: <TerminalIcon size={14} /> },
+  'dkgh-general':    { label: 'General',         icon: <SettingsIcon size={14} /> },
   'dkgh':            { label: 'GitHub CLI',      icon: <IssueOpenedIcon size={14} /> },
   'power-features':  { label: 'Power Features',  icon: <CodeBracketsIcon size={14} /> },
 };
@@ -106,10 +109,12 @@ const SETTINGS_NAV_ITEMS: SideNavItem[] = [
     panel already is.
   */
   { id: 'g-dk8s', label: 'DK8S', isGroup: true, children: [
+    { id: 'dk8s-general', label: SETTINGS_SECTION_META['dk8s-general'].label, icon: SETTINGS_SECTION_META['dk8s-general'].icon },
     { id: 'dk8s-cluster', label: SETTINGS_SECTION_META['dk8s-cluster'].label, icon: SETTINGS_SECTION_META['dk8s-cluster'].icon },
     { id: 'dk8s-terminal', label: SETTINGS_SECTION_META['dk8s-terminal'].label, icon: SETTINGS_SECTION_META['dk8s-terminal'].icon },
   ] },
   { id: 'g-dkgh', label: 'DKGH', isGroup: true, children: [
+    { id: 'dkgh-general', label: SETTINGS_SECTION_META['dkgh-general'].label, icon: SETTINGS_SECTION_META['dkgh-general'].icon },
     { id: 'dkgh', label: SETTINGS_SECTION_META['dkgh'].label, icon: SETTINGS_SECTION_META['dkgh'].icon },
   ] },
   { id: 'g-advanced', label: 'Advanced', isGroup: true, children: [
@@ -162,7 +167,7 @@ export function SettingsPanel() {
             items={SETTINGS_NAV_ITEMS}
             activeId={activeSection}
             onSelect={(id) => setActiveSection(id as ActiveNavId)}
-            defaultOpenIds={['g-general', 'g-server', 'g-ai', 'g-dk8s', 'g-advanced']}
+            defaultOpenIds={['g-general', 'g-server', 'g-ai', 'g-dk8s', 'g-dkgh', 'g-advanced']}
             fillContainer
             collapsible={false}
             accentColor="var(--color-settings)"
@@ -198,6 +203,10 @@ export function SettingsPanel() {
               <AiAuditPanel />
             ) : activeSection === 'power-features' ? (
               <PowerFeaturesPanel />
+            ) : activeSection === 'dk8s-general' ? (
+              <Dk8sGeneralSettings />
+            ) : activeSection === 'dkgh-general' ? (
+              <DkghGeneralSettings />
             ) : activeSection === 'dk8s-cluster' ? (
               <Dk8sClusterSettings />
             ) : activeSection === 'dk8s-terminal' ? (

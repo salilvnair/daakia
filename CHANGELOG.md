@@ -4,6 +4,84 @@ All notable changes to the Daakia API Client extension are documented here.
 
 ---
 
+## [3.0.3] — 2026-09-13
+
+A day spent on everything that was telling you the wrong thing while it
+worked. Nothing here is a new surface; all of it is a screen that was lying,
+a control that did not do what it said, or an answer that never reached the
+issue it was written for.
+
+### Fixed — the AI calls
+- **A refused connection says which port refused it.** "The model did not
+  answer" was drawn whenever a socket was refused before a request had been
+  written to it — so the one screen that could not be checked was also the one
+  making the most confident wrong statement.
+- **A follow-up stopped erasing the evidence it was asking about.** The echoed
+  evidence came back empty and was written over the real one, because `??`
+  does not catch `''`. "Show what was sent · 1 line" was that same empty
+  string, on screen.
+- **The audit keeps the whole exchange** — the full request, the full
+  response, the headers and the metadata — instead of a truncated echo, for
+  AI calls and every other call it records.
+
+### Fixed — dk8s
+- **Quick Search remembers what it ran and the pods it ran over.** The history
+  moved into the search box as suggestions, one click restores the query and
+  re-picks the pods that still exist, and Logs and Files keep separate lists —
+  a file search no longer buries the log search you want back. Clear all sits
+  on the heading.
+- **The namespace picker no longer says a cluster is empty while it is still
+  being read.**
+- **Pressing Watch keeps you on the pods.** A cluster list that arrived late
+  reset the stage and dragged you back to the namespace picker about fifteen
+  seconds in.
+- **The AI panel scrolls.** Its cards were being squashed to fit — a flex item
+  with `overflow: hidden` has a minimum size of zero — so nothing ever
+  overflowed and there was nothing for a scrollbar to do.
+- **Every question and answer folds on its own**, the question carries who
+  asked it and the answer says what answered.
+- **Every wait that owns a panel** — kubectl, namespaces, pods, retries — is
+  the same size and says what it is waiting for.
+- The follow-up box is a box, not a capsule.
+
+### Fixed — dkgh
+- **A comment's `#14` is a link**, opens inside dkgh, and survives the
+  composer: it used to be escaped on the way to GitHub and quietly stop
+  linking.
+- **One Generate button** that generates, says it is working while it works,
+  and stops offering to do again what it has just done — until the title or
+  the description changes.
+- **Every field you filled is actually filed.** The composer ran its whole
+  screen on the *proposed* template — the sidebar's fields, the AI step, what
+  "required" meant — while the body was assembled from `templateFile`, which
+  nothing in the composer ever set. Template answers were shown, counted,
+  filled in by the AI, and then dropped: the issue went to GitHub as the
+  description and nothing else.
+
+### Added — dkgh
+- **The proposal is reviewed field by field.** Every field the template
+  declares gets a row — what the model proposed, what it refused to guess at
+  and why, and what it never mentioned — each saying whose value it holds and
+  each editable in place. Take all takes every proposal still going spare and
+  never overwrites something you wrote.
+- **A screenshot goes in the field you paste it into.** Ctrl+V, drop or choose
+  into Evidence, Steps to Reproduce or any other written field, and it is
+  written under that heading rather than in a pile at the bottom.
+
+### Added — Settings
+- **About** — which version you are on, what is new in it, and what came
+  before, with an ⓘ under the gear in the rail that opens it.
+- **dk8s and dkgh can be taken off the toolbar**, each from its own General
+  page, for anyone who only wants the API client.
+
+### Changed
+- **One chip, in fifty switchable styles**, with its padding and its text
+  centring fixed; `recessed` is the default and has a light and a dark
+  variant.
+- Light mode stopped drawing a box around every tab strip.
+
+---
+
 ## [3.0.2] — 2026-09-13
 
 Five things that were quietly wrong.
@@ -34,6 +112,21 @@ moment it changes.
 **Builds are reproducible.** The design system was resolved through a path on
 one machine rather than from the registry. Nothing shipped differently; it
 simply could not be rebuilt anywhere else.
+
+---
+
+## [3.0.1] — 2026-09-12
+
+The listing, rewritten so the extension can be found.
+
+### Changed
+- **Named and described as what it is** — a REST and HTTP client for VS Code —
+  with the protocols, the Kubernetes dashboard and the GitHub board said in the
+  words people search the Marketplace for.
+- **The README rebuilt** around what each surface actually does, rather than a
+  feature list.
+
+No code changed in this release.
 
 ---
 
