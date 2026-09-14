@@ -147,6 +147,8 @@ export const SCREENS = [
   ['dk807', 'dk8s-explorer',            'dk8s — File explorer'],
   ['dk808', 'dk8s-doctor',              'dk8s — Doctor'],
   ['dk809', 'dk8s-artifacts',           'dk8s — Artifacts'],
+  ['dk810', 'dk8s-search',              'dk8s — Quick Search'],
+  ['dk811', 'dk8s-search-history',      'dk8s — Recent searches'],
 
   // ── dkgh ──────────────────────────────────────────────────────────────────
   ['dgh01', 'dkgh-board',               'dkgh — Board'],

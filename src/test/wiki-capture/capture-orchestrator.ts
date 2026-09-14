@@ -17,7 +17,7 @@
  */
 
 export interface CaptureDirective {
-  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow' | 'openWikiTab' | 'openDk8sTab' | 'seedDk8sState' | 'openWorkspaceTab' | 'seedWorkspaces' | 'openDaakiaAiTab' | 'seedSchemaDiff' | 'openDkghTab' | 'seedDkgh';
+  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow' | 'openWikiTab' | 'openDk8sTab' | 'seedDk8sState' | 'openWorkspaceTab' | 'seedWorkspaces' | 'openDaakiaAiTab' | 'seedSchemaDiff' | 'openDkghTab' | 'seedDkgh' | 'seedDk8sSearch';
   selector?: string;
   text?: string;
   ms?: number;
@@ -68,6 +68,8 @@ export interface CaptureDirective {
   dk8sPatch?: Record<string, unknown>;
   /** seedDkgh — the messages the host would have posted; see CaptureBridge. */
   dkghMessages?: Record<string, unknown>[];
+  /** seedDk8sSearch — a partial of the Quick Search store; see CaptureBridge. */
+  searchPatch?: Record<string, unknown>;
   /** seedWorkspaces — the list, which one is active, and the Overview counts. */
   workspaces?: Record<string, unknown>[];
   activeWorkspaceId?: string;

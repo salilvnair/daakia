@@ -111,6 +111,123 @@ const LOGS = [
   line(10, 'info', '2026-09-07T09:40:09.331Z INFO  [http-nio-8080-exec-4] c.e.ledger.Api - POST /v1/transfers -> 201 (38ms)', { logger: 'c.e.ledger.Api', thread: 'http-nio-8080-exec-4' }),
 ];
 
+/**
+ * A Quick Search that has already run.
+ *
+ * Its own store — the pod store's watch updates would throw results away, and
+ * a result set is worth keeping while you click through pods — so it seeds
+ * through its own directive. Two pods, two sources: the live half read through
+ * `kubectl logs`, the archive half read off a mounted volume, reported as
+ * separate rows because they are two different bodies of text.
+ */
+const MATCH = (over: Record<string, unknown>) => ({
+  namespace: 'payments',
+  context: 'docker-desktop',
+  level: 'error',
+  hits: [[0, 9]] as [number, number][],
+  before: [],
+  after: [],
+  ...over,
+});
+
+const SEARCH_GROUPS = [
+  {
+    source: 'live',
+    result: {
+      pod: 'ledger-api-7d9c4b8f6-x2mzq', namespace: 'payments', context: 'docker-desktop',
+      scanned: 5000, matched: 3, capped: false, elapsedMs: 412,
+    },
+    matches: [
+      MATCH({
+        pod: 'ledger-api-7d9c4b8f6-x2mzq', line: 4471, ts: Date.parse('2026-09-07T09:40:07.902Z'),
+        text: '2026-09-07T09:40:07.902Z ERROR [pool-2-thread-3] c.e.ledger.Settle - Settlement 4471 failed after 3 attempts',
+        hits: [[64, 72]] as [number, number][],
+        before: ['2026-09-07T09:40:05.640Z WARN  [pool-2-thread-3] c.e.ledger.Settle - Retry 1/3 for settlement 4471 — upstream timed out'],
+        after: ['java.net.SocketTimeoutException: Read timed out'],
+      }),
+      MATCH({
+        pod: 'ledger-api-7d9c4b8f6-x2mzq', line: 4620, ts: Date.parse('2026-09-07T09:41:12.004Z'),
+        text: '2026-09-07T09:41:12.004Z ERROR [pool-2-thread-1] c.e.ledger.Settle - Settlement 4488 failed after 3 attempts',
+        hits: [[64, 72]] as [number, number][],
+      }),
+      MATCH({
+        pod: 'ledger-api-7d9c4b8f6-x2mzq', line: 4881, ts: Date.parse('2026-09-07T09:44:31.117Z'),
+        level: 'warn',
+        text: '2026-09-07T09:44:31.117Z WARN  [pool-2-thread-6] c.e.ledger.Settle - settlement queue depth 812',
+        hits: [[52, 62]] as [number, number][],
+      }),
+    ],
+  },
+  {
+    source: 'archive',
+    result: {
+      pod: 'ledger-api-7d9c4b8f6-x2mzq', namespace: 'payments', context: 'docker-desktop',
+      scanned: 1840226, matched: 214, capped: true, elapsedMs: 9106,
+    },
+    files: [
+      { rel: 'ledger-api/2026-09-06.log.gz', file: '2026-09-06.log.gz', bytes: 48_112_009, mtime: Date.parse('2026-09-07T00:00:00Z'), scanned: 912_004, matched: 141 },
+      { rel: 'ledger-api/2026-09-05.log.gz', file: '2026-09-05.log.gz', bytes: 44_889_120, mtime: Date.parse('2026-09-06T00:00:00Z'), scanned: 928_222, matched: 73 },
+    ],
+    matches: [
+      MATCH({
+        pod: 'ledger-api-7d9c4b8f6-x2mzq', line: 118204, ts: Date.parse('2026-09-06T22:14:02.551Z'),
+        text: '2026-09-06T22:14:02.551Z ERROR [pool-2-thread-9] c.e.ledger.Settle - Settlement 3910 failed after 3 attempts',
+        hits: [[64, 72]] as [number, number][],
+      }),
+    ],
+  },
+  {
+    source: 'live',
+    result: {
+      pod: 'settlement-worker-5f7b9d-qq4wl', namespace: 'payments', context: 'docker-desktop',
+      scanned: 5000, matched: 0, capped: false, elapsedMs: 284,
+    },
+    matches: [],
+  },
+];
+
+const POD_AT = (name: string) => ({ name, namespace: 'payments', context: 'docker-desktop' });
+
+/** Searches that were actually run — only those, never a keystroke on the way. */
+const SEARCH_HISTORY = [
+  {
+    query: 'failed after 3 attempts', where: 'logs', at: Date.now() - 4 * 60 * 1000,
+    pods: [POD_AT('ledger-api-7d9c4b8f6-x2mzq'), POD_AT('settlement-worker-5f7b9d-qq4wl')],
+  },
+  {
+    query: 'SocketTimeoutException', where: 'logs', at: Date.now() - 52 * 60 * 1000,
+    pods: [POD_AT('ledger-api-7d9c4b8f6-x2mzq')],
+  },
+  {
+    query: 'a41f9c2e-77b1-4f0e-9a2d-0b6f1c3d8e55', where: 'logs', at: Date.now() - 3 * 60 * 60 * 1000,
+    pods: [POD_AT('ledger-api-7d9c4b8f6-x2mzq'), POD_AT('ledger-api-7d9c4b8f6-p8kdr')],
+  },
+  {
+    query: 'queue depth', where: 'logs', at: Date.now() - 26 * 60 * 60 * 1000,
+    pods: [POD_AT('settlement-worker-5f7b9d-qq4wl')],
+  },
+];
+
+const SEARCH_STATE = {
+  open: true,
+  searchIn: 'logs',
+  running: false,
+  progress: { done: 3, total: 3 },
+  groups: SEARCH_GROUPS,
+  picked: ['uid-ledger-1', 'uid-settle-1'],
+  pickerOpen: false,
+  archiveSearched: true,
+  scanningArchive: false,
+  filesOpen: [],
+  collapsed: [],
+  history: SEARCH_HISTORY,
+  options: {
+    query: 'failed after 3 attempts',
+    regex: false, caseSensitive: false, contextLines: 2, tailLines: 5000,
+    includePrevious: false,
+  },
+};
+
 /** The state every dk8s screen starts from: connected, watching, pods in. */
 const CONNECTED = {
   stage: 'ready',
@@ -366,6 +483,47 @@ const SCREENS: ScreenSpec[] = [
       { action: 'wait', ms: 1200 },
       { action: 'seedDk8sState', dk8sPatch: { ...CONNECTED, panel: 'artifacts' } },
       { action: 'wait', ms: 1500 },
+    ],
+  },
+  {
+    id: 'dk8s-search',
+    label: 'dk8s — Quick Search',
+    explanation:
+      'One query across every selected pod, with the live half read through kubectl and the archive half read off a mounted volume — reported as separate rows per pod because they are two different bodies of text. Each row says what was scanned, what matched, and whether the count was capped.',
+    directives: [
+      { action: 'closeAllTabs' },
+      { action: 'openDk8sTab' },
+      { action: 'wait', ms: 1500 },
+      { action: 'seedDk8sState', dk8sPatch: { ...CONNECTED, view: 'cards', detail: undefined } },
+      { action: 'wait', ms: 1200 },
+      { action: 'seedDk8sState', dk8sPatch: { ...CONNECTED, view: 'cards', detail: undefined } },
+      /* The dialog belongs to the grid, so the grid has to be on screen and
+         settled before the search store is told it is open. */
+      { action: 'wait', ms: 800 },
+      { action: 'seedDk8sSearch', searchPatch: SEARCH_STATE },
+      { action: 'wait', ms: 1400 },
+    ],
+  },
+  {
+    id: 'dk8s-search-history',
+    label: 'dk8s — Recent searches',
+    explanation:
+      'A search is a query and a set of pods, and the box remembers both. Focusing it drops the recent searches down inside the field — the same gesture a URL bar has — and picking one restores the query and re-picks the pods it ran over, skipping any that are gone. Logs and Files keep separate lists.',
+    directives: [
+      { action: 'closeAllTabs' },
+      { action: 'openDk8sTab' },
+      { action: 'wait', ms: 1500 },
+      { action: 'seedDk8sState', dk8sPatch: { ...CONNECTED, view: 'cards', detail: undefined } },
+      { action: 'wait', ms: 1200 },
+      { action: 'seedDk8sState', dk8sPatch: { ...CONNECTED, view: 'cards', detail: undefined } },
+      { action: 'wait', ms: 800 },
+      { action: 'seedDk8sSearch', searchPatch: { ...SEARCH_STATE, groups: [], archiveSearched: false } },
+      { action: 'wait', ms: 1000 },
+      /* `type` focuses the field before it writes, and the empty string is the
+         state this screen is about: nothing typed yet, and the list of what
+         was run before under the box. */
+      { action: 'type', selector: 'input[placeholder^="Search across the selected pods"]', text: '' },
+      { action: 'wait', ms: 1200 },
     ],
   },
 ];

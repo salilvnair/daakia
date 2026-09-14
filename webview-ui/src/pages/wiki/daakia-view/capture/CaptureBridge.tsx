@@ -25,12 +25,13 @@ import { useDevToolsStore, type ConsoleLogEntry, type NetworkEntry, type DevTool
 import type { MockServer } from '../../../../components/mock/mock-types';
 import { installSMRestWorkflow } from '../../../../components/mock/samples/sm-rest-workflows';
 import { useSMWorkspaceStore, useSMTabsStore } from '@salilvnair/state-machine';
+import { useDk8sSearchStore } from '../../../../store/dk8s-search-store';
 import { useK8sStore } from '../../../../store/k8s-store';
 import { useWorkspaceStore } from '../../../../store/workspace-store';
 import { getVsCodeApi } from '../../../../vscode';
 
 export interface CaptureDirective {
-  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow' | 'openWikiTab' | 'openDk8sTab' | 'seedDk8sState' | 'openWorkspaceTab' | 'seedWorkspaces' | 'openDaakiaAiTab' | 'seedSchemaDiff' | 'openDkghTab' | 'seedDkgh';
+  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow' | 'openWikiTab' | 'openDk8sTab' | 'seedDk8sState' | 'openWorkspaceTab' | 'seedWorkspaces' | 'openDaakiaAiTab' | 'seedSchemaDiff' | 'openDkghTab' | 'seedDkgh' | 'seedDk8sSearch';
   selector?: string;       // CSS selector — click, type
   text?: string;           // type
   ms?: number;             // wait
@@ -117,6 +118,15 @@ export interface CaptureDirective {
    * would be capturing a different code path from the one users run.
    */
   dkghMessages?: Record<string, unknown>[];
+  /**
+   * seedDk8sSearch — a partial of the Quick Search store, merged in.
+   *
+   * Its own store, and therefore its own directive: `seedDk8sState` writes the
+   * pod store, and a search's results, its recent queries and whether it is
+   * looking at logs or files live apart from that on purpose — they outlive a
+   * watch update.
+   */
+  searchPatch?: Record<string, unknown>;
   // seedWorkspaces — the list, which one is active, and the Overview
   // counts. Same reasoning as dk8sPatch: both come from the host, and a
   // capture run's database is empty.
@@ -295,6 +305,11 @@ async function runDirective(d: CaptureDirective): Promise<void> {
        state and every view renders from it as it would from a real watch. */
     case 'seedDk8sState': {
       if (d.dk8sPatch) useK8sStore.setState(d.dk8sPatch as never);
+      return;
+    }
+    /* The search is a second store — see `searchPatch`. */
+    case 'seedDk8sSearch': {
+      if (d.searchPatch) useDk8sSearchStore.setState(d.searchPatch as never);
       return;
     }
     case 'openDkghTab': {
