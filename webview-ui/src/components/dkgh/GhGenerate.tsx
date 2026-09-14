@@ -18,6 +18,14 @@
  * row you can click back into. The model proposed it; it is not a decision the
  * screen made for you.
  *
+ * **11F — and the review is over the template, not over the answer.** Every
+ * field the form declares gets a row whatever the model did with it: proposed,
+ * refused with a reason, or never mentioned. Each says whose value it is
+ * holding — the model's, yours, or the model's with your edit on top — and each
+ * opens in place. A screen that can only take a value whole or leave it whole
+ * sends people off to the sidebar to change one word, and that is a different
+ * screen with a different layout; this is the one they are reading.
+ *
  * **11D — no model configured** is a first-class state, not an error toast. It
  * says which screen fixes it.
  *
@@ -32,6 +40,10 @@ import { CopyWord, GhNote } from './GhShell';
 import { sendAiRequest, newAiRequestId } from '../../services/ai/ai-client';
 import { useAiProvidersStore } from '../../store/ai-providers-store';
 import { useAiPromptTemplatesStore } from '../../store/prompt-template';
+import {
+  reviewRows, untaken, takeAll, filledCount, missingRequired, titleState,
+  type ReviewRow, type Proposal,
+} from './proposal-review';
 import type { Draft } from './composer-model';
 import type { FormField, IssueForm } from './board-types';
 
@@ -50,13 +62,6 @@ let lastFailure = '';
 /** Whether there is a failure worth showing on the button that opens this. */
 export function aiFailed(): string {
   return lastFailure;
-}
-
-interface Proposal {
-  title?: string;
-  answers?: Record<string, string>;
-  unanswered?: { label: string; why: string }[];
-  notes?: string;
 }
 
 export function GhGenerate({
@@ -232,6 +237,18 @@ export function GhGenerate({
   const question = open[asking];
   const field = question ? fields.find(f => f.label === question.label) : undefined;
 
+  /* 11F — every field of the template, and what became of it. */
+  const rows = useMemo(
+    () => reviewRows(fields, proposal, draft.answers),
+    [fields, proposal, draft.answers],
+  );
+  const spare = untaken(rows);
+  const { filled, total } = filledCount(rows);
+  const missing = missingRequired(rows);
+  const title = titleState(proposal?.title, draft.title);
+  /** Which row is open for editing. One at a time — it is a list, not a form. */
+  const [editing, setEditing] = useState('');
+
   return (
     <div className="opt" style={{ marginTop: 10 }}>
       <div className="oh">
@@ -239,10 +256,7 @@ export function GhGenerate({
         Generate with AI
         <span className="sp" />
         {proposal && (
-          <span className="cx">
-            {Object.keys(draft.answers).filter(k => draft.answers[k]).length} of {fields.length}{' '}
-            answered
-          </span>
+          <span className="cx">{filled} of {total} filled</span>
         )}
         <GhClose onClick={onClose} size={24} />
       </div>
@@ -305,33 +319,42 @@ export function GhGenerate({
 
           {proposal && (
             <>
-              {proposal.title && !draft.title && (
-                <div className="fct" style={{ cursor: 'default' }}>
-                  <Ico name="pen" style={{ color: 'var(--dk-gh)', flexShrink: 0 }} />
-                  <span>Suggested title: <b>{proposal.title}</b></span>
-                  <span className="sp" style={{ flex: 1 }} />
-                  <button type="button" className="btn" style={{ padding: '2px 9px' }}
-                          onClick={() => onDraft({ title: proposal.title })}>
-                    Use it
-                  </button>
-                </div>
-              )}
+              {/*
+                11F — the title, always, not only when yours is empty.
 
-              {Object.entries(proposal.answers ?? {}).length > 0 && (
-                <div className="opt" style={{ gap: 2, padding: 4 }}>
-                  {Object.entries(proposal.answers ?? {}).map(([label, value]) => {
-                    const taken = draft.answers[label] === value;
-                    return (
-                      <div key={label} className={`fct${taken ? ' on' : ''}`}
-                           style={{ cursor: 'pointer' }}
-                           onClick={() => answer(label, taken ? '' : value)}
-                           title={taken ? 'Click to drop it again' : 'Click to take it'}>
-                        <span className="bx">{taken && <Ico name="check" />}</span>
-                        <b style={{ color: 'var(--dk-text)' }}>{label}</b>
-                        <span>{value}</span>
+                It used to be hidden the moment there was a title in the box,
+                which meant the one case where you actually want to compare —
+                the model read what you wrote and phrased it better — was the
+                case the screen refused to show you.
+              */}
+              {title !== 'none' && (
+                <div className="fct" style={{ cursor: 'default', alignItems: 'flex-start' }}>
+                  <Ico name="pen" style={{ color: 'var(--dk-gh)', flexShrink: 0, marginTop: 2 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ color: 'var(--dk-text)' }}>
+                      <b>Title</b>{' '}
+                      <Tag state={title === 'taken' ? 'taken' : title === 'yours' ? 'yours'
+                        : title === 'differs' ? 'edited' : 'offered'} />
+                    </div>
+                    {title === 'differs' && (
+                      <div className="sub" style={{ marginTop: 2 }}>
+                        It would have written: <b>{proposal.title}</b>
                       </div>
-                    );
-                  })}
+                    )}
+                    <input
+                      className="inp"
+                      style={{ marginTop: 4, width: '100%' }}
+                      value={draft.title}
+                      placeholder={proposal.title || 'One line, as you would say it out loud'}
+                      onChange={e => onDraft({ title: e.target.value })}
+                    />
+                  </div>
+                  {title !== 'taken' && proposal.title && (
+                    <button type="button" className="btn" style={{ padding: '2px 9px' }}
+                            onClick={() => onDraft({ title: proposal.title })}>
+                      {title === 'differs' ? 'Use its' : 'Use it'}
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -379,10 +402,55 @@ export function GhGenerate({
                 </div>
               )}
 
+              {/*
+                11F — the review.
+
+                Every field the template declares, in the order it declared
+                them, whatever the model did with it: what it proposed, what it
+                refused to guess at, and what it never mentioned. Each row is
+                editable in place, because "take it or leave it" is not a
+                review — the value you want is usually the model's with one
+                word changed, and finding that field again in the sidebar to
+                change it is a different screen with a different layout.
+              */}
+              {rows.length > 0 && (
+                <div className="opt" style={{ gap: 2, padding: 4 }}>
+                  <div className="fct" style={{ cursor: 'default', color: 'var(--dk-faint)' }}>
+                    <b style={{ color: 'var(--dk-text)' }}>Review</b>
+                    <span>
+                      {filled} of {total} filled
+                      {missing.length > 0 && (
+                        <span style={{ color: 'var(--dk-amber)' }}>
+                          {' '}· {missing.length} required still empty
+                        </span>
+                      )}
+                    </span>
+                    <span className="sp" style={{ flex: 1 }} />
+                    {spare.length > 0 && (
+                      <button type="button" className="btn" style={{ padding: '2px 9px' }}
+                              title="Fills in every value it proposed that you have not already changed"
+                              onClick={() => onDraft({ answers: takeAll(rows, draft.answers) })}>
+                        Take all {spare.length}
+                      </button>
+                    )}
+                  </div>
+
+                  {rows.map(r => (
+                    <Row
+                      key={r.label}
+                      row={r}
+                      editing={editing === r.label}
+                      onEdit={() => setEditing(e => (e === r.label ? '' : r.label))}
+                      onSet={v => answer(r.label, v)}
+                    />
+                  ))}
+                </div>
+              )}
+
               {!question && open.length > 0 && (
                 <div className="sub">
-                  That was all of them. Every answer is a row above — click one to change your
-                  mind.
+                  That was all of them. Every field is a row above, whatever it made of it —
+                  press the pencil on any one to change what will be written.
                 </div>
               )}
 
@@ -407,6 +475,133 @@ export function GhGenerate({
           </details>
         </>
       )}
+    </div>
+  );
+}
+
+/** What a row's state is called, in one word, in the tone that says it. */
+const TAG: Record<ReviewRow['state'], { word: string; tone: string } | null> = {
+  taken: { word: 'from AI', tone: 'var(--dk-gh)' },
+  edited: { word: 'edited', tone: 'var(--dk-amber)' },
+  yours: { word: 'yours', tone: 'var(--dk-muted)' },
+  offered: { word: 'proposed', tone: 'var(--dk-gh)' },
+  open: { word: 'not answered', tone: 'var(--dk-muted)' },
+  blank: null,
+};
+
+function Tag({ state }: { state: ReviewRow['state'] }) {
+  const t = TAG[state];
+  if (!t) return null;
+  return (
+    <span style={{
+      fontSize: 10, letterSpacing: '.04em', color: t.tone, border: `1px solid ${t.tone}`,
+      borderRadius: 4, padding: '0 4px', marginLeft: 6, whiteSpace: 'nowrap',
+      background: `color-mix(in srgb, ${t.tone} 10%, transparent)`,
+    }}>
+      {t.word}
+    </span>
+  );
+}
+
+/**
+ * One field of the template, and what will be written under its heading.
+ *
+ * The tick takes or drops the model's proposal in one press, because that is
+ * the common answer. The pencil opens the value itself, because the other
+ * common answer is "nearly" — and a screen that can only take a value whole or
+ * leave it whole sends people to the sidebar to fix one word, which is the
+ * complaint this row exists to answer.
+ */
+function Row({ row, editing, onEdit, onSet }: {
+  row: ReviewRow;
+  editing: boolean;
+  onEdit: () => void;
+  onSet: (value: string) => void;
+}) {
+  const on = row.state === 'taken' || row.state === 'edited' || row.state === 'yours';
+  const canTick = row.state === 'taken' || row.state === 'offered';
+
+  return (
+    <div className={`fct${on ? ' on' : ''}`}
+         style={{ cursor: 'default', alignItems: 'flex-start', flexWrap: 'wrap', rowGap: 4 }}>
+      <button
+        type="button"
+        className="bx"
+        style={{
+          marginTop: 2,
+          cursor: canTick ? 'pointer' : 'default',
+          opacity: canTick || on ? 1 : 0.45,
+        }}
+        disabled={!canTick && !on}
+        title={row.state === 'taken' ? 'Drop it again'
+          : row.state === 'offered' ? 'Take what it proposed'
+            : on ? 'Clear this field' : 'Nothing proposed for this one'}
+        onClick={() => onSet(row.state === 'offered' ? row.proposed! : '')}
+      >
+        {on && <Ico name="check" />}
+      </button>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div>
+          <b style={{ color: 'var(--dk-text)' }}>{row.label}</b>
+          {row.required && !row.value && (
+            <span style={{ color: 'var(--dk-amber)', marginLeft: 5 }}>required</span>
+          )}
+          <Tag state={row.state} />
+        </div>
+
+        {/* What is there now — or, when there is nothing, why there is nothing. */}
+        {!editing && (
+          <div className="sub" style={{ marginTop: 1, whiteSpace: 'pre-wrap' }}>
+            {row.value.trim()
+              || (row.state === 'offered' ? row.proposed
+                : row.why ? `It could not tell — ${row.why}`
+                  : 'Nothing written, and it did not mention this one.')}
+          </div>
+        )}
+
+        {editing && (row.options.length > 0 ? (
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 4 }}>
+            {row.options.map(o => (
+              <button key={o} type="button"
+                      className="btn"
+                      style={{
+                        padding: '3px 9px',
+                        borderColor: row.value === o ? 'var(--dk-gh)' : undefined,
+                        color: row.value === o ? 'var(--dk-gh)' : undefined,
+                      }}
+                      onClick={() => { onSet(row.value === o ? '' : o); onEdit(); }}>
+                {o}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <textarea
+            className="mdbody"
+            autoFocus
+            style={{ minHeight: 54, borderRadius: 7, marginTop: 4, width: '100%' }}
+            value={row.value}
+            placeholder={row.proposed || `What goes under “${row.label}”`}
+            onChange={e => onSet(e.target.value)}
+          />
+        ))}
+
+        {/* The original is never lost, so changing your mind twice is free. */}
+        {editing && row.state === 'edited' && (
+          <button type="button" className="btn"
+                  style={{ padding: '2px 9px', marginTop: 5 }}
+                  onClick={() => onSet(row.proposed!)}>
+            Put its answer back
+          </button>
+        )}
+      </div>
+
+      <button type="button" className="btn"
+              style={{ padding: '2px 7px', marginTop: 1 }}
+              title={editing ? 'Done' : `Edit ${row.label}`}
+              onClick={onEdit}>
+        <Ico name={editing ? 'check' : 'pen'} />
+      </button>
     </div>
   );
 }
