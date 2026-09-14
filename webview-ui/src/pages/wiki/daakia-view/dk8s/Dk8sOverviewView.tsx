@@ -20,6 +20,7 @@ const TOC_ITEMS: TocItem[] = [
   { id: 'dk-grid', icon: 'layers', label: 'The pod grid' },
   { id: 'dk-watch', icon: 'radio', label: 'Watching' },
   { id: 'dk-actions', icon: 'select', label: 'Acting on pods' },
+  { id: 'dk-waiting', icon: 'clock', label: 'While it waits' },
 ];
 
 export function Dk8sOverviewView() {
@@ -156,7 +157,9 @@ kubectl --context C -n NS top pods --no-headers`}</CodeBlock>
         <SectionTitle id="dk-actions" icon="select">Acting on pods</SectionTitle>
         <p className="dw-p">
           Right-click any card or row for the pod menu; long-press to enter selection mode and act
-          on several at once.
+          on several at once. A cluster or a namespace has its own right-click
+          menu too — switch to it, refresh it, copy the <Code>kubectl</Code>
+          that would reach it, or forget a saved one.
         </p>
         <WikiTable
           headers={['Menu item', 'What it opens']}
@@ -173,6 +176,33 @@ kubectl --context C -n NS top pods --no-headers`}</CodeBlock>
           A Doctor entry that cannot run in this container is greyed out with a short note saying why
           — no jcmd in the image, no shell at all, the capability the kernel did not grant. That
           comes from the capability probe described on the Doctor page.
+        </Callout>
+      </div>
+      <Divider />
+
+      <div>
+        <SectionTitle id="dk-waiting" icon="clock">While it waits, and when it gives up</SectionTitle>
+        <p className="dw-p">
+          Every wait that owns a panel — finding <Code>kubectl</Code>, listing
+          namespaces, listing pods, retrying after a refusal — is the same size,
+          in the same place, and says what it is waiting for. A screen that
+          draws the same spinner for four different questions teaches you to
+          read none of them.
+        </p>
+        <WikiTable
+          headers={['State', 'What it says']}
+          rows={[
+            ['Working', <>The thing being waited on, named — <em>listing namespaces in staging-eu</em>, not <em>Loading…</em></>],
+            ['Refused', 'The cluster’s own words, with somewhere to go: pick another cluster, or retry'],
+            ['Silent', <>After twenty-five seconds a reply that never arrived gets its own answer — a stream that says nothing is a state, not a success</>],
+            ['Empty', <>Only once the answer is in. &ldquo;This namespace has no pods&rdquo; is a fact; drawing it while the list is still being read is a lie</>],
+          ]}
+        />
+        <Callout type="info" title="Fixed in 3.0.3">
+          Pressing Watch used to drag you back to the namespace picker about
+          fifteen seconds later: a cluster list that arrived late reset the
+          stage you had already moved past. A late answer can no longer undo a
+          screen you have reached.
         </Callout>
       </div>
     </WikiScrollPage>

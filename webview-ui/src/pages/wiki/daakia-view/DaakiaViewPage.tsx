@@ -21,16 +21,18 @@ import { Dk8sDoctorView } from './dk8s/Dk8sDoctorView';
 import { Dk8sArchiveView } from './dk8s/Dk8sArchiveView';
 import { Dk8sCommandsView } from './dk8s/Dk8sCommandsView';
 import { Dk8sViewsView } from './dk8s/Dk8sViewsView';
+import { DkghOverviewView } from './dkgh/DkghOverviewView';
+import { DkghComposeView } from './dkgh/DkghComposeView';
 import { CompassIcon, LayoutGridIcon,
   DocumentIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge,
   ProtocolGrpcBadge, ProtocolSoapBadge, ServerIcon, CollectionsFolderIcon,
   GeneralAssistantIcon, SettingsIcon, Dk8sIcon, SearchIcon, StethoscopeIcon,
-  FolderOpenIcon, TerminalIcon, LayersIcon,
+  FolderOpenIcon, TerminalIcon, LayersIcon, IssueOpenedIcon, PencilIcon,
 } from '../../../icons';
 
 // ─── Wiki tabs ──────────────────────────────────────────────────────────────
 
-export type TabId = 'daakia-tour' | 'quick-start' | 'workspaces' | 'rest' | 'gql' | 'websocket' | 'grpc' | 'soap' | 'mock-server' | 'collections-env' | 'ai-assistant' | 'settings' | 'dk8s' | 'dk8s-pod' | 'dk8s-terminal' | 'dk8s-search' | 'dk8s-doctor' | 'dk8s-archive' | 'dk8s-commands' | 'dk8s-views';
+export type TabId = 'daakia-tour' | 'quick-start' | 'workspaces' | 'rest' | 'gql' | 'websocket' | 'grpc' | 'soap' | 'mock-server' | 'collections-env' | 'ai-assistant' | 'settings' | 'dk8s' | 'dk8s-pod' | 'dk8s-terminal' | 'dk8s-search' | 'dk8s-doctor' | 'dk8s-archive' | 'dk8s-commands' | 'dk8s-views' | 'dkgh' | 'dkgh-compose';
 
 interface Tab {
   id: TabId;
@@ -60,6 +62,8 @@ const TABS: Tab[] = [
   { id: 'dk8s-views',        label: 'Every View',        color: 'var(--color-doctor)',             icon: <LayersIcon size={15} /> },
   { id: 'dk8s-archive',      label: 'Archived Logs',     color: 'var(--color-dk8s)',               icon: <FolderOpenIcon size={15} /> },
   { id: 'dk8s-commands',     label: 'Behind the Scenes', color: 'var(--color-dk8s)',               icon: <TerminalIcon size={15} /> },
+  { id: 'dkgh',              label: 'Overview',          color: 'var(--color-dkgh)',               icon: <IssueOpenedIcon size={15} /> },
+  { id: 'dkgh-compose',      label: 'Filing an Issue',   color: 'var(--color-dkgh)',               icon: <PencilIcon size={15} /> },
 ];
 
 const TAB_BY_ID = Object.fromEntries(TABS.map(t => [t.id, t]));
@@ -106,6 +110,13 @@ const NAV_ITEMS: SideNavItem[] = [
     { id: 'dk8s-archive', label: TAB_BY_ID['dk8s-archive'].label, icon: TAB_BY_ID['dk8s-archive'].icon },
     { id: 'dk8s-commands', label: TAB_BY_ID['dk8s-commands'].label, icon: TAB_BY_ID['dk8s-commands'].icon },
   ] },
+  /* And dkgh its own, for the same reason: it is a third surface, not a
+     protocol and not a platform screen, and it shipped in 3.0.0 with no page
+     here at all. */
+  { id: 'g-dkgh', label: 'dkgh (GitHub)', isGroup: true, children: [
+    { id: 'dkgh', label: TAB_BY_ID['dkgh'].label, icon: TAB_BY_ID['dkgh'].icon },
+    { id: 'dkgh-compose', label: TAB_BY_ID['dkgh-compose'].label, icon: TAB_BY_ID['dkgh-compose'].icon },
+  ] },
 ];
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -147,7 +158,7 @@ export function DaakiaViewPage({ hideNav, activeId: activeIdProp, onSelect: onSe
           items={NAV_ITEMS}
           activeId={activeId}
           onSelect={(id) => onSelect(id as TabId)}
-          defaultOpenIds={['g-start', 'g-protocols', 'g-platform', 'g-dk8s']}
+          defaultOpenIds={['g-start', 'g-protocols', 'g-platform', 'g-dk8s', 'g-dkgh']}
           width={196}
           accentColor={active.color}
           searchable
@@ -184,6 +195,8 @@ export function DaakiaViewPage({ hideNav, activeId: activeIdProp, onSelect: onSe
         {activeId === 'dk8s-views'     && <Dk8sViewsView />}
         {activeId === 'dk8s-archive'   && <Dk8sArchiveView />}
         {activeId === 'dk8s-commands'  && <Dk8sCommandsView />}
+        {activeId === 'dkgh'           && <DkghOverviewView />}
+        {activeId === 'dkgh-compose'   && <DkghComposeView />}
       </div>
 
     </div>

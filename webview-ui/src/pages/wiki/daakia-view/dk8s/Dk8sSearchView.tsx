@@ -21,6 +21,8 @@ const TOC_ITEMS: TocItem[] = [
   { id: 'dk-counts', icon: 'type', label: 'Counts vs kept' },
   { id: 'dk-stop', icon: 'stop', label: 'Stopping a search' },
   { id: 'dk-export', icon: 'document', label: 'Export' },
+  { id: 'dk-history', icon: 'clock', label: 'What it remembers' },
+  { id: 'dk-ai', icon: 'ai', label: 'Asking about a result' },
 ];
 
 export function Dk8sSearchView() {
@@ -306,6 +308,50 @@ for line in stream:                                 # one pass, one line held
             [<Code>===== path =====</Code>, 'The rotation file the lines below came from'],
           ]}
         />
+      </div>
+
+      <Divider />
+
+      <div>
+        <SectionTitle id="dk-history" icon="clock">What a search remembers</SectionTitle>
+        <p className="dw-p">
+          A search is a query <em>and</em> a set of pods, and repeating one used
+          to mean retyping the first and re-picking the second. Since 3.0.3 the
+          box remembers both: the recent searches drop down inside the search
+          field as you focus it, and picking one restores the query and
+          re-selects the pods it ran over.
+        </p>
+        <Steps steps={[
+          <><strong>Pods that are gone stay gone.</strong> A restored search re-picks only the pods that still exist — a rolled deployment has new names, and silently searching a pod that is not there would produce a zero nobody could explain.</>,
+          <><strong>Logs and files keep separate lists.</strong> They are two different questions asked with the same box, and a morning of file searches would otherwise bury the log search you want back.</>,
+          <><strong>Clear all</strong> sits on the heading of the list, and forgets only the half you are looking at.</>,
+        ]} />
+      </div>
+
+      <Divider />
+
+      <div>
+        <SectionTitle id="dk-ai" icon="ai">Asking about a result</SectionTitle>
+        <p className="dw-p">
+          A result can be handed to a model — what these lines mean, what to
+          look at next — and the panel that answers is built to be checked
+          rather than believed.
+        </p>
+        <WikiTable
+          headers={['On screen', 'What it is for']}
+          rows={[
+            ['Each question and answer folds', 'A long thread stays readable; the exchange you are re-reading opens on its own'],
+            ['A marker on each side', 'Who asked and what answered, so a long answer is never mistaken for something you wrote'],
+            [<>Show what was sent</>, 'The evidence and the prompt as they left the machine — not a paraphrase'],
+            ['Redaction note', 'What was taken out before it went, when anything was'],
+          ]}
+        />
+        <Callout type="info" title="Fixed in 3.0.3">
+          The panel could not scroll: its cards were being squashed to fit, so
+          nothing ever overflowed and there was nothing for a scrollbar to do.
+          A follow-up also used to erase the evidence it was asking about,
+          which is why "show what was sent" was showing one empty line.
+        </Callout>
       </div>
     </WikiScrollPage>
   );
