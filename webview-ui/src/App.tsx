@@ -449,9 +449,31 @@ export default function App() {
   // Extension host → webview message routing (extracted to app/use-extension-messages.ts)
   useExtensionMessages({ setSqliteStatus, setSaveAsTabId, setSplitPercent, setFocusedPanel, setSidebarSection, setSidebarOpen, setSidebarWidth, setPaletteOpen });
 
-  // Persist env store changes (activeEnvId, environments) to DB — always mounted
+  /*
+    Persist env store changes to the database — always mounted.
+
+    Only when the environments or the active one actually change. A plain
+    zustand subscription fires on *every* write to that store, and the store
+    holds more than environments: opening the edit dialog sets
+    `pendingEditEnvId`, and closing it clears it, so a dialog nobody typed in
+    wrote every environment back to disk twice.
+
+    The hydration write is skipped for the same reason: the rows had just come
+    out of the database, and posting them straight back is a save nobody asked
+    for — three of them on every launch, which is what filled the audit log.
+
+    Reference equality is the right test here: every action in the store
+    replaces the array rather than mutating it.
+  */
   useEffect(() => {
+    let lastEnvironments = useEnvStore.getState().environments;
+    let lastActiveId = useEnvStore.getState().activeEnvId;
     const unsubscribe = useEnvStore.subscribe((state) => {
+      if (state.environments === lastEnvironments && state.activeEnvId === lastActiveId) return;
+      const hydrating = lastEnvironments.length === 0 && state.activeEnvId === lastActiveId;
+      lastEnvironments = state.environments;
+      lastActiveId = state.activeEnvId;
+      if (hydrating) return;
       postMsg({
         type: 'saveEnvironments',
         environments: state.environments,

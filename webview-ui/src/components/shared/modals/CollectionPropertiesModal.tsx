@@ -105,11 +105,21 @@ export function CollectionPropertiesModal({ open, collectionId, collectionName, 
         </span>
       }
       /*
-        Capped below the default 85vh. The body is a handful of rows on most
-        tabs, and a dialog that always stood nearly the full height of the
+        Capped well below the default 85vh. The body is a handful of rows on
+        most tabs, and a dialog that always stood nearly the full height of the
         window made an empty headers table look like a page.
       */
-      maxHeight="68vh"
+      maxHeight="54vh"
+      height="54vh"
+      /*
+        The body does not scroll — the tab strip lives in it.
+
+        It did, and so the tabs scrolled with the content: the scrollbar ran
+        from above "Headers" to the footer, and scrolling a long headers table
+        carried the tab bar off the top of the dialog. The strip is fixed now
+        and each tab's own panel is what scrolls.
+      */
+      bodyStyle={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}
       size="xl"
       /*
         DUI's chip, not a hand-rolled span. The app already has one look for a
@@ -134,8 +144,8 @@ export function CollectionPropertiesModal({ open, collectionId, collectionName, 
         </ButtonView>
       }
     >
-      {/* Tab bar */}
-      <div className="px-3 pt-2.5 pb-0" style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+      {/* Tab bar — fixed; `shrink-0` so a long panel cannot squeeze it away. */}
+      <div className="px-3 pt-2.5 pb-0 shrink-0" style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
         <TabView
           tabs={TABS}
           activeTab={activeTab}
@@ -146,7 +156,10 @@ export function CollectionPropertiesModal({ open, collectionId, collectionName, 
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: '16px 18px', height: '60vh' }}>
+      {/* No fixed height of its own: it fills what the card gives it. The
+          60vh it used to carry, plus the tab strip and the footer, is what
+          made the card overflow and scroll as a whole. */}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: '16px 18px' }}>
         {activeTab === 'headers' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, minHeight: 0, overflowY: 'auto' }}>
             <KeyValueTableView

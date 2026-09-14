@@ -90,7 +90,9 @@ export function EnvironmentModal({ open, envId, title, onSave, onCancel, accentC
         </ButtonView>
       }
     >
-      <div className="px-6 py-4 flex flex-col" style={{ height: '65vh', minHeight: 480 }}>
+      {/* 52vh, down from 65: three variables in a dialog two thirds of the
+          window tall is mostly empty dialog. */}
+      <div className="px-6 py-4 flex flex-col" style={{ height: '52vh', minHeight: 384 }}>
         <EnvironmentEditor environmentId={envId} showSelector={false} allowRename={envId !== GLOBAL_ENV_ID} showName={false} />
       </div>
     </ModalView>
