@@ -66,7 +66,7 @@ import {
 } from '../src/panel/main/handlers/soap-handler';
 import { handleWsConnect, handleWsDisconnect, handleWsSend } from '../src/panel/main/handlers/websocket-handler';
 import {
-  handleDk8sProbe, handleDk8sCommands, handleDk8sUseContext, handleDk8sSetDefaultContext, handleDk8sNamespaces, handleDk8sSetNamespace,
+  handleDk8sProbe, handleDk8sCommands, handleDk8sSetClusterTimeout, handleDk8sUseContext, handleDk8sSetDefaultContext, handleDk8sNamespaces, handleDk8sSetNamespace,
   handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSearchLogs, handleDk8sProbeAccess, handleDk8sCancelSearch, handleDk8sCancelExport,
   handleDk8sGetFormats, handleDk8sSaveFormat, handleDk8sDeleteFormat,
   handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat,
@@ -461,6 +461,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dk8s:setKubectlPath':
       await handleDk8sSetKubectlPath(msg, post);
+      break;
+    case 'dk8s:setClusterTimeout':
+      await handleDk8sSetClusterTimeout(msg, post);
       break;
     case 'dk8s:watchPods':
       handleDk8sWatchPods(msg, post);

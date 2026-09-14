@@ -93,7 +93,7 @@ import { handleDebugMessage } from './handlers/debug-handler';
 import { noteProtocolSend, auditProtocolResponse } from '../../services/protocol-audit';
 import { noteSessionConnect, auditSessionMessage, flushOpenSessions } from '../../services/session-audit';
 import {
-  handleDk8sProbe, handleDk8sCommands, handleDk8sUseContext, handleDk8sSetDefaultContext, handleDk8sNamespaces,
+  handleDk8sProbe, handleDk8sCommands, handleDk8sSetClusterTimeout, handleDk8sUseContext, handleDk8sSetDefaultContext, handleDk8sNamespaces,
   handleDk8sSetNamespace, handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSetLogLineNumbers, handleDk8sSearchLogs, handleDk8sCancelSearch, handleDk8sCancelExport,
   handleDk8sProbePv, handleDk8sSavePv, handleDk8sOpenLogFile, handleDk8sProbeAccess,
   handleDk8sGetFormats, handleDk8sSaveFormat, handleDk8sDeleteFormat,
@@ -662,6 +662,9 @@ export class MainPanel {
         break;
       case 'dk8s:setKubectlPath':
         handleDk8sSetKubectlPath(msg, this._post);
+        break;
+      case 'dk8s:setClusterTimeout':
+        handleDk8sSetClusterTimeout(msg, this._post);
         break;
       case 'dk8s:watchPods':
         handleDk8sWatchPods(msg, this._post);

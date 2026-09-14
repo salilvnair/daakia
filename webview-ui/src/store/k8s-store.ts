@@ -62,9 +62,16 @@ export const ALL_ACCESS: Access = {
  * Everything downstream of the namespace goes with it: the pods on screen, what
  * they were using, what the last cluster said you could do, and the offers the
  * picker had cached.
+ *
+ * And the screen goes back to the namespace picker. Clearing the namespace
+ * without saying so leaves the pod grid on screen with nothing to watch, which
+ * reads as an empty cluster rather than as a question — changing cluster is a
+ * decision that has to be finished, and choosing where to look is the rest of
+ * it.
  */
 function leavingCluster() {
   return {
+    stage: 'pick-namespace' as const,
     namespace: undefined,
     pods: [],
     usage: {},
@@ -460,6 +467,18 @@ interface K8sState {
    */
   commands: KubectlCommand[];
 
+  /**
+   * How long the host waits for a cluster call, in seconds.
+   *
+   * Mirrors `services/k8s/k8s-timeouts.ts`, and every screen that wants to say
+   * "I have heard nothing" derives its wait from this rather than picking a
+   * number. A screen that picked its own picked 25 seconds for a call bounded
+   * at 30, and announced that the cluster had not answered five seconds before
+   * the call it was waiting on had finished.
+   */
+  clusterTimeoutSeconds: number;
+  setClusterTimeout: (seconds: number) => void;
+
   pods: PodSummary[];
   usage: Record<string, PodUsage>;
   usageHistory: UsageHistory;
@@ -753,6 +772,13 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   access: ALL_ACCESS,
   /* What has been run, for the waits that name it. */
   commands: [],
+  clusterTimeoutSeconds: 30,
+
+  setClusterTimeout: (seconds) => {
+    const clamped = Math.min(300, Math.max(5, Math.round(seconds) || 30));
+    set({ clusterTimeoutSeconds: clamped });
+    postMsg({ type: 'dk8s:setClusterTimeout', seconds: clamped });
+  },
 
   probe: () => {
     set({ busy: true });
@@ -1236,6 +1262,9 @@ export const useK8sStore = create<K8sState>((set, get) => ({
           // one frame with the wrong setting.
           guardHeapDump: msg.guardHeapDump !== false,
           logLineNumbers: msg.logLineNumbers !== false,
+          /* The host's ceiling, so a screen's own backstop derives from the
+             same number rather than a guess. */
+          clusterTimeoutSeconds: (msg.clusterTimeoutSeconds as number) ?? get().clusterTimeoutSeconds,
         });
         break;
       }
@@ -1244,10 +1273,16 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         const reachable = msg.reachable as Reachability;
         const ctx = msg.context as string;
         const known = !!get().sensitivity[ctx];
+        const namespace = msg.namespace as string | undefined;
         set({
           busy: false, context: ctx, reachable,
-          namespace: msg.namespace as string | undefined,
+          namespace,
           stage: !reachable.reachable ? 'unreachable'
+            /* Nothing to watch yet. A cluster's default namespace is a
+               reasonable proposal, not a choice somebody made — and after a
+               switch there is deliberately no namespace at all, so the picker
+               is the only honest screen. */
+            : !namespace ? 'pick-namespace'
             /* Was: an unclassified context sent you to the prompt before you
                had seen a single pod. An unclassified context is now simply one
                that has not been corrected yet. */
@@ -1533,6 +1568,10 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         set(s => ({
           commands: [...s.commands, msg.event as KubectlCommand].slice(-40),
         }));
+        break;
+
+      case 'dk8s:clusterTimeout':
+        set({ clusterTimeoutSeconds: msg.seconds as number });
         break;
 
       /* The backlog, for a panel that opened after the commands had run. */

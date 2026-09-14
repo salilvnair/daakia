@@ -713,18 +713,42 @@ export function PodGrid() {
 
   const {
     pods, filter, view, setFilter, setView, startWatch, openDetail, setDetailTab, watchStatus,
+    watchDetail, clusterTimeoutSeconds,
     capped, selectMode, selected, exportOpen, exportState, busy,
     toggleSelectMode, selectAllVisible, openExport, closeExport,
   } = useK8sStore();
-  /* Silence is not a state a reader can act on. The host bounds its own calls,
-     so past 25s with nothing connected the cluster is the answer, not the wait. */
-  const [watchNeverCame, setWatchNeverCame] = useState(false);
+
+  /*
+    ── When to stop waiting ──
+
+    This was a 25-second stopwatch, and it was wrong in both directions.
+
+    The pod list it waits on is bounded by the cluster timeout — 30 seconds by
+    default — so at 25 the screen announced "no answer from the cluster" five
+    seconds *before* the call had finished, and a merely slow cluster was called
+    dead while its answer was on the way. And when the list failed for real in
+    two seconds, the host said so immediately and the screen sat on that for
+    twenty-three more before mentioning it.
+
+    So: a failure is reported the moment the host reports it, and the only
+    timer left is a backstop for hearing nothing at all — derived from the
+    host's own ceiling, so it cannot fire first. The number is a setting now:
+    Settings → DK8S → General.
+  */
+  const listFailed = watchStatus === 'reconnecting' && !!watchDetail;
+  const [heardNothing, setHeardNothing] = useState(false);
   useEffect(() => {
-    if (pods.length || watchStatus === 'connected') { setWatchNeverCame(false); return; }
-    setWatchNeverCame(false);
-    const id = window.setTimeout(() => setWatchNeverCame(true), 25_000);
+    if (pods.length || watchStatus === 'connected' || listFailed) {
+      setHeardNothing(false);
+      return;
+    }
+    setHeardNothing(false);
+    const backstop = clusterTimeoutSeconds * 1000 + 8_000;
+    const id = window.setTimeout(() => setHeardNothing(true), backstop);
     return () => window.clearTimeout(id);
-  }, [pods.length, watchStatus]);
+  }, [pods.length, watchStatus, listFailed, clusterTimeoutSeconds]);
+
+  const watchNeverCame = listFailed || heardNothing;
 
   const { collapsed, toggle } = useCollapsedGroups();
   const searchOpen = useDk8sSearchStore(s => s.open);
@@ -1066,12 +1090,17 @@ export function PodGrid() {
             ) : watchNeverCame ? (
               <div className="flex flex-col items-center gap-2 text-center px-4">
                 <span className="text-[12.5px] font-semibold" style={{ color: 'var(--color-warning)' }}>
-                  No pods, and no answer from the cluster
+                  {listFailed ? 'The cluster refused the pod list' : 'No pods, and nothing back from the cluster'}
                 </span>
                 <span className="text-[11.5px]"
-                      style={{ color: 'var(--color-text-muted)', maxWidth: '48ch', lineHeight: 1.6 }}>
-                  The watch has not connected in 25 seconds. A stopped cluster or a VPN that is
-                  not up looks like this; a namespace that is genuinely empty says so instead.
+                      style={{ color: 'var(--color-text-muted)', maxWidth: '52ch', lineHeight: 1.6 }}>
+                  {listFailed
+                    ? watchDetail
+                    : `Nothing has come back in ${clusterTimeoutSeconds + 8} seconds — longer than `
+                      + 'the wait dk8s allows a cluster call, so the answer is not simply late. A '
+                      + 'stopped cluster or a VPN that is not up looks like this; a namespace that '
+                      + 'is genuinely empty says so instead. The wait is yours to change in '
+                      + 'Settings → DK8S → General.'}
                 </span>
                 {/* What it opened and what came back — the whole point of the
                     complaint this state exists for. */}
@@ -1079,10 +1108,11 @@ export function PodGrid() {
                 <ButtonView label="Try again" size="sm" variant="secondary"
                             onClick={() => {
                               /* Clears the local verdict too — without this the
-                                 25-second timer stays fired and the failure
-                                 comes back the instant the probe ends, whatever
-                                 it found. */
-                              setWatchNeverCame(false);
+                                 backstop stays fired and the failure comes back
+                                 the instant the probe ends, whatever it found.
+                                 The host's own verdict clears when the watch
+                                 reports again. */
+                              setHeardNothing(false);
                               useK8sStore.getState().probe();
                             }} />
               </div>

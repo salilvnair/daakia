@@ -8,6 +8,7 @@
  * default as a separate, opt-in action.
  */
 import { run } from './kubectl';
+import { clusterTimeoutMs, reachRequestTimeoutSeconds } from './k8s-timeouts';
 
 export interface KubeContext {
   name: string;
@@ -98,8 +99,8 @@ export interface Reachability {
  */
 export async function checkReachable(context: string): Promise<Reachability> {
   const res = await run(
-    ['--context', context, 'version', '-o', 'json', '--request-timeout=8s'],
-    { timeoutMs: 15_000 },
+    ['--context', context, 'version', '-o', 'json', `--request-timeout=${reachRequestTimeoutSeconds()}s`],
+    { timeoutMs: clusterTimeoutMs() },
   );
   let serverVersion: string | undefined;
   try {
@@ -133,7 +134,7 @@ export interface NamespaceList {
  * seeded with `fallback`.
  */
 export async function listNamespaces(context: string): Promise<NamespaceList> {
-  const res = await run(['--context', context, 'get', 'namespaces', '-o', 'name'], { timeoutMs: 20_000 });
+  const res = await run(['--context', context, 'get', 'namespaces', '-o', 'name'], { timeoutMs: clusterTimeoutMs() });
   if (res.ok) {
     const namespaces = res.stdout
       .split('\n')

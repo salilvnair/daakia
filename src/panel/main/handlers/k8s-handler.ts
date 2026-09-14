@@ -21,6 +21,9 @@ import {
 } from '../../../services/k8s/kube-context';
 import { getSetting, setSetting, insertUiAudit } from '../../../storage/db';
 import { onKubectl, recentKubectl, type KubectlEvent } from '../../../services/k8s/kubectl-audit';
+import {
+  setClusterTimeoutSeconds, clusterTimeoutSeconds, clampTimeoutSeconds,
+} from '../../../services/k8s/k8s-timeouts';
 import { watchPods, topPods, type WatchHandle } from '../../../services/k8s/k8s-watch';
 import {
   exportPodLogs, exportVisibleLines, summariseExport,
@@ -76,6 +79,14 @@ export interface Dk8sState {
   /** context name -> sensitivity, set by the user and never inferred silently. */
   sensitivity?: Record<string, 'normal' | 'production'>;
   kubectlPath?: string;
+  /**
+   * How long to wait for a cluster call, in seconds.
+   *
+   * One ceiling for everything that talks to a cluster — see k8s-timeouts.
+   * Undefined means the default, which is what every install has until
+   * somebody has a cluster slow enough to care.
+   */
+  clusterTimeoutSeconds?: number;
   /**
    * Refuse a heap dump the safety check judges likely to OOM-kill the pod.
    * Undefined means on — the guard has to protect people who have never opened
@@ -188,13 +199,19 @@ export async function handleDk8sProbe(postMessage: PostMessage): Promise<void> {
   installKubectlAudit(postMessage);
   const saved = state();
   if (saved.kubectlPath) setKubectlPath(saved.kubectlPath);
+  /* Applied before anything is asked of a cluster: every bound below derives
+     from it, and so does the screen's own backstop. */
+  setClusterTimeoutSeconds(saved.clusterTimeoutSeconds);
 
   /* See the note above: a refresh that returns the cached answer is not one. */
   clearAccessCache();
 
   const env = await probeEnvironment();
   if (!env.present) {
-    postMessage({ type: 'dk8s:env', env, contexts: [], platform: process.platform });
+    postMessage({
+      type: 'dk8s:env', env, contexts: [], platform: process.platform,
+      clusterTimeoutSeconds: clusterTimeoutSeconds(),
+    });
     return;
   }
 
@@ -267,6 +284,9 @@ export async function handleDk8sProbe(postMessage: PostMessage): Promise<void> {
     type: 'dk8s:env',
     env,
     platform: process.platform,
+    /* So a screen can derive its own backstop from the same number rather than
+       inventing one that fires before the call it is timing. */
+    clusterTimeoutSeconds: clusterTimeoutSeconds(),
     contexts: list.contexts,
     contextError: list.error,
     context: chosen,
@@ -1251,6 +1271,23 @@ export async function handleDk8sProbePod(
     runtime, capabilities: caps, actions,
     memory, safety,
   });
+}
+
+/**
+ * How long to wait for a cluster, in seconds.
+ *
+ * Stored, applied at once, and echoed back — the panel derives its own "I have
+ * heard nothing" backstop from it, and a UI that guessed its own number is the
+ * bug this setting exists to retire.
+ */
+export async function handleDk8sSetClusterTimeout(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const seconds = clampTimeoutSeconds(Number(msg.seconds));
+  setClusterTimeoutSeconds(seconds);
+  saveState({ clusterTimeoutSeconds: seconds });
+  postMessage({ type: 'dk8s:clusterTimeout', seconds });
 }
 
 /** Explicit kubectl path, for when it is installed somewhere unusual. */

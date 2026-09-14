@@ -13,6 +13,7 @@ import { Dk8sIcon, IssueOpenedIcon, KeyboardIcon } from '../../icons';
 import { useTabsStore } from '../../store/tabs-store';
 import { useShowOnToolbar, type ToolbarSurface } from '../../store/toolbar-visibility';
 import { KubectlBinarySetting } from './KubectlBinarySetting';
+import { ClusterTimeoutSetting } from './ClusterTimeoutSetting';
 
 function Toggle({ on, onChange, label, description, accent }: {
   on: boolean;
@@ -141,6 +142,9 @@ export function Dk8sGeneralSettings() {
       {/* Which binary it drives is a fact about dk8s itself, not about how it
           behaves against a cluster — so it is here rather than on Cluster. */}
       <KubectlBinarySetting />
+      {/* And how long to wait for one, which is a property of your network
+          rather than of dk8s. */}
+      <ClusterTimeoutSetting />
     </SurfaceGeneral>
   );
 }

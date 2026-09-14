@@ -465,17 +465,20 @@ export function NamespaceMultiPicker() {
     sentence: a dropped message, a host that died, a kubectl wedged past its
     own timeout, and the screen waits forever on a promise nobody is keeping.
 
-    This is deliberately longer than the host's own bound. Firing first would
-    accuse a cluster of being unreachable while the call that would have proved
-    otherwise is still in flight, which is worse than the spinner.
+    Deliberately longer than the host's own bound — and now derived from it
+    rather than guessed. Firing first would accuse a cluster of being
+    unreachable while the call that would have proved otherwise is still in
+    flight, which is worse than the spinner; a hard-coded number cannot promise
+    that once the bound is a setting.
   */
+  const clusterTimeoutSeconds = useK8sStore(s => s.clusterTimeoutSeconds);
   const [timedOut, setTimedOut] = useState(false);
   useEffect(() => {
     if (heardBack) { setTimedOut(false); return; }
     setTimedOut(false);
-    const id = window.setTimeout(() => setTimedOut(true), 25_000);
+    const id = window.setTimeout(() => setTimedOut(true), clusterTimeoutSeconds * 1000 + 8_000);
     return () => window.clearTimeout(id);
-  }, [heardBack, selectedContexts.join(',')]);
+  }, [heardBack, selectedContexts.join(','), clusterTimeoutSeconds]);
 
   const toggle = (t: WatchTarget) =>
     setChecked(prev =>
@@ -646,10 +649,13 @@ export function NamespaceMultiPicker() {
               No answer from {selectedContexts.length === 1 ? 'that cluster' : 'these clusters'}
             </span>
             <span className="text-[11.5px]" style={{ color: 'var(--color-text-muted)', maxWidth: '52ch', lineHeight: 1.6 }}>
-              kubectl has not replied in 25 seconds. It is usually a cluster that is stopped or
-              behind a VPN that is not up — an API server that is merely slow answers well
-              inside this.
+              kubectl has not replied in {clusterTimeoutSeconds + 8} seconds — longer than the
+              wait dk8s allows a cluster call. It is usually a cluster that is stopped or behind
+              a VPN that is not up; an API server that is merely slow answers well inside this.
+              The wait is yours to change in Settings → DK8S → General.
             </span>
+            {/* And the line it is waiting on, to try in a terminal. */}
+            <RunningCommand width={640} />
             <div className="flex gap-2 mt-1">
               <ButtonView label="Choose other clusters" size="sm" variant="secondary"
                           accentColor={ACCENT_FILL} color={ACCENT}

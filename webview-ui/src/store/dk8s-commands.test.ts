@@ -99,6 +99,33 @@ describe('switching cluster', () => {
     expect(s.pods).toEqual([]);
   });
 
+  it('sends you back to the namespace picker', () => {
+    /*
+      Clearing the namespace without changing the screen leaves the pod grid up
+      with nothing to watch, which reads as an empty cluster rather than as a
+      question. Changing cluster is a decision that has to be finished.
+    */
+    useK8sStore.setState({ stage: 'ready' });
+    useK8sStore.getState().useContext('staging-eu');
+    expect(useK8sStore.getState().stage).toBe('pick-namespace');
+
+    useK8sStore.setState({ stage: 'ready' });
+    useK8sStore.getState().useContexts(['staging-eu', 'prod-us']);
+    expect(useK8sStore.getState().stage).toBe('pick-namespace');
+  });
+
+  it('does not take a default namespace as a choice somebody made', () => {
+    // The host proposes the context's default; with none, the picker is the
+    // only honest screen.
+    useK8sStore.getState().apply({
+      type: 'dk8s:contextSet',
+      context: 'staging-eu',
+      reachable: { reachable: true },
+      namespace: undefined,
+    });
+    expect(useK8sStore.getState().stage).toBe('pick-namespace');
+  });
+
   it('keeps the commands, which are what explains the switch', () => {
     useK8sStore.setState({ commands: [CMD()] });
     useK8sStore.getState().useContext('staging-eu');
