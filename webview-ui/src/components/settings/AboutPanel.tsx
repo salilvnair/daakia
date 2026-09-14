@@ -12,7 +12,7 @@
  */
 import { useState } from 'react';
 import {
-  BadgeChipView, ButtonView, CalloutView, CopyButtonView, TimelineView, IconSize,
+  BadgeChipView, ButtonView, CopyButtonView, TimelineView, IconSize,
 } from '@salilvnair/dui';
 import {
   Dk8sIcon, GitHubIcon, SparkleIcon, GlobeIcon, BookOpenIcon, ChevronDownIcon,
@@ -180,9 +180,18 @@ export function AboutPanel() {
             </span>
           </div>
 
-          <CalloutView variant="info" title={`Daakia ${CURRENT_RELEASE.version}`}>
+          {/*
+            The headline, as a sentence.
+
+            It was a bordered info callout titled "Daakia 3.0.3" — a box
+            restating the version from the heading directly above it and the
+            product name from the hero directly above that, in the tone the
+            rest of the app reserves for something you need to act on.
+          */}
+          <p className="m-0 text-[12.5px]"
+             style={{ color: 'var(--color-text-secondary)', lineHeight: 1.65, maxWidth: '74ch' }}>
             {CURRENT_RELEASE.headline}
-          </CalloutView>
+          </p>
 
           <div className="flex flex-col rounded-lg px-3.5 py-2.5"
                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)' }}>

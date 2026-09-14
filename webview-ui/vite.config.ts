@@ -13,9 +13,32 @@ import { SHARED_ALIASES } from './shared-aliases';
   disagree with itself, and the one place people check it is the screen that
   would be wrong.
 */
-const EXTENSION_VERSION = JSON.parse(
-  readFileSync(resolve(__dirname, '..', 'package.json'), 'utf8'),
-).version as string;
+const MANIFEST = resolve(__dirname, '..', 'package.json');
+const EXTENSION_VERSION = JSON.parse(readFileSync(MANIFEST, 'utf8')).version as string;
+
+/**
+ * Restart the dev server when the manifest's version changes.
+ *
+ * A config is evaluated once, when the server starts — so a dev server
+ * started before a release bump goes on reporting the old version, on the one
+ * screen whose job is to say which version this is, for as long as it keeps
+ * running. Nothing is wrong with the build; the page is simply older than the
+ * number. Watching the file turns that into a restart nobody has to know to
+ * ask for.
+ */
+function watchManifestVersion() {
+  return {
+    name: 'daakia-watch-manifest-version',
+    configureServer(server: { watcher: { add: (p: string) => void; on: (e: string, cb: (p: string) => void) => void }; restart: () => void }) {
+      server.watcher.add(MANIFEST);
+      server.watcher.on('change', (file: string) => {
+        if (resolve(file) !== MANIFEST) return;
+        const now = JSON.parse(readFileSync(MANIFEST, 'utf8')).version as string;
+        if (now !== EXTENSION_VERSION) server.restart();
+      });
+    },
+  };
+}
 
 export default defineConfig({
   root: resolve(__dirname),
@@ -54,5 +77,5 @@ export default defineConfig({
       },
     },
   },
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), watchManifestVersion()],
 });

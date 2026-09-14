@@ -30,7 +30,7 @@ import { useWorkspaceStore } from '../../../../store/workspace-store';
 import { getVsCodeApi } from '../../../../vscode';
 
 export interface CaptureDirective {
-  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow' | 'openWikiTab' | 'openDk8sTab' | 'seedDk8sState' | 'openWorkspaceTab' | 'seedWorkspaces' | 'openDaakiaAiTab' | 'seedSchemaDiff';
+  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow' | 'openWikiTab' | 'openDk8sTab' | 'seedDk8sState' | 'openWorkspaceTab' | 'seedWorkspaces' | 'openDaakiaAiTab' | 'seedSchemaDiff' | 'openDkghTab' | 'seedDkgh';
   selector?: string;       // CSS selector — click, type
   text?: string;           // type
   ms?: number;             // wait
@@ -103,6 +103,20 @@ export interface CaptureDirective {
    * from a real watch.
    */
   dk8sPatch?: Record<string, unknown>;
+  /**
+   * seedDkgh — the answers the host would have given, posted as messages.
+   *
+   * dkgh's screens are somebody's repository, read through `gh`. A capture run
+   * has neither, and making it need them would mean the wiki could only be
+   * rebuilt on a machine signed in to the right account. So the probe result
+   * and the board result go in as the messages the host sends, and every
+   * screen renders from them exactly as it would from the real thing.
+   *
+   * Posted rather than written into a store on purpose: the board keeps its
+   * data in component state behind a `message` listener, and reaching into it
+   * would be capturing a different code path from the one users run.
+   */
+  dkghMessages?: Record<string, unknown>[];
   // seedWorkspaces — the list, which one is active, and the Overview
   // counts. Same reasoning as dk8sPatch: both come from the host, and a
   // capture run's database is empty.
@@ -281,6 +295,17 @@ async function runDirective(d: CaptureDirective): Promise<void> {
        state and every view renders from it as it would from a real watch. */
     case 'seedDk8sState': {
       if (d.dk8sPatch) useK8sStore.setState(d.dk8sPatch as never);
+      return;
+    }
+    case 'openDkghTab': {
+      useTabsStore.getState().openDkghTab();
+      return;
+    }
+    /* See `dkghMessages` — the host's answers, without the host. */
+    case 'seedDkgh': {
+      for (const message of d.dkghMessages ?? []) {
+        window.postMessage(message, '*');
+      }
       return;
     }
     case 'openSettingsTab': {
