@@ -20,7 +20,7 @@
 import { useEffect, useState } from 'react';
 import { ButtonView, TextInputView } from '@salilvnair/dui';
 import { useK8sStore } from '../../store/k8s-store';
-import { ClockIcon, WarningTriangleIcon } from '../../icons';
+import { ClockIcon } from '../../icons';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -33,15 +33,22 @@ export function ClusterTimeoutSetting() {
   const seconds = useK8sStore(s => s.clusterTimeoutSeconds);
   const setClusterTimeout = useK8sStore(s => s.setClusterTimeout);
 
-  const [draft, setDraft] = useState(String(seconds));
-  /* Follow the stored value until somebody types, so a change made elsewhere
-     shows up without a reload. */
-  const [typed, setTyped] = useState(false);
-  useEffect(() => { if (!typed) setDraft(String(seconds)); }, [seconds, typed]);
+  /*
+    The unit lives inside the field.
 
-  const parsed = Number(draft);
-  const valid = Number.isFinite(parsed) && parsed >= MIN && parsed <= MAX;
-  const dirty = valid && Math.round(parsed) !== seconds;
+    It was beside it — a fixed-width box with the word "seconds" next to it —
+    and the input overlapped the word. A stepper fixed the overlap and brought
+    its own: dui's value field is 37px at its largest, which fits "30" exactly
+    and clips "300", and this setting goes to 300. So: one field, the unit as
+    its suffix, and a width chosen for the longest value it can hold.
+  */
+  const [draft, setDraft] = useState(seconds);
+  /* Follow the stored value until somebody changes it, so a change made
+     elsewhere shows up without a reload. */
+  const [touched, setTouched] = useState(false);
+  useEffect(() => { if (!touched) setDraft(seconds); }, [seconds, touched]);
+
+  const dirty = draft !== seconds;
 
   return (
     <div className="flex flex-col gap-3">
@@ -73,43 +80,46 @@ export function ClusterTimeoutSetting() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span style={{ width: 110 }}>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <span style={{ width: 150, display: 'inline-block' }}>
             <TextInputView
-              value={draft}
-              onChange={e => { setTyped(true); setDraft(e.target.value); }}
-              placeholder={String(DEFAULT)}
+              value={String(draft)}
+              onChange={e => {
+                setTouched(true);
+                /* Digits only: a spinner button is not worth a keyboard that
+                   can type "3o" and a message explaining it. */
+                const digits = e.target.value.replace(/[^0-9]/g, '').slice(0, 3);
+                setDraft(digits === '' ? 0 : Number(digits));
+              }}
+              onBlur={() => setDraft(d => Math.min(MAX, Math.max(MIN, d || DEFAULT)))}
               size="sm"
+              width="fullWidth"
               accentColor={ACCENT}
+              suffixIcon={
+                <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+                  seconds
+                </span>
+              }
             />
           </span>
-          <span className="text-[11.5px]" style={{ color: 'var(--color-text-muted)' }}>seconds</span>
           <ButtonView
             label="Save"
             size="sm"
             variant="secondary"
             accentColor={ACCENT}
             color={dirty ? ACCENT : 'var(--color-text-muted)'}
-            disabled={!dirty}
-            onClick={() => { setClusterTimeout(Math.round(parsed)); setTyped(false); }}
+            disabled={!dirty || draft < MIN || draft > MAX}
+            onClick={() => { setClusterTimeout(draft); setTouched(false); }}
           />
-          {seconds !== DEFAULT && (
+          {(seconds !== DEFAULT || draft !== DEFAULT) && (
             <ButtonView
               label="Reset"
               size="sm"
               variant="secondary"
-              onClick={() => { setClusterTimeout(DEFAULT); setTyped(false); }}
+              onClick={() => { setDraft(DEFAULT); setClusterTimeout(DEFAULT); setTouched(false); }}
             />
           )}
         </div>
-
-        {!valid && (
-          <span className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--color-warning)' }}>
-            <WarningTriangleIcon size={12} />
-            Between {MIN} and {MAX} seconds. Below {MIN} a normal call cannot finish; above
-            {' '}{MAX} nobody is still waiting.
-          </span>
-        )}
 
         {/*
           What the number actually governs, said plainly — the screens quote it
