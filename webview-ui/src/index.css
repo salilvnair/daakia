@@ -1576,28 +1576,29 @@ input[type="number"] {
   word-break: break-word;
 }
 
-/* ── hljs atom-one-dark colour palette ─────────────────────────────── */
-.mdv-root .hljs                                     { color: #abb2bf; }
-.mdv-root .hljs-comment, .mdv-root .hljs-quote      { color: #5c6370; font-style: italic; }
-.mdv-root .hljs-keyword, .mdv-root .hljs-selector-tag,
-.mdv-root .hljs-built_in                            { color: #c678dd; }
-.mdv-root .hljs-string, .mdv-root .hljs-regexp,
-.mdv-root .hljs-addition, .mdv-root .hljs-attribute { color: #98c379; }
-.mdv-root .hljs-number, .mdv-root .hljs-literal,
-.mdv-root .hljs-variable, .mdv-root .hljs-template-variable,
-.mdv-root .hljs-meta                                { color: #56b6c2; }
-.mdv-root .hljs-title, .mdv-root .hljs-section,
-.mdv-root .hljs-name, .mdv-root .hljs-selector-id   { color: #61aeee; }
-.mdv-root .hljs-type, .mdv-root .hljs-class .hljs-title,
-.mdv-root .hljs-attr                                { color: #e6c07b; }
-.mdv-root .hljs-tag, .mdv-root .hljs-deletion,
-.mdv-root .hljs-subst                               { color: #e06c75; }
-.mdv-root .hljs-link                                { color: #61aeee; text-decoration: underline; }
-.mdv-root .hljs-emphasis                            { font-style: italic; }
-.mdv-root .hljs-strong                              { font-weight: 700; }
-.mdv-root .hljs-punctuation                         { color: #abb2bf; }
-.mdv-root .hljs-property                            { color: #e06c75; }
-.mdv-root .hljs-operator                            { color: #56b6c2; }
+/* ── hljs atom-one-dark palette, shared by the markdown viewer
+   and anywhere else that highlights code (.dk-hl) ── ─────────────────────────────── */
+:is(.mdv-root, .dk-hl) .hljs                                     { color: #abb2bf; }
+:is(.mdv-root, .dk-hl) .hljs-comment, :is(.mdv-root, .dk-hl) .hljs-quote      { color: #5c6370; font-style: italic; }
+:is(.mdv-root, .dk-hl) .hljs-keyword, :is(.mdv-root, .dk-hl) .hljs-selector-tag,
+:is(.mdv-root, .dk-hl) .hljs-built_in                            { color: #c678dd; }
+:is(.mdv-root, .dk-hl) .hljs-string, :is(.mdv-root, .dk-hl) .hljs-regexp,
+:is(.mdv-root, .dk-hl) .hljs-addition, :is(.mdv-root, .dk-hl) .hljs-attribute { color: #98c379; }
+:is(.mdv-root, .dk-hl) .hljs-number, :is(.mdv-root, .dk-hl) .hljs-literal,
+:is(.mdv-root, .dk-hl) .hljs-variable, :is(.mdv-root, .dk-hl) .hljs-template-variable,
+:is(.mdv-root, .dk-hl) .hljs-meta                                { color: #56b6c2; }
+:is(.mdv-root, .dk-hl) .hljs-title, :is(.mdv-root, .dk-hl) .hljs-section,
+:is(.mdv-root, .dk-hl) .hljs-name, :is(.mdv-root, .dk-hl) .hljs-selector-id   { color: #61aeee; }
+:is(.mdv-root, .dk-hl) .hljs-type, :is(.mdv-root, .dk-hl) .hljs-class .hljs-title,
+:is(.mdv-root, .dk-hl) .hljs-attr                                { color: #e6c07b; }
+:is(.mdv-root, .dk-hl) .hljs-tag, :is(.mdv-root, .dk-hl) .hljs-deletion,
+:is(.mdv-root, .dk-hl) .hljs-subst                               { color: #e06c75; }
+:is(.mdv-root, .dk-hl) .hljs-link                                { color: #61aeee; text-decoration: underline; }
+:is(.mdv-root, .dk-hl) .hljs-emphasis                            { font-style: italic; }
+:is(.mdv-root, .dk-hl) .hljs-strong                              { font-weight: 700; }
+:is(.mdv-root, .dk-hl) .hljs-punctuation                         { color: #abb2bf; }
+:is(.mdv-root, .dk-hl) .hljs-property                            { color: #e06c75; }
+:is(.mdv-root, .dk-hl) .hljs-operator                            { color: #56b6c2; }
 .mdv-root .hljs-params                              { color: #abb2bf; }
 .mdv-root .hljs-function                            { color: #61aeee; }
 .mdv-root .hljs-class                               { color: #e6c07b; }
@@ -1937,3 +1938,24 @@ input[type="number"] {
   style; WebKit needs this.
 */
 [data-nobar="true"]::-webkit-scrollbar { display: none; }
+
+/*
+  A highlighted code block outside the markdown viewer.
+
+  Same palette, same font, without inheriting the viewer's prose spacing —
+  used by the scan's review pane, where a generated request body has to read
+  like the body editor it is going to become.
+*/
+.dk-hl {
+  margin: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-surface-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.65;
+  overflow: auto;
+  tab-size: 2;
+}
+.dk-hl code { font-family: inherit; background: none; padding: 0; }

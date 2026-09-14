@@ -104,18 +104,21 @@ export function RunningCommand({ match, now: pinnedNow, width = 1040, mode = 'wa
 
   return (
     <div
-      className="flex flex-col gap-2 rounded-lg px-3.5 py-3 mt-2.5 mx-auto text-left"
+      className="flex flex-col gap-2 rounded-lg px-4 py-3 mt-2.5 mx-auto text-left"
       style={{
         /*
-          Grows with the panel rather than sitting at a fixed cap.
+          As wide as the line it holds, and no wider.
 
-          A fixed width meant a long line — `auth can-i create pods/portforward`
-          against a long context and namespace — scrolled inside a box with
-          plenty of empty panel either side of it. `width` is now the ceiling,
-          not the size: the card takes what the panel can spare up to it, so
-          most commands fit outright and only a genuinely long one scrolls.
+          Two earlier versions were wrong in opposite directions: a fixed width
+          left a short command floating in an over-large box, and a percentage
+          of the panel made the card change size as the window did while the
+          line inside stayed put. `max-content` sizes the card to the command —
+          so the box is the command's own length, centred, up to a ceiling past
+          which a genuinely long line scrolls inside it.
         */
-        width: `min(94%, ${width}px)`,
+        width: 'max-content',
+        maxWidth: `min(94%, ${width}px)`,
+        minWidth: 'min(94%, 380px)',
         background: 'var(--color-surface)',
         border: '1px solid var(--color-surface-border)',
       }}
@@ -166,8 +169,14 @@ export function RunningCommand({ match, now: pinnedNow, width = 1040, mode = 'wa
         got back when it ran the same thing.
       */}
       {cmd.said && (
-        <span className="text-[11px] leading-relaxed break-all"
-              style={{ color: failed ? 'var(--color-warning)' : 'var(--color-text-muted)' }}>
+        <span className="text-[11px] leading-relaxed"
+              style={{
+                color: failed ? 'var(--color-warning)' : 'var(--color-text-muted)',
+                /* Prose, wrapped as prose. `break-all` split it mid-word —
+                   "awaiting he / aders" — which reads as a rendering fault
+                   rather than as what the cluster said. */
+                overflowWrap: 'break-word', wordBreak: 'normal',
+              }}>
           {cmd.said}
         </span>
       )}

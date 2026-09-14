@@ -8,8 +8,9 @@
  *
  * Nothing is written until the button on the review screen is pressed.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { ModalView, ButtonView, TextInputView, CopyButtonView } from '@salilvnair/dui';
+import hljs from 'highlight.js';
 import {
   useScanStore, byFolder, isInternal, type ScannedRequest, type Provenance, type ProvenanceKind,
 } from '../../../store/scan-store';
@@ -119,9 +120,9 @@ function Row({ r, chosen, focused, onToggle, onFocus }: {
       <span style={{
         fontFamily: 'var(--font-mono, monospace)', fontSize: 11.5,
         color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
+        whiteSpace: 'nowrap', minWidth: 0,
       }}>{r.url.replace('{{baseUrl}}', '')}</span>
-      <span style={{ flex: 1 }} />
+      <span style={{ flex: 1, minWidth: 8 }} />
       {isInternal(r) && <Mark p={{ kind: 'unknown' }} label="internal" />}
       {worst && <Mark p={worst[1]} label={worst[0] === 'path' ? worst[1].kind : `${worst[0]} ${worst[1].kind}`} />}
     </div>
@@ -196,7 +197,7 @@ export function ScanModal() {
   };
 
   return (
-    <ModalView open onClose={s.close} title="Scan code for requests" size="xl">
+    <ModalView open onClose={s.close} title="Scan code for requests" size="xxl">
       {s.stage === 'source' && <SourceStep />}
       {s.stage === 'scanning' && <ScanningStep />}
       {s.stage === 'error' && (
@@ -214,7 +215,7 @@ export function ScanModal() {
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <Summary />
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', minHeight: 360, maxHeight: '52vh' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 400px', minHeight: 380, maxHeight: '56vh' }}>
             <div style={{ overflowY: 'auto', borderRight: '1px solid var(--color-surface-border)' }}>
               {groups.map(g => (
                 <div key={g.folder}>
@@ -364,13 +365,21 @@ function Detail({ r }: { r?: ScannedRequest }) {
       {r.params.length > 0 && (
         <>
           <Section title="Query" />
-          <div style={{ marginBottom: 12 }}>
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+            columnGap: 10, rowGap: 3, marginBottom: 12,
+            fontFamily: 'var(--font-mono, monospace)', fontSize: 11, alignItems: 'baseline',
+          }}>
             {r.params.map(p => (
-              <div key={p.key} style={{ display: 'flex', gap: 8, fontFamily: 'var(--font-mono, monospace)', fontSize: 11, padding: '1px 0' }}>
-                <span style={{ color: 'var(--color-text-muted)', minWidth: 96 }}>{p.key}</span>
-                <span>{p.value || <em style={{ color: 'var(--color-text-muted)' }}>empty</em>}</span>
-                {!p.enabled && <span style={{ color: 'var(--color-text-muted)', fontSize: 10 }}>optional</span>}
-              </div>
+              <Fragment key={p.key}>
+                <span style={{ color: 'var(--color-text-muted)' }}>{p.key}</span>
+                <span style={{ overflowWrap: 'anywhere' }}>
+                  {p.value || <em style={{ color: 'var(--color-text-muted)' }}>empty</em>}
+                </span>
+                <span style={{ color: 'var(--color-text-muted)', fontSize: 10 }}>
+                  {p.enabled ? '' : 'optional'}
+                </span>
+              </Fragment>
             ))}
           </div>
         </>
@@ -379,12 +388,18 @@ function Detail({ r }: { r?: ScannedRequest }) {
       {r.headers.length > 0 && (
         <>
           <Section title="Headers" />
-          <div style={{ marginBottom: 12 }}>
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)',
+            columnGap: 10, rowGap: 3, marginBottom: 12,
+            fontFamily: 'var(--font-mono, monospace)', fontSize: 11, alignItems: 'baseline',
+          }}>
             {r.headers.map(h => (
-              <div key={h.key} style={{ display: 'flex', gap: 8, fontFamily: 'var(--font-mono, monospace)', fontSize: 11, padding: '1px 0' }}>
-                <span style={{ color: 'var(--color-text-muted)', minWidth: 96 }}>{h.key}</span>
-                <span style={{ wordBreak: 'break-all' }}>{h.value || <em style={{ color: 'var(--color-text-muted)' }}>empty</em>}</span>
-              </div>
+              <Fragment key={h.key}>
+                <span style={{ color: 'var(--color-text-muted)' }}>{h.key}</span>
+                <span style={{ overflowWrap: 'anywhere' }}>
+                  {h.value || <em style={{ color: 'var(--color-text-muted)' }}>empty</em>}
+                </span>
+              </Fragment>
             ))}
           </div>
         </>
@@ -393,27 +408,68 @@ function Detail({ r }: { r?: ScannedRequest }) {
       {r.bodyRaw && (
         <>
           <Section title="Body" mark={prov.body} />
-          <pre style={{
-            margin: '0 0 12px', background: 'var(--color-surface)',
-            border: '1px solid var(--color-surface-border)', borderRadius: 5,
-            padding: '8px 10px', fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5,
-            color: 'var(--color-text-secondary)', overflowX: 'auto', maxHeight: 180,
-          }}>{r.bodyRaw}</pre>
+          <Json text={r.bodyRaw} />
         </>
       )}
 
       <Section title="How daakia knows" />
-      <div style={{ fontSize: 10.5, color: 'var(--color-text-muted)', lineHeight: 1.75 }}>
+      {/*
+        A grid, not a row of flexed spans.
+
+        Flexed, every marker sat at a different x because each label is a
+        different width, and the wrapped second line of a long explanation ran
+        back under the marker. Three columns — marker, field, why — give the
+        markers a rail to line up on and the text a column to wrap inside.
+      */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'auto auto minmax(0, 1fr)',
+        columnGap: 8, rowGap: 5, alignItems: 'baseline',
+        fontSize: 10.5, color: 'var(--color-text-muted)', lineHeight: 1.6,
+      }}>
         {Object.entries(prov).map(([field, p]) => p && (
-          <div key={field} style={{ display: 'flex', gap: 7, alignItems: 'baseline' }}>
+          <Fragment key={field}>
             <Mark p={p} />
-            <span>{field} — {describe(p)}</span>
-          </div>
+            <span style={{ color: 'var(--color-text-secondary)' }}>{field}</span>
+            <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{describe(p)}</span>
+          </Fragment>
         ))}
-        <div style={{ marginTop: 8, fontFamily: 'var(--font-mono, monospace)' }}>{r.scan.source}</div>
       </div>
+      <div style={{
+        marginTop: 10, paddingTop: 9, borderTop: '1px solid var(--color-surface-border)',
+        fontFamily: 'var(--font-mono, monospace)', fontSize: 10,
+        color: 'var(--color-text-muted)', overflowWrap: 'anywhere',
+      }}>{r.scan.source}</div>
     </div>
   );
+}
+
+/**
+ * A generated body, highlighted the way the body editor will highlight it.
+ *
+ * It is going to become a request body in a moment, and seeing it in plain
+ * grey here and coloured there makes the review feel like a different tool
+ * from the thing it is feeding.
+ */
+function Json({ text }: { text: string }) {
+  const html = useMemo(() => {
+    try {
+      return hljs.highlight(text, { language: 'json' }).value;
+    } catch {
+      /* A body that is not valid JSON is still worth showing — unhighlighted
+         rather than not at all. */
+      return escapeHtml(text);
+    }
+  }, [text]);
+  return (
+    <pre className="dk-hl" style={{ marginBottom: 12, maxHeight: 220 }}>
+      <code dangerouslySetInnerHTML={{ __html: html }} />
+    </pre>
+  );
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] ?? c));
 }
 
 function Section({ title, mark }: { title: string; mark?: Provenance }) {
