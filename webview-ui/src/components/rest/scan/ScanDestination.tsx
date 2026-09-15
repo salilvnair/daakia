@@ -20,7 +20,7 @@
  * two places, which is one more than it should be in.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FolderIcon, FolderOpenIcon, ChevronRightIcon, ChevronDownIcon, CheckIcon, LayoutGridIcon } from '../../../icons';
+import { FolderIcon, FolderOpenIcon, FolderPlusIcon, ChevronRightIcon, ChevronDownIcon, CheckIcon, LayoutGridIcon } from '../../../icons';
 import { useWorkspaceStore } from '../../../store/workspace-store';
 import { postMsg } from '../../../vscode';
 
@@ -393,9 +393,14 @@ function TreeRow({ node, depth, expanded, onToggleExpand, selectedId, onSelect, 
           onClick={e => { e.stopPropagation(); onCreateInside(node); }}
           style={{
             background: 'none', border: 'none', padding: '0 2px', cursor: 'pointer',
-            fontSize: 13, lineHeight: 1, color: 'var(--color-text-muted)',
+            display: 'grid', placeItems: 'center', color: 'var(--color-text-muted)',
           }}
-        >+</button>
+        >
+          {/* The same folder-plus daakia uses for "new folder" everywhere else —
+              a bare `+` beside a folder row reads as "add something", which is
+              not the same promise. */}
+          <FolderPlusIcon size={13} />
+        </button>
       </div>
       {isOpen && kids.map(k => (
         <TreeRow

@@ -465,6 +465,30 @@ export default function App() {
     Reference equality is the right test here: every action in the store
     replaces the array rather than mutating it.
   */
+  /*
+    One environment, two controls that agree.
+
+    A tab pins its own `envId`, and the Environments panel only ever set the
+    global active one — so the moment a tab had an environment, the toolbar
+    selector and the panel were reporting different answers to the same
+    question, and every request went out resolved against whichever of them
+    happened to be right.
+
+    The active environment is the truth; the active tab follows it. The
+    per-tab field stays because a dozen AI features read it, but it is no
+    longer a second opinion.
+  */
+  useEffect(() => {
+    return useEnvStore.subscribe((state, prev) => {
+      if (state.activeEnvId === prev.activeEnvId) return;
+      const { tabs, activeTabId, updateTab } = useTabsStore.getState();
+      const tab = tabs.find(t => t.id === activeTabId);
+      if (!tab) return;
+      const next = state.activeEnvId && state.activeEnvId !== 'global' ? state.activeEnvId : null;
+      if (tab.envId !== next) updateTab(tab.id, { envId: next });
+    });
+  }, []);
+
   useEffect(() => {
     let lastEnvironments = useEnvStore.getState().environments;
     let lastActiveId = useEnvStore.getState().activeEnvId;
