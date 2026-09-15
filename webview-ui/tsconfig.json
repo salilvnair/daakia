@@ -20,7 +20,9 @@
       "@daakia/dk8s-prompts": ["../src/panel/chat/dk8s-prompts.ts"],
       "@daakia/log-format": ["../src/services/k8s/log-format.ts"],
       "@daakia/pv-layouts": ["../src/services/k8s/pv-layouts.ts"],
-      "@daakia/access-checks": ["../src/services/k8s/access-checks.ts"]
+      "@daakia/access-checks": ["../src/services/k8s/access-checks.ts"],
+      "@daakia/scan-reconcile": ["../src/services/scan/reconcile.ts"],
+      "@daakia/api-detector": ["../src/services/scan/api-detector.ts"]
     }
   },
   "include": [

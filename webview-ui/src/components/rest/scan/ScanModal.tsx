@@ -20,6 +20,10 @@ import { useToastStore } from '../../../store/toast-store';
 import { SearchIcon, FolderOpenIcon, RefreshIcon } from '../../../icons';
 import { ScanDestination, type Destination } from './ScanDestination';
 import { useEnvStore } from '../../../store/env-store';
+import { ScanReconcile } from './ScanReconcile';
+import { reconcile, defaultSelection, type Reconciled } from '@daakia/scan-reconcile';
+import { existingRequests, findNode, folderNamed, type CollectionNodeWithRequests } from '../../../services/scan/existing-requests';
+import { postMsg } from '../../../vscode';
 
 /** Collections is purple everywhere else in daakia; this lives under it. */
 const ACCENT = 'var(--color-sidebar-collections)';
@@ -125,7 +129,9 @@ function Row({ r, chosen, focused, onToggle, onFocus }: {
         whiteSpace: 'nowrap', minWidth: 0,
       }}>{r.url.replace('{{baseUrl}}', '')}</span>
       <span style={{ flex: 1, minWidth: 8 }} />
-      {isInternal(r) && <Mark p={{ kind: 'unknown' }} label="internal" />}
+      {isInternal(r) && (
+        <Mark p={{ kind: 'unknown', why: 'an internal path — listed, not selected' }} label="internal" />
+      )}
       {worst && <Mark p={worst[1]} label={worst[0] === 'path' ? worst[1].kind : `${worst[0]} ${worst[1].kind}`} />}
     </div>
   );
@@ -159,7 +165,19 @@ export function ScanModal() {
   */
   const [destination, setDestination] = useState<Destination>({ kind: 'new', name: '' });
   const [createEnv, setCreateEnv] = useState(true);
-  const [step, setStep] = useState<'review' | 'destination'>('review');
+  const [step, setStep] = useState<'review' | 'destination' | 'reconcile'>('review');
+  /*
+    What a re-scan would do, worked out before anything is written.
+
+    Only ever populated when the destination is a collection that already
+    holds requests a scan wrote — a first scan has nothing to reconcile with
+    and should not be made to look at a screen about it.
+  */
+  const [plan, setPlan] = useState<Reconciled[]>([]);
+  const [planChosen, setPlanChosen] = useState<Set<string>>(new Set());
+  const [tree, setTree] = useState<CollectionNodeWithRequests[]>([]);
+  /** Request id → the folder it currently lives in. Read before writing back. */
+  const [homes, setHomes] = useState<Map<string, string>>(new Map());
 
   /* The host's replies all land here. */
   useEffect(() => {
@@ -172,21 +190,158 @@ export function ScanModal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /* The tree, so an existing collection's requests can be read back. */
   useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type !== 'collectionsData') return;
+      const list = (e.data.collections ?? e.data.data ?? []) as CollectionNodeWithRequests[];
+      if (Array.isArray(list)) setTree(list);
+    };
+    window.addEventListener('message', onMessage);
+    postMsg({ type: 'getCollections', protocol: 'rest' });
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
+  /*
+    A new scan starts on the review screen, and starts without a destination.
+
+    The modal is hidden rather than unmounted, so every piece of state here
+    outlives the scan that set it. After one successful write `step` stayed on
+    'destination', so the next scan rendered "where should they go?" on top of
+    the review it is meant to follow — and the review's own footer button,
+    still in the tree underneath, sat exactly under the one that writes.
+    Carrying the old destination forward is the same bug with worse
+    consequences: a scan of one repository would arrive, unasked, in the
+    collection built from another.
+  */
+  useEffect(() => {
+    if (s.stage !== 'source' && s.stage !== 'scanning') return;
+    setStep('review');
+    setPlan([]);
+    setPlanChosen(new Set());
+    setHomes(new Map());
+    setDestination({ kind: 'new', name: '' });
+  }, [s.stage]);
+
+  /* The repository's name is the usual answer, once the scan knows it. */
+  useEffect(() => {
+    if (s.stage !== 'review') return;
     if (s.collectionName && destination.kind === 'new' && !destination.name) {
       setDestination({ kind: 'new', name: s.collectionName });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [s.collectionName]);
+  }, [s.stage, s.collectionName]);
 
   const groups = useMemo(() => byFolder(s.requests), [s.requests]);
   const focused = s.requests.find(r => r.scan.identity === s.focused);
 
   if (!s.open) return null;
 
+  /** The requests that were ticked on the review screen. */
+  const picked = () => s.requests.filter(r => s.chosen.has(r.scan.identity));
+
+  /**
+   * Going forward from the destination step.
+   *
+   * Into an existing collection that already holds scanned requests, this is a
+   * re-scan and there is a decision to show. Anywhere else there is nothing to
+   * reconcile against, and making somebody look at an empty reconcile screen
+   * would be ceremony.
+   */
+  const proceed = () => {
+    if (destination.kind !== 'existing') { void write(); return; }
+    const existing = existingRequests(tree, destination.id);
+    if (!existing.some(e => e.scan)) { void write(); return; }
+
+    /* Where each one lives now, so updating it does not also move it. */
+    setHomes(new Map(existing.map(e => [e.id, e.collectionId])));
+
+    const rows = reconcile(existing, picked().map(r => ({
+      name: r.name, method: r.method, url: r.url,
+      headers: r.headers, params: r.params,
+      bodyMode: r.bodyMode, bodyRaw: r.bodyRaw, authType: r.authType,
+      folder: r.folder, scan: r.scan,
+    })));
+    setPlan(rows);
+    setPlanChosen(defaultSelection(rows));
+    setStep('reconcile');
+  };
+
+  /** Apply a reconciliation: only the rows that were ticked, by their own id. */
+  const applyPlan = async () => {
+    setWriting(true);
+    try {
+      const rows = plan.filter(r => planChosen.has(r.identity) && r.next && r.outcome !== 'orphaned');
+      const collectionId = destination.kind === 'existing' ? destination.id : undefined;
+      if (!collectionId) return;
+
+      /*
+        A request added by a re-scan goes in the folder for its source file,
+        beside the ones the first scan put there — created now if the file is
+        new. Anything already here is written back where it already is.
+      */
+      const root = findNode(tree, collectionId);
+      const folders = new Map<string, string>();
+      for (const row of rows) {
+        const folder = row.next!.folder?.trim();
+        if (!folder || row.existing || folders.has(folder)) continue;
+        const known = folderNamed(root, folder);
+        if (known) { folders.set(folder, known.id); continue; }
+        const id = crypto.randomUUID();
+        folders.set(folder, id);
+        postMsg({ type: 'createFolder', id, name: folder, parentId: collectionId, protocol: 'rest' });
+        await new Promise(r => setTimeout(r, 60));
+      }
+
+      for (const row of rows) {
+        const next = row.next!;
+        const home = (row.existing && homes.get(row.existing.id))
+          ?? folders.get(next.folder?.trim() ?? '')
+          ?? collectionId;
+        postMsg({
+          type: 'saveRequestToCollection',
+          collectionId: home,
+          protocol: 'rest',
+          request: {
+            /*
+              An update keeps the row's own id — `saveRequestToCollection`
+              upserts — so the request people have open, starred or referenced
+              stays the same request rather than becoming a copy of itself.
+            */
+            id: row.existing?.id ?? crypto.randomUUID(),
+            name: next.name,
+            method: next.method,
+            url: next.url,
+            data: JSON.stringify({
+              headers: withBlank(next.headers),
+              params: withBlank(next.params),
+              bodyMode: next.bodyMode,
+              bodyRaw: next.bodyRaw,
+              bodyFormData: [], bodyUrlEncoded: [],
+              authType: next.authType, authData: {},
+              preRequestScript: '', postResponseScript: '',
+              scan: next.scan,
+            }),
+          },
+        });
+        await new Promise(r => setTimeout(r, 40));
+      }
+      postMsg({ type: 'getCollections', protocol: 'rest' });
+      const added = rows.filter(r => r.outcome === 'added').length;
+      const updated = rows.length - added;
+      addToast({
+        type: 'success',
+        message: `${added} added, ${updated} updated in ${destination.name}`,
+      });
+      s.close();
+    } finally {
+      setWriting(false);
+    }
+  };
+
   const write = async () => {
-    const picked = s.requests.filter(r => s.chosen.has(r.scan.identity));
-    if (!picked.length) return;
+    const chosen = picked();
+    if (!chosen.length) return;
     setWriting(true);
     try {
       const name = destination.kind === 'new'
@@ -216,10 +371,12 @@ export function ScanModal() {
       const saved = await importRequestsAsCollection({
         name,
         protocol: 'rest',
-        /* Into the collection that was chosen, when one was. */
         ...(destination.kind === 'existing' ? { collectionId: destination.id } : {}),
-        requests: picked.map(r => ({
+        /* One folder per source file, which is what the review screen showed. */
+        useFolders: true,
+        requests: chosen.map(r => ({
           name: r.name,
+          folder: r.folder,
           method: r.method,
           url: r.url,
           headers: r.headers,
@@ -354,14 +511,47 @@ export function ScanModal() {
               label={writing ? 'Creating…' : `Create ${s.chosen.size} request${s.chosen.size === 1 ? '' : 's'}`}
               size="sm" variant="secondary" accentColor={ACCENT} color={ACCENT}
               disabled={writing || s.chosen.size === 0}
-              onClick={write}
+              onClick={proceed}
             />
           </div>
+        </div>
+      )}
+
+      {s.stage === 'review' && step === 'reconcile' && (
+        <div style={{
+          position: 'absolute', inset: 0, background: 'var(--color-panel)',
+        }}>
+          <ScanReconcile
+            rows={plan}
+            chosen={planChosen}
+            onToggle={(identity) => setPlanChosen(prev => {
+              const next = new Set(prev);
+              if (next.has(identity)) next.delete(identity); else next.add(identity);
+              return next;
+            })}
+            collectionName={destination.kind === 'existing' ? destination.name : s.collectionName}
+            onBack={() => setStep('destination')}
+            onApply={applyPlan}
+            applying={writing}
+          />
         </div>
       )}
       </div>
     </ModalView>
   );
+}
+
+/**
+ * The trailing blank row the request editor expects.
+ *
+ * `toCollectionRequest` adds it on the create path; an update writes its own
+ * rows, and without one the editor opens with no empty line to type into.
+ */
+function withBlank(rows: { key: string; value: string; enabled: boolean }[]) {
+  return [
+    ...rows.map(r => ({ id: crypto.randomUUID(), ...r })),
+    { id: crypto.randomUUID(), key: '', value: '', enabled: true },
+  ];
 }
 
 function Summary() {

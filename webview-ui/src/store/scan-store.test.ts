@@ -15,7 +15,7 @@ const req = (over: Partial<ScannedRequest> = {}): ScannedRequest => ({
   scan: {
     detector: 'spring', source: 'CheckoutController.java:48',
     identity: 'GET /api/checkout/{id}', written: 'abc', at: '2026-01-01T00:00:00Z',
-    provenance: { path: { kind: 'read' } },
+    provenance: { path: { kind: 'read', at: { file: 'CheckoutController.java', line: 48 } } },
   },
   ...over,
 });
@@ -53,6 +53,24 @@ describe('the result', () => {
     expect(requests).toHaveLength(2);
     expect(chosen.has('GET /api/checkout/{id}')).toBe(true);
     expect(chosen.has('POST /internal/reindex')).toBe(false);
+  });
+});
+
+describe('opening it again', () => {
+  it('forgets the last repository’s name', () => {
+    /* The name is derived from the folder. Kept across scans, a scan of the
+       next repository proposes a collection named after the previous one. */
+    apply({ type: 'scan:result', dir: '/repo/checkout-service', requests: [] });
+    useScanStore.getState().openScan();
+    apply({ type: 'scan:result', dir: '/repo/orders-service', requests: [] });
+    expect(useScanStore.getState().collectionName).toBe('orders-service');
+  });
+
+  it('keeps a name typed during the scan it belongs to', () => {
+    apply({ type: 'scan:result', dir: '/repo/checkout-service', requests: [] });
+    useScanStore.getState().setCollectionName('Checkout (staging)');
+    apply({ type: 'scan:result', dir: '/repo/checkout-service', requests: [] });
+    expect(useScanStore.getState().collectionName).toBe('Checkout (staging)');
   });
 });
 
@@ -120,7 +138,10 @@ describe('the helpers', () => {
   it('counts provenance across every request, which is the headline', () => {
     const counts = summarise([
       req(),
-      req({ scan: { ...req().scan, provenance: { path: { kind: 'resolved' }, body: { kind: 'generated' } } } }),
+      req({ scan: { ...req().scan, provenance: {
+        path: { kind: 'resolved', at: { file: 'X.java', line: 1 }, from: '@MyController' },
+        body: { kind: 'generated', rule: '@Email' },
+      } } }),
     ]);
     expect(counts).toMatchObject({ read: 1, resolved: 1, generated: 1 });
   });

@@ -50,4 +50,25 @@ export const SHARED_ALIASES = {
     quoting a rule the host never checked.
   */
   '@daakia/access-checks': resolve(__dirname, '..', 'src', 'services', 'k8s', 'access-checks.ts'),
+
+  /*
+    What a second scan does to a collection you already have.
+
+    The rules — which request is new, which changed, which you edited, which is
+    gone — are decided once in `reconcile.ts` and rendered by the webview. They
+    are worth exactly nothing if the screen re-decides them, so the screen
+    imports the same function the tests do.
+  */
+  '@daakia/scan-reconcile': resolve(__dirname, '..', 'src', 'services', 'scan', 'reconcile.ts'),
+
+  /*
+    The shapes a detector produces — Finding, Provenance, and the rest.
+
+    The webview had its own copies, and they drifted the moment they were
+    written: `Provenance` is a discriminated union on the host and was a flat
+    interface here, so a value that typechecked in the webview could not be
+    passed to the reconciliation the host defines. Import-free, so it is shared
+    rather than mirrored.
+  */
+  '@daakia/api-detector': resolve(__dirname, '..', 'src', 'services', 'scan', 'api-detector.ts'),
 };

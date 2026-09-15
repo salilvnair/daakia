@@ -125,6 +125,9 @@ export function openCollectionRequest(req: CollectionRequest, forceNewTab = fals
     docs: typeof config.docs === 'string' ? config.docs : '',
     tags: tagsFromData(config),
     examples: parseExamples(config.examples),
+    /* Passed through so an edit does not erase what a scan wrote. */
+    ...(config.scan && typeof config.scan === 'object'
+      ? { scan: config.scan as Record<string, unknown> } : {}),
     // GraphQL
     ...(protocol === 'graphql' ? {
       bodyRaw: config.bodyRaw || '',

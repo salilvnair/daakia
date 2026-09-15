@@ -98,36 +98,52 @@ export function reconcile(
 
   const out: Reconciled[] = [];
   const matched = new Set<string>();
+  /* Proposed requests that no stored identity matched exactly. */
+  const unmatched: GeneratedRequest[] = [];
 
   for (const next of proposed) {
-    const id = next.scan.identity;
-    const e = byIdentity.get(id);
+    const e = byIdentity.get(next.scan.identity);
+    if (!e) { unmatched.push(next); continue; }
+    matched.add(next.scan.identity);
+    out.push(classify(e, next));
+  }
 
-    if (!e) {
-      out.push({ outcome: 'added', identity: id, next });
-      continue;
-    }
-    matched.add(id);
+  /*
+    Second pass: the same route, differently labelled.
 
-    if (e.scan!.written === next.scan.written && untouched(e)) {
-      out.push({ outcome: 'unchanged', identity: id, next, existing: e });
+    Two mappings on one path are told apart by a discriminator — `POST /import
+    [json]` beside `POST /import [form-data]`. Delete one and the survivor
+    stops needing the suffix, so its identity changes without the route
+    changing at all, and a strict match reports the request you still have as
+    an orphan and writes a second copy of it beside itself.
+
+    Only an unambiguous pairing counts: exactly one unmatched proposal and
+    exactly one unmatched stored request reducing to the same base. Anything
+    less certain stays an add and an orphan, which is the outcome that loses
+    nothing.
+  */
+  const leftovers = new Map<string, ExistingRequest[]>();
+  for (const e of existing) {
+    if (!e.scan || matched.has(e.scan.identity)) continue;
+    const key = baseIdentity(e.scan.identity);
+    leftovers.set(key, [...(leftovers.get(key) ?? []), e]);
+  }
+  const byBase = new Map<string, GeneratedRequest[]>();
+  for (const next of unmatched) {
+    const key = baseIdentity(next.scan.identity);
+    byBase.set(key, [...(byBase.get(key) ?? []), next]);
+  }
+
+  for (const next of unmatched) {
+    const key = baseIdentity(next.scan.identity);
+    const candidates = leftovers.get(key);
+    if (candidates?.length === 1 && byBase.get(key)!.length === 1) {
+      const e = candidates[0];
+      matched.add(e.scan!.identity);
+      out.push(classify(e, next));
       continue;
     }
-    if (untouched(e)) {
-      out.push({ outcome: 'updated', identity: id, next, existing: e });
-      continue;
-    }
-    /* Edited by somebody. If the scan's own fields are the same as last time,
-       the code did not change and there is nothing to offer — their edit stands
-       and this is simply not news. */
-    if (e.scan!.written === next.scan.written) {
-      out.push({ outcome: 'unchanged', identity: id, next, existing: e });
-      continue;
-    }
-    out.push({
-      outcome: 'conflict', identity: id, next, existing: e,
-      changedFields: changedFields(e, next),
-    });
+    out.push({ outcome: 'added', identity: next.scan.identity, next });
   }
 
   for (const e of existing) {
@@ -138,6 +154,28 @@ export function reconcile(
   }
 
   return out;
+}
+
+/** An identity without its discriminator: `POST /import [json]` → `POST /import`. */
+export function baseIdentity(identity: string): string {
+  return identity.replace(/\s*\[[^\]]*\]\s*$/, '');
+}
+
+/** What should happen to a stored request the scan has found again. */
+function classify(e: ExistingRequest, next: GeneratedRequest): Reconciled {
+  const identity = next.scan.identity;
+  const sameCode = e.scan!.written === next.scan.written;
+
+  if (sameCode && untouched(e)) return { outcome: 'unchanged', identity, next, existing: e };
+  if (untouched(e)) return { outcome: 'updated', identity, next, existing: e };
+  /* Edited by somebody. If the scan's own fields are the same as last time,
+     the code did not change and there is nothing to offer — their edit stands
+     and this is simply not news. */
+  if (sameCode) return { outcome: 'unchanged', identity, next, existing: e };
+  return {
+    outcome: 'conflict', identity, next, existing: e,
+    changedFields: changedFields(e, next),
+  };
 }
 
 export function summarise(rows: Reconciled[]): ReconcileSummary {

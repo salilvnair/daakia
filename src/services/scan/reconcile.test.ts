@@ -141,3 +141,40 @@ describe('identity', () => {
     expect(rows.map(r => r.outcome)).toEqual(['added', 'added']);
   });
 });
+
+describe('a route whose discriminator disappeared', () => {
+  /* Two mappings on one path are told apart by a suffix. Delete one and the
+     survivor stops needing it — the route did not change, only its label, and
+     a strict match would orphan the request you still have while writing a
+     second copy of it beside itself. */
+  const overload = finding({ path: '/api/checkout/import', discriminator: 'json' });
+  const alone = finding({ path: '/api/checkout/import' });
+
+  it('is the same request', () => {
+    const rows = reconcile([asWritten(overload)], [toRequest(alone)]);
+    expect(rows.map(r => r.outcome)).toEqual(['unchanged']);
+    expect(rows[0].existing?.id).toBe('row-1');
+  });
+
+  it('still reports a code change made through the rename', () => {
+    const changed = finding({
+      path: '/api/checkout/import',
+      body: { mode: 'raw', raw: '{"cartId":"","note":""}' },
+    });
+    const rows = reconcile([asWritten(overload)], [toRequest(changed)]);
+    expect(rows.map(r => r.outcome)).toEqual(['updated']);
+  });
+
+  it('will not guess when two could have become one', () => {
+    /* Which of the two the survivor used to be is not knowable. An add beside
+       orphans loses nothing; a wrong pairing overwrites the wrong request. */
+    const other = { ...asWritten(finding({ path: '/api/checkout/import', discriminator: 'form-data' })), id: 'row-2' };
+    const rows = reconcile([asWritten(overload), other], [toRequest(alone)]);
+    expect(summarise(rows)).toMatchObject({ added: 1, orphaned: 2 });
+  });
+
+  it('leaves a genuinely new route as an addition', () => {
+    const rows = reconcile([], [toRequest(alone)]);
+    expect(rows.map(r => r.outcome)).toEqual(['added']);
+  });
+});

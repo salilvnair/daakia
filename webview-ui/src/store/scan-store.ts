@@ -9,16 +9,18 @@
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
 
-/** Mirrors services/scan/api-detector.ts — the webview reads these, never builds them. */
-export type ProvenanceKind = 'read' | 'resolved' | 'example' | 'generated' | 'unknown';
+/*
+  The shapes a detector produces, shared rather than mirrored.
 
-export interface Provenance {
-  kind: ProvenanceKind;
-  at?: { file: string; line: number; snippet?: string };
-  from?: string;
-  rule?: string;
-  why?: string;
-}
+  These were declared again here, and drifted immediately: `Provenance` is a
+  discriminated union on the host and was written as a flat interface here, so
+  a value the webview considered valid could not be handed to the
+  reconciliation the host defines.
+*/
+export type { Provenance } from '@daakia/api-detector';
+import type { Provenance } from '@daakia/api-detector';
+
+export type ProvenanceKind = Provenance['kind'];
 
 export interface ScanStamp {
   detector: string;
@@ -128,6 +130,10 @@ export const useScanStore = create<ScanState>((set, get) => ({
       dir: dir ?? get().dir,
       requests: [], unresolved: [], chosen: new Set(), focused: undefined,
       progress: undefined,
+      /* The name is derived from the folder, so last scan's repository must
+         not survive into this one — the `||` in `scan:result` is there to keep
+         a name somebody typed during *this* scan, not the previous one's. */
+      collectionName: '',
     });
     if (dir) get().inspect(dir);
   },

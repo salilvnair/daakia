@@ -930,17 +930,19 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
             }}
           />
 
-          {tree.length > 0 && (
-            <IconButtonView
-              icon={<MoreVerticalIcon size={14} />}
-              size="default"
-              tooltip="More Options"
-              onClick={(e) => {
-                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                setHeaderMenu(headerMenu?.kind === 'more' ? null : { kind: 'more', x: rect.right, y: rect.bottom + 4 });
-              }}
-            />
-          )}
+          {/* Always rendered. This was gated on `tree.length > 0`, which hid the
+              only way in to "Scan code for requests…" precisely when somebody had
+              no collections — the moment scanning a repository is most useful. The
+              destructive entry below is what depends on there being something. */}
+          <IconButtonView
+            icon={<MoreVerticalIcon size={14} />}
+            size="default"
+            tooltip="More Options"
+            onClick={(e) => {
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              setHeaderMenu(headerMenu?.kind === 'more' ? null : { kind: 'more', x: rect.right, y: rect.bottom + 4 });
+            }}
+          />
           <ContextMenuView
             open={headerMenu?.kind === 'importExport'}
             anchorEl={null}
@@ -1001,8 +1003,10 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
                 icon: <SearchIcon size={14} />,
                 onClick: () => { useScanStore.getState().openScan(); setHeaderMenu(null); },
               },
-              { id: 'scan-sep', label: '', separator: true },
-              { id: 'delete-all', label: 'Delete all collections', danger: true, shortcut: 'D', icon: <TrashIcon size={14} />, onClick: () => { setShowDeleteAllConfirm(true); setHeaderMenu(null); } },
+              ...(tree.length > 0 ? [
+                { id: 'scan-sep', label: '', separator: true },
+                { id: 'delete-all', label: 'Delete all collections', danger: true, shortcut: 'D', icon: <TrashIcon size={14} />, onClick: () => { setShowDeleteAllConfirm(true); setHeaderMenu(null); } },
+              ] as DuiContextMenuItem[] : []),
             ] as DuiContextMenuItem[]}
           />
         </div>

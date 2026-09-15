@@ -112,6 +112,16 @@ export interface RequestTab {
    * `data` blob every collection load reads whole.
    */
   examples?: ResponseExample[];
+  /**
+   * The stamp a code scan left, carried through untouched.
+   *
+   * It is what a later scan of the same repository matches against. `data` is
+   * rebuilt from this tab on every save, so a stamp the tab does not hold is a
+   * stamp that is erased the first time somebody edits the request — and the
+   * next scan then writes a second copy of a request it had already written.
+   * Nothing here reads it; it is passed through.
+   */
+  scan?: Record<string, unknown>;
   // Response state
   response: ResponseData | null;
   loading: boolean;

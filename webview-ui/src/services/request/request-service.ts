@@ -180,6 +180,8 @@ export function saveRequest(tab: RequestTab) {
       chainExtractions: tab.chainExtractions,
       docs: tab.docs,
       examples: tab.examples,
+      /* Written back untouched, so a scan can still recognise its own work. */
+      ...(tab.scan ? { scan: tab.scan } : {}),
     };
 
     if (tab.protocol === 'ai') {

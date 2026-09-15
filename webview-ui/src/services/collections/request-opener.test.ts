@@ -87,3 +87,19 @@ describe('opening a saved request', () => {
     expect(openedTab()).toMatchObject({ url: 'https://api.example.com/users', method: 'GET', name: 'Get users' });
   });
 });
+
+describe('a scan stamp', () => {
+  it('survives being opened', () => {
+    /* `data` is rebuilt from the tab on every save. A stamp the tab does not
+       hold is erased the first time somebody edits the request — and the next
+       scan then writes a second copy of a request it had already written. */
+    const scan = { detector: 'spring', identity: 'GET /users', written: 'abc' };
+    openCollectionRequest({ ...BASE, data: JSON.stringify({ headers: [], params: [], scan }) });
+    expect(openedTab().scan).toEqual(scan);
+  });
+
+  it('is absent on a request nobody scanned', () => {
+    openCollectionRequest(BASE);
+    expect(openedTab().scan).toBeUndefined();
+  });
+});

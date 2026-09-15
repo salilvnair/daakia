@@ -67,6 +67,15 @@ export function toCollectionRequest(
       authData: (raw.authData as Record<string, unknown> | undefined) ?? {},
       preRequestScript: typeof raw.preRequestScript === 'string' ? raw.preRequestScript : '',
       postResponseScript: typeof raw.postResponseScript === 'string' ? raw.postResponseScript : '',
+      /*
+        A code scan's stamp, when there is one.
+
+        `data` is a whitelist, and the stamp was not on it — so every request a
+        scan wrote came back with no record that a scan had written it, and the
+        second scan of the same repository had nothing to reconcile against and
+        silently built a second collection beside the first.
+      */
+      ...(raw.scan ? { scan: raw.scan } : {}),
     },
   };
 }
@@ -87,17 +96,41 @@ export async function importRequestsAsCollection(opts: {
   requests: Record<string, unknown>[];
   /** Supply one when the caller already made an id it wants to keep. */
   collectionId?: string;
+  /**
+   * File the requests into sub-folders taken from each one's `folder`.
+   *
+   * A scan groups by source file, and the review screen shows those groups —
+   * writing them flat made the collection disagree with the screen that
+   * proposed it. Requests with no `folder` stay at the top level.
+   */
+  useFolders?: boolean;
 }): Promise<number> {
   const collectionId = opts.collectionId ?? crypto.randomUUID();
-  const rows = opts.requests.map(r => toCollectionRequest(r));
+  const rows = opts.requests.map(r => ({
+    row: toCollectionRequest(r),
+    folder: opts.useFolders ? String(r.folder ?? '').trim() : '',
+  }));
 
   postMsg({ type: 'createCollection', id: collectionId, name: opts.name, protocol: opts.protocol });
   await new Promise(r => setTimeout(r, 120));
 
-  for (const row of rows) {
+  /* One folder per distinct name, made before anything is filed under it. */
+  const folderIds = new Map<string, string>();
+  for (const { folder } of rows) {
+    if (!folder || folderIds.has(folder)) continue;
+    const id = crypto.randomUUID();
+    folderIds.set(folder, id);
+    postMsg({
+      type: 'createFolder', id, name: folder,
+      parentId: collectionId, protocol: opts.protocol,
+    });
+    await new Promise(r => setTimeout(r, 60));
+  }
+
+  for (const { row, folder } of rows) {
     postMsg({
       type: 'saveRequestToCollection',
-      collectionId,
+      collectionId: folderIds.get(folder) ?? collectionId,
       protocol: opts.protocol,
       request: { ...row, data: JSON.stringify(row.data) },
     });
