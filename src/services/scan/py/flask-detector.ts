@@ -18,7 +18,7 @@ import type {
   ApiDetector, DetectorIndex, DetectResult, Finding, HttpMethod, Param,
   Provenance, RepoRoot, SourceFile, Unresolved,
 } from '../api-detector';
-import { HTTP_METHODS, joinPath, normalisePathParams, pathParamNames } from '../api-detector';
+import { DETECTOR_LABELS, HTTP_METHODS, joinPath, normalisePathParams, pathParamNames } from '../api-detector';
 import {
   balanced, declaresPackage, keyword, literal, lineOf, moduleConstants,
   positional, resolvePath, splitArgs, stringList, stripComments,
@@ -85,7 +85,7 @@ export function blueprintPrefix(src: string): string | undefined {
 
 export const flaskDetector: ApiDetector = {
   id: 'flask',
-  label: 'Flask',
+  label: DETECTOR_LABELS.flask,
 
   present(root) {
     for (const f of root.files) {

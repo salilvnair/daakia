@@ -66,6 +66,7 @@ import { ProtocolIcon, EmptyState } from './app/app-shell';
 import { CaptureBridge } from './pages/wiki/daakia-view/capture/CaptureBridge';
 import { DaakiaViewPage } from './pages/wiki/daakia-view/DaakiaViewPage';
 import { ResponseDiffModal } from './components/power/ResponseDiffModal';
+import { ScanModal } from './components/rest/scan/ScanModal';
 import { useCompareStore } from './store/compare-store';
 
 type FocusedPanel = 'request' | 'response' | null;
@@ -1054,6 +1055,16 @@ export default function App() {
       />
 
       <ToastContainer />
+      {/*
+        The code scan, mounted here rather than inside the Collections panel.
+
+        Its state is global and a scan takes a while, so living inside one
+        sidebar panel meant two things: switching panels mid-scan unmounted
+        the modal and lost the result, and opening it from anywhere else — the
+        Settings page that configures it, for one — set state nobody rendered
+        and looked like a button that does nothing.
+      */}
+      <ScanModal />
       <RightClickMenu />
       {/* Opened by "Compare with clipboard" in the right-click menu, from
           wherever the data happened to be. */}

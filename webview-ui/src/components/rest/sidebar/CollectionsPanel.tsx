@@ -3,7 +3,6 @@ import { TagChips } from '../../shared/tags/TagChips';
 import { tagsFromData } from '../../shared/tags/request-tags';
 import { postMsg } from '../../../vscode';
 import { useScanStore } from '../../../store/scan-store';
-import { ScanModal } from '../scan/ScanModal';
 import { useTabsStore } from '../../../store/tabs-store';
 import type { Protocol, RequestTab } from '../../../store/tabs-store';
 import { getDisplayMethod } from '../../../services/request/request-service';
@@ -1349,7 +1348,6 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
         pick, inspect, run, review — so it takes no props and closes itself;
         the panel's only part in it is the menu item that opens it.
       */}
-      <ScanModal />
 
       {/* Sprint 11 modals */}
       {collectionOptimizerNode && (

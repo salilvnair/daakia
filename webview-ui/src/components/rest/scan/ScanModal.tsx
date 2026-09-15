@@ -17,16 +17,25 @@ import {
 import { useWorkspaceStore } from '../../../store/workspace-store';
 import { importRequestsAsCollection } from '../../../services/collections/import-to-collection';
 import { useToastStore } from '../../../store/toast-store';
-import { SearchIcon, FolderOpenIcon, RefreshIcon } from '../../../icons';
+import { SearchIcon, FolderOpenIcon, RefreshIcon, CheckIcon } from '../../../icons';
 import { ScanDestination, type Destination } from './ScanDestination';
 import { useEnvStore } from '../../../store/env-store';
 import { ScanReconcile } from './ScanReconcile';
 import { reconcile, defaultSelection, type Reconciled } from '@daakia/scan-reconcile';
 import { existingRequests, findNode, folderNamed, type CollectionNodeWithRequests } from '../../../services/scan/existing-requests';
 import { postMsg } from '../../../vscode';
+import { useUiStateStore } from '../../../store/ui-state-store';
+import {
+  scanPreferences, detectors as detectorPrefs,
+  SCAN_DETECTORS_KEY, DETECTOR_IDS, DETECTOR_LABELS, type DetectorId,
+} from '../../../services/scan/scan-settings';
+import { DETECTOR_COLORS } from '@daakia/api-detector';
 
 /** Collections is purple everywhere else in daakia; this lives under it. */
 const ACCENT = 'var(--color-sidebar-collections)';
+
+/* A Windows path, kept out of JSX so the backslashes are unambiguous. */
+const PLACEHOLDER_PATH = 'C:\\path\\to\\your\\repository';
 
 const METHOD_COLOR: Record<string, string> = {
   GET: 'var(--color-method-get)',
@@ -87,6 +96,62 @@ export function describe(p: Provenance): string {
     case 'generated': return `Generated to satisfy ${p.rule ?? 'a stated constraint'}`;
     default: return p.why ?? 'Not established';
   }
+}
+
+/**
+ * A scan that found nothing, and why that might be.
+ *
+ * The usual reason is the folder — a parent directory, or a repository whose
+ * routes are somewhere this does not look. But a detector turned off in
+ * Settings produces exactly the same empty screen from a repository that is
+ * full of endpoints, and somebody who set that last month will not connect the
+ * two. So when the list is filtered, the screen says so and offers the way
+ * back rather than leaving them to wonder whether the parser is broken.
+ */
+function FoundNothing() {
+  const prefs = useUiStateStore(s => s.prefs);
+  const chosen = detectorPrefs(prefs[SCAN_DETECTORS_KEY]);
+  const off = DETECTOR_IDS.filter(id => !chosen.includes(id));
+
+  return (
+    <div style={{ padding: '38px 24px', textAlign: 'center' }}>
+      <p style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--color-text-primary)' }}>
+        No endpoints here
+      </p>
+      <p style={{
+        margin: '0 auto', fontSize: 11.5, lineHeight: 1.6, maxWidth: '54ch',
+        color: 'var(--color-text-muted)',
+      }}>
+        Nothing in this folder declares a route that daakia recognises. If you pointed it at a
+        parent directory, try the service itself &mdash; the walk stops at the file cap, and a
+        repository&rsquo;s controllers can be deeper than that.
+      </p>
+
+      {off.length > 0 && (
+        <p style={{
+          margin: '14px auto 0', fontSize: 11.5, lineHeight: 1.6, maxWidth: '54ch',
+          color: 'var(--color-warning)',
+        }}>
+          {off.map(id => DETECTOR_LABELS[id]).join(', ')}{' '}
+          {off.length === 1 ? 'is' : 'are'} turned off in Settings &rarr; Code Scan, so this scan
+          did not look for {off.length === 1 ? 'it' : 'them'}.{' '}
+          <button
+            type="button"
+            onClick={() => {
+              useUiStateStore.getState().setPref(SCAN_DETECTORS_KEY, '');
+              useScanStore.getState().run();
+            }}
+            style={{
+              color: ACCENT, background: 'none', border: 'none', padding: 0,
+              font: 'inherit', textDecoration: 'underline', cursor: 'pointer',
+            }}
+          >
+            Turn all back on and scan again
+          </button>
+        </p>
+      )}
+    </div>
+  );
 }
 
 function Row({ r, chosen, focused, onToggle, onFocus }: {
@@ -164,7 +229,10 @@ export function ScanModal() {
     should go into that collection, and that was not expressible at all.
   */
   const [destination, setDestination] = useState<Destination>({ kind: 'new', name: '' });
-  const [createEnv, setCreateEnv] = useState(true);
+  /* Settings → Code Scan decides what this arrives as; it is still a checkbox. */
+  const [createEnv, setCreateEnv] = useState(
+    () => scanPreferences(useUiStateStore.getState().prefs).createEnvironment,
+  );
   const [step, setStep] = useState<'review' | 'destination' | 'reconcile'>('review');
   /*
     What a re-scan would do, worked out before anything is written.
@@ -220,6 +288,7 @@ export function ScanModal() {
     setPlan([]);
     setPlanChosen(new Set());
     setHomes(new Map());
+    setCreateEnv(scanPreferences(useUiStateStore.getState().prefs).createEnvironment);
     setDestination({ kind: 'new', name: '' });
   }, [s.stage]);
 
@@ -421,6 +490,7 @@ export function ScanModal() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 400px', minHeight: 380, maxHeight: '56vh' }}>
             <div style={{ overflowY: 'auto', borderRight: '1px solid var(--color-surface-border)' }}>
+              {s.requests.length === 0 && <FoundNothing />}
               {groups.map(g => (
                 <div key={g.folder}>
                   <div style={{
@@ -566,12 +636,22 @@ function Summary() {
         {s.requests.length} endpoint{s.requests.length === 1 ? '' : 's'}
       </span>
       <span>· {s.filesWalked} files · {s.ms}ms</span>
-      {s.detected.map(d => (
-        <span key={d.id} style={{
-          fontSize: 10, padding: '1px 6px', borderRadius: 4,
-          color: ACCENT, background: `color-mix(in srgb, ${ACCENT} 13%, transparent)`,
-        }}>{d.label}</span>
-      ))}
+      {/* Each framework in its own colour, the same one the source screen lit. */}
+      {s.detected.map(d => {
+        const tone = DETECTOR_COLORS[d.id as DetectorId] ?? ACCENT;
+        return (
+          <span key={d.id} style={{
+            fontSize: 10, padding: '2px 8px', borderRadius: 999,
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            color: tone,
+            background: `color-mix(in srgb, ${tone} 13%, transparent)`,
+            border: `1px solid color-mix(in srgb, ${tone} 28%, transparent)`,
+          }}>
+            <span style={{ width: 5, height: 5, borderRadius: 999, background: tone }} />
+            {d.label}
+          </span>
+        );
+      })}
       <span style={{ flex: 1 }} />
       {s.baseUrl && (
         <span title="Every request is written against this as a collection variable"
@@ -782,90 +862,225 @@ function SourceStep() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.dir]);
+
   const workspaces = useWorkspaceStore(w => w.workspaces);
   const activeId = useWorkspaceStore(w => w.activeId);
   const workspacePath = workspaces.find(w => w.id === activeId)?.path;
 
+  const prefs = useUiStateStore(p => p.prefs);
+  const enabled = detectorPrefs(prefs[SCAN_DETECTORS_KEY]);
+  const found = new Set(s.detected.map(d => d.id));
+  const looked = !!s.dir.trim();
+
   return (
-    <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.55, maxWidth: '72ch' }}>
-        daakia reads route declarations out of your source. It opens nothing, runs nothing, and
-        sends nothing anywhere — the files are read on this machine and the result is a list you
-        choose from.
-      </p>
-
-      <Field label="Folder to scan">
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ flex: 1 }}>
-            <TextInputView
-              value={s.dir}
-              onChange={e => s.setDir(e.target.value)}
-              placeholder="C:\path\to\your\repository"
-              size="sm" width="fullWidth" accentColor={ACCENT}
-            />
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {/* The pitch and the guarantee as one band, rather than a paragraph of grey. */}
+      <div style={{
+        display: 'flex', gap: 14, padding: '18px 20px 16px',
+        background: `linear-gradient(135deg,
+          color-mix(in srgb, ${ACCENT} 9%, transparent),
+          color-mix(in srgb, ${ACCENT} 2%, transparent) 60%,
+          transparent)`,
+        borderBottom: '1px solid var(--color-surface-border)',
+      }}>
+        <span style={{
+          width: 42, height: 42, borderRadius: 12, flexShrink: 0,
+          display: 'grid', placeItems: 'center',
+          background: `color-mix(in srgb, ${ACCENT} 15%, var(--color-surface))`,
+          border: `1px solid color-mix(in srgb, ${ACCENT} 30%, transparent)`,
+        }}>
+          <SearchIcon size={20} color={ACCENT} />
+        </span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7, minWidth: 0 }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+            Point it at a repository
           </span>
-          <ButtonView label="Browse…" size="sm" variant="secondary" onClick={s.pickFolder} />
+          <span style={{ fontSize: 11.5, lineHeight: 1.55, color: 'var(--color-text-secondary)', maxWidth: '68ch' }}>
+            daakia reads the route declarations out of your source and turns them into a collection
+            you review before anything is saved.
+          </span>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 1 }}>
+            <Pill tone="var(--color-success)">Read-only</Pill>
+            <Pill tone="var(--color-success)">Nothing is run</Pill>
+            <Pill tone="var(--color-success)">Stays on this machine</Pill>
+          </div>
         </div>
-        {workspacePath && workspacePath !== s.dir && (
-          <button
-            type="button"
-            onClick={() => { s.setDir(workspacePath); s.inspect(workspacePath); }}
-            style={{
-              alignSelf: 'flex-start', background: 'none', border: 'none', padding: 0,
-              cursor: 'pointer', fontSize: 11, color: ACCENT,
-            }}
-          >
-            Use this workspace's folder
-          </button>
-        )}
-      </Field>
+      </div>
 
-      {s.detected.length > 0 && (
-        <Field label="Recognised here">
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {s.detected.map(d => (
-              <span key={d.id} style={{
-                fontSize: 10.5, padding: '2px 7px', borderRadius: 4,
-                color: ACCENT, background: `color-mix(in srgb, ${ACCENT} 13%, transparent)`,
-                border: `1px solid color-mix(in srgb, ${ACCENT} 28%, transparent)`,
-              }}>{d.label}</span>
-            ))}
-            {s.manifests.slice(0, 2).map(m => (
-              <span key={m} style={{ fontSize: 10.5, color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono, monospace)' }}>
-                {m}
-              </span>
-            ))}
-          </div>
-        </Field>
-      )}
-
-      {s.profiles.length > 0 && (
-        <Field label="Configuration profile">
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-            <Chip on={!s.profile} onClick={() => s.setProfile(undefined)}>application</Chip>
-            {s.profiles.map(p => (
-              <Chip key={p} on={s.profile === p} onClick={() => s.setProfile(p)}>{p}</Chip>
-            ))}
-            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 4 }}>
-              Chosen, not merged — profiles disagree on purpose.
+      <div style={{ padding: '16px 20px 6px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <Field label="Folder to scan">
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span style={{ flex: 1 }}>
+              <TextInputView
+                value={s.dir}
+                onChange={e => s.setDir(e.target.value)}
+                placeholder={PLACEHOLDER_PATH}
+                size="sm" width="fullWidth" accentColor={ACCENT}
+              />
             </span>
+            <ButtonView label="Browse…" size="sm" variant="secondary"
+                        iconLeft={<FolderOpenIcon size={13} />} onClick={s.pickFolder} />
           </div>
+          {workspacePath && workspacePath !== s.dir && (
+            <button
+              type="button"
+              onClick={() => { s.setDir(workspacePath); s.inspect(workspacePath); }}
+              style={{
+                alignSelf: 'flex-start', cursor: 'pointer', fontSize: 11,
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '3px 9px', borderRadius: 999,
+                color: ACCENT,
+                background: `color-mix(in srgb, ${ACCENT} 11%, transparent)`,
+                border: `1px solid color-mix(in srgb, ${ACCENT} 26%, transparent)`,
+              }}
+            >
+              <FolderOpenIcon size={11} />
+              Use this workspace&rsquo;s folder
+            </button>
+          )}
         </Field>
-      )}
 
-      {s.dir.trim() && s.detected.length === 0 && (
-        <p style={{ margin: 0, fontSize: 11.5, color: 'var(--color-text-muted)' }}>
-          No framework recognised there yet. daakia looks for a manifest — pom.xml, build.gradle,
-          package.json — before it opens a single source file.
-        </p>
-      )}
+        {/*
+          All six, always — lit when this folder has one, dim when it does not,
+          and plainly marked when Settings has one turned off.
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+          Listing only what was recognised meant an empty row said nothing at
+          all: not what daakia can find, and not that a parser was switched off
+          somewhere else and is the reason this repository looks empty.
+        */}
+        <Field label={looked ? 'Recognised here' : 'What it looks for'}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {DETECTOR_IDS.map(id => (
+              <FrameworkChip
+                key={id}
+                id={id}
+                state={!enabled.includes(id) ? 'off' : found.has(id) ? 'found' : 'idle'}
+              />
+            ))}
+          </div>
+
+          {s.manifests.length > 0 && (
+            <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              by
+              {s.manifests.slice(0, 3).map(m => (
+                <code key={m} style={{ fontFamily: 'var(--font-mono, monospace)', color: 'var(--color-text-secondary)' }}>
+                  {m}
+                </code>
+              ))}
+            </span>
+          )}
+
+          {looked && s.detected.length === 0 && (
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', lineHeight: 1.5, maxWidth: '68ch' }}>
+              Nothing recognised there yet — daakia looks for a manifest
+              (<code style={{ fontFamily: 'var(--font-mono, monospace)' }}>pom.xml</code>,{' '}
+              <code style={{ fontFamily: 'var(--font-mono, monospace)' }}>build.gradle</code>,{' '}
+              <code style={{ fontFamily: 'var(--font-mono, monospace)' }}>package.json</code>) before it opens
+              a single source file. You can scan anyway.
+            </span>
+          )}
+        </Field>
+
+        {s.profiles.length > 0 && (
+          <Field label="Configuration profile">
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Chip on={!s.profile} onClick={() => s.setProfile(undefined)}>application</Chip>
+              {s.profiles.map(p => (
+                <Chip key={p} on={s.profile === p} onClick={() => s.setProfile(p)}>{p}</Chip>
+              ))}
+              <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 4 }}>
+                Chosen, not merged — profiles disagree on purpose.
+              </span>
+            </div>
+          </Field>
+        )}
+      </div>
+
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '12px 20px', marginTop: 8,
+        borderTop: '1px solid var(--color-surface-border)',
+      }}>
+        <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+          {enabled.length < DETECTOR_IDS.length
+            ? `${enabled.length} of ${DETECTOR_IDS.length} parsers enabled in Settings`
+            : 'Reads files. Writes nothing.'}
+        </span>
+        <span style={{ flex: 1 }} />
         <ButtonView label="Cancel" size="sm" variant="secondary" onClick={s.close} />
         <ButtonView label="Scan" size="sm" variant="secondary" accentColor={ACCENT} color={ACCENT}
                     disabled={!s.dir.trim()} onClick={s.run} />
       </div>
     </div>
+  );
+}
+
+/** A stated fact, not a control — so it never looks clickable. */
+function Pill({ tone, children }: { tone: string; children: React.ReactNode }) {
+  return (
+    <span style={{
+      fontSize: 10, padding: '2px 8px', borderRadius: 999,
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      color: tone,
+      background: `color-mix(in srgb, ${tone} 12%, transparent)`,
+      border: `1px solid color-mix(in srgb, ${tone} 26%, transparent)`,
+    }}>
+      <span style={{ width: 4, height: 4, borderRadius: 999, background: tone }} />
+      {children}
+    </span>
+  );
+}
+
+/**
+ * One framework, in its own colour.
+ *
+ * Three states rather than two: found here, not found here, and switched off
+ * in Settings — which is a different thing and the one somebody needs told,
+ * because a parser turned off last month looks exactly like a repository with
+ * no endpoints in it.
+ */
+function FrameworkChip({ id, state }: { id: DetectorId; state: 'found' | 'idle' | 'off' }) {
+  const tone = DETECTOR_COLORS[id];
+  const label = DETECTOR_LABELS[id];
+
+  if (state === 'off') {
+    return (
+      <span
+        title="Turned off in Settings → Code Scan"
+        style={{
+          fontSize: 11, padding: '3px 9px', borderRadius: 999,
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          color: 'var(--color-text-muted)',
+          border: '1px dashed var(--color-surface-border)',
+          opacity: 0.75,
+        }}
+      >
+        <span style={{ textDecoration: 'line-through' }}>{label}</span>
+        <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.04em' }}>off</span>
+      </span>
+    );
+  }
+
+  const found = state === 'found';
+  return (
+    <span style={{
+      fontSize: 11, padding: '3px 9px', borderRadius: 999,
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      color: found ? tone : 'var(--color-text-muted)',
+      background: found ? `color-mix(in srgb, ${tone} 14%, transparent)` : 'transparent',
+      border: `1px solid ${found
+        ? `color-mix(in srgb, ${tone} 34%, transparent)`
+        : 'var(--color-surface-border)'}`,
+      transition: 'color 140ms, background 140ms, border-color 140ms',
+    }}>
+      <span style={{
+        width: 6, height: 6, borderRadius: 999,
+        background: found ? tone : 'var(--color-surface-border)',
+        boxShadow: found ? `0 0 0 2px color-mix(in srgb, ${tone} 22%, transparent)` : undefined,
+      }} />
+      {label}
+      {found && <CheckIcon size={11} />}
+    </span>
   );
 }
 

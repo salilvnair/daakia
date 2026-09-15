@@ -17,7 +17,7 @@ import type {
   ApiDetector, DetectResult, Finding, HttpMethod, Param, Provenance,
   SourceFile, Unresolved,
 } from '../api-detector';
-import { HTTP_METHODS, normalisePathParams, pathParamNames } from '../api-detector';
+import { DETECTOR_LABELS, HTTP_METHODS, normalisePathParams, pathParamNames } from '../api-detector';
 import {
   balanced, fileConstants, lineOf, literal, packageDeps, property, resolvePath,
   splitArgs, stripComments,
@@ -31,7 +31,7 @@ const ROUTE_CALL = /\b(?:server|srv|app)\s*\.\s*route\s*\(/g;
 
 export const hapiDetector: ApiDetector = {
   id: 'hapi',
-  label: 'Hapi.js',
+  label: DETECTOR_LABELS.hapi,
 
   present(root) {
     for (const f of root.files) {

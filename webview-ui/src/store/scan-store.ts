@@ -8,6 +8,8 @@
  */
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
+import { useUiStateStore } from './ui-state-store';
+import { scanPreferences } from '../services/scan/scan-settings';
 
 /*
   The shapes a detector produces, shared rather than mirrored.
@@ -149,8 +151,11 @@ export const useScanStore = create<ScanState>((set, get) => ({
   run: () => {
     const { dir, profile } = get();
     if (!dir.trim()) return;
+    /* Settings → Code Scan decides the walk. Read at the moment of running so
+       a change takes effect on the next scan rather than the next reload. */
+    const { maxFiles, ignore, only } = scanPreferences(useUiStateStore.getState().prefs);
     set({ stage: 'scanning', progress: undefined, error: undefined });
-    postMsg({ type: 'scan:run', dir: dir.trim(), profile });
+    postMsg({ type: 'scan:run', dir: dir.trim(), profile, maxFiles, ignore, only });
   },
 
   toggle: (identity) => set(s => {
@@ -196,6 +201,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
 
       case 'scan:result': {
         const requests = (msg.requests as ScannedRequest[]) ?? [];
+        const { selectInternal } = scanPreferences(useUiStateStore.getState().prefs);
         set({
           stage: 'review',
           requests,
@@ -209,9 +215,14 @@ export const useScanStore = create<ScanState>((set, get) => ({
           /*
             Everything is ticked except what somebody plainly did not come for.
             Internal and actuator endpoints are real and findable — they just
-            should not arrive selected in a collection somebody is about to run.
+            should not arrive selected in a collection somebody is about to
+            run, unless Settings says they are what you are looking for.
           */
-          chosen: new Set(requests.filter(r => !isInternal(r)).map(r => r.scan.identity)),
+          chosen: new Set(
+            requests
+              .filter(r => selectInternal || !isInternal(r))
+              .map(r => r.scan.identity),
+          ),
           focused: requests[0]?.scan.identity,
           collectionName: get().collectionName || nameFromDir(String(msg.dir ?? get().dir)),
         });

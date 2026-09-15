@@ -27,6 +27,7 @@ type PostMessage = (msg: unknown) => void;
 import { scanRepository, walk, repoRoot, DETECTORS } from '../../../services/scan/scanner';
 import { profiles } from '../../../services/scan/spring/base-url';
 import { toRequest, collectionVariables } from '../../../services/scan/to-requests';
+import type { DetectorId } from '../../../services/scan/api-detector';
 
 /** Ask for a folder. The webview cannot open a dialog; the host can. */
 export async function handleScanPickFolder(
@@ -111,9 +112,18 @@ export async function handleScanRun(
     return;
   }
 
+  /*
+    The walk's shape comes from Settings → Code Scan, resolved in the webview
+    and sent whole. Each one falls back here as well: a message from an older
+    build, or one sent before the preferences loaded, must still scan rather
+    than walk zero files or run no detectors.
+  */
   const profile = msg.profile ? String(msg.profile) : undefined;
   const maxFiles = Number(msg.maxFiles) || 2000;
   const ignore = Array.isArray(msg.ignore) ? (msg.ignore as string[]) : undefined;
+  const only = Array.isArray(msg.only) && msg.only.length
+    ? (msg.only as DetectorId[]).filter(id => DETECTORS.some(d => d.id === id))
+    : undefined;
 
   try {
     /*
@@ -123,7 +133,7 @@ export async function handleScanRun(
     */
     let lastPost = 0;
     const result = scanRepository(dir, {
-      profile, maxFiles, ignore,
+      profile, maxFiles, ignore, only,
       onProgress: (p) => {
         const now = Date.now();
         if (now - lastPost < 90) return;

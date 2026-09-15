@@ -23,7 +23,7 @@ import type {
   ApiDetector, DetectorIndex, DetectResult, Finding, HttpMethod, Param,
   Provenance, RepoRoot, SourceFile, SourceRef, Unresolved,
 } from '../api-detector';
-import { joinPath, normalisePathParams, pathParamNames } from '../api-detector';
+import { DETECTOR_LABELS, joinPath, normalisePathParams, pathParamNames } from '../api-detector';
 import {
   VERB_ANNOTATIONS, annotationArgs, annotationsAbove, attribute, readController,
   stripNoise, type AnnotationMeaning,
@@ -169,7 +169,7 @@ function statusFrom(args: string | undefined): { status: number; declared: boole
 
 export const springDetector: ApiDetector = {
   id: 'spring',
-  label: 'Spring Boot',
+  label: DETECTOR_LABELS.spring,
 
   present(root) {
     for (const f of root.files) {

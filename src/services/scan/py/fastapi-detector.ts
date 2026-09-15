@@ -18,7 +18,7 @@ import type {
   ApiDetector, DetectorIndex, DetectResult, Finding, HttpMethod, Param,
   Provenance, RepoRoot, SourceFile, Unresolved,
 } from '../api-detector';
-import { HTTP_METHODS, joinPath, normalisePathParams, pathParamNames } from '../api-detector';
+import { DETECTOR_LABELS, HTTP_METHODS, joinPath, normalisePathParams, pathParamNames } from '../api-detector';
 import {
   balanced, declaresPackage, decoratorsAbove, keyword, literal, lineOf, moduleConstants,
   positional, resolvePath, splitArgs, stripComments,
@@ -110,7 +110,7 @@ export function routerPrefix(src: string): string {
 
 export const fastapiDetector: ApiDetector = {
   id: 'fastapi',
-  label: 'FastAPI',
+  label: DETECTOR_LABELS.fastapi,
 
   present(root) {
     for (const f of root.files) {

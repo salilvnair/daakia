@@ -23,7 +23,7 @@ import type {
   ApiDetector, DetectResult, Finding, HttpMethod, Param, Provenance,
   RepoRoot, SourceFile,
 } from '../api-detector';
-import { HTTP_METHODS, joinPath, normalisePathParams, pathParamNames } from '../api-detector';
+import { DETECTOR_LABELS, HTTP_METHODS, joinPath, normalisePathParams, pathParamNames } from '../api-detector';
 import { balanced, literal, lineOf, packageDeps, stripComments } from './js-source';
 import { nameFor } from './express-detector';
 
@@ -126,7 +126,7 @@ export function methodsFromBody(src: string): HttpMethod[] {
 
 export const nextjsDetector: ApiDetector = {
   id: 'nextjs',
-  label: 'Next.js',
+  label: DETECTOR_LABELS.nextjs,
 
   present(root) {
     for (const f of root.files) {

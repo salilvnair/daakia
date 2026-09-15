@@ -4,9 +4,14 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-vi.mock('../vscode', () => ({ postMsg: vi.fn() }));
+const postMsg = vi.fn();
+vi.mock('../vscode', () => ({ postMsg: (m: unknown) => postMsg(m) }));
 
 import { useScanStore, nameFromDir, isInternal, byFolder, summarise, type ScannedRequest } from './scan-store';
+import { useUiStateStore } from './ui-state-store';
+import {
+  SCAN_MAX_FILES_KEY, SCAN_IGNORE_KEY, SCAN_DETECTORS_KEY, SCAN_PICK_INTERNAL_KEY,
+} from '../services/scan/scan-settings';
 
 const req = (over: Partial<ScannedRequest> = {}): ScannedRequest => ({
   name: 'Get checkout', method: 'GET', url: '{{baseUrl}}/api/checkout/{id}',
@@ -21,6 +26,8 @@ const req = (over: Partial<ScannedRequest> = {}): ScannedRequest => ({
 });
 
 const apply = (msg: Record<string, unknown>) => useScanStore.getState().apply(msg);
+
+beforeEach(() => { postMsg.mockClear(); useUiStateStore.setState({ prefs: {} }); });
 
 beforeEach(() => useScanStore.setState({
   open: false, stage: 'source', dir: '', requests: [], unresolved: [],
@@ -71,6 +78,39 @@ describe('opening it again', () => {
     useScanStore.getState().setCollectionName('Checkout (staging)');
     apply({ type: 'scan:result', dir: '/repo/checkout-service', requests: [] });
     expect(useScanStore.getState().collectionName).toBe('Checkout (staging)');
+  });
+});
+
+describe('what Settings decides', () => {
+  it('sends the walk’s shape with the run', () => {
+    useUiStateStore.setState({ prefs: {
+      [SCAN_MAX_FILES_KEY]: '5000',
+      [SCAN_IGNORE_KEY]: 'fixtures, testdata',
+      [SCAN_DETECTORS_KEY]: 'spring',
+    } });
+    useScanStore.setState({ dir: '/repo' });
+    useScanStore.getState().run();
+    expect(postMsg).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'scan:run', dir: '/repo',
+      maxFiles: 5000, ignore: ['fixtures', 'testdata'], only: ['spring'],
+    }));
+  });
+
+  it('sends usable defaults when nothing has been set', () => {
+    useScanStore.setState({ dir: '/repo' });
+    useScanStore.getState().run();
+    expect(postMsg).toHaveBeenCalledWith(expect.objectContaining({
+      maxFiles: 2000, ignore: [], only: undefined,
+    }));
+  });
+
+  it('can tick the internal endpoints too', () => {
+    useUiStateStore.setState({ prefs: { [SCAN_PICK_INTERNAL_KEY]: 'on' } });
+    apply({ type: 'scan:result', dir: '/r', requests: [
+      req(),
+      req({ url: '{{baseUrl}}/actuator/health', scan: { ...req().scan, identity: 'GET /actuator/health' } }),
+    ] });
+    expect(useScanStore.getState().chosen.has('GET /actuator/health')).toBe(true);
   });
 });
 

@@ -24,6 +24,7 @@ import { join, relative, sep } from 'path';
 import type {
   ApiDetector, BaseUrl, DetectorId, Finding, RepoRoot, Unresolved,
 } from './api-detector';
+import { SKIP_DIRS as SKIP_DIR_NAMES } from './api-detector';
 import { springDetector } from './spring/spring-detector';
 import { expressDetector } from './js/express-detector';
 import { hapiDetector } from './js/hapi-detector';
@@ -41,17 +42,8 @@ export const DETECTORS: readonly ApiDetector[] = [
   flaskDetector,
 ];
 
-/**
- * Directories never worth walking.
- *
- * The same list `src/mcp/open-source.ts` uses, for the same reason — one of
- * these on a large repository is most of the files and none of the routes.
- */
-export const SKIP_DIRS = new Set([
-  'node_modules', '.git', '.svn', '.hg', '.idea', '.vscode', '.gradle', '.mvn',
-  'target', 'build', 'dist', 'out', 'bin', 'obj', 'vendor', 'coverage',
-  '__pycache__', '.venv', 'venv', 'env', '.next', '.nuxt', '.cache', '.terraform',
-]);
+/** Declared in `api-detector` so Settings can show it without importing `fs`. */
+export const SKIP_DIRS = new Set(SKIP_DIR_NAMES);
 
 /** Extensions worth opening at all. A detector narrows further. */
 const EXTENSIONS = new Set([

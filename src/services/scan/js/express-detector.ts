@@ -21,7 +21,7 @@ import type {
   ApiDetector, DetectorIndex, DetectResult, Finding, HttpMethod, Param,
   Provenance, RepoRoot, SourceFile, Unresolved,
 } from '../api-detector';
-import { HTTP_METHODS, joinPath, normalisePathParams, pathParamNames } from '../api-detector';
+import { DETECTOR_LABELS, HTTP_METHODS, joinPath, normalisePathParams, pathParamNames } from '../api-detector';
 import {
   balanced, fileConstants, lineOf, literal, packageDeps, resolvePath, splitArgs, stripComments,
 } from './js-source';
@@ -135,7 +135,7 @@ export function buildPrefixes(root: RepoRoot): Map<string, string> {
 
 export const expressDetector: ApiDetector = {
   id: 'express',
-  label: 'Express',
+  label: DETECTOR_LABELS.express,
 
   present(root) {
     for (const f of root.files) {

@@ -6,7 +6,7 @@ import type { TabItem } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, GitHubIcon, LockIcon, TrashIcon, KeyboardIcon, Dk8sIcon, TerminalIcon,
          CookieIcon, NetworkIcon, ShieldIcon, UptimeIcon, FilterIcon, LayersIcon, BulkEditIcon, GaugeIcon,
-         DocumentIcon, ConnectIcon, ClipboardCompareIcon, FolderIcon, BugIcon, IssueOpenedIcon, InfoCircleIcon } from '../../icons';
+         DocumentIcon, ConnectIcon, ClipboardCompareIcon, FolderIcon, BugIcon, IssueOpenedIcon, InfoCircleIcon, SearchIcon } from '../../icons';
 import { useAiFeaturesStore, type AiFeatureKey } from '../../store/ai-features-store';
 import { useTabsStore } from '../../store/tabs-store';
 import { AiSchemaDiffModal } from '../ai/AiSchemaDiffModal';
@@ -26,6 +26,7 @@ import { LlmProviderSettings } from './LlmProviderSettings';
 import { GitSyncSettings } from './GitSyncSettings';
 import { VaultSettings } from './VaultSettings';
 import { BinSettings } from './BinSettings';
+import { CodeScanSettings } from '../settings/CodeScanSettings';
 import { KeymapSettings } from './KeymapSettings';
 import { PromptLibraryPanel } from './PromptLibraryPanel';
 import { AiFeatureSettings } from './AiFeatureSettings';
@@ -51,7 +52,7 @@ import { AboutPanel } from '../settings/AboutPanel';
 import { Dk8sGeneralSettings, DkghGeneralSettings } from '../settings/SurfaceGeneralSettings';
 import { Dk8sCommandAudit } from '../settings/Dk8sCommandAudit';
 
-type SettingsSection = 'general' | 'theme' | 'keymap' | 'about' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-general' | 'dk8s-cluster' | 'dk8s-terminal' | 'dk8s-commands' | 'dkgh-general' | 'dkgh';
+type SettingsSection = 'general' | 'theme' | 'keymap' | 'about' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'code-scan' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-general' | 'dk8s-cluster' | 'dk8s-terminal' | 'dk8s-commands' | 'dkgh-general' | 'dkgh';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
 type PowerSubtab = 'cookies' | 'proxy' | 'certs' | 'monitor' | 'interceptor' | 'diff' | 'bulk' | 'load'
   | 'schema-diff' | 'openapi' | 'security' | 'webhook' | 'postman' | 'clustering'
@@ -68,6 +69,7 @@ const SETTINGS_SECTION_META: Record<SettingsSection, { label: string; icon: Reac
   'git-sync':        { label: 'Git Sync',        icon: <GitHubIcon size={14} /> },
   'vault':           { label: 'Vault',           icon: <LockIcon size={14} /> },
   'bin':             { label: 'Bin',              icon: <TrashIcon size={14} /> },
+  'code-scan':       { label: 'Code Scan',      icon: <SearchIcon size={14} /> },
   'llm':             { label: 'LLM Provider',    icon: <CpuIcon size={14} /> },
   'ai-features':     { label: 'AI Features',     icon: <SparkleIcon size={14} /> },
   'prompt-library':  { label: 'Prompt Library',  icon: <AgentIcon size={14} /> },
@@ -121,6 +123,7 @@ const SETTINGS_NAV_ITEMS: SideNavItem[] = [
     { id: 'dkgh', label: SETTINGS_SECTION_META['dkgh'].label, icon: SETTINGS_SECTION_META['dkgh'].icon },
   ] },
   { id: 'g-advanced', label: 'Advanced', isGroup: true, children: [
+    { id: 'code-scan', label: SETTINGS_SECTION_META['code-scan'].label, icon: SETTINGS_SECTION_META['code-scan'].icon },
     { id: 'devtools', label: SETTINGS_SECTION_META.devtools.label, icon: SETTINGS_SECTION_META.devtools.icon },
     { id: 'power-features', label: SETTINGS_SECTION_META['power-features'].label, icon: SETTINGS_SECTION_META['power-features'].icon },
   ] },
@@ -196,6 +199,8 @@ export function SettingsPanel() {
               <VaultSettings />
             ) : activeSection === 'bin' ? (
               <BinSettings />
+            ) : activeSection === 'code-scan' ? (
+              <CodeScanSettings />
             ) : activeSection === 'llm' ? (
               <LlmProviderSettings />
             ) : activeSection === 'ai-features' ? (

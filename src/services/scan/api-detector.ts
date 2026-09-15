@@ -36,6 +36,59 @@ export const HTTP_METHODS: readonly HttpMethod[] =
 export type DetectorId =
   | 'spring' | 'express' | 'hapi' | 'nextjs' | 'fastapi' | 'flask';
 
+/**
+ * What each detector is called, in one place.
+ *
+ * The label lives on the detector object, but a detector imports `fs` and the
+ * settings screen has to name all six without running any of them. So the
+ * names live here — this module is pure — and each detector reads its own.
+ */
+export const DETECTOR_LABELS: Record<DetectorId, string> = {
+  spring: 'Spring Boot',
+  express: 'Express',
+  hapi: 'Hapi.js',
+  nextjs: 'Next.js',
+  fastapi: 'FastAPI',
+  flask: 'Flask',
+};
+
+/**
+ * Directories never worth walking.
+ *
+ * Here rather than beside the walk because Settings shows the list: without it
+ * the box for extra names invites somebody to type `node_modules` into a field
+ * that already ignores it, and then to wonder why nothing changed.
+ *
+ * The same list `src/mcp/open-source.ts` uses, for the same reason — one of
+ * these on a large repository is most of the files and none of the routes.
+ */
+export const SKIP_DIRS: readonly string[] = [
+  'node_modules', '.git', '.svn', '.hg', '.idea', '.vscode', '.gradle', '.mvn',
+  'target', 'build', 'dist', 'out', 'bin', 'obj', 'vendor', 'coverage',
+  '__pycache__', '.venv', 'venv', 'env', '.next', '.nuxt', '.cache', '.terraform',
+];
+
+/**
+ * A colour per framework, so a list of six is scannable rather than six
+ * identical chips in the accent. Brand-adjacent where a framework has a colour
+ * worth borrowing (Spring's green, Hapi's orange, Python's blue) and simply
+ * distinct where it does not — Express and Next.js are black-and-white.
+ *
+ * Every one of these is readable on a light and a dark ground; they are used
+ * as a text colour over a heavily-mixed version of themselves.
+ */
+export const DETECTOR_COLORS: Record<DetectorId, string> = {
+  spring: '#6DB33F',
+  express: '#8A93A8',
+  hapi: '#F0932B',
+  nextjs: '#A78BFA',
+  fastapi: '#0EA5A0',
+  flask: '#4B8BBE',
+};
+
+/** Every detector id, in the order a list of them should read. */
+export const DETECTOR_IDS = Object.keys(DETECTOR_LABELS) as DetectorId[];
+
 /** Where in the source something was read. */
 export interface SourceRef {
   /** Repo-relative, forward slashes, so it reads the same on every platform. */
