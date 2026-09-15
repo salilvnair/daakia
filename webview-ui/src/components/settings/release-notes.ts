@@ -49,6 +49,28 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '3.1.0',
+    date: '2026-09-15',
+    headline: 'Point daakia at a repository and it reads the routes out of the source.',
+    lines: [
+      { kind: 'feature', area: 'Code Scan', text: 'Build a collection from your code. Give it a folder and every route declared in it comes back as a request — Spring Boot, Express, Hapi.js, Next.js, FastAPI and Flask, out of the box.' },
+      { kind: 'feature', area: 'Code Scan', text: 'It says how it knows. Every field is marked: read from the source and where, resolved through a custom annotation or a mounted router, taken from an example, or generated to satisfy a validation constraint.' },
+      { kind: 'feature', area: 'Code Scan', text: 'Your own annotations are followed — a @TestClientApiController that is @RestController underneath resolves through four levels, and @AliasFor renames are honoured.' },
+      { kind: 'feature', area: 'Code Scan', text: 'The base URL is the one the service runs on: its port and its context path, from the profile you picked. Profiles are chosen, not merged, because they disagree on purpose.' },
+      { kind: 'feature', area: 'Code Scan', text: 'An environment arrives with the collection, holding {{baseUrl}} — without it the collection points at nothing.' },
+      { kind: 'feature', area: 'Code Scan', text: 'One folder per source file, matching the groups the review screen showed you. Internal and actuator endpoints are listed but never arrive ticked.' },
+      { kind: 'feature', area: 'Code Scan', text: 'Re-scanning a collection you have worked in shows you added, updated, conflict, orphaned and unchanged before anything is written. Matched on method and path, so renaming a request does not orphan it.' },
+      { kind: 'feature', area: 'Code Scan', text: 'Your edits are never overwritten silently, and nothing is ever deleted — a removed route and a moved file look identical from here, so an orphan is marked and left.' },
+      { kind: 'feature', area: 'Settings', text: 'Code Scan, under Advanced: the file cap, folders to skip, which parsers to run, and what the review screen arrives with ticked — leading with what a scan does, which is open files and nothing else.' },
+      { kind: 'feature', area: 'dk8s', text: 'An Access tab in the explorer, with one list of what you can and cannot do in a namespace instead of the same question answered three ways in three places.' },
+      { kind: 'fix', area: 'dk8s', text: 'Every command dk8s runs is written down, including the ones that were refused — a silent refusal made a permissions problem look like a bug.' },
+      { kind: 'fix', area: 'dk8s', text: 'A command card appears when the command starts, not when it finishes, so a long wait shows what it is waiting on.' },
+      { kind: 'fix', area: 'dk8s', text: 'A cluster nobody is on stopped answering for one you are: contextless commands were exempt from the cluster filter.' },
+      { kind: 'change', area: 'dk8s', text: 'The 25-second verdict is yours to set. A slow cluster was being called broken on a timeout nobody chose.' },
+      { kind: 'fix', area: 'REST', text: 'The toolbar shows the environment that is actually active. It fell back to whichever one sorted first, so a tab could say Default while the right panel said something else.' },
+    ],
+  },
+  {
     version: '3.0.3',
     date: '2026-09-13',
     headline: 'A day spent on everything that was telling you the wrong thing while it worked.',

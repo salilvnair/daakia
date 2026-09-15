@@ -4,6 +4,102 @@ All notable changes to the Daakia API Client extension are documented here.
 
 ---
 
+## [3.1.0] — 2026-09-15
+
+Point daakia at a repository and it reads the routes out of the source.
+
+The rest of the release is dk8s telling you what it actually did — which
+commands it ran, why a cluster was refused, how long it is willing to wait —
+and one environment selector that finally agrees with itself.
+
+### Added — Code Scan
+
+- **Build a collection from your code.** Collections panel → ⋮ → "Scan code
+  for requests…", give it a folder, and every route declared in it comes back
+  as a request. Spring Boot, Express, Hapi.js, Next.js, FastAPI and Flask, out
+  of the box. Nothing is written until you have read the list.
+- **It says how it knows.** Every field of every request is marked: read from
+  the source and where, resolved through something (a custom annotation, a
+  mounted router, an `include_router` prefix), taken from an example, or
+  generated to satisfy a constraint. A generated body says which validation
+  annotation produced each value. There is no field it will not account for.
+- **Your own annotations are followed.** `@TestClientApiController` that is
+  `@RestController` underneath resolves through four levels, `@AliasFor`
+  renames are honoured, and the path comes out the same as Spring's.
+- **The base URL is the one the service runs on** — its port and its
+  `server.servlet.context-path`, from the profile you picked. Profiles are
+  chosen, not merged, because they disagree on purpose.
+- **An environment arrives with the collection**, holding `{{baseUrl}}`.
+  Without it the collection points at nothing, which is the state the first
+  version of this shipped in.
+- **One folder per source file**, matching the groups the review screen showed
+  you. They used to be written flat.
+- **Endpoints nobody came for are listed but unticked** — `/internal`,
+  `/actuator`, `/admin`. They are real, so they are never hidden.
+- **Two handlers on one path are told apart** by whatever distinguishes them —
+  a `consumes`, a `produces`, a `params=` condition — instead of one silently
+  replacing the other.
+- **What it could not resolve, it says so about**, with the file, the line and
+  the expression, rather than inventing a path.
+
+### Added — Code Scan, the second time
+
+- **Re-scanning a collection you have worked in.** Every request gets one of
+  five outcomes — added, updated, conflict, orphaned, unchanged — and you see
+  all of them before anything is written. Matched on method and path, so
+  renaming a request does not orphan it.
+- **Your edits are never overwritten silently.** A request the code changed
+  *and* you had edited is a conflict, shown with what differs; yours is kept
+  unless you take theirs. A request only the code changed is updated quietly,
+  because there is nothing to lose.
+- **Nothing is ever deleted.** A route that was removed and a file that was
+  moved look identical from here, so an orphan is marked and left.
+- **An update stays the same request** — same id, same folder — so anything
+  you had open, starred or referenced still points at it.
+
+### Added — Settings
+
+- **Code Scan**, under Advanced: the file cap, folder names to skip on top of
+  the ones always skipped, which parsers to run, and what the review screen
+  arrives with ticked. It leads with what a scan does — opens files, runs
+  nothing, installs nothing, sends nothing anywhere — because that is what you
+  want to know before pointing it at a repository you have just cloned.
+
+### Added — dk8s
+
+- **An Access tab in the explorer**, with one list of what you can and cannot
+  do in a namespace instead of the same question answered three different ways
+  in three places. It says which check produced each answer.
+
+### Fixed — dk8s
+
+- **Every command dk8s runs is written down**, including the ones that were
+  refused — a refusal used to be silent, which made a permissions problem look
+  like a bug.
+- **A command card appears when the command starts**, not when it finishes, so
+  a long wait shows what it is waiting on rather than nothing at all.
+- **A cluster nobody is on stopped answering for one you are.** Contextless
+  commands were exempt from the cluster filter, so `config view` could surface
+  under a cluster it had nothing to do with.
+- **The 25-second verdict is yours to set.** A slow cluster was being called
+  broken on a timeout nobody chose; the wait is one field with its unit inside
+  it, in Settings → DK8S → Cluster.
+- **How far back the Commands tab reads** is configurable, and the audit keeps
+  everything either way.
+
+### Fixed — environments
+
+- **The toolbar shows the environment that is actually active.** It fell back
+  to whichever one sorted first, so a tab could say `Default` while the right
+  panel said something else — and the two controls now agree with each other.
+
+### Changed
+
+- `@salilvnair/dui` 1.0.11 — a stepper can hold its own maximum, and a loading
+  state can be told how wide its message should be.
+
+---
+
 ## [3.0.3] — 2026-09-13
 
 A day spent on everything that was telling you the wrong thing while it
