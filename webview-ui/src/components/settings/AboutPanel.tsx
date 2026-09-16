@@ -86,7 +86,7 @@ export function AboutPanel() {
 
   return (
     <div className="flex-1 overflow-y-auto" style={{ scrollbarGutter: 'stable' }}>
-      <div className="flex flex-col gap-6 px-6 py-5" style={{ maxWidth: 860 }}>
+      <div className="flex flex-col gap-6 px-6 py-5" style={{ maxWidth: '100%' }}>
 
         {/* ── What you are running ── */}
         <div className="flex items-start gap-4">
@@ -189,7 +189,7 @@ export function AboutPanel() {
             rest of the app reserves for something you need to act on.
           */}
           <p className="m-0 text-[12.5px]"
-             style={{ color: 'var(--color-text-secondary)', lineHeight: 1.65, maxWidth: '74ch' }}>
+             style={{ color: 'var(--color-text-secondary)', lineHeight: 1.65, maxWidth: '110ch' }}>
             {CURRENT_RELEASE.headline}
           </p>
 

@@ -148,7 +148,7 @@ function Field({ label, hint, after, children }: {
       {children}
       {hint && (
         <span className="text-[11px] leading-relaxed text-[var(--color-text-muted)]"
-              style={{ maxWidth: '92ch' }}>
+              style={{ maxWidth: '100%' }}>
           {hint}
         </span>
       )}
@@ -248,8 +248,19 @@ function LayoutTable({ value, layouts, found, onChange }: {
   };
 
   const add = () => {
+    /*
+      A name, not a blank.
+
+      An empty one renders as italic "unnamed" in the table, which reads as
+      something dk8s shipped without naming rather than as a row you have not
+      filled in yet — and the config is shared between every install reading
+      the same database, so it turns up later somewhere you were not expecting
+      it and looks like a defect in the product.
+    */
     const row: PvLayout = {
-      id: layoutIdFor('layout', rows), name: '', template: '', custom: true,
+      id: layoutIdFor('layout', rows),
+      name: `My layout ${rows.filter(r => r.custom).length + 1}`,
+      template: '', custom: true,
     };
     // Selected and open on arrival, so what you type next lands in the search
     // rather than in a row you then have to remember to click and unlock.

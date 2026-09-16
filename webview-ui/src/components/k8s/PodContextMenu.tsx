@@ -26,7 +26,9 @@ import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import {
   useDk8sDoctorStore, ARTIFACT_META, type ArtifactKind,
 } from '../../store/dk8s-doctor-store';
-import { favoriteKey, useFavoriteKeys, toggleFavorite } from '../../store/dk8s-favorites-store';
+import {
+  favoriteKey, useFavoriteKeys, toggleFavorite, favoriteChoices, starredKeyOf,
+} from '../../store/dk8s-favorites-store';
 
 import { ACCENT } from './tone';
 import { markRuntimeItems, targetOf } from './mark-runtime';
@@ -98,7 +100,8 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
   const items = useMemo<ContextMenuItem[]>(() => {
     if (!pod) return [];
     const key = favoriteKey(pod);
-    const starred = favorites.includes(key);
+    const starred = !!starredKeyOf(pod, favorites);
+    const choices = favoriteChoices(pod);
     const picked = selected.includes(pod.uid);
     const copy = (text: string) => () => { void navigator.clipboard?.writeText(text); onClose(); };
 
@@ -293,10 +296,31 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
         label: starred ? 'Remove from favourites' : 'Add to favourites',
         icon: <StarIcon size={IconSize.item} filled={starred} />,
         iconColor: starred ? 'var(--color-warning)' : undefined,
-        onClick: () => {
-          if (starred) { onConfirmUnfavorite(pod); } else { toggleFavorite(key); }
-          onClose();
-        },
+        /*
+          Adding asks what it is starring, the same question the star on the
+          row asks — the two ways to star a pod have to mean the same thing, or
+          one of them silently does something else.
+
+          Removing does not: there is one star on and it is the one that comes
+          off. Only where there is a choice to make, so a pod with no owning
+          workload keeps a single click.
+        */
+        ...(!starred && choices.length > 1
+          ? {
+              children: choices.map((c): ContextMenuItem => ({
+                id: `fav-${c.mode}`,
+                label: c.label,
+                description: c.detail,
+                icon: <StarIcon size={IconSize.item} />,
+                onClick: () => { toggleFavorite(c.key); onClose(); },
+              })),
+            }
+          : {
+              onClick: () => {
+                if (starred) { onConfirmUnfavorite(pod); } else { toggleFavorite(key); }
+                onClose();
+              },
+            }),
       },
     ];
   }, [pod, favorites, selected, menuProbe, guardHeapDump, access, running, detail, runtimeMark, contextName,

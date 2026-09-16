@@ -137,7 +137,7 @@ export function Dk8sCommandAudit() {
           Commands
         </span>
         <span className="text-[11.5px] leading-relaxed"
-              style={{ color: 'var(--color-text-muted)', maxWidth: '78ch' }}>
+              style={{ color: 'var(--color-text-muted)', maxWidth: '110ch' }}>
           Every kubectl dk8s has run this session, with what the cluster said back. Copy any
           line and run it yourself — if it behaves differently there, the difference is the
           answer. Credentials are masked; contexts, namespaces and pod names are not, because

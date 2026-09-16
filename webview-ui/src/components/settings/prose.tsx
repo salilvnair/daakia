@@ -57,7 +57,7 @@ export function Hint({ lead, points }: {
   points?: React.ReactNode[];
 }) {
   return (
-    <div className="flex flex-col gap-1" style={{ maxWidth: '84ch' }}>
+    <div className="flex flex-col gap-1" style={{ maxWidth: '110ch' }}>
       {lead && (
         <span className="text-[11px] leading-[1.55]"
               style={{ color: 'var(--color-text-secondary)' }}>
@@ -95,7 +95,7 @@ export function Why({ children, label = 'Why this exists' }: {
   children: React.ReactNode; label?: string;
 }) {
   return (
-    <details className="group" style={{ maxWidth: '84ch' }}>
+    <details className="group" style={{ maxWidth: '110ch' }}>
       <summary
         className="cursor-pointer text-[10px] uppercase tracking-wider select-none
                    list-none inline-flex items-center gap-1 w-fit"

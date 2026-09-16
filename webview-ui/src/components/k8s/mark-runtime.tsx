@@ -15,13 +15,13 @@
  * answer for a team who want every colleague to get it; this is the answer for
  * the person looking at the pod right now.
  *
- * ── Two scopes, because they mean different things ──
+ * ── One scope, because a runtime is a property of the image ──
  *
- * The app is what people mean nearly always, and it survives a rollout. The
- * pod is for when this one really is the subject — a bare debug pod, one
- * container of a job you are working through — and it stops applying when the
- * pod is replaced, which is correct rather than a leak: the thing it described
- * is gone.
+ * Every pod of a workload runs the same image, so "this pod is Java but its
+ * siblings are not" describes nothing real. The mark goes on the app and
+ * survives a rollout. A pod with no owning workload is marked as itself,
+ * because there is nothing more stable to hang it on — and then that is the
+ * only option rather than one of two.
  */
 import type { ContextMenuItem } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
@@ -71,7 +71,7 @@ function runtimeItems(
   target: MarkTarget, scope: 'workload' | 'pod', mark: CurrentMark | undefined,
   container: string | undefined,
 ): ContextMenuItem[] {
-  const on = mark?.scope === scope ? mark.runtime : undefined;
+  const on = mark?.runtime;
   return RUNTIMES.map(r => ({
     id: `mark-${scope}-${r}`,
     label: RUNTIME_LABEL[r],
@@ -81,13 +81,7 @@ function runtimeItems(
   }));
 }
 
-/**
- * `Mark app ▸` and `Mark pod ▸`, ready to drop into a context menu.
- *
- * Returns nothing when there is no pod to mark. The app entry is absent for a
- * pod with no owning workload — there is nothing stable to hang it on, and an
- * entry that silently did the pod instead would be a lie about what it did.
- */
+/** `Mark app ▸`, ready to drop into a context menu. Nothing without a pod. */
 export function markRuntimeItems(
   target: MarkTarget | undefined,
   mark: CurrentMark | undefined,
@@ -95,29 +89,30 @@ export function markRuntimeItems(
 ): ContextMenuItem[] {
   if (!target?.pod) return [];
 
-  const items: ContextMenuItem[] = [];
+  /*
+    One entry, not two.
 
-  if (target.workload) {
-    items.push({
-      id: 'mark-app',
-      label: `Mark app${mark?.scope === 'workload' ? ` · ${labelOf(mark.runtime)}` : ''}`,
-      description: `${target.workload.kind} ${target.workload.name} — survives a rollout`,
-      icon: <CpuIcon size={13} />,
-      children: runtimeItems(target, 'workload', mark, container),
-    });
-  }
+    A runtime is a property of the image, and every pod of a workload runs the
+    same image — so "this pod is Java but its siblings are not" describes
+    nothing real. Offering the choice made people decide between two answers
+    where only one of them is ever right, and the wrong one silently expires at
+    the next rollout.
 
-  items.push({
-    id: 'mark-pod',
-    label: `Mark pod${mark?.scope === 'pod' ? ` · ${labelOf(mark.runtime)}` : ''}`,
+    A pod with no owning workload is marked as itself, because there is nothing
+    more stable to hang it on — and then it is the only option rather than one
+    of two.
+  */
+  const scope = target.workload ? 'workload' as const : 'pod' as const;
+
+  return [{
+    id: 'mark-runtime',
+    label: `Mark ${target.workload ? 'app' : 'pod'}${mark ? ` · ${labelOf(mark.runtime)}` : ''}`,
     description: target.workload
-      ? 'Only this pod, until it is replaced'
+      ? `${target.workload.kind} ${target.workload.name} — survives a rollout`
       : 'This pod has no owning workload, so its own name is all there is',
     icon: <CpuIcon size={13} />,
-    children: runtimeItems(target, 'pod', mark, container),
-  });
-
-  return items;
+    children: runtimeItems(target, scope, mark, container),
+  }];
 }
 
 function labelOf(runtime: string): string {

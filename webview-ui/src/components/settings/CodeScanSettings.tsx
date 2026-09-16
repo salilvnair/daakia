@@ -41,7 +41,7 @@ const ACCENT = 'var(--color-sidebar-collections)';
 const cardStyle: React.CSSProperties = {
   background: 'var(--color-surface)',
   border: '1px solid var(--color-surface-border)',
-  maxWidth: '92ch',
+  maxWidth: '100%',
 };
 
 function SectionRule({ label }: { label: string }) {
@@ -168,7 +168,7 @@ export function CodeScanSettings() {
         <h2 className="text-[15px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
           Code Scan
         </h2>
-        <p className="text-[11.5px] leading-relaxed" style={{ color: 'var(--color-text-secondary)', maxWidth: '78ch' }}>
+        <p className="text-[11.5px] leading-relaxed" style={{ color: 'var(--color-text-secondary)', maxWidth: '110ch' }}>
           Reads route declarations out of a repository and builds a collection from them.
           Open it from the Collections panel &mdash; the &#8942; menu, &ldquo;Scan code for
           requests&hellip;&rdquo;. What is here is what a scan cannot work out for itself.

@@ -26,7 +26,7 @@ const ACCENT = 'var(--color-dk8s)';
 const cardStyle: React.CSSProperties = {
   background: 'var(--color-surface)',
   border: '1px solid var(--color-surface-border)',
-  maxWidth: '92ch',
+  maxWidth: '100%',
 };
 
 function SectionRule({ label }: { label: string }) {
@@ -147,7 +147,7 @@ export function Dk8sLogSettings() {
         <h2 className="text-[15px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
           Logs
         </h2>
-        <p className="text-[11.5px] leading-relaxed" style={{ color: 'var(--color-text-secondary)', maxWidth: '78ch' }}>
+        <p className="text-[11.5px] leading-relaxed" style={{ color: 'var(--color-text-secondary)', maxWidth: '110ch' }}>
           Every &ldquo;how many lines&rdquo; dropdown in dk8s offers the numbers set here.
           Separate them with commas; they are sorted for you, and anything that is not a
           number of lines is dropped. Nothing above {MAX_LINES.toLocaleString()} &mdash; one

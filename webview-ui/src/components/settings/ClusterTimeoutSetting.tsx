@@ -63,7 +63,7 @@ export function ClusterTimeoutSetting() {
            style={{
              background: 'var(--color-surface)',
              border: '1px solid var(--color-surface-border)',
-             maxWidth: '92ch',
+             maxWidth: '100%',
            }}>
         <div className="flex items-start gap-3">
           <ClockIcon size={15} style={{ color: ACCENT, marginTop: 2, flexShrink: 0 }} />

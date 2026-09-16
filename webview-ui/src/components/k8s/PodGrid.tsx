@@ -298,7 +298,10 @@ function FavoriteStar({ pod, size = 13 }: { pod: PodSummary; size?: number }) {
             id: c.mode,
             label: c.label,
             description: c.detail,
-            icon: <StarIcon size={13} filled={c.mode === 'workload'} />,
+            /* Both hollow: neither is starred yet, and a filled one beside a
+               hollow one reads as "this is already on" rather than as two
+               choices. */
+            icon: <StarIcon size={13} />,
             onClick: () => { toggleFavorite(c.key); setAsking(null); },
           }))}
         />

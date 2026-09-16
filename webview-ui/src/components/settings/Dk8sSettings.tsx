@@ -31,7 +31,7 @@ function Toggle({ on, onChange, label, description, children }: {
            style={{
              background: 'var(--color-surface)',
              border: '1px solid var(--color-surface-border)',
-             maxWidth: '92ch',
+             maxWidth: '100%',
            }}>
       <input
         type="checkbox"
@@ -98,7 +98,7 @@ export function Dk8sClusterSettings() {
         </span>
       </div>
       <span className="text-[11.5px] leading-relaxed"
-            style={{ color: 'var(--color-text-muted)', maxWidth: '72ch' }}>
+            style={{ color: 'var(--color-text-muted)', maxWidth: '110ch' }}>
         How Dk8s — Daakia K8s — behaves against a live cluster.
       </span>
 
@@ -131,7 +131,7 @@ export function Dk8sClusterSettings() {
         <div className="flex-1 h-px" style={{ background: 'var(--color-surface-border)' }} />
       </div>
       <span className="text-[11px] leading-relaxed -mt-2"
-            style={{ color: 'var(--color-text-muted)', maxWidth: '72ch' }}>
+            style={{ color: 'var(--color-text-muted)', maxWidth: '110ch' }}>
         Everything in this group is about the cost to the pod, not to you.
       </span>
 
@@ -171,7 +171,7 @@ export function Dk8sClusterSettings() {
       </Toggle>
 
       <span className="text-[10.5px] leading-relaxed"
-            style={{ color: 'var(--color-text-muted)', maxWidth: '72ch' }}>
+            style={{ color: 'var(--color-text-muted)', maxWidth: '110ch' }}>
         Thread dumps, class histograms, flight recordings and connection snapshots are
         never blocked by this — none of them writes a file the size of the heap.
       </span>

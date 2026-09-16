@@ -28,7 +28,7 @@ function Toggle({ on, onChange, label, description, accent }: {
            style={{
              background: 'var(--color-surface)',
              border: '1px solid var(--color-surface-border)',
-             maxWidth: '92ch',
+             maxWidth: '100%',
            }}>
       <input
         type="checkbox"
@@ -93,7 +93,7 @@ function SurfaceGeneral({ surface, name, what, accent, icon, open, children }: {
         </button>
       </div>
       <span className="text-[11.5px] leading-relaxed"
-            style={{ color: 'var(--color-text-muted)', maxWidth: '72ch' }}>
+            style={{ color: 'var(--color-text-muted)', maxWidth: '110ch' }}>
         {what}
       </span>
 
@@ -121,7 +121,7 @@ function SurfaceGeneral({ surface, name, what, accent, icon, open, children }: {
                background: 'var(--color-surface)',
                border: '1px solid var(--color-surface-border)',
                color: 'var(--color-text-secondary)',
-               maxWidth: '92ch',
+               maxWidth: '100%',
              }}>
           <KeyboardIcon size={14} style={{ marginTop: 1, flexShrink: 0 }} />
           <span>
