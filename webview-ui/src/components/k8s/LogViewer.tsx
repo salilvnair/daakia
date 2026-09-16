@@ -24,7 +24,8 @@ import {
   WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon, CloseIcon,
   ChevronLeftIcon, SidebarLeftIcon,
 } from '../../icons';
-import { useK8sStore, type LogLevel } from '../../store/k8s-store';
+import { type LogLevel } from '../../store/k8s-store';
+import { useLogSource } from './log-source';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { buildFacets, filterTermFor } from './log-facets';
@@ -405,7 +406,7 @@ function DensityRibbon({
 // ── Level chips ─────────────────────────────────────────────────────────────
 
 function LevelChips() {
-  const { logs, logLevels, toggleLogLevel } = useK8sStore();
+  const { logs, logLevels, toggleLogLevel } = useLogSource();
   const counts = useMemo(() => levelCounts(logs), [logs]);
 
   return (
@@ -551,7 +552,11 @@ export function LogViewer() {
     setLogFilter, setLogFollow, setLogLive, setLogTail, setLogDirection,
     setLogSince, setLogWrap, setLogPrevious, setLogSelection,
     fetchLogs, openLogExport, logExportOpen, closeLogExport,
-  } = useK8sStore();
+    /* From the source, not the store: a results page clears ITS filters and
+       closes ITS view, and reaching past the source for either would act on
+       whichever pod happened to be open behind it. */
+    clearFieldFilters, closeDetail, isSnapshot,
+  } = useLogSource();
 
   /* Every "how many lines" ladder in this view, from Settings → DK8S → Logs. */
   const prefs = useUiStateStore(p => p.prefs);
@@ -695,7 +700,7 @@ export function LogViewer() {
         // Clears both kinds. Two ways to be filtered and one way out of it —
         // someone who wants the whole log back does not care which is which.
         clear: anyFilter
-          ? () => { setLogFilter(''); useK8sStore.getState().clearFieldFilters(); }
+          ? () => { setLogFilter(''); clearFieldFilters(); }
           : undefined,
       };
     };
@@ -1147,7 +1152,7 @@ export function LogViewer() {
       if (action === 'search:here') {
         setLogFilter(term);
       } else if (action === 'search:everywhere') {
-        useK8sStore.getState().closeDetail();
+        closeDetail();
         useDk8sSearchStore.getState().searchEverywhere(term);
       }
       window.getSelection()?.removeAllRanges();
@@ -1156,7 +1161,7 @@ export function LogViewer() {
     return () => el.removeEventListener('daakia:selection-action', onAction);
   }, [setLogFilter]);
 
-  const logLineNumbers = useK8sStore(s => s.logLineNumbers);
+  const { logLineNumbers } = useLogSource();
   const containers = detail?.containers ?? [];
   const oldest = logs.find(l => l.ts !== undefined)?.ts;
 
@@ -1294,6 +1299,18 @@ export function LogViewer() {
                     title={foldTraces ? 'Stack traces are folded' : 'Stack traces shown in full'}
                     icon={<LayersIcon size={IconSize.item} />} />
 
+        {/*
+          Everything that reaches back to the cluster.
+
+          Hidden, not disabled, when these lines are a result that already
+          happened: a search finished at 1:16 cannot be followed, refetched,
+          asked for a previous run or given a different window, and a greyed
+          row of controls that can never work is clutter pretending to be a
+          feature. What is left — the filter, the levels, wrap, folding,
+          download, Analyze — all works on lines, and works the same either way.
+        */}
+        {!isSnapshot && (
+          <>
         <Sep />
 
         {/* Which end, and how much. Nothing is fetched until Fetch is pressed —
@@ -1426,6 +1443,8 @@ export function LogViewer() {
             }} />
           }
         />
+          </>
+        )}
 
         <Sep />
 
@@ -1593,7 +1612,7 @@ export function LogViewer() {
             filters={logFieldFilters}
             onFlip={f => addFieldFilter(f)}
             onRemove={f => removeFieldFilter(f.field, f.value)}
-            onClearAll={() => useK8sStore.getState().clearFieldFilters()}
+            onClearAll={() => clearFieldFilters()}
           />
 
           <div
@@ -1854,9 +1873,18 @@ export function LogViewer() {
           being avoided — so the denominator is the request, which is a fact,
           rather than the total, which would be a guess.
         */}
+        {/*
+          A snapshot has no tail to be a fraction of.
+
+          "161 of the last 0 lines · at the limit" is what the live wording
+          becomes when there was never a `--tail` — three claims, all false,
+          about a result that simply is what it is.
+        */}
         <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-          {logs.length.toLocaleString()} of the last {logTail.toLocaleString()} lines
-          {logs.length >= logTail && ' · at the limit'}
+          {isSnapshot
+            ? `${logs.length.toLocaleString()} line${logs.length === 1 ? '' : 's'}`
+            : `${logs.length.toLocaleString()} of the last ${logTail.toLocaleString()} lines`}
+          {!isSnapshot && logs.length >= logTail && ' · at the limit'}
           {logs.length > 0 && ` · ${(bufferBytes(logs) / 1024 / 1024).toFixed(1)} MB`}
           {oldest !== undefined && ` · oldest ${formatLogTime(oldest)}`}
         </span>
@@ -1867,9 +1895,10 @@ export function LogViewer() {
         )}
         <div className="flex-1" />
         <span>
-          {logLive
-            ? 'following — new lines append as they arrive'
-            : `snapshot of the last ${logTail} lines`}
+          {isSnapshot ? (logDetail ?? 'a search result')
+            : logLive
+              ? 'following — new lines append as they arrive'
+              : `snapshot of the last ${logTail} lines`}
         </span>
         {logLive && !logFollow && total > 0 && (
           <button
@@ -1888,7 +1917,7 @@ export function LogViewer() {
 }
 
 function ContainerChip({ name }: { name: string }) {
-  const { logContainer, setLogContainer } = useK8sStore();
+  const { logContainer, setLogContainer } = useLogSource();
   const on = logContainer === name;
   return (
     <ButtonView

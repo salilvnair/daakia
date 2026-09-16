@@ -1,584 +1,424 @@
 /**
- * A search result, on a page you can actually read.
+ * A search result, in the pod detail's own clothes.
  *
- * ── Why a page and not the dialog ──
+ * ── Why it is not a lookalike ──
  *
- * The dialog answers "did it find anything". Reading is the thing people do
- * next, and a few hits per pod in a scrolling box inside a modal is a bad
- * place to do it: the pods you searched are off screen, the filter that would
- * narrow it does not exist, and closing the dialog to look at something loses
- * the answer.
+ * The first version of this page reimplemented the log view: its own rows, its
+ * own filter box, its own rail. It looked approximately right and was wrong in
+ * every detail — no density ribbon, no field chips, no selection menu, no
+ * Analyze, a toolbar that shared nothing with the one next door. A lookalike
+ * is a promise to keep two implementations in step forever, and nobody keeps
+ * it.
  *
- * So the result comes out into a tab of its own, in the log view's own clothes
- * — same rows, same level colours, same stack folding, same field rail — and
- * the reader keeps the pods tab beside it.
+ * So this is the real one. `LogViewer` takes its lines from a `LogSource` now,
+ * defaulting to the pod store, and this provides a source built from the
+ * result instead. Every control in that toolbar is the same control, because
+ * it IS the same component — and the header and tab strip are the pod
+ * detail's, for the same reason.
  *
- * ── What is deliberately the same ──
+ * ── What is different, and why it has to be ──
  *
- * Everything about a line. `filterLines`, `foldStackTraces`, `levelColor`,
- * `displayText` and `frameOrigin` are the log view's, imported rather than
- * reimplemented, so a stack trace folds here exactly as it folds there and a
- * format's parsed message is what gets drawn in both. A second implementation
- * of any of that would drift within a week.
- *
- * ── What is deliberately different ──
- *
- * The lines came from several pods, so each one says which. And the search's
- * own hits are highlighted differently from the page filter's: the thing you
- * searched the cluster for is the point of the page, and a filter you typed
- * afterwards is a way of getting around it.
+ * The lines came from several pods and the search already happened. So there
+ * is no Shell — a shell goes into one pod — and everything that reaches back
+ * to the cluster is hidden by `isSnapshot`. What is left works on lines, and
+ * works the same either way.
  */
-import { useMemo, useState } from 'react';
-import { ButtonView, TextInputView } from '@salilvnair/dui';
+import { useEffect, useMemo } from 'react';
+import { IconSize } from '@salilvnair/dui';
 import {
-  filterLines, foldStackTraces, levelColor, levelLabel, displayText,
-  frameOrigin, formatLogTime, LEVEL_ORDER, type FieldFilter,
-} from './log-view';
-import { buildFacets, facetLabel } from './log-facets';
-import {
-  resultLines, podsLabel, podsIn, timings, totals, levelsIn, type ResultLine,
-} from './search-results';
+  ChevronLeftIcon, FileTextIcon, LayersIcon, SparkleIcon, SearchIcon,
+  ServerIcon, ClockIcon, NetworkIcon,
+} from '../../icons';
+import { LogViewer } from './LogViewer';
+import { LogSourceProvider, type LogSource } from './log-source';
 import { useResultTabStore } from '../../store/dk8s-result-tab-store';
-import { useK8sStore, type LogLevel } from '../../store/k8s-store';
+import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import { useTabsStore } from '../../store/tabs-store';
-import { ACCENT } from './tone';
-import { SearchIcon, CloseIcon, FileTextIcon, TimelineIcon } from '../../icons';
+import { useDk8sAiStore } from '../../store/dk8s-ai-store';
+import { AiSplit } from './AiAnswerPanel';
+import { resultLines, podsLabel, podsIn, timings, totals } from './search-results';
+import { ACCENT, AI as AI_ACCENT } from './tone';
 
-/**
- * The colour a matched line's query text takes.
- *
- * Not the accent. The accent marks the line — the row's rule and its text —
- * and a highlight in the same colour inside a line already wearing it is
- * invisible. Orange against the accent's teal is the pairing the search dialog
- * already uses for the same two jobs.
- */
-const HIT_BG = 'color-mix(in srgb, var(--color-warning) 42%, transparent)';
+/* ── The pod detail's own header pieces, so the two read as one product ── */
 
-/** A dim row of everything the search was, for the header. */
-function Meta({ children }: { children: React.ReactNode }) {
+function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-      {children}
-    </span>
-  );
-}
-
-function Highlighted({ text, hits, search }: {
-  text: string; hits?: [number, number][]; search?: boolean;
-}) {
-  if (!hits?.length) return <>{text}</>;
-  const out: React.ReactNode[] = [];
-  let at = 0;
-  hits.forEach(([from, to], i) => {
-    if (from > at) out.push(text.slice(at, from));
-    out.push(
-      <mark key={i} style={{
-        background: search ? HIT_BG : `color-mix(in srgb, ${ACCENT} 34%, transparent)`,
-        color: 'var(--color-text-primary)', borderRadius: 2, padding: '0 1px',
-      }}>
-        {text.slice(from, to)}
-      </mark>,
-    );
-    at = to;
-  });
-  if (at < text.length) out.push(text.slice(at));
-  return <>{out}</>;
-}
-
-function LevelTag({ level }: { level: LogLevel }) {
-  if (level === 'other') return <span className="shrink-0" style={{ width: 42 }} />;
-  return (
-    <span className="shrink-0 select-none uppercase"
-          style={{ width: 42, color: levelColor(level), fontWeight: 600, fontSize: '10.5px' }}>
-      {level === 'debug' ? 'DEBUG' : level}
-    </span>
-  );
-}
-
-/* ── The left rail ───────────────────────────────────────────────────────── */
-
-function Rail({ lines, all }: { lines: ResultLine[]; all: ResultLine[] }) {
-  const {
-    levels, setLevels, pods, setPods, fields, addField, removeField,
-  } = useResultTabStore();
-
-  /* Counted over what the OTHER filters left, not over the whole result: a
-     facet that still offers 400 of a pod you have already filtered out is
-     offering to narrow something that is not on screen. */
-  const podCounts = useMemo(() => {
-    const out = new Map<string, number>();
-    for (const l of lines) if (!l.context) out.set(l.pod, (out.get(l.pod) ?? 0) + 1);
-    return out;
-  }, [lines]);
-
-  const counts = useMemo(() => levelsIn(lines), [lines]);
-  const facets = useMemo(() => buildFacets(lines), [lines]);
-  const everyPod = useMemo(() => podsIn2(all), [all]);
-
-  return (
-    <div className="flex flex-col gap-4 overflow-y-auto px-3 py-3 shrink-0 dk8s-no-scrollbar"
-         style={{
-           width: 232,
-           borderRight: '1px solid var(--color-surface-border)',
-           background: 'var(--color-panel)',
-         }}>
-      <Section title="level">
-        <div className="flex flex-wrap gap-1">
-          {LEVEL_ORDER.filter(l => counts[l] > 0).map((level) => {
-            const on = levels.includes(level);
-            return (
-              <button
-                key={level} type="button"
-                onClick={() => setLevels(on ? levels.filter(x => x !== level) : [...levels, level])}
-                className="text-[10px] px-1.5 py-0.5 rounded cursor-pointer uppercase"
-                style={{
-                  color: on ? 'var(--color-text-primary)' : levelColor(level),
-                  background: on
-                    ? `color-mix(in srgb, ${levelColor(level)} 30%, transparent)`
-                    : `color-mix(in srgb, ${levelColor(level)} 10%, transparent)`,
-                  border: `1px solid color-mix(in srgb, ${levelColor(level)} ${on ? 60 : 24}%, transparent)`,
-                  fontWeight: 600,
-                }}
-              >
-                {levelLabel(level)} {counts[level]}
-              </button>
-            );
-          })}
-        </div>
-      </Section>
-
-      {everyPod.length > 1 && (
-        <Section title={`pods · ${everyPod.length}`}>
-          <div className="flex flex-col gap-0.5">
-            {everyPod.map((pod) => {
-              const on = pods.includes(pod);
-              const n = podCounts.get(pod) ?? 0;
-              return (
-                <button
-                  key={pod} type="button"
-                  onClick={() => setPods(on ? pods.filter(p => p !== pod) : [...pods, pod])}
-                  className="flex items-baseline gap-2 text-[10.5px] px-1.5 py-1 rounded cursor-pointer text-left"
-                  style={{
-                    background: on ? `color-mix(in srgb, ${ACCENT} 16%, transparent)` : 'transparent',
-                    color: on ? ACCENT : 'var(--color-text-secondary)',
-                    fontFamily: 'var(--font-mono, monospace)',
-                    /* A pod the search reached and found nothing in is still
-                       worth showing — "it looked and there was nothing" is an
-                       answer, and hiding the row loses it. */
-                    opacity: n ? 1 : 0.5,
-                  }}
-                >
-                  <span className="truncate flex-1">{pod}</span>
-                  <span className="shrink-0" style={{ fontVariantNumeric: 'tabular-nums' }}>{n}</span>
-                </button>
-              );
-            })}
-          </div>
-        </Section>
-      )}
-
-      {facets.map(f => (
-        <Section key={f.field} title={facetLabel(f.field)}>
-          <div className="flex flex-col gap-0.5">
-            {f.values.slice(0, 12).map(v => {
-              const on = fields.some(x => x.field === f.field && x.value === v.value);
-              return (
-                <button
-                  key={v.value} type="button"
-                  onClick={() => {
-                    const spec: FieldFilter = { field: f.field, value: v.value, mode: 'include' };
-                    if (on) removeField(spec); else addField(spec);
-                  }}
-                  className="flex items-baseline gap-2 text-[10.5px] px-1.5 py-1 rounded cursor-pointer text-left"
-                  style={{
-                    background: on ? `color-mix(in srgb, ${ACCENT} 16%, transparent)` : 'transparent',
-                    color: on ? ACCENT : 'var(--color-text-secondary)',
-                    fontFamily: 'var(--font-mono, monospace)',
-                  }}
-                >
-                  <span className="truncate flex-1">{v.value}</span>
-                  <span className="shrink-0" style={{ fontVariantNumeric: 'tabular-nums' }}>{v.count}</span>
-                </button>
-              );
-            })}
-          </div>
-        </Section>
-      ))}
-    </div>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-[9.5px] uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>
-        {title}
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[9px] uppercase tracking-wider text-[var(--color-text-muted)]">{label}</span>
+      <span className="text-[11.5px]" style={{ color: color ?? 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+        {value}
       </span>
+    </div>
+  );
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline gap-3 py-1">
+      <span className="text-[9.5px] uppercase tracking-wider shrink-0"
+            style={{ width: 96, color: 'var(--color-text-muted)' }}>
+        {label}
+      </span>
+      <span className="text-[11.5px] min-w-0" style={{ color: 'var(--color-text-primary)' }}>
+        {children}
+      </span>
+    </div>
+  );
+}
+
+function Card({ title, Icon, children }: {
+  title: string; Icon: typeof LayersIcon; children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1 px-3.5 py-3 rounded-lg"
+         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)' }}>
+      <div className="flex items-center gap-1.5 mb-1">
+        <Icon size={IconSize.action} color={ACCENT} />
+        <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>
+          {title}
+        </span>
+      </div>
       {children}
     </div>
   );
 }
 
-/** Every pod in a result set, including the ones that matched nothing. */
-function podsIn2(lines: ResultLine[]): string[] {
-  return [...new Set(lines.map(l => l.pod))];
-}
+const TABS = [
+  { id: 'overview' as const, label: 'Overview', Icon: LayersIcon },
+  { id: 'logs' as const, label: 'Logs', Icon: FileTextIcon },
+];
 
-/* ── Overview ────────────────────────────────────────────────────────────── */
+/* ── Overview ── */
 
-function Overview() {
-  const { groups, query, at, archiveRoots, searched } = useResultTabStore();
+function SearchOverview() {
+  const { query, groups, at, scanned, archiveRoots, searched, regex, caseSensitive } =
+    useResultTabStore();
   const rows = useMemo(() => timings(groups, searched), [groups, searched]);
+  const sums = useMemo(() => totals(groups, searched), [groups, searched]);
 
   const cell: React.CSSProperties = {
-    padding: '7px 10px', textAlign: 'left', fontSize: 11,
+    padding: '6px 10px', textAlign: 'left', fontSize: 11,
     borderBottom: '1px solid var(--color-surface-border)',
   };
 
   return (
-    <div className="flex-1 overflow-auto px-5 py-4 flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <span className="text-[12.5px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-          What this search did
-        </span>
-        <Meta>
-          <code style={{ fontFamily: 'var(--font-mono, monospace)' }}>{query}</code>
-          {' · '}{new Date(at).toLocaleString()}
-        </Meta>
+    <div className="flex-1 overflow-auto px-4 py-3 flex flex-col gap-3 h-full min-h-0">
+      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
+        <Card title="the search" Icon={SearchIcon}>
+          <Row label="term">
+            <code style={{ fontFamily: 'var(--font-mono, monospace)', color: ACCENT }}>{query}</code>
+          </Row>
+          <Row label="matched">
+            <span style={{ color: sums.matches ? ACCENT : 'var(--color-text-muted)', fontWeight: 600 }}>
+              {sums.matches.toLocaleString()}
+            </span>
+            {' in '}{sums.podsWithHits} of {sums.pods} pod{sums.pods === 1 ? '' : 's'}
+          </Row>
+          <Row label="read">
+            {/* Only the half that counts lines. `grep` inside a pod reports
+                what matched and never how much it read. */}
+            {scanned ? `${scanned.toLocaleString()} lines` : 'not counted'}
+          </Row>
+          <Row label="ran at">{new Date(at).toLocaleString()}</Row>
+        </Card>
+
+        <Card title="how it looked" Icon={LayersIcon}>
+          <Row label="matching">{regex ? 'regular expression' : 'literal text'}</Row>
+          <Row label="case">{caseSensitive ? 'matched exactly' : 'ignored'}</Row>
+          <Row label="live logs">what each pod is printing now</Row>
+          <Row label="archives">
+            {archiveRoots.length
+              ? <span style={{ color: 'var(--color-text-secondary)' }}>
+                  read with <code style={{ fontFamily: 'var(--font-mono, monospace)' }}>grep</code> inside the pod
+                </span>
+              : <span style={{ color: 'var(--color-text-muted)' }}>none configured</span>}
+          </Row>
+        </Card>
       </div>
 
       {archiveRoots.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <span className="text-[9.5px] uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>
-            archive paths, inside the pods
-          </span>
+        <Card title="archive paths, inside the pods" Icon={ServerIcon}>
           {archiveRoots.map(r => (
-            <code key={r} className="text-[11px]"
+            <code key={r} className="text-[11px] block py-0.5"
                   style={{ fontFamily: 'var(--font-mono, monospace)', color: 'var(--color-text-secondary)' }}>
               {r}
             </code>
           ))}
-        </div>
+        </Card>
       )}
 
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ color: 'var(--color-text-muted)', fontSize: 9.5, textTransform: 'uppercase' }}>
-            <th style={cell}>Pod</th>
-            <th style={cell}>Namespace</th>
-            <th style={cell}>Where</th>
-            <th style={cell}>Hits</th>
-            <th style={cell}>Read</th>
-            <th style={cell}>Took</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={`${r.pod}:${r.source}:${i}`}>
-              <td style={{ ...cell, fontFamily: 'var(--font-mono, monospace)', color: 'var(--color-text-primary)' }}>
-                {r.pod}
-                {r.error && (
-                  <div className="text-[10.5px]" style={{ color: 'var(--color-warning)' }}>{r.error}</div>
-                )}
-              </td>
-              <td style={{ ...cell, color: 'var(--color-text-secondary)' }}>{r.namespace}</td>
-              <td style={{ ...cell, color: 'var(--color-text-secondary)' }}>
-                {r.source === 'archive' ? 'archive, in pod' : 'live log'}
-              </td>
-              <td style={{ ...cell, color: r.matched ? ACCENT : 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-                {r.matched.toLocaleString()}
-              </td>
-              <td style={{ ...cell, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-                {/* `grep` in a pod says what matched and never how much it
-                    read, so this says so rather than printing a 0 nobody
-                    measured. */}
-                {r.scannedKnown ? `${r.scanned.toLocaleString()} lines`
-                  : r.matched ? 'grep in pod' : 'no matches'}
-              </td>
-              <td style={{ ...cell, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-                {r.elapsedMs !== undefined ? `${(r.elapsedMs / 1000).toFixed(1)}s` : '—'}
-              </td>
+      <Card title="pods it searched" Icon={NetworkIcon}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ color: 'var(--color-text-muted)', fontSize: 9.5, textTransform: 'uppercase' }}>
+              <th style={cell}>Pod</th>
+              <th style={cell}>Namespace</th>
+              <th style={cell}>Where</th>
+              <th style={cell}>Hits</th>
+              <th style={cell}>Read</th>
+              <th style={cell}>Took</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={`${r.pod}:${r.source}:${i}`}>
+                <td style={{ ...cell, fontFamily: 'var(--font-mono, monospace)', color: 'var(--color-text-primary)' }}>
+                  {r.pod}
+                  {r.error && (
+                    <div className="text-[10.5px]" style={{ color: 'var(--color-warning)' }}>{r.error}</div>
+                  )}
+                </td>
+                <td style={{ ...cell, color: 'var(--color-text-secondary)' }}>{r.namespace}</td>
+                <td style={{ ...cell, color: 'var(--color-text-secondary)' }}>
+                  {r.source === 'archive' ? 'archive, in pod' : 'live log'}
+                </td>
+                <td style={{ ...cell, color: r.matched ? ACCENT : 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                  {r.matched.toLocaleString()}
+                </td>
+                <td style={{ ...cell, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                  {r.scannedKnown ? `${r.scanned.toLocaleString()} lines`
+                    : r.matched ? 'grep in pod' : 'no matches'}
+                </td>
+                <td style={{ ...cell, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                  {r.elapsedMs !== undefined ? `${(r.elapsedMs / 1000).toFixed(1)}s` : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+
+      <Card title="what came back" Icon={ClockIcon}>
+        <span className="text-[11.5px]" style={{ color: 'var(--color-text-muted)' }}>
+          {sums.matches
+            ? 'Every matching line, with what surrounded it, is on the Logs tab.'
+            : 'Nothing matched. The pods and paths above are where it looked — an '
+              + 'empty result and a wrong path are the same empty list without them.'}
+        </span>
+      </Card>
     </div>
   );
 }
 
-/* ── The page ────────────────────────────────────────────────────────────── */
+/* ── The page ── */
 
 export function SearchResultsPage() {
   const {
-    query, groups, at, scanned, archiveRoots,
-    tab, setTab, filter, setFilter, levels, pods, fields, wrap, setWrap, searched,
+    query, groups, at, scanned, searched,
+    tab, setTab, filter, setFilter, levels, setLevels,
+    fields, addField, removeField, wrap, setWrap,
   } = useResultTabStore();
   const openDk8sTab = useTabsStore(s => s.openDk8sTab);
   const logLineNumbers = useK8sStore(s => s.logLineNumbers);
+  const aiOpen = useDk8sAiStore(s => s.open);
+  const openAi = useDk8sAiStore(s => s.openPanel);
+  const closeAi = useDk8sAiStore(s => s.closePanel);
+  const answers = useDk8sAiStore(s => s.answers);
 
-  const all = useMemo(() => resultLines(groups), [groups]);
-  /* Named from what was searched, so a pod with no hits is still in the
-     header's list — it is part of what this page is a record of. */
+  const lines = useMemo(() => resultLines(groups), [groups]);
   const podNames = useMemo(
     () => [...new Set([...podsIn(groups), ...searched.map(s => s.pod)])],
     [groups, searched],
   );
   const sums = useMemo(() => totals(groups, searched), [groups, searched]);
 
-  /* The pod filter first, then everything the log view already knows how to
-     do — so `filterLines` sees only lines that are still in play. */
-  const scoped = useMemo(
-    () => (pods.length ? all.filter(l => pods.includes(l.pod)) : all),
-    [all, pods],
-  );
+  /*
+    Opening puts the search term in the filter box.
 
-  const shown = useMemo(() => filterLines(scoped, {
-    query: filter, levels, fields, contextLines: 0,
-  }) as ResultLine[], [scoped, filter, levels, fields]);
+    It is what the page is about, so it is what the box should say — and it
+    means the highlight, the hit counter and the step-between-matches arrows
+    all work on the term without a second mechanism beside them. Clearing it
+    shows every line that came back, neighbours included, which is the other
+    thing people want here.
+  */
+  useEffect(() => {
+    if (query) setFilter(query);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, at]);
 
-  const rows = useMemo(() => foldStackTraces(shown, true), [shown]);
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  /*
+    A pod-shaped stand-in for the thing these lines are about.
 
-  if (!groups.length) {
+    Export and Ask AI both want to name what they are describing. There is no
+    one pod to name, so this names the search — which is true, and better than
+    quietly attributing a result spanning twelve pods to whichever happened to
+    come back first.
+  */
+  const asPod = useMemo(() => ({
+    name: query || 'search',
+    namespace: [...new Set(searched.map(s => s.namespace))].join(', ') || '—',
+    context: groups[0]?.result.context ?? '',
+    uid: `search:${at}`,
+    phase: 'Search result',
+    ready: { current: sums.podsWithHits, total: sums.pods },
+    restarts: 0,
+    containers: [],
+    healthy: true,
+    deleting: false,
+  } as PodSummary), [query, searched, groups, at, sums]);
+
+  const source = useMemo(() => ({
+    logs: lines,
+    logStatus: 'ended',
+    logDetail: `${sums.matches} match${sums.matches === 1 ? '' : 'es'} across ${sums.pods} pods`,
+    logDropped: 0,
+    logFilter: filter,
+    logLevels: levels,
+    logRequestedAt: at,
+    logFieldFilters: fields,
+    addFieldFilter: addField,
+    removeFieldFilter: removeField,
+    clearFieldFilters: () => fields.forEach(removeField),
+    logFollow: false,
+    logLive: false,
+    logTail: 0,
+    logDirection: 'last',
+    logSince: 0,
+    logWrap: wrap,
+    logPrevious: false,
+    logFrom: undefined,
+    logTo: undefined,
+    logLineNumbers,
+    logContainer: undefined,
+    logExportOpen: false,
+    detail: asPod,
+    runtime: undefined,
+    setLogFilter: setFilter,
+    toggleLogLevel: (level: (typeof levels)[number]) => setLevels(
+      levels.includes(level) ? levels.filter(l => l !== level) : [...levels, level],
+    ),
+    setLogWrap: setWrap,
+    /* Everything below reaches the cluster, and a result that already happened
+       cannot. They exist because the view's shape says they do; `isSnapshot`
+       is what stops any of them being on screen. */
+    setLogFollow: () => {},
+    setLogLive: () => {},
+    setLogTail: () => {},
+    setLogDirection: () => {},
+    setLogSince: () => {},
+    setLogPrevious: () => {},
+    setLogWindow: () => {},
+    setLogSelection: () => {},
+    setLogContainer: () => {},
+    fetchLogs: () => {},
+    openLogExport: () => {},
+    closeLogExport: () => {},
+    closeDetail: openDk8sTab,
+    isSnapshot: true,
+    title: query,
+  } as unknown as LogSource), [
+    lines, filter, levels, fields, wrap, logLineNumbers, asPod, at, sums, query,
+    addField, removeField, setFilter, setLevels, setWrap, openDk8sTab,
+  ]);
+
+  if (!groups.length && !searched.length) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-2">
         <SearchIcon size={22} style={{ color: 'var(--color-text-muted)' }} />
         <span className="text-[12px]" style={{ color: 'var(--color-text-muted)' }}>
           No search has been opened here yet.
         </span>
-        <ButtonView label="Go to Dk8s" size="sm" variant="secondary"
-                    accentColor={ACCENT} color={ACCENT} onClick={openDk8sTab} />
+        <button type="button" onClick={openDk8sTab}
+                className="text-[11px] px-2.5 py-1.5 rounded-md cursor-pointer"
+                style={{
+                  color: ACCENT,
+                  background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
+                  border: 'none',
+                }}>
+          Go to Dk8s
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0" style={{ background: 'var(--color-panel)' }}>
-      {/* ── Header ── */}
-      <div className="flex flex-col gap-2 px-4 pt-3 pb-2"
-           style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        <div className="flex items-baseline gap-3 flex-wrap">
-          <span className="text-[13px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-            <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}>results for </span>
-            <code style={{ fontFamily: 'var(--font-mono, monospace)', color: ACCENT }}>{query}</code>
+    <div className="flex-1 flex flex-col min-h-0"
+         style={{ background: 'var(--color-bg, var(--color-surface))' }}>
+      {/* ── Header — the pod detail's, with a search where the pod goes ── */}
+      <div className="flex items-center gap-3 px-4 py-3 shrink-0"
+           style={{
+             borderBottom: '1px solid var(--color-surface-border)',
+             background: `linear-gradient(to right, color-mix(in srgb, ${ACCENT} 8%, transparent), transparent 60%)`,
+           }}>
+        <button type="button" onClick={openDk8sTab} title="Back to pods"
+                className="p-1 rounded cursor-pointer border-none bg-transparent">
+          <ChevronLeftIcon size={IconSize.nav} color="var(--color-text-secondary)" />
+        </button>
+
+        <span style={{ width: 7, height: 7, borderRadius: 7, background: ACCENT, boxShadow: `0 0 8px ${ACCENT}` }} />
+
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <span className="text-[13.5px] font-mono truncate" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
+            {query}
           </span>
-          {/* Every pod it touched, named the way the spec asked: the one you
-              recognise, and how many others came with it. */}
-          <Meta>
-            <code style={{ fontFamily: 'var(--font-mono, monospace)' }}>{podsLabel(podNames)}</code>
-          </Meta>
-          <span className="flex-1" />
-          <Meta>
-            {sums.matches.toLocaleString()} match{sums.matches === 1 ? '' : 'es'} in{' '}
-            {sums.podsWithHits} of {sums.pods} pods
-            {scanned > 0 && ` · ${scanned.toLocaleString()} lines scanned`}
-            {' · '}{new Date(at).toLocaleTimeString()}
-          </Meta>
+          <span className="text-[10.5px] text-[var(--color-text-muted)] truncate">
+            {podsLabel(podNames)} · {groups[0]?.result.context ?? ''}
+          </span>
         </div>
 
-        {archiveRoots.length > 0 && (
-          <Meta>
-            searched in-pod under{' '}
-            <code style={{ fontFamily: 'var(--font-mono, monospace)' }}>
-              {archiveRoots.join('  ')}
-            </code>
-          </Meta>
-        )}
-
-        {/* ── Subtabs ── */}
-        <div className="flex items-center gap-1">
-          {([['logs', 'Logs', <FileTextIcon key="l" size={12} />],
-             ['overview', 'Overview', <TimelineIcon key="o" size={12} />]] as const).map(([id, label, icon]) => (
-            <button
-              key={id} type="button"
-              onClick={() => setTab(id as 'logs' | 'overview')}
-              className="flex items-center gap-1.5 text-[11.5px] px-2.5 py-1 rounded-md cursor-pointer"
-              style={{
-                color: tab === id ? ACCENT : 'var(--color-text-secondary)',
-                background: tab === id ? `color-mix(in srgb, ${ACCENT} 14%, transparent)` : 'transparent',
-                fontWeight: tab === id ? 600 : 400,
-              }}
-            >
-              {icon}{label}
-            </button>
-          ))}
-
-          <span className="flex-1" />
-
-          {tab === 'logs' && (
-            <>
-              <div style={{ width: 260 }}>
-                <TextInputView
-                  value={filter} size="sm" accentColor={ACCENT}
-                  placeholder="narrow these results…"
-                  onChange={e => setFilter(e.target.value)}
-                  style={{ width: '100%' }}
-                />
-              </div>
-              <ButtonView
-                label={wrap ? 'No wrap' : 'Wrap'} size="sm" variant="secondary"
-                onClick={() => setWrap(!wrap)}
-              />
-              {filter && (
-                <ButtonView label="Clear" size="sm" variant="secondary"
-                            iconLeft={<CloseIcon size={10} />}
-                            onClick={() => setFilter('')} />
-              )}
-            </>
-          )}
+        <div className="flex items-center gap-5 ml-4 flex-wrap">
+          <Stat label="matches" value={sums.matches.toLocaleString()}
+                color={sums.matches ? ACCENT : undefined} />
+          <Stat label="pods" value={`${sums.podsWithHits}/${sums.pods}`} />
+          <Stat label="read" value={scanned ? `${scanned.toLocaleString()} lines` : '—'} />
+          <Stat label="ran" value={new Date(at).toLocaleTimeString()} />
         </div>
+
+        <div className="flex-1" />
+
+        {/* No Shell: a shell goes into one pod, and this is a result from
+            several. The AI toggle is the pod detail's own. */}
+        <button
+          type="button"
+          onClick={() => (aiOpen ? closeAi() : openAi())}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] cursor-pointer"
+          style={{
+            background: aiOpen ? `color-mix(in srgb, ${AI_ACCENT} 22%, transparent)` : 'transparent',
+            border: `1px solid ${aiOpen ? `color-mix(in srgb, ${AI_ACCENT} 55%, transparent)` : 'var(--color-surface-border)'}`,
+            color: aiOpen ? '#fff' : 'var(--color-text-secondary)',
+            fontWeight: aiOpen ? 600 : 400,
+          }}
+          title={aiOpen ? 'Hide AI analysis' : 'Show AI analysis'}
+        >
+          <SparkleIcon size={IconSize.action} color={AI_ACCENT} />
+          AI{answers.length > 0 && ` · ${answers.length}`}
+        </button>
       </div>
 
-      {tab === 'overview' ? <Overview /> : (
-        <div className="flex-1 flex min-h-0">
-          <Rail lines={shown} all={all} />
-
-          <div className="flex-1 overflow-auto font-mono min-h-0 px-3 py-2 dk8s-no-scrollbar"
-               style={{ fontSize: 11.5, lineHeight: '18px' }}>
-            {rows.length === 0 ? (
-              <div className="flex items-center justify-center h-full">
-                <span className="text-[12px]" style={{ color: 'var(--color-text-muted)', fontFamily: 'inherit' }}>
-                  {all.length
-                    ? `No line matches. ${all.length.toLocaleString()} hidden by the filter.`
-                    : 'This search matched nothing.'}
-                </span>
-              </div>
-            ) : rows.map((row, i) => {
-              const line = row.line as ResultLine;
-              const prev = i > 0 ? (rows[i - 1].line as ResultLine) : undefined;
-              /* A pod heading wherever the pod changes. The lines came from
-                 several logs, and a wall with no divisions is one log that
-                 contradicts itself. */
-              const newPod = !prev || prev.pod !== line.pod;
-              const isFrame = !!row.folded?.length || false;
-              const open = expanded.has(line.seq);
-
+      <AiSplit>
+        <div className="flex flex-col flex-1 min-w-0 min-h-0">
+          <div className="flex items-center gap-1 px-4 pt-2 shrink-0"
+               style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+            {TABS.map(({ id, label, Icon }) => {
+              const on = tab === id;
               return (
-                <div key={line.seq}>
-                  {newPod && (
-                    <div className="flex items-baseline gap-2 mt-3 mb-1 px-1.5 py-1 rounded"
-                         style={{
-                           background: `color-mix(in srgb, ${ACCENT} 9%, transparent)`,
-                           borderLeft: `2px solid ${ACCENT}`,
-                         }}>
-                      <span style={{ color: ACCENT, fontWeight: 600 }}>{line.pod}</span>
-                      <span style={{ color: 'var(--color-text-muted)' }}>{line.namespace}</span>
-                      <span className="text-[10px] px-1.5 rounded" style={{
-                        color: 'var(--color-text-muted)',
-                        background: 'color-mix(in srgb, var(--color-text-muted) 12%, transparent)',
-                      }}>
-                        {line.source === 'archive' ? (line.rel ?? 'archive') : 'live'}
-                      </span>
-                    </div>
-                  )}
-
-                  <div
-                    className="flex gap-2.5 items-start"
-                    style={{
-                      whiteSpace: wrap ? 'pre-wrap' : 'pre',
-                      /*
-                        The matched line is the point of the page, so it wears
-                        the accent; the lines kept beside it recede. Level still
-                        wins for an error, because "this is the line you
-                        searched for" and "this line is an error" are both worth
-                        knowing and the second is the more urgent.
-                      */
-                      background: line.level === 'error'
-                        ? 'color-mix(in srgb, var(--color-error) 7%, transparent)'
-                        : line.level === 'warn'
-                          ? 'color-mix(in srgb, var(--color-warning) 5%, transparent)'
-                          : !line.context
-                            ? `color-mix(in srgb, ${ACCENT} 6%, transparent)`
-                            : 'transparent',
-                      borderLeft: `2px solid ${
-                        line.level === 'error' ? 'var(--color-error)'
-                          : line.level === 'warn' ? 'var(--color-warning)'
-                            : !line.context ? ACCENT : 'transparent'
-                      }`,
-                      paddingLeft: 6,
-                    }}
-                  >
-                    {logLineNumbers && (
-                      <span className="shrink-0 select-none text-right"
-                            style={{
-                              width: 52, color: 'var(--color-text-muted)', opacity: 0.45,
-                              fontVariantNumeric: 'tabular-nums',
-                            }}>
-                        {/* The pod's own line number, not this page's. It is
-                            what a reader checks against `kubectl logs`. */}
-                        {line.sourceLine}
-                      </span>
-                    )}
-
-                    {line.ts !== undefined && (
-                      <span className="shrink-0 select-none"
-                            style={{ color: 'var(--color-text-muted)', opacity: 0.6, fontVariantNumeric: 'tabular-nums' }}>
-                        {formatLogTime(line.ts)}
-                      </span>
-                    )}
-                    <LevelTag level={line.level} />
-
-                    <span style={{
-                      color: line.level === 'error' ? 'var(--color-error)'
-                        : line.level === 'warn' ? 'var(--color-warning)'
-                          : line.level === 'debug' ? 'var(--color-text-muted)'
-                            : 'var(--color-text-primary)',
-                      /* A line kept for what it sits next to recedes, so the
-                         thing that was searched for is the thing that stands
-                         out — the same rule the search dialog uses. */
-                      opacity: line.context ? 0.55
-                        : frameOrigin(line.text) === 'library' ? 0.6 : 1,
-                      flex: wrap ? 1 : undefined,
-                      minWidth: 0,
-                    }}>
-                      <Highlighted
-                        text={displayText(line)}
-                        /* The page filter's hits when one is typed, the
-                           search's own otherwise — and they are coloured
-                           differently, because one is what you asked the
-                           cluster and the other is how you are getting around
-                           the answer. */
-                        hits={filter ? row.line.hits : line.hits}
-                        search={!filter}
-                      />
-                    </span>
-
-                    {isFrame && (
-                      <button
-                        type="button"
-                        onClick={() => setExpanded((s) => {
-                          const next = new Set(s);
-                          if (next.has(line.seq)) next.delete(line.seq); else next.add(line.seq);
-                          return next;
-                        })}
-                        className="shrink-0 text-[10px] px-1.5 rounded cursor-pointer"
-                        style={{
-                          color: 'var(--color-text-muted)',
-                          background: 'color-mix(in srgb, var(--color-text-muted) 10%, transparent)',
-                        }}
-                      >
-                        {open ? 'hide' : `+${row.folded!.length} frames`}
-                      </button>
-                    )}
-                  </div>
-
-                  {isFrame && open && row.folded!.map(f => (
-                    <div key={f.seq} className="flex gap-2.5 items-start"
-                         style={{ paddingLeft: 28, whiteSpace: wrap ? 'pre-wrap' : 'pre' }}>
-                      <span style={{
-                        color: 'var(--color-text-secondary)',
-                        opacity: frameOrigin(f.text) === 'library' ? 0.55 : 0.85,
-                      }}>
-                        {displayText(f)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <button
+                  key={id} type="button" data-tab={id}
+                  onClick={() => setTab(id)}
+                  className="flex items-center gap-1.5 px-3 py-2 text-[11.5px] cursor-pointer border-none bg-transparent transition-colors"
+                  style={{
+                    color: on ? ACCENT : 'var(--color-text-secondary)',
+                    fontWeight: on ? 600 : 400,
+                    borderBottom: `2px solid ${on ? ACCENT : 'transparent'}`,
+                    marginBottom: -1,
+                  }}
+                >
+                  <Icon size={IconSize.action} color={on ? ACCENT : 'var(--color-text-muted)'} />
+                  {label}
+                </button>
               );
             })}
           </div>
+
+          <div className="flex-1 min-h-0">
+            {tab === 'overview' ? <SearchOverview /> : (
+              <LogSourceProvider value={source}>
+                <LogViewer />
+              </LogSourceProvider>
+            )}
+          </div>
         </div>
-      )}
+      </AiSplit>
     </div>
   );
 }
