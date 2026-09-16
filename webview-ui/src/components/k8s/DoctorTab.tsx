@@ -20,6 +20,7 @@ import { type CollectResult, useDk8sDoctorStore, ARTIFACT_META, type ArtifactKin
 import { MemoryPanel } from './MemoryPanel';
 
 import { ACCENT } from './tone';
+import { markRuntime, RUNTIMES, RUNTIME_LABEL } from './mark-runtime';
 
 const ICONS: Record<string, typeof CpuIcon> = {
   threaddump: CpuIcon,
@@ -348,7 +349,7 @@ function formatBytes(n: number): string {
 }
 
 export function DoctorTab() {
-  const { actions, probeBusy, capabilities, runtime, detail } = useK8sStore();
+  const { actions, probeBusy, capabilities, runtime, detail, markTarget, runtimeMark } = useK8sStore();
   const { results: allResults, reveal } = useDk8sDoctorStore();
   const detailPod = useK8sStore(s => s.detail?.name);
 
@@ -405,8 +406,13 @@ export function DoctorTab() {
         <div className="flex items-center gap-1.5">
           <StethoscopeIcon size={IconSize.item} color={ACCENT} />
           <span className="text-[11px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
+            {/* "detected from user" is not English, and the difference between
+                what dk8s worked out and what somebody told it is worth
+                stating — one is a guess you might want to correct. */}
             {runtime && runtime.runtime !== 'unknown'
-              ? `${runtime.runtime} · detected from ${runtime.detectedFrom}`
+              ? runtime.detectedFrom === 'user'
+                ? `${runtime.runtime} · you marked ${runtimeMark?.label ?? 'this'}`
+                : `${runtime.runtime} · detected from ${runtime.detectedFrom}`
               : 'runtime not identified'}
           </span>
         </div>
@@ -442,11 +448,54 @@ export function DoctorTab() {
       <MemoryPanel />
 
       {actions.filter(a => a.id !== 'logs').length === 0 ? (
-        <span className="text-[11.5px] text-[var(--color-text-muted)] py-4 text-center">
-          Nothing to collect from a {runtime?.runtime ?? 'container'} beyond its logs.
-          {' '}Tag the pod's runtime with the <code className="font-mono">dk8s.daakia/runtime</code> label
-          {' '}if this is a JVM or Python workload dk8s did not recognise.
-        </span>
+        <div className="flex flex-col items-center gap-3 py-5 text-center">
+          <span className="text-[11.5px] text-[var(--color-text-muted)]" style={{ maxWidth: '62ch' }}>
+            Nothing to collect from a {runtime?.runtime ?? 'container'} beyond its logs.
+            {runtime?.runtime === 'unknown' && ' If you know what this is, say so and Doctor will '
+              + 'offer what that runtime can do.'}
+          </span>
+
+          {/*
+            The way out, on the screen that reports the problem.
+
+            This used to be one sentence telling you to add a Kubernetes label
+            — which needs write access to the cluster, a manifest change, a
+            review and a deploy, in order to tell a tool on your own machine
+            something you already know. It is still the right answer for a team
+            who want every colleague to get it, so it is still here, underneath
+            and as a footnote rather than as the only option.
+          */}
+          {markTarget && runtime?.runtime === 'unknown' && (
+            <div className="flex items-center gap-1.5 flex-wrap justify-center">
+              {RUNTIMES.map(r => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => markRuntime(markTarget, markTarget.workload ? 'workload' : 'pod', r)}
+                  className="text-[11px] px-2.5 py-1 rounded-full cursor-pointer"
+                  style={{
+                    color: ACCENT,
+                    background: `color-mix(in srgb, ${ACCENT} 12%, transparent)`,
+                    border: `1px solid color-mix(in srgb, ${ACCENT} 30%, transparent)`,
+                  }}
+                >
+                  It&rsquo;s {RUNTIME_LABEL[r]}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {markTarget && runtime?.runtime === 'unknown' && (
+            <span className="text-[10.5px] text-[var(--color-text-muted)]" style={{ maxWidth: '62ch' }}>
+              {markTarget.workload
+                ? `Marks ${markTarget.workload.kind} ${markTarget.workload.name}, so it still applies after a rollout. `
+                : 'Marks this pod. It has no owning workload, so there is nothing more stable to use. '}
+              Right-click the pod for the pod-only choice, or to change it later. For everybody on
+              your team at once, put <code className="font-mono">dk8s.daakia/runtime</code> on the pod
+              in the cluster instead.
+            </span>
+          )}
+        </div>
       ) : (
         <div className="flex flex-col gap-2">
           {actions.map(a => <ActionCard key={a.id} action={a} />)}

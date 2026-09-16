@@ -10,6 +10,15 @@ import { postMsg } from '../vscode';
 import type { FieldFilter } from '../components/k8s/log-view';
 import { logUiEvent } from './ui-audit-store';
 import { useUiStateStore } from './ui-state-store';
+import type { MarkTarget } from '../components/k8s/mark-runtime';
+
+/** What somebody said a pod's runtime is. Mirrors services/k8s/runtime-marks. */
+export interface RuntimeMark {
+  runtime: string;
+  at: number;
+  scope: 'workload' | 'pod';
+  label: string;
+}
 
 /** Same shape as `rest.subtab.<id>` and friends — see setScopedPref. */
 const DETAIL_TAB_PREF = 'dk8s.detailTab.';
@@ -633,6 +642,16 @@ interface K8sState {
   describeBusy: boolean;
   capabilities?: PodCapabilities;
   runtime?: { runtime: string; confidence: number; detectedFrom: string };
+  /**
+   * What somebody marked this as, if they did.
+   *
+   * Separate from `runtime` on purpose: `runtime` is the answer in force and
+   * already carries the mark when there is one, but the screen also has to say
+   * whether it was told or worked it out, and offer to change it.
+   */
+  runtimeMark?: RuntimeMark;
+  /** What a mark would be attached to — resolved on the host from the spec. */
+  markTarget?: MarkTarget;
   actions: PodAction[];
   probeBusy: boolean;
   /**
@@ -1593,6 +1612,9 @@ export const useK8sStore = create<K8sState>((set, get) => ({
           actions: (msg.actions as PodAction[]) ?? [],
           memory: msg.memory as MemoryProfile | undefined,
           safety: msg.safety as HeapDumpSafety | undefined,
+          /* What somebody said this is, and what a menu would mark. */
+          runtimeMark: msg.mark as RuntimeMark | undefined,
+          markTarget: msg.markTarget as MarkTarget | undefined,
         });
         break;
       }

@@ -29,6 +29,7 @@ import {
 import { favoriteKey, useFavoriteKeys, toggleFavorite } from '../../store/dk8s-favorites-store';
 
 import { ACCENT } from './tone';
+import { markRuntimeItems, targetOf } from './mark-runtime';
 
 /*
   The diagnostics offered here, in the order the Doctor tab lists them, with
@@ -87,6 +88,9 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
   const menuProbe = useK8sStore(s => s.menuProbe);
   const guardHeapDump = useK8sStore(s => s.guardHeapDump);
   const access = useK8sStore(s => s.access);
+  const detail = useK8sStore(s => s.detail);
+  const runtimeMark = useK8sStore(s => s.runtimeMark);
+  const contextName = useK8sStore(s => s.context);
   const collect = useDk8sDoctorStore(s => s.collect);
   const running = useDk8sDoctorStore(s => s.running);
   const favorites = useFavoriteKeys();
@@ -102,6 +106,9 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
     // about this one. Anything else would show one pod's capabilities under
     // another pod's name.
     const probe = menuProbe?.pod === pod.name ? menuProbe : undefined;
+    /* Only for the pod that is open — a row's menu has not been probed, so it
+       offers the marks without claiming to know what is already set. */
+    const currentMark = detail?.name === pod.name ? runtimeMark : undefined;
     const checking = !probe || probe.busy;
 
     const doctor: ContextMenuItem[] = DOCTOR.map(({ id, icon }) => {
@@ -205,6 +212,16 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
         onClick: () => { openShellFor(pod); onClose(); },
       },
       { id: 'sep-2', label: '', separator: true },
+      /*
+        What this pod is, when dk8s could not tell.
+
+        Here rather than only in Doctor because this is where you are when you
+        notice: the pod list is the screen you scan, and being sent to open a
+        pod, read a tab and find a sentence about a Kubernetes label is three
+        steps to say one thing you already know.
+      */
+      ...markRuntimeItems(targetOf(pod, contextName ?? ''), currentMark),
+      { id: 'sep-mark', label: '', separator: true },
       {
         id: 'copy',
         label: 'Copy',
@@ -282,7 +299,7 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
         },
       },
     ];
-  }, [pod, favorites, selected, menuProbe, guardHeapDump, access, running,
+  }, [pod, favorites, selected, menuProbe, guardHeapDump, access, running, detail, runtimeMark, contextName,
     beginSelection, togglePodSelected, copyPodText, openShellFor, collect,
     onClose, onConfirmUnfavorite, onOpen]);
 

@@ -109,7 +109,7 @@ import {
   handleDk8sLogsClose,
   handleDk8sDescribe,
   handleDk8sShell,
-  handleDk8sProbePod,
+  handleDk8sProbePod, handleDk8sMarkRuntime,
   handleDk8sAsk, handleDk8sCollect, handleDk8sAnalyze, handleDk8sRevealArtifacts,
 } from './handlers/k8s-handler';
 import {
@@ -714,6 +714,9 @@ export class MainPanel {
         break;
       case 'dk8s:probePod':
         handleDk8sProbePod(msg, this._post);
+        break;
+      case 'dk8s:markRuntime':
+        void handleDk8sMarkRuntime(msg, this._post);
         break;
       case 'dk8s:ask':
         handleDk8sAsk(msg, this._post);

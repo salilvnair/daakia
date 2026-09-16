@@ -77,7 +77,7 @@ import {
   handleDk8sUseContexts, handleDk8sSetTargets, handleDk8sExportLogs,
   handleDk8sExportSearch,
   handleDk8sLogsOpen, handleDk8sLogsClose, handleDk8sDescribe,
-  handleDk8sShell, handleDk8sProbePod, handleDk8sAsk,
+  handleDk8sShell, handleDk8sProbePod, handleDk8sMarkRuntime, handleDk8sAsk,
   handleDk8sCollect, handleDk8sAnalyze, handleDk8sRevealArtifacts,
   handleDk8sProbePv, handleDk8sSavePv, handleDk8sOpenLogFile, handleDk8sSetLogLineNumbers,
 } from '../src/panel/main/handlers/k8s-handler';
@@ -513,6 +513,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dk8s:probePod':
       await handleDk8sProbePod(msg, post);
+      break;
+    case 'dk8s:markRuntime':
+      await handleDk8sMarkRuntime(msg, post);
       break;
     case 'dk8s:ask':
       await handleDk8sAsk(msg, post);

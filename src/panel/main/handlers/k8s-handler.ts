@@ -64,6 +64,10 @@ import { streamLogs, type LogStreamHandle } from '../../../services/k8s/k8s-log-
 import { run, kubectlBinary, resolveBinary } from '../../../services/k8s/kubectl';
 import { clearAccessCache } from '../../../services/k8s/k8s-access';
 import { probeCapabilities, classifyFromSpec, availableActions, execFailureKind } from '../../../services/k8s/pod-classify';
+import {
+  markFor, setMark, targetFromSpec, type MarkTarget,
+} from '../../../services/k8s/runtime-marks';
+import type { PodRuntime } from '../../../services/k8s/pod-classify';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -1241,6 +1245,32 @@ function closeAllTerminals(): void {
 }
 
 /** What this pod can actually support — drives which actions are offered. */
+/**
+ * Record that somebody knows what this is.
+ *
+ * The pod is re-probed afterwards rather than the answer being patched in
+ * place: a runtime decides which actions are offered, and those come from a
+ * capability probe against the real container. Marking a pod Java has to
+ * produce the same screen as dk8s having recognised it — not a Java label over
+ * an action list built for an unknown.
+ */
+export async function handleDk8sMarkRuntime(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const target = msg.target as MarkTarget | undefined;
+  const scope = msg.scope === 'pod' ? 'pod' as const : 'workload' as const;
+  if (!target?.context || !target?.namespace || !target?.pod) return;
+
+  const runtime = msg.runtime as PodRuntime | undefined;
+  setMark(target, scope, runtime);
+
+  await handleDk8sProbePod({
+    context: target.context, namespace: target.namespace, pod: target.pod,
+    container: msg.container,
+  }, postMessage);
+}
+
 export async function handleDk8sProbePod(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
@@ -1253,9 +1283,23 @@ export async function handleDk8sProbePod(
 
   const spec = await run(['--context', context, '-n', namespace, 'get', 'pod', pod, '-o', 'json'], { timeoutMs: 20_000 });
   let runtime: ReturnType<typeof classifyFromSpec> = { runtime: 'unknown', confidence: 0, detectedFrom: 'image' };
+  let markTarget: MarkTarget | undefined;
   try {
-    runtime = classifyFromSpec(JSON.parse(spec.stdout));
+    const parsed = JSON.parse(spec.stdout);
+    runtime = classifyFromSpec(parsed);
+    markTarget = targetFromSpec(context, namespace, parsed);
   } catch { /* fall through with unknown */ }
+
+  /*
+    What somebody said beats what dk8s worked out.
+
+    A guess is good and not complete — a distroless image, a wrapper script or
+    a company base image nobody outside the company has heard of all come back
+    unknown, and an unknown pod is offered nothing but its logs. Marking one
+    is the way out that does not require write access to the cluster.
+  */
+  const mark = markTarget ? markFor(markTarget) : undefined;
+  if (mark) runtime = { runtime: mark.runtime, confidence: 1, detectedFrom: 'user' };
 
   const caps = await probeCapabilities(context, namespace, pod, container);
 
@@ -1281,6 +1325,8 @@ export async function handleDk8sProbePod(
     type: 'dk8s:podProbed', pod,
     runtime, capabilities: caps, actions,
     memory, safety,
+    /* So the screen can say what it is marked as, and offer to change it. */
+    mark, markTarget,
   });
 }
 
