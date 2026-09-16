@@ -26,6 +26,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { IconSize, ModalView, ButtonView, CheckboxView } from '@salilvnair/dui';
 import {
+  TimeWindowPicker, windowError, windowOptions, type TimeWindow,
+} from './TimeWindow';
+import { postMsg } from '../../vscode';
+import { logUiEvent } from '../../store/ui-audit-store';
+import {
   ChevronLeftIcon, FileTextIcon, LayersIcon, SparkleIcon, SearchIcon,
   ServerIcon, ClockIcon, NetworkIcon,
 } from '../../icons';
@@ -202,21 +207,83 @@ function SearchOverview() {
 }
 
 /**
+ * How much of the surrounding log to write per hit.
+ *
+ * Far bigger than the page can show, and deliberately. On screen ±5 is about
+ * the limit of what anybody reads around a hit; in a file ±1,000 is how you
+ * get the whole request that produced the error, and the cost is disk rather
+ * than a view you cannot scroll.
+ *
+ * Anything past the first rung means going back to the cluster — the page
+ * holds only what the search brought back — so the dialog says when it is
+ * about to.
+ */
+const DOWNLOAD_CONTEXT = [0, 100, 500, 1000, 2000, 5000, 10000];
+
+/** `YYYY-MM-DDTHH:mm` on the reader's own clock, which is what the picker takes. */
+function localInput(ms: number): string {
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+    + `T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/**
+ * When the hits happened — the first and the last, to the minute.
+ *
+ * This is the window the dialog opens on, because it is the one the reader
+ * already has: they searched, they got hits between 10:00 and 10:30, and what
+ * they want on disk is that half hour. Widening it from there is a decision
+ * made against a real number rather than a guess at one.
+ *
+ * Lines with no timestamp of their own are skipped, and their neighbours with
+ * them: a window stretched by a line that was only kept for being nearby is a
+ * window nobody asked for. A log whose format carries no timestamps gives no
+ * span at all, and the dialog opens on everything — which is true, rather than
+ * a range invented from nothing.
+ */
+export function hitSpan(lines: { ts?: number; context?: boolean }[]):
+{ from: number; to: number } | undefined {
+  let from: number | undefined;
+  let to: number | undefined;
+  for (const l of lines) {
+    if (l.context || l.ts === undefined) continue;
+    if (from === undefined || l.ts < from) from = l.ts;
+    if (to === undefined || l.ts > to) to = l.ts;
+  }
+  return from !== undefined && to !== undefined ? { from, to } : undefined;
+}
+
+/**
  * Downloading the result.
  *
- * One choice, because one choice applies. The pod export dialog offers a
- * range, a slice and the previous container — all of them descriptions of how
- * to FETCH a log, and this does not fetch one: the lines are already here and
- * already filtered. Timestamps are the only thing left that changes what gets
- * written.
+ * Two different acts behind one button, and the dialog is honest about which
+ * one it is doing. Left alone it writes what is on screen — already fetched,
+ * already filtered, instant. Ask for more surrounding lines or a different
+ * window and there is nothing on the page to widen from: the search runs
+ * again, against the cluster, with the wider question.
  */
-function DownloadModal({ lines, name, namespace, onClose }: {
-  lines: ResultLine[]; name: string; namespace: string; onClose: () => void;
+function DownloadModal({ lines, name, onClose }: {
+  lines: ResultLine[]; name: string; onClose: () => void;
 }) {
+  const { query, regex, caseSensitive, searched } = useResultTabStore();
   const [keepTimestamps, setKeepTimestamps] = useState(true);
+  const [contextLines, setContextLines] = useState(0);
   const exportLines = useK8sStore(s => s.exportLines);
   const exportState = useK8sStore(s => s.exportState);
   const busy = exportState?.phase === 'running';
+
+  const span = useMemo(() => hitSpan(lines), [lines]);
+  const [window_, setWindow] = useState<TimeWindow>(() => (span
+    ? { kind: 'between', from: localInput(span.from), to: localInput(span.to) }
+    : { kind: 'all', from: '', to: '' }));
+
+  const problem = windowError(window_);
+  /* Untouched, and no extra context: the page already holds the answer. */
+  const asShown = contextLines === 0 && span !== undefined
+    && window_.kind === 'between'
+    && window_.from === localInput(span.from)
+    && window_.to === localInput(span.to);
 
   const body = useMemo(() => lines.map(l => (
     keepTimestamps && l.ts !== undefined
@@ -224,11 +291,40 @@ function DownloadModal({ lines, name, namespace, onClose }: {
       : l.text
   )), [lines, keepTimestamps]);
 
+  const submit = () => {
+    if (asShown) {
+      exportLines(name, searched[0]?.namespace ?? '', body);
+      onClose();
+      return;
+    }
+    logUiEvent('dk8s.results_export_refetch', {
+      query, contextLines, window: window_.kind, pods: searched.length,
+    });
+    postMsg({
+      type: 'dk8s:exportSearch',
+      targets: searched.map(t => ({
+        context: t.context, namespace: t.namespace, pod: t.pod,
+        containers: t.containers,
+      })),
+      options: {
+        query, regex, caseSensitive,
+        contextLines,
+        combine: true,
+        includePrevious: false,
+        keepTimestamps,
+        ...windowOptions(window_),
+      },
+    });
+    onClose();
+  };
+
   return (
     <ModalView
-      open onClose={onClose} size="md"
+      open onClose={onClose} size="lg"
       title="Download these results"
-      subtitle={`${lines.length.toLocaleString()} line${lines.length === 1 ? '' : 's'}, exactly as shown`}
+      subtitle={asShown
+        ? `${lines.length.toLocaleString()} line${lines.length === 1 ? '' : 's'}, exactly as shown`
+        : `${searched.length} pod${searched.length === 1 ? '' : 's'}, read again for this`}
       headerColor={ACCENT}
       footerRight={
         <div className="flex items-center gap-2">
@@ -236,29 +332,85 @@ function DownloadModal({ lines, name, namespace, onClose }: {
           <ButtonView
             label={busy ? 'Writing…' : 'Download'}
             size="sm" variant="secondary"
-            disabled={busy || !lines.length}
+            disabled={busy || !!problem || (asShown && !lines.length)}
             accentColor={ACCENT} color={ACCENT}
-            onClick={() => { exportLines(name, namespace, body); onClose(); }}
+            onClick={submit}
           />
         </div>
       }
     >
-      <div className="flex flex-col gap-3 py-1">
+      <div className="flex flex-col gap-4 py-1">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[9.5px] uppercase tracking-wider"
+                style={{ color: 'var(--color-text-muted)' }}>
+            when
+          </span>
+          <TimeWindowPicker value={window_} onChange={setWindow} accent={ACCENT} />
+          <span className="text-[10.5px]"
+                style={{ color: problem ? 'var(--color-error)' : 'var(--color-text-muted)' }}>
+            {problem ?? (span
+              ? `The hits run from ${new Date(span.from).toLocaleTimeString()} to `
+                + `${new Date(span.to).toLocaleTimeString()}. Change it and the pods are read again.`
+              : 'These lines carry no timestamps, so there is no window to open on.')}
+          </span>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[9.5px] uppercase tracking-wider"
+                style={{ color: 'var(--color-text-muted)' }}>
+            lines around each hit
+          </span>
+          <div className="flex flex-wrap gap-1">
+            {DOWNLOAD_CONTEXT.map(n => (
+              <button
+                key={n} type="button"
+                onClick={() => setContextLines(n)}
+                className="text-[11px] px-2 py-1 rounded-md cursor-pointer"
+                style={{
+                  color: contextLines === n ? ACCENT : 'var(--color-text-secondary)',
+                  background: contextLines === n
+                    ? `color-mix(in srgb, ${ACCENT} 16%, transparent)`
+                    : 'transparent',
+                  border: `1px solid ${contextLines === n
+                    ? `color-mix(in srgb, ${ACCENT} 42%, transparent)`
+                    : 'var(--color-surface-border)'}`,
+                  fontWeight: contextLines === n ? 600 : 400,
+                }}
+              >
+                {n === 0 ? 'as shown' : `±${n.toLocaleString()}`}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <CheckboxView
           label="Keep timestamps"
           checked={keepTimestamps}
           onChange={setKeepTimestamps}
           size="md" accentColor={ACCENT}
         />
+
         <div className="flex flex-col gap-1 px-3 py-2 rounded-md"
              style={{ background: 'var(--color-surface-hover)' }}>
           <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
-            Written as{' '}
-            <code style={{ fontFamily: 'var(--font-mono, monospace)' }}>
-              {name.replace(/[^A-Za-z0-9._-]/g, '_')}.log
-            </code>
-            . You will be asked where to put it. Every pod's matches are in the
-            one file, in the order they are on screen.
+            {asShown ? (
+              <>
+                Written as{' '}
+                <code style={{ fontFamily: 'var(--font-mono, monospace)' }}>
+                  {name.replace(/[^A-Za-z0-9._-]/g, '_')}.log
+                </code>
+                {' '}&mdash; every pod&rsquo;s matches in the one file, in the order they
+                are on screen. Nothing is fetched.
+              </>
+            ) : (
+              <>
+                One file per pod. The search runs again against {searched.length}{' '}
+                pod{searched.length === 1 ? '' : 's'} for this, because the page
+                holds only the lines the first search brought back &mdash; so it
+                reads from the cluster and takes as long as a search does.
+              </>
+            )}
+            {' '}You will be asked where to put it.
           </span>
         </div>
       </div>
@@ -508,7 +660,6 @@ export function SearchResultsPage() {
         <DownloadModal
           lines={onScreen}
           name={query || 'search'}
-          namespace={asPod.namespace}
           onClose={() => setDownloadOpen(false)}
         />
       )}

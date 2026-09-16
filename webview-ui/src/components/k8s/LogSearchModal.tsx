@@ -1019,7 +1019,13 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                       /* Every pod it covered, so the Overview can show the
                          ones that matched nothing — `groups` drops those. */
                       searched: chosen.map(p2 => ({
-                        pod: p2.name, namespace: p2.namespace,
+                        pod: p2.name,
+                        namespace: p2.namespace,
+                        /* Carried so the page can ask the cluster again — a
+                           download wider than what is on screen re-runs the
+                           search, and a target with no context cannot run. */
+                        context: p2.context ?? '',
+                        containers: p2.containers.map(c => c.name),
                       })),
                     });
                     useTabsStore.getState().openDk8sResultsTab(

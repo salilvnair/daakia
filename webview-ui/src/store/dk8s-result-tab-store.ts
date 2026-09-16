@@ -16,6 +16,21 @@
  */
 import { create } from 'zustand';
 import type { PodGroup } from './dk8s-search-store';
+
+/**
+ * A pod the search covered, with enough to go back and ask it again.
+ *
+ * The name and namespace are what the Overview lists. The cluster and the
+ * containers are what a re-fetch needs — downloading a wider window than the
+ * page holds means re-running the search, and a target without a context
+ * cannot be run at all.
+ */
+export interface SearchedPod {
+  pod: string;
+  namespace: string;
+  context: string;
+  containers: string[];
+}
 import type { LogLevel } from './k8s-store';
 import type { FieldFilter } from '../components/k8s/log-view';
 
@@ -50,7 +65,7 @@ export interface ResultTabState {
    * nothing" is an answer, and it is the one somebody checks when they expected
    * a hit there.
    */
-  searched: { pod: string; namespace: string }[];
+  searched: SearchedPod[];
 
   // ── What the page is showing, which is the reader's and not the search's ──
   tab: 'logs' | 'overview';
@@ -72,7 +87,7 @@ export interface ResultTabState {
   open: (snapshot: {
     query: string; regex: boolean; caseSensitive: boolean; contextLines: number;
     groups: PodGroup[]; scanned: number; archiveRoots: string[];
-    searched: { pod: string; namespace: string }[];
+    searched: SearchedPod[];
   }) => void;
 }
 
