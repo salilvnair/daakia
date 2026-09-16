@@ -23,8 +23,8 @@
  * to the cluster is hidden by `isSnapshot`. What is left works on lines, and
  * works the same either way.
  */
-import { useEffect, useMemo } from 'react';
-import { IconSize } from '@salilvnair/dui';
+import { useEffect, useMemo, useState } from 'react';
+import { IconSize, ModalView, ButtonView, CheckboxView } from '@salilvnair/dui';
 import {
   ChevronLeftIcon, FileTextIcon, LayersIcon, SparkleIcon, SearchIcon,
   ServerIcon, ClockIcon, NetworkIcon,
@@ -36,7 +36,8 @@ import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import { useTabsStore } from '../../store/tabs-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { AiSplit } from './AiAnswerPanel';
-import { resultLines, podsLabel, podsIn, timings, totals } from './search-results';
+import { resultLines, podsLabel, podsIn, timings, totals, type ResultLine } from './search-results';
+import { filterLines } from './log-view';
 import { ACCENT, AI as AI_ACCENT } from './tone';
 
 /* ── The pod detail's own header pieces, so the two read as one product ── */
@@ -200,6 +201,71 @@ function SearchOverview() {
   );
 }
 
+/**
+ * Downloading the result.
+ *
+ * One choice, because one choice applies. The pod export dialog offers a
+ * range, a slice and the previous container — all of them descriptions of how
+ * to FETCH a log, and this does not fetch one: the lines are already here and
+ * already filtered. Timestamps are the only thing left that changes what gets
+ * written.
+ */
+function DownloadModal({ lines, name, namespace, onClose }: {
+  lines: ResultLine[]; name: string; namespace: string; onClose: () => void;
+}) {
+  const [keepTimestamps, setKeepTimestamps] = useState(true);
+  const exportLines = useK8sStore(s => s.exportLines);
+  const exportState = useK8sStore(s => s.exportState);
+  const busy = exportState?.phase === 'running';
+
+  const body = useMemo(() => lines.map(l => (
+    keepTimestamps && l.ts !== undefined
+      ? `${new Date(l.ts).toISOString()} ${l.text}`
+      : l.text
+  )), [lines, keepTimestamps]);
+
+  return (
+    <ModalView
+      open onClose={onClose} size="md"
+      title="Download these results"
+      subtitle={`${lines.length.toLocaleString()} line${lines.length === 1 ? '' : 's'}, exactly as shown`}
+      headerColor={ACCENT}
+      footerRight={
+        <div className="flex items-center gap-2">
+          <ButtonView label="Cancel" size="sm" variant="secondary" onClick={onClose} />
+          <ButtonView
+            label={busy ? 'Writing…' : 'Download'}
+            size="sm" variant="secondary"
+            disabled={busy || !lines.length}
+            accentColor={ACCENT} color={ACCENT}
+            onClick={() => { exportLines(name, namespace, body); onClose(); }}
+          />
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-3 py-1">
+        <CheckboxView
+          label="Keep timestamps"
+          checked={keepTimestamps}
+          onChange={setKeepTimestamps}
+          size="md" accentColor={ACCENT}
+        />
+        <div className="flex flex-col gap-1 px-3 py-2 rounded-md"
+             style={{ background: 'var(--color-surface-hover)' }}>
+          <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
+            Written as{' '}
+            <code style={{ fontFamily: 'var(--font-mono, monospace)' }}>
+              {name.replace(/[^A-Za-z0-9._-]/g, '_')}.log
+            </code>
+            . You will be asked where to put it. Every pod's matches are in the
+            one file, in the order they are on screen.
+          </span>
+        </div>
+      </div>
+    </ModalView>
+  );
+}
+
 /* ── The page ── */
 
 export function SearchResultsPage() {
@@ -221,6 +287,22 @@ export function SearchResultsPage() {
     [groups, searched],
   );
   const sums = useMemo(() => totals(groups, searched), [groups, searched]);
+
+  const [downloadOpen, setDownloadOpen] = useState(false);
+
+  /*
+    What the download writes: what is on screen, not what came back.
+
+    The same spec the view filters by, so the file and the page cannot
+    disagree — somebody who narrowed to one logger and pressed Download meant
+    that logger.
+  */
+  const onScreen = useMemo(
+    () => filterLines(lines, {
+      query: filter, levels, fields, contextLines: 0,
+    }) as ResultLine[],
+    [lines, filter, levels, fields],
+  );
 
   /*
     Opening puts the search term in the filter box.
@@ -301,7 +383,7 @@ export function SearchResultsPage() {
     setLogSelection: () => {},
     setLogContainer: () => {},
     fetchLogs: () => {},
-    openLogExport: () => {},
+    openLogExport: () => setDownloadOpen(true),
     closeLogExport: () => {},
     closeDetail: openDk8sTab,
     isSnapshot: true,
@@ -419,6 +501,15 @@ export function SearchResultsPage() {
           </div>
         </div>
       </AiSplit>
+
+      {downloadOpen && (
+        <DownloadModal
+          lines={onScreen}
+          name={query || 'search'}
+          namespace={asPod.namespace}
+          onClose={() => setDownloadOpen(false)}
+        />
+      )}
     </div>
   );
 }

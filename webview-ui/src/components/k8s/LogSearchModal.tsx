@@ -18,6 +18,7 @@ import {
 import {
   SearchIcon, SpinnerIcon, WarningTriangleIcon, ChevronDownIcon, ChevronRightIcon,
   FolderExportIcon, FilterIcon, ClockIcon, CodeIcon, RefreshIcon, StopSquareIcon,
+  CheckCircleIcon, CloseCircleIcon,
 } from '../../icons';
 import { useResultTabStore } from '../../store/dk8s-result-tab-store';
 import { useTabsStore } from '../../store/tabs-store';
@@ -122,6 +123,23 @@ function time(ts?: number): string {
   const p = (n: number, w = 2) => String(n).padStart(w, '0');
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
+
+/**
+ * The one box every control in the results row is drawn in.
+ *
+ * They were built three different ways — a bare text button, a `ButtonView`
+ * with accent props, and a `ButtonView` with an inline style — and read as
+ * three different classes of thing sitting in a row. Same height, padding and
+ * radius from one object; only the colour says what each one does.
+ */
+const BTN: React.CSSProperties = {
+  height: 24,
+  paddingLeft: 8,
+  paddingRight: 8,
+  borderRadius: 4,
+  fontWeight: 600,
+  whiteSpace: 'nowrap',
+};
 
 export function LogSearchModal({ onClose }: { onClose: () => void }) {
   /* Every "how many lines" ladder in this dialog, from Settings → DK8S → Logs. */
@@ -891,14 +909,27 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
             {!running && matchedKeys.length > 0 && (
               <>
                 <div className="flex-1" />
-                <button
-                  type="button"
+                {/*
+                  Ticking, as a control rather than as a sentence.
+
+                  It sat in this row as bare text at a different size and with
+                  no box, so three things that act on the same result read as
+                  two buttons and a link. Same height, same padding, same
+                  radius as the two beside it — the row is one set of controls
+                  and should look like one.
+                */}
+                <ButtonView
+                  label={allTicked ? 'Clear' : `Select all ${matchedKeys.length}`}
+                  size="sm" variant="secondary"
+                  iconLeft={allTicked
+                    ? <CloseCircleIcon size={IconSize.inline} />
+                    : <CheckCircleIcon size={IconSize.inline} />}
                   onClick={toggleAllTicks}
-                  className="cursor-pointer border-none bg-transparent px-1 shrink-0"
-                  style={{ color: ACCENT, fontSize: 11, fontFamily: 'inherit' }}
-                >
-                  {allTicked ? 'clear' : `select all ${matchedKeys.length}`}
-                </button>
+                  title={allTicked
+                    ? 'Untick every pod'
+                    : `Tick all ${matchedKeys.length} pods that matched`}
+                  style={BTN}
+                />
                 {/*
                   Out of the dialog and onto a page.
 
@@ -934,8 +965,12 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                     onClose();
                   }}
                   title="Read these results full width, with a filter and the pods they came from"
-                  accentColor={ACCENT} color={ACCENT}
-                  style={{ height: 24 }}
+                  style={{
+                    ...BTN,
+                    color: ACCENT,
+                    background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
+                    borderColor: `color-mix(in srgb, ${ACCENT} 42%, transparent)`,
+                  }}
                 />
                 <ButtonView
                   label={`Export ${ticked.length || ''}`.trim()}
@@ -947,7 +982,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                     ? `Write every match from ${ticked.length} pod${ticked.length === 1 ? '' : 's'} to disk`
                     : 'Tick a pod to export its matches'}
                   style={{
-                    height: 24,
+                    ...BTN,
                     background: ticked.length
                       ? 'color-mix(in srgb, var(--color-warning) 16%, transparent)'
                       : 'transparent',
@@ -955,7 +990,6 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                       ? 'color-mix(in srgb, var(--color-warning) 45%, transparent)'
                       : 'var(--color-surface-border)',
                     color: ticked.length ? 'var(--color-warning)' : 'var(--color-text-muted)',
-                    fontWeight: 600,
                   }}
                 />
               </>

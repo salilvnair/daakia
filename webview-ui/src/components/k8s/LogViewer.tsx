@@ -1840,7 +1840,10 @@ export function LogViewer() {
 
       {/* Rendered here rather than in PodDetail because "On screen" exports
           `visible` — the filtered buffer this component owns. */}
-      {logExportOpen && (
+      {/* A snapshot has no pod to re-read and no range to fetch, so its
+          download is its own dialog with the one choice that applies. The
+          source opens it; see `SearchResultsPage`. */}
+      {logExportOpen && !isSnapshot && (
         <ExportLogsModal
           onClose={closeLogExport}
           visibleLines={visible.map(l =>

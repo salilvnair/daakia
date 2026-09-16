@@ -808,6 +808,15 @@ interface K8sState {
   openExport: () => void;
   closeExport: () => void;
   exportLogs: (options: ExportOptions, visibleLines?: string[]) => void;
+  /**
+   * Write lines that belong to no single pod — a search result.
+   *
+   * `exportLogs` derives its targets from what is selected in the grid or open
+   * in the detail, which is exactly right for a pod's log and exactly wrong
+   * for a result spanning twelve of them. This takes the name to write under
+   * and the lines to write, and asks nothing of the rest of the store.
+   */
+  exportLines: (name: string, namespace: string, lines: string[]) => void;
   apply: (msg: Record<string, unknown>) => void;
 }
 
@@ -1335,6 +1344,25 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   clearSelection: () => set({ selected: [] }),
   openExport: () => set({ exportOpen: true, exportState: undefined }),
   closeExport: () => set({ exportOpen: false }),
+
+  exportLines: (name, namespace, lines) => {
+    logUiEvent('dk8s.results_export', { name, namespace, lines: lines.length });
+    set({ exportState: { phase: 'running', done: 0, total: 1 } });
+    postMsg({
+      type: 'dk8s:exportLogs',
+      options: {
+        range: { kind: 'all' }, slice: { kind: 'all' },
+        includePrevious: false, keepTimestamps: true,
+      },
+      /* Present, so the host writes these rather than re-reading a pod — there
+         is no one pod behind them to re-read. */
+      visibleLines: lines,
+      /* One target, named for the search. `logFileName` replaces anything a
+         filename cannot carry, so a query with spaces or slashes in it lands
+         as `worker_process.log` rather than failing at the write. */
+      targets: [{ context: '', namespace, pod: name, containers: [] }],
+    });
+  },
 
   exportLogs: (options, visibleLines) => {
     const { pods, selected, logExportOpen, detail } = get();
