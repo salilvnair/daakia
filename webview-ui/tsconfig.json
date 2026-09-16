@@ -22,7 +22,8 @@
       "@daakia/pv-layouts": ["../src/services/k8s/pv-layouts.ts"],
       "@daakia/access-checks": ["../src/services/k8s/access-checks.ts"],
       "@daakia/scan-reconcile": ["../src/services/scan/reconcile.ts"],
-      "@daakia/api-detector": ["../src/services/scan/api-detector.ts"]
+      "@daakia/api-detector": ["../src/services/scan/api-detector.ts"],
+      "@daakia/k8s-workload": ["../src/services/k8s/workload.ts"]
     }
   },
   "include": [

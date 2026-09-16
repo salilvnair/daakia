@@ -71,4 +71,14 @@ export const SHARED_ALIASES = {
     rather than mirrored.
   */
   '@daakia/api-detector': resolve(__dirname, '..', 'src', 'services', 'scan', 'api-detector.ts'),
+
+  /*
+    What a pod belongs to, named the way a person names it.
+
+    The host resolves it off the owner reference; the webview decides what to
+    badge and what to filter. Both have to agree that a Job called
+    `billing-28912345` is one run of a CronJob called `billing`, or a badge
+    says one thing and a star attaches to another.
+  */
+  '@daakia/k8s-workload': resolve(__dirname, '..', 'src', 'services', 'k8s', 'workload.ts'),
 };

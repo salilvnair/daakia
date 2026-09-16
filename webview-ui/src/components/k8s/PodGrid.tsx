@@ -22,6 +22,7 @@ import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import {
   useFavoriteKeys, toggleFavorite, favoriteKey, favoritesFirst,
 } from '../../store/dk8s-favorites-store';
+import { isScheduled } from '@daakia/k8s-workload';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { ExportLogsModal } from './ExportLogsModal';
 import { LogSearchModal } from './LogSearchModal';
@@ -41,6 +42,8 @@ import { isTypingTarget } from '../../utils/typing-target';
 import { RunningCommand } from './RunningCommand';
 /* Amber, not the dk8s accent: a star is a personal mark, not a status, and
    reusing the accent made starred rows look selected. */
+/* Scheduled work reads as its own thing — not an error, not a service. */
+const SCHEDULED_COLOR = 'var(--color-info)';
 const FAV_COLOR = 'var(--color-warning)';
 
 // ── Cluster pulse ───────────────────────────────────────────────────────────
@@ -341,8 +344,28 @@ function PodCard({ pod, onOpen, onMenu }: {
             {pod.name}
           </span>
         </span>
-        <span className="text-[10px] text-[var(--color-text-muted)] truncate">
-          {pod.workload ? `${pod.workload.kind}/${pod.workload.name}` : pod.node ?? '—'}
+        <span className="flex items-center gap-1.5 min-w-0">
+          {/* The kind, as its own mark. A namespace with a CronJob firing
+              every five minutes fills with finished runs, and reading which
+              is which off the end of a truncated `Job/billing-28912345` is
+              not reading. */}
+          {pod.workload && (
+            <span
+              className="text-[9px] px-1 py-px rounded shrink-0 uppercase tracking-wide"
+              title={`${pod.workload.kind}/${pod.workload.name}`}
+              style={{
+                color: isScheduled(pod.workload) ? SCHEDULED_COLOR : 'var(--color-text-muted)',
+                background: isScheduled(pod.workload)
+                  ? `color-mix(in srgb, ${SCHEDULED_COLOR} 14%, transparent)`
+                  : 'color-mix(in srgb, var(--color-text-muted) 10%, transparent)',
+              }}
+            >
+              {pod.workload.kind}
+            </span>
+          )}
+          <span className="text-[10px] text-[var(--color-text-muted)] truncate">
+            {pod.workload ? pod.workload.name : pod.node ?? '—'}
+          </span>
         </span>
       </div>
 
@@ -813,13 +836,27 @@ export function PodGrid() {
   const setFavScope = useK8sStore(s => s.setPodScope);
   const scope = favKeys.length === 0 ? 'all' : favScope;
 
+  /*
+    Pods that stay up and runs of something are two different questions.
+
+    A namespace with a CronJob firing every five minutes accumulates finished
+    runs, and they sit in the same list as the services — so "is anything
+    broken" and "did last night's billing job work" bury each other. The kind
+    is already on the pod; this just lets you ask one at a time.
+  */
+  const [kind, setKind] = useState<'all' | 'pods' | 'runs'>('all');
+  const runCount = useMemo(() => pods.filter(p => isScheduled(p.workload)).length, [pods]);
+
   const visible = useMemo(() => {
     const matched = pods.filter(p => matchesFilter(p, filter));
     const scoped = scope === 'fav'
       ? matched.filter(p => favKeys.includes(favoriteKey(p)))
       : matched;
-    return favoritesFirst(sortPods(scoped, now), favKeys);
-  }, [pods, filter, now, scope, favKeys]);
+    const byKind = kind === 'all'
+      ? scoped
+      : scoped.filter(p => isScheduled(p.workload) === (kind === 'runs'));
+    return favoritesFirst(sortPods(byKind, now), favKeys);
+  }, [pods, filter, now, scope, favKeys, kind]);
 
   const groups = useMemo(() => groupPods(visible, now), [visible, now]);
 
@@ -901,6 +938,23 @@ export function PodGrid() {
           Hidden until something is starred: a filter whose only setting shows
           nothing is a dead end, and there is no way to star from inside it.
         */}
+        {/* Only where there is something to separate: a namespace with no
+            scheduled work does not need to be asked about it. */}
+        {runCount > 0 && (
+          <SegmentedControlView
+            value={kind}
+            onChange={v => setKind(v as 'all' | 'pods' | 'runs')}
+            options={[
+              { value: 'all', label: 'all' },
+              { value: 'pods', label: 'pods' },
+              { value: 'runs', label: `runs ${runCount}` },
+            ]}
+            size="md"
+            variant="rounded"
+            accentColor={SCHEDULED_COLOR}
+          />
+        )}
+
         {favKeys.length > 0 && (
           <SegmentedControlView
             value={scope}

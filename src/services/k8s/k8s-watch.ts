@@ -15,6 +15,7 @@
 import type { ChildProcess } from 'child_process';
 import { run, spawnKubectl, createJsonObjectSplitter } from './kubectl';
 import { clusterTimeoutMs } from './k8s-timeouts';
+import { resolveWorkload } from './workload';
 
 export interface ContainerSummary {
   name: string;
@@ -99,15 +100,9 @@ export function toPodSummary(raw: RawPod): PodSummary {
   const deleting = !!meta.deletionTimestamp;
   const phase = deleting ? 'Terminating' : (status.phase ?? 'Unknown');
 
-  const owner = meta.ownerReferences?.[0];
-  const workload = owner
-    ? {
-        kind: owner.kind === 'ReplicaSet' ? 'Deployment' : owner.kind,
-        name: owner.kind === 'ReplicaSet'
-          ? String(owner.name).replace(/-[a-z0-9]{6,10}$/, '')
-          : owner.name,
-      }
-    : undefined;
+  /* See workload.ts: the first owner is rarely the thing anybody calls it,
+     and both of the generated middles carry a suffix that changes. */
+  const workload = resolveWorkload(meta.ownerReferences?.[0]);
 
   return {
     name: meta.name ?? '?',
