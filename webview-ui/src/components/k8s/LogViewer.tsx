@@ -28,6 +28,8 @@ import { useK8sStore, type LogLevel } from '../../store/k8s-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { buildFacets, filterTermFor } from './log-facets';
+import { useUiStateStore } from '../../store/ui-state-store';
+import { logLineSettings, onLadder, tailLabel } from './log-settings';
 import { FacetRail } from './FacetRail';
 import { LogSkeleton } from './LogSkeleton';
 import {
@@ -549,6 +551,10 @@ export function LogViewer() {
     setLogSince, setLogWrap, setLogPrevious, setLogSelection,
     fetchLogs, openLogExport, logExportOpen, closeLogExport,
   } = useK8sStore();
+
+  /* Every "how many lines" ladder in this view, from Settings → DK8S → Logs. */
+  const prefs = useUiStateStore(p => p.prefs);
+  const lineSettings = useMemo(() => logLineSettings(prefs), [prefs]);
   /*
     The first moment after asking, when an empty view means nothing yet.
 
@@ -1270,10 +1276,13 @@ export function LogViewer() {
           accentColor={ACCENT}
         />
 
+        {/* The rungs come from Settings → DK8S → Logs. A service that writes
+            four lines a request and one that writes four hundred are both
+            normal, and no ladder written in here is right for both. */}
         <SelectInputView
-          value={String(logTail)}
+          value={String(onLadder(logTail, lineSettings.tailLadder, lineSettings.tailDefault))}
           onChange={v => setLogTail(Number(v))}
-          options={[100, 200, 500, 1000, 5000].map(v => ({ value: String(v), label: String(v) + ' lines' }))}
+          options={lineSettings.tailLadder.map(v => ({ value: String(v), label: tailLabel(v) }))}
           size={CTL_SIZE}
           accentColor={ACCENT}
         />

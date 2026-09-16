@@ -35,6 +35,8 @@ import { severityOf, severityColor, shortAge } from './pod-view';
 import { softPrimary } from './button-style';
 
 import { ACCENT, MUTED } from './tone';
+import { useUiStateStore } from '../../store/ui-state-store';
+import { logLineSettings, onLadder, contextLabel } from './log-settings';
 const ROW_H = 19;
 const OVERSCAN = 20;
 
@@ -110,6 +112,10 @@ function time(ts?: number): string {
 }
 
 export function LogSearchModal({ onClose }: { onClose: () => void }) {
+  /* Every "how many lines" ladder in this dialog, from Settings → DK8S → Logs. */
+  const prefs = useUiStateStore(p => p.prefs);
+  const lineSettings = useMemo(() => logLineSettings(prefs), [prefs]);
+
   const { pods, selected, openDetail, setDetailTab, openExplorerAt } = useK8sStore();
   const {
     options, running, progress, groups, summary, collapsed,
@@ -723,22 +729,25 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
           <SelectInputView
             value={String(options.tailLines)}
             onChange={v => setOptions({ tailLines: Number(v) })}
-            options={[1000, 5000, 20000, 100000].map(v => ({
+            options={lineSettings.archiveLadder.map(v => ({
               value: String(v), label: `last ${v.toLocaleString()}`,
             }))}
             size="md" width={148} accentColor={ACCENT}
           />
           )}
+          {/*
+            How far either side of a hit to show.
+
+            This stopped at five, which does not answer "what happened around
+            this logger" — the question somebody is asking when they turn
+            context on at all. The rungs come from Settings → DK8S → Logs now,
+            and reach a hundred either side out of the box.
+          */}
           {searchIn === 'logs' && (
           <SelectInputView
-            value={String(options.contextLines)}
+            value={String(onLadder(options.contextLines, lineSettings.contextLadder, lineSettings.contextDefault))}
             onChange={v => setOptions({ contextLines: Number(v) })}
-            options={[
-              { value: '0', label: 'no surrounding lines' },
-              { value: '1', label: '\u00b11 line around' },
-              { value: '2', label: '\u00b12 lines around' },
-              { value: '5', label: '\u00b15 lines around' },
-            ]}
+            options={lineSettings.contextLadder.map(v => ({ value: String(v), label: contextLabel(v) }))}
             size="md" width={192} accentColor={ACCENT}
           />
           )}
