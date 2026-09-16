@@ -110,6 +110,11 @@ import {
   handleDk8sDescribe,
   handleDk8sShell,
   handleDk8sProbePod, handleDk8sMarkRuntime,
+} from './handlers/k8s-handler';
+import {
+  handleDk8sPodMounts, handleDk8sPvList, handleDk8sPvSearch,
+} from './handlers/pv-in-pod-handler';
+import {
   handleDk8sAsk, handleDk8sCollect, handleDk8sAnalyze, handleDk8sRevealArtifacts,
 } from './handlers/k8s-handler';
 import {
@@ -717,6 +722,15 @@ export class MainPanel {
         break;
       case 'dk8s:markRuntime':
         void handleDk8sMarkRuntime(msg, this._post);
+        break;
+      case 'dk8s:podMounts':
+        void handleDk8sPodMounts(msg, this._post);
+        break;
+      case 'dk8s:pvList':
+        void handleDk8sPvList(msg, this._post);
+        break;
+      case 'dk8s:pvSearch':
+        void handleDk8sPvSearch(msg, this._post);
         break;
       case 'dk8s:ask':
         handleDk8sAsk(msg, this._post);

@@ -81,6 +81,9 @@ import {
   handleDk8sCollect, handleDk8sAnalyze, handleDk8sRevealArtifacts,
   handleDk8sProbePv, handleDk8sSavePv, handleDk8sOpenLogFile, handleDk8sSetLogLineNumbers,
 } from '../src/panel/main/handlers/k8s-handler';
+import {
+  handleDk8sPodMounts, handleDk8sPvList, handleDk8sPvSearch,
+} from '../src/panel/main/handlers/pv-in-pod-handler';
 import { handleDk8sHeapInvestigate } from '../src/panel/main/handlers/heap-investigate';
 import { handleSseConnect, handleSseDisconnect } from '../src/panel/main/handlers/sse-handler';
 import { handleSocketIOConnect, handleSocketIODisconnect, handleSocketIOEmit } from '../src/panel/main/handlers/socketio-handler';
@@ -516,6 +519,15 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dk8s:markRuntime':
       await handleDk8sMarkRuntime(msg, post);
+      break;
+    case 'dk8s:podMounts':
+      await handleDk8sPodMounts(msg, post);
+      break;
+    case 'dk8s:pvList':
+      await handleDk8sPvList(msg, post);
+      break;
+    case 'dk8s:pvSearch':
+      await handleDk8sPvSearch(msg, post);
       break;
     case 'dk8s:ask':
       await handleDk8sAsk(msg, post);

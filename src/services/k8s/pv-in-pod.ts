@@ -263,27 +263,47 @@ export function escapeRegex(s: string): string {
 /**
  * `path:12:matched` and `path-11-context`.
  *
- * grep separates a hit from its context by the punctuation, which is the only
- * thing distinguishing them — and the path may itself contain both characters,
- * so the split is anchored on the LAST `:<digits>:` or `-<digits>-` rather
- * than the first.
+ * Only the punctuation separates a hit from its context, and BOTH characters
+ * occur in real paths and real log lines — so neither a greedy nor a lazy
+ * split is safe. The live archive proved it: greedy on the dash matched the
+ * `-09-` inside the date in `… archived day 2026-09-14`, and the file came
+ * back as `archive/prodapp-2026-09-14.log-1-2026-09-14 INFO …`.
+ *
+ * So the file is not guessed. A hit carries a colon, which paths seldom do, so
+ * hits parse on their own — and every context line belongs to a file that has
+ * a hit, so `known` is matched as a prefix instead. Longest first, because one
+ * path can be a prefix of another.
  */
-export function parseGrepLine(line: string, root: string): PvMatch | undefined {
+export function parseGrepLine(
+  line: string, root: string, known?: Iterable<string>,
+): PvMatch | undefined {
   if (!line || line === '--') return undefined;
 
-  const m = /^(.*?)([:-])(\d+)\2(.*)$/.exec(line);
-  if (!m) return undefined;
+  const hit = /^(.+?):(\d+):(.*)$/.exec(line);
+  if (hit && hit[1].startsWith('/')) {
+    return {
+      file: hit[1],
+      rel: relativeTo(root, hit[1]),
+      line: Number(hit[2]),
+      text: hit[3],
+    };
+  }
 
-  const file = m[1];
-  if (!file.startsWith('/')) return undefined;
+  for (const file of [...(known ?? [])].sort((a, b) => b.length - a.length)) {
+    if (!line.startsWith(file + '-')) continue;
+    const rest = line.slice(file.length + 1);
+    const m = /^(\d+)-(.*)$/.exec(rest);
+    if (!m) continue;
+    return {
+      file,
+      rel: relativeTo(root, file),
+      line: Number(m[1]),
+      text: m[2],
+      context: true,
+    };
+  }
 
-  return {
-    file,
-    rel: relativeTo(root, file),
-    line: Number(m[3]),
-    text: m[4],
-    ...(m[2] === '-' ? { context: true } : {}),
-  };
+  return undefined;
 }
 
 /**
@@ -308,9 +328,23 @@ export async function searchInPod(
   const command = showCommand(args);
   const r = await run(args, { timeoutMs: 60_000 });
 
+  /*
+    Two passes, because a context line cannot be parsed on its own.
+
+    The first collects the files that had a hit — those parse unambiguously,
+    on the colon. The second resolves every context line against that set by
+    prefix, which is exact where a regex over the punctuation is not.
+  */
+  const out = (r.stdout ?? '').split('\n');
+  const known = new Set<string>();
+  for (const line of out) {
+    const h = parseGrepLine(line, cleanRoot);
+    if (h && !h.context) known.add(h.file);
+  }
+
   const matches: PvMatch[] = [];
-  for (const line of (r.stdout ?? '').split('\n')) {
-    const m = parseGrepLine(line, cleanRoot);
+  for (const line of out) {
+    const m = parseGrepLine(line, cleanRoot, known);
     if (m) matches.push(m);
   }
 

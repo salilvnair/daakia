@@ -20,6 +20,9 @@ import {
   ladder, ladderText, defaultOf, contextLabel, tailLabel,
 } from '../../components/k8s/log-settings';
 import { LayersIcon, SearchIcon, ClockIcon } from '../../icons';
+import { useK8sStore } from '../../store/k8s-store';
+import { LogFormatSettings } from './LogFormatSettings';
+import { PvLogSettings } from './PvLogSettings';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -141,6 +144,22 @@ function Ladder({
 }
 
 export function Dk8sLogSettings() {
+  const logLineNumbers = useK8sStore(s => s.logLineNumbers);
+  const setLogLineNumbers = useK8sStore(s => s.setLogLineNumbers);
+  const apply = useK8sStore(s => s.apply);
+
+  /* Settings can be opened without dk8s ever having been, so this page hears
+     the host itself rather than relying on K8sPanel being mounted — otherwise
+     the checkbox shows its default instead of the stored value. */
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      const msg = event.data as Record<string, unknown>;
+      if (msg?.type === 'dk8s:logLineNumbers') apply(msg);
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [apply]);
+
   return (
     <div className="flex flex-col gap-6 px-5 py-5">
       <div className="flex flex-col gap-1.5">
@@ -203,6 +222,49 @@ export function Dk8sLogSettings() {
           label={(n) => `last ${n.toLocaleString()}`}
         />
       </div>
+
+      {/*
+        The three that used to sit on Cluster. They are not about how dk8s
+        behaves against a cluster — they are about how it reads what a pod
+        wrote, which is this page.
+      */}
+      <div className="flex flex-col gap-3">
+        <SectionRule label="the log view" />
+        <Toggle
+          on={logLineNumbers}
+          onChange={setLogLineNumbers}
+          label="Show line numbers"
+          description={
+            'A numbered gutter down the left of a pod’s log, like an editor. On by default — '
+            + 'turn it off on a narrow panel, where the width a long line needs matters more.'
+          }
+        />
+      </div>
+
+      <LogFormatSettings />
+      <PvLogSettings />
     </div>
+  );
+}
+
+/** The same switch the Cluster page had, moved with its section. */
+function Toggle({ on, onChange, label, description }: {
+  on: boolean; onChange: (v: boolean) => void; label: string; description: string;
+}) {
+  return (
+    <label className="flex items-start gap-3 px-4 py-3.5 rounded-lg cursor-pointer" style={cardStyle}>
+      <input
+        type="checkbox"
+        checked={on}
+        onChange={e => onChange(e.target.checked)}
+        style={{ accentColor: ACCENT, marginTop: 2, width: 15, height: 15 }}
+      />
+      <span className="flex flex-col gap-1.5 flex-1 min-w-0">
+        <span className="text-[13px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>{label}</span>
+        <span className="text-[11.5px] leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+          {description}
+        </span>
+      </span>
+    </label>
   );
 }

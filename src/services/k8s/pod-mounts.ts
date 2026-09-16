@@ -1,160 +1,142 @@
 /**
- * What a path inside a pod actually is.
+ * Where a pod's volumes are, according to the pod.
  *
- * The Explorer shows a filesystem without saying where any of it comes from,
- * and inside a container that is the difference between two very different
- * directories that look identical: one baked into the image, whose contents
- * vanish on restart, and one backed by a PersistentVolume, whose contents are
- * the reason anybody is looking. `/data` tells you nothing; `PVC: order-data`
- * tells you what you are holding.
+ * Configuring an archive path by hand means knowing a path that lives inside
+ * somebody else's container — and getting one character wrong produces an
+ * empty search rather than an error, which is the worst way to be wrong.
  *
- * It also answers the question the download button raises. A read-only mount
- * is worth knowing about before rather than after, and a path that is not a
- * mount at all is a path whose contents are as temporary as the pod.
- *
- * This is a `kubectl get pod`, not an exec — the answer is in the pod spec and
- * needs nothing from inside the container. So it works on a distroless image
- * where nothing else in the Explorer does, which is worth having: on those the
- * mount list is the only thing the tab can say.
+ * The pod already knows. `spec.containers[].volumeMounts` says the path and
+ * `spec.volumes[]` says what is mounted there, so the paths worth searching
+ * can be offered rather than typed. A claim is ranked first because a
+ * PersistentVolumeClaim is what an archive almost always is; a ConfigMap or a
+ * projected token is a mount too and is never a log directory.
  */
 import { run } from './kubectl';
 
 export interface PodMount {
-  /** Where it is mounted inside the container. Always absolute. */
+  /** Absolute path inside the container. */
   path: string;
-  /**
-   * What is behind it, in the reader's words.
-   *
-   * `pvc: order-data`, `configmap: zp-config-app`, `secret: db-creds`,
-   * `emptyDir`, `hostPath` — the kind and the name, because the kind alone
-   * does not identify which of three ConfigMaps this one is.
-   */
-  source: string;
-  /** The tone the chip should take. A PVC is the one worth noticing. */
-  kind: 'pvc' | 'config' | 'secret' | 'ephemeral' | 'host' | 'other';
-  readOnly: boolean;
-  /** The container it belongs to, since mounts differ between them. */
+  /** The volume's name in the spec — how the two halves are joined. */
+  name: string;
+  /** Which container it belongs to, for a pod that has more than one. */
   container: string;
+  /** `pvc`, `configMap`, `emptyDir`, `hostPath`, `projected`… */
+  kind: string;
+  /** The claim's name, where it is one. */
+  claim?: string;
+  readOnly?: boolean;
+  /** True when this looks like somewhere logs are kept. */
+  likelyLogs: boolean;
 }
 
-interface RawVolume {
-  name?: string;
-  persistentVolumeClaim?: { claimName?: string };
-  configMap?: { name?: string };
-  secret?: { secretName?: string };
-  emptyDir?: unknown;
-  hostPath?: { path?: string };
-  projected?: unknown;
-  downwardAPI?: unknown;
-}
-
-/**
- * Name a volume by what it is, not by the key it happens to sit under.
- *
- * `name` in the spec is the pod author's label for it — `config-volume`,
- * `data` — and is exactly as uninformative as the mount path. What identifies
- * a mount is the claim or the ConfigMap behind it, which is what somebody
- * would go and look at next.
- */
-export function describeVolume(v: RawVolume): { source: string; kind: PodMount['kind'] } {
-  const pvc = v.persistentVolumeClaim?.claimName;
-  if (pvc) return { source: `pvc: ${pvc}`, kind: 'pvc' };
-
-  const cm = v.configMap?.name;
-  if (cm) return { source: `configmap: ${cm}`, kind: 'config' };
-
-  const sec = v.secret?.secretName;
-  if (sec) return { source: `secret: ${sec}`, kind: 'secret' };
-
-  if (v.hostPath?.path) return { source: `hostpath: ${v.hostPath.path}`, kind: 'host' };
-  if (v.emptyDir !== undefined) return { source: 'emptydir', kind: 'ephemeral' };
-  if (v.projected !== undefined) return { source: 'projected', kind: 'config' };
-  if (v.downwardAPI !== undefined) return { source: 'downward api', kind: 'config' };
-
-  // A volume type we do not name yet still gets a row: knowing a path is a
-  // mount at all is most of the value, and guessing at the kind is not.
-  return { source: v.name ? `volume: ${v.name}` : 'volume', kind: 'other' };
-}
-
-/**
- * The deepest mount containing this path, or none.
- *
- * Deepest because mounts nest: a PVC on `/data` and a ConfigMap on
- * `/data/conf` both contain `/data/conf/app.yaml`, and the ConfigMap is the
- * one that actually provides it. Longest-prefix wins, exactly as the kernel
- * resolves it.
- *
- * The boundary check is deliberate — `/data` must not match `/database`, which
- * a bare `startsWith` would happily do and would then attribute a directory to
- * a volume it has nothing to do with.
- */
-export function mountFor(mounts: PodMount[], path: string): PodMount | undefined {
-  let best: PodMount | undefined;
-  for (const m of mounts) {
-    if (path !== m.path && !path.startsWith(m.path.endsWith('/') ? m.path : `${m.path}/`)) {
-      continue;
-    }
-    if (!best || m.path.length > best.path.length) best = m;
-  }
-  return best;
-}
-
-export interface MountsResult {
+export interface PodMountsResult {
   mounts: PodMount[];
   command: string;
   error?: string;
 }
 
+/**
+ * Mounts Kubernetes adds that nobody put there.
+ *
+ * The service-account token is on every pod in the cluster and is never what
+ * anybody is looking for. Listing it first, above the claim they came for, is
+ * the difference between a list you scan and a list you read.
+ */
+const NOISE = /^\/var\/run\/secrets\/kubernetes\.io/;
+
+/** Path fragments that suggest logs. Only a ranking — nothing is hidden. */
+const LOGGY = /log|archive/i;
+
+/** What kind of volume this is, from whichever key the spec carries. */
+export function volumeKind(volume: Record<string, unknown> | undefined): {
+  kind: string; claim?: string;
+} {
+  if (!volume) return { kind: 'unknown' };
+  const pvc = volume.persistentVolumeClaim as { claimName?: string } | undefined;
+  if (pvc) return { kind: 'pvc', claim: pvc.claimName };
+
+  for (const key of ['configMap', 'secret', 'emptyDir', 'hostPath', 'projected',
+    'downwardAPI', 'nfs', 'csi', 'azureFile', 'azureDisk']) {
+    if (volume[key]) return { kind: key };
+  }
+  return { kind: 'unknown' };
+}
+
+/**
+ * Rank a mount by how likely it is to hold logs.
+ *
+ * A claim whose path mentions logs is the answer nearly every time; a claim
+ * that does not is still a good guess; an emptyDir called `logs` is a real
+ * pattern for a sidecar shipping them. Everything Kubernetes mounted itself
+ * goes last.
+ */
+export function mountScore(m: Pick<PodMount, 'path' | 'kind'>): number {
+  if (NOISE.test(m.path)) return -1;
+  let score = 0;
+  if (m.kind === 'pvc') score += 4;
+  if (m.kind === 'nfs' || m.kind === 'csi' || m.kind === 'azureFile') score += 3;
+  if (LOGGY.test(m.path)) score += 3;
+  if (m.kind === 'emptyDir') score += 1;
+  if (m.kind === 'configMap' || m.kind === 'secret' || m.kind === 'projected') score -= 3;
+  return score;
+}
+
+/** Read the pod's spec and pair its mounts with its volumes. */
 export async function podMounts(
   context: string, namespace: string, pod: string,
-): Promise<MountsResult> {
-  const args = ['--context', context, '-n', namespace, 'get', 'pod', pod, '-o', 'json'];
-  const command = ['kubectl', ...args].join(' ');
-  const r = await run(args);
+): Promise<PodMountsResult> {
+  const args = [
+    '--context', context, '-n', namespace, 'get', 'pod', pod, '-o', 'json',
+  ];
+  const command = `kubectl ${args.join(' ')}`;
+  const r = await run(args, { timeoutMs: 20_000 });
 
-  if (r.code !== 0) {
-    return { mounts: [], command, error: r.stderr.trim() || 'Could not read the pod.' };
+  if (!r.ok) {
+    return { mounts: [], command, error: firstLine(r.stderr) || `Could not read ${pod}.` };
   }
 
   let spec: {
     spec?: {
-      volumes?: RawVolume[];
-      containers?: { name?: string; volumeMounts?: {
-        name?: string; mountPath?: string; readOnly?: boolean;
-      }[] }[];
+      containers?: { name?: string; volumeMounts?: { name?: string; mountPath?: string; readOnly?: boolean }[] }[];
+      volumes?: Record<string, unknown>[];
     };
   };
   try {
     spec = JSON.parse(r.stdout);
   } catch {
-    return { mounts: [], command, error: 'The pod description did not parse.' };
+    return { mounts: [], command, error: 'The pod definition could not be read.' };
   }
 
-  const byName = new Map<string, RawVolume>();
-  for (const v of spec.spec?.volumes ?? []) if (v.name) byName.set(v.name, v);
+  const volumes = new Map<string, Record<string, unknown>>();
+  for (const v of spec.spec?.volumes ?? []) {
+    if (typeof v.name === 'string') volumes.set(v.name, v);
+  }
 
   const mounts: PodMount[] = [];
   for (const c of spec.spec?.containers ?? []) {
     for (const vm of c.volumeMounts ?? []) {
-      if (!vm.mountPath) continue;
-      /*
-        The service-account token is on every pod ever created and is never
-        what anyone is looking at. Listing it would put a chip on `/var/run`
-        in every pod in the cluster, which trains people to ignore the chip.
-      */
-      if (vm.mountPath.startsWith('/var/run/secrets/kubernetes.io/')) continue;
-
-      const vol = vm.name ? byName.get(vm.name) : undefined;
-      const { source, kind } = describeVolume(vol ?? { name: vm.name });
+      if (!vm.mountPath || !vm.name) continue;
+      const { kind, claim } = volumeKind(volumes.get(vm.name));
       mounts.push({
         path: vm.mountPath,
-        source,
-        kind,
-        readOnly: !!vm.readOnly,
+        name: vm.name,
         container: c.name ?? '',
+        kind,
+        claim,
+        readOnly: vm.readOnly,
+        likelyLogs: mountScore({ path: vm.mountPath, kind }) >= 4,
       });
     }
   }
 
+  /* Best guess first, then alphabetically so the order does not wander between
+     two mounts that score the same. */
+  mounts.sort((a, b) =>
+    mountScore(b) - mountScore(a) || a.path.localeCompare(b.path));
+
   return { mounts, command };
+}
+
+function firstLine(s: string | undefined): string | undefined {
+  return (s ?? '').split('\n').map(l => l.trim()).find(Boolean)?.slice(0, 200);
 }
