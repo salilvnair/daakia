@@ -15,6 +15,7 @@ import { useShowOnToolbar, type ToolbarSurface } from '../../store/toolbar-visib
 import { KubectlBinarySetting } from './KubectlBinarySetting';
 import { ClusterTimeoutSetting } from './ClusterTimeoutSetting';
 import { CommandAuditLimitSetting } from './CommandAuditLimit';
+import { CronJobVisibilitySetting } from './cronjob-visibility';
 
 function Toggle({ on, onChange, label, description, accent }: {
   on: boolean;
@@ -154,6 +155,9 @@ export function Dk8sGeneralSettings() {
       {/* And how long to wait for one, which is a property of your network
           rather than of dk8s. */}
       <ClusterTimeoutSetting />
+      {/* What the pod list opens on, which is about your namespaces rather
+          than about dk8s or the network. */}
+      <CronJobVisibilitySetting />
       <CommandAuditLimitSetting />
     </SurfaceGeneral>
   );

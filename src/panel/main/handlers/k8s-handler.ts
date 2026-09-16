@@ -1145,6 +1145,39 @@ export async function handleDk8sShell(
   }
 }
 
+/**
+ * Which shell a container has, once anybody has found out.
+ *
+ * Opening a terminal used to cost up to three sequential `exec … which`
+ * round trips before the PTY started — one per candidate, each a full
+ * connection upgrade and container attach. On an image with only `sh` that
+ * is two, and the first of them has to FAIL first, which is the slow kind.
+ * `kubectl exec -it pod -- sh` in a normal terminal does none of that, which
+ * is the whole of why this felt slow next to it.
+ *
+ * The capability probe already answers this when a pod is opened, so the
+ * answer is kept and the terminal asks nobody. A container's shell does not
+ * change while it is running; a restart replaces the pod and the entry is
+ * keyed by pod name, so a new one probes again.
+ */
+const shellCache = new Map<string, string>();
+
+function shellKey(context: string, namespace: string, pod: string, container?: string): string {
+  return `${context}/${namespace}/${pod}/${container ?? ''}`;
+}
+
+export function rememberShell(
+  context: string, namespace: string, pod: string, container: string | undefined,
+  shell: string | null,
+): void {
+  if (shell) shellCache.set(shellKey(context, namespace, pod, container), shell);
+}
+
+/** Only for tests and for a pod that has just been replaced. */
+export function clearShellCache(): void {
+  shellCache.clear();
+}
+
 async function openShell(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
@@ -1175,15 +1208,22 @@ async function openShell(
   // Distroless images have no bash, and many have no sh either. `exec -- bash`
   // on one fails with an OCI error that reads like a permissions problem and
   // sends people down entirely the wrong path, so probe first.
-  let shell: string | undefined;
+  let shell: string | undefined = shellCache.get(shellKey(context, namespace, pod, container));
   let lastError = '';
-  for (const candidate of ['bash', 'sh', 'ash']) {
+  /* Nothing to ask when the capability probe already found out — see
+     shellCache. Otherwise: bash first, because it makes the better terminal,
+     and stop at the first one that answers. */
+  for (const candidate of shell ? [] : ['bash', 'sh', 'ash']) {
     const r = await run([
       '--context', context, '-n', namespace, 'exec', pod,
       ...(container ? ['-c', container] : []),
       '--', 'which', candidate,
     ], { timeoutMs: 15_000 });
-    if (r.ok && r.stdout.trim()) { shell = candidate; break; }
+    if (r.ok && r.stdout.trim()) {
+      shell = candidate;
+      rememberShell(context, namespace, pod, container, shell);
+      break;
+    }
     if (r.stderr) lastError = r.stderr;
   }
 
@@ -1309,6 +1349,8 @@ export async function handleDk8sProbePod(
   if (mark) runtime = { runtime: mark.runtime, confidence: 1, detectedFrom: 'user' };
 
   const caps = await probeCapabilities(context, namespace, pod, container);
+  /* The terminal asks nobody when this already found out — see shellCache. */
+  rememberShell(context, namespace, pod, container, caps.shell);
 
   // The capabilities answer "can this pod do a heap dump"; the memory profile
   // answers "should it". Both are needed before the button is drawn, because

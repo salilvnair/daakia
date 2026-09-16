@@ -24,6 +24,7 @@ import {
   starredKeyOf,
 } from '../../store/dk8s-favorites-store';
 import { isScheduled } from '@daakia/k8s-workload';
+import { HIDE_CRONJOBS_PREF } from '../settings/cronjob-visibility';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { ExportLogsModal } from './ExportLogsModal';
 import { LogSearchModal } from './LogSearchModal';
@@ -45,6 +46,25 @@ import { RunningCommand } from './RunningCommand';
    reusing the accent made starred rows look selected. */
 /* Scheduled work reads as its own thing — not an error, not a service. */
 const SCHEDULED_COLOR = 'var(--color-info)';
+
+/**
+ * A colour per workload kind, so the badges are told apart at a glance.
+ *
+ * A Deployment and a CronJob are the two you see most and they mean opposite
+ * things — one is meant to be up, the other is meant to have finished — so
+ * they are the two furthest apart.
+ */
+const WORKLOAD_COLOR: Record<string, string> = {
+  Deployment: 'var(--color-method-get)',
+  StatefulSet: 'var(--color-method-put)',
+  DaemonSet: 'var(--color-method-patch)',
+  CronJob: 'var(--color-info)',
+  Job: 'var(--color-method-post)',
+};
+
+function workloadColor(kind: string): string {
+  return WORKLOAD_COLOR[kind] ?? 'var(--color-text-muted)';
+}
 const FAV_COLOR = 'var(--color-warning)';
 
 // ── Cluster pulse ───────────────────────────────────────────────────────────
@@ -369,10 +389,8 @@ function PodCard({ pod, onOpen, onMenu }: {
               className="text-[9px] px-1 py-px rounded shrink-0 uppercase tracking-wide"
               title={`${pod.workload.kind}/${pod.workload.name}`}
               style={{
-                color: isScheduled(pod.workload) ? SCHEDULED_COLOR : 'var(--color-text-muted)',
-                background: isScheduled(pod.workload)
-                  ? `color-mix(in srgb, ${SCHEDULED_COLOR} 14%, transparent)`
-                  : 'color-mix(in srgb, var(--color-text-muted) 10%, transparent)',
+                color: workloadColor(pod.workload.kind),
+                background: `color-mix(in srgb, ${workloadColor(pod.workload.kind)} 14%, transparent)`,
               }}
             >
               {pod.workload.kind}
@@ -859,7 +877,20 @@ export function PodGrid() {
     broken" and "did last night's billing job work" bury each other. The kind
     is already on the pod; this just lets you ask one at a time.
   */
-  const [kind, setKind] = useState<'all' | 'pods' | 'runs'>('all');
+  /* What it starts on comes from Settings → DK8S → General. Somebody who
+     never wants to see finished runs should not have to say so per namespace,
+     per session — but it stays a control here, because "did last night's job
+     work" is a question they will have eventually. */
+  const hideRuns = useUiStateStore(s2 => s2.prefs[HIDE_CRONJOBS_PREF]) === 'on';
+  const [kind, setKind] = useState<'all' | 'pods' | 'runs'>(hideRuns ? 'pods' : 'all');
+  /* Follows the setting when it changes, unless this view has been pointed
+     somewhere else in the meantime. */
+  const lastDefault = useRef(hideRuns);
+  useEffect(() => {
+    if (lastDefault.current === hideRuns) return;
+    lastDefault.current = hideRuns;
+    setKind(hideRuns ? 'pods' : 'all');
+  }, [hideRuns]);
   const runCount = useMemo(() => pods.filter(p => isScheduled(p.workload)).length, [pods]);
 
   const visible = useMemo(() => {
@@ -962,7 +993,7 @@ export function PodGrid() {
             options={[
               { value: 'all', label: 'all' },
               { value: 'pods', label: 'pods' },
-              { value: 'runs', label: `runs ${runCount}` },
+              { value: 'runs', label: `cronjobs ${runCount}` },
             ]}
             size="md"
             variant="rounded"
