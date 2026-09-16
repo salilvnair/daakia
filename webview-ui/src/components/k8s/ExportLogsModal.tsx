@@ -97,6 +97,7 @@ export function ExportLogsModal({ onClose, visibleLines }: {
   };
 
   const busy = exportState?.phase === 'running';
+  const done = exportState?.phase === 'done';
   /* The archived half is running when it has told us a byte total. */
   const archiving = (exportState?.totalBytes ?? 0) > 0;
   const bytesDone = bytesLabel(exportState?.bytes ?? 0);
@@ -118,15 +119,28 @@ export function ExportLogsModal({ onClose, visibleLines }: {
       headerColor={ACCENT}
       footerRight={
         <div className="flex items-center gap-2">
-          <ButtonView label="Cancel" size="sm" variant="secondary" disabled={busy} onClick={onClose} />
-          <ButtonView
-            label={busy ? 'Exporting…' : 'Choose folder and export'}
-            size="sm" variant="secondary" disabled={busy || !chosen.length}
-            accentColor={ACCENT}
-            color={busy || !chosen.length ? 'var(--color-text-muted)' : ACCENT}
-            onClick={submit}
-            style={softPrimary(ACCENT, !busy && chosen.length > 0)}
-          />
+          {done ? (
+            /* Nothing left to choose. The result is above, and the only thing
+               to do with it is read it and close. */
+            <ButtonView
+              label="Done" size="sm" variant="secondary"
+              accentColor={ACCENT} color={ACCENT}
+              onClick={onClose}
+              style={softPrimary(ACCENT, true)}
+            />
+          ) : (
+            <>
+              <ButtonView label="Cancel" size="sm" variant="secondary" disabled={busy} onClick={onClose} />
+              <ButtonView
+                label={busy ? 'Exporting…' : 'Choose folder and export'}
+                size="sm" variant="secondary" disabled={busy || !chosen.length}
+                accentColor={ACCENT}
+                color={busy || !chosen.length ? 'var(--color-text-muted)' : ACCENT}
+                onClick={submit}
+                style={softPrimary(ACCENT, !busy && chosen.length > 0)}
+              />
+            </>
+          )}
         </div>
       }
     >
@@ -255,6 +269,40 @@ export function ExportLogsModal({ onClose, visibleLines }: {
             . You will be asked where to put {single ? 'it' : 'them'}.
           </span>
         </div>
+
+        {/*
+          Where it went, on the screen you were already looking at.
+
+          The dialog used to close itself the instant the last byte landed, so
+          the path — the one thing you need next — arrived in a banner behind a
+          dialog that was disappearing at the same moment.
+        */}
+        {done && (
+          <div
+            className="flex flex-col gap-2 px-3 py-3 rounded-lg"
+            style={{
+              background: 'color-mix(in srgb, var(--color-success) 10%, var(--color-surface))',
+              border: '1px solid color-mix(in srgb, var(--color-success) 30%, transparent)',
+            }}
+          >
+            <span className="text-[12px]" style={{ color: 'var(--color-success)', fontWeight: 600 }}>
+              {exportState?.summary}
+            </span>
+            {/* Selectable, because you usually need to paste it somewhere. */}
+            <span
+              className="text-[11px] font-mono"
+              style={{ color: 'var(--color-text-secondary)', userSelect: 'text', overflowWrap: 'anywhere' }}
+              title={exportState?.destDir}
+            >
+              {exportState?.destDir}
+            </span>
+            {missed && (
+              <span className="text-[11px]" style={{ color: 'var(--color-warning)' }}>
+                {missed}
+              </span>
+            )}
+          </div>
+        )}
 
         {exportState?.phase === 'running' && (
           /*

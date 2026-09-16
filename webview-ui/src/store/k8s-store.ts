@@ -1457,9 +1457,18 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         break;
 
       case 'dk8s:exportDone':
+        /*
+          The dialog stays open on the result.
+
+          It used to close itself the instant the last byte landed, which meant
+          the summary you had just waited minutes for — where the files went,
+          and which pods gave nothing — appeared in a banner somewhere behind
+          the dialog that was being torn away at the same moment. The one thing
+          you need next is the path, and it was the thing hardest to catch.
+
+          The selection is still cleared: that work is finished either way.
+        */
         set(s => ({
-          exportOpen: false,
-          logExportOpen: false,
           selectMode: false,
           selected: [],
           exportState: {
