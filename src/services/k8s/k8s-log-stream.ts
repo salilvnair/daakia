@@ -69,6 +69,14 @@ export interface LogLine {
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'other';
 
 export interface LogStreamCallbacks {
+  /**
+   * Which format the stream settled on, once it knows.
+   *
+   * Called at most once, and only when the stream worked it out itself. The
+   * screen names the format it is running under, and it cannot name one that
+   * was decided after the panel was told.
+   */
+  onFormat?: (format: LogFormat | undefined) => void;
   onLines: (lines: LogLine[]) => void;
   onStatus: (status: 'streaming' | 'ended' | 'error', detail?: string) => void;
   /** Fired when the producer outruns the consumer and lines were discarded. */
@@ -84,6 +92,21 @@ export interface LogStreamOptions {
    * with no format is exactly as good as it was before rather than worse.
    */
   format?: LogFormat;
+  /**
+   * Work the format out from this log's own first lines.
+   *
+   * Used instead of `format` when the caller does not already know it. The
+   * caller used to find out by running a second `kubectl logs --tail=200`
+   * before opening the stream — the same window, fetched twice, one after the
+   * other, so nothing appeared on screen until both had crossed the network.
+   * Across a VPN that is the whole of "why does dk8s take so long to open a
+   * log".
+   *
+   * The stream is already reading exactly those lines. It holds the first few
+   * back, hands them here, and applies whatever comes back to them and to
+   * everything after — one call where there were two.
+   */
+  resolveFormat?: (sample: string[]) => Promise<LogFormat | undefined>;
   /**
    * Keep the stream open.
    *
@@ -138,6 +161,22 @@ const FLUSH_MS = 60;
 const MAX_PER_FLUSH = 2_000;
 
 const RFC3339 = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)\s?(.*)$/;
+
+/**
+ * How many lines the format is worked out from, and how long that may take.
+ *
+ * Two hundred because that is what the separate probe call used to ask for,
+ * and it was chosen for a reason worth keeping: a CrashLoopBackOff container
+ * dies inside a stack trace, so its last twenty-five lines are twenty-five
+ * frames and a smaller sample sees no events at all.
+ *
+ * The deadline is what stops a quiet pod holding its own first lines hostage.
+ * A snapshot of the tail arrives in one burst and never reaches it; a live
+ * `--follow` on a pod that logs once a minute would otherwise show nothing
+ * until it did.
+ */
+export const FORMAT_SAMPLE_LINES = 200;
+export const FORMAT_DEADLINE_MS = 700;
 
 /**
  * The longest line worth keeping whole.
@@ -435,8 +474,20 @@ export function streamLogs(
 
   // Compiled once for the whole stream. Building this per line is the single
   // easiest way to turn format support into the reason the view stutters.
-  const compiled = opts.format ? compileFormat(opts.format) : undefined;
-  const meter = compiled ? new FormatMeter() : undefined;
+  let compiled = opts.format ? compileFormat(opts.format) : undefined;
+  let meter = compiled ? new FormatMeter() : undefined;
+
+  /*
+    Holding the first lines back while the format is worked out.
+
+    Only when the caller asked us to find the format — with one already
+    resolved there is nothing to wait for and nothing is held. The lines are
+    kept raw rather than parsed twice: a parse without the format would have to
+    be thrown away the moment it arrived.
+  */
+  const deferring = !opts.format && !!opts.resolveFormat;
+  let held: string[] | undefined = deferring ? [] : undefined;
+  let deadline: NodeJS.Timeout | undefined;
 
   let child: ChildProcess | undefined;
   let stopped = false;
@@ -476,6 +527,71 @@ export function streamLogs(
     cb.onLines(batch);
   };
 
+  /** Parse one raw line with whatever format is in force and queue it. */
+  const take = (raw: string): void => {
+    const parsed = parseLine(raw, seq, opts.timestamps !== false, compiled, meter, prev);
+    /*
+      The far end of a bounded window, applied here because kubectl has no
+      `--until-time`. A line with no timestamp at all is kept: it is a
+      continuation of the event above it, and dropping stack frames out from
+      under the error that produced them is worse than showing a little past
+      the end.
+    */
+    if (opts.toMs !== undefined && parsed.ts !== undefined && parsed.ts > opts.toMs) {
+      past = true;
+      return;
+    }
+    seq++;
+    pending.push(parsed);
+    remember(parsed);
+  };
+
+  /*
+    Decide the format from what has arrived, then let the held lines through.
+
+    Runs exactly once. Whatever it decides is applied to the lines it decided
+    FROM as well as to everything after, so the first screenful is parsed the
+    same way as the rest — a log whose first two hundred lines rendered without
+    levels and whose next line had them would be worse than no format at all.
+  */
+  let releasing = false;
+  const release = async (): Promise<void> => {
+    if (!held || releasing) return;
+    releasing = true;
+    if (deadline) { clearTimeout(deadline); deadline = undefined; }
+
+    const sample = held;
+    held = undefined;
+
+    try {
+      /* The sample is what the application printed, without kubectl's own
+         timestamp prefix — which is what the separate probe call used to see,
+         and what every format was written against. */
+      const format = await opts.resolveFormat?.(
+        sample.map(l => stripAnsi(opts.timestamps !== false
+          ? (RFC3339.exec(l)?.[2] ?? l)
+          : l)),
+      );
+      if (format) {
+        compiled = compileFormat(format);
+        meter = new FormatMeter();
+        cb.onFormat?.(format);
+      } else {
+        cb.onFormat?.(undefined);
+      }
+    } catch {
+      /* A format that could not be worked out is not a failure of the log.
+         Every line still gets `levelOf`, which is what it had before. */
+      cb.onFormat?.(undefined);
+    }
+
+    for (const raw of sample) {
+      if (stopped) return;
+      take(raw);
+    }
+    flush();
+  };
+
   void (async () => {
     try {
       child = await spawnKubectl(args);
@@ -496,22 +612,24 @@ export function streamLogs(
       carry = parts.pop() ?? '';
       for (const raw of parts) {
         if (!raw) continue;
-        const parsed = parseLine(raw, seq, opts.timestamps !== false, compiled, meter, prev);
-        /*
-          The far end of a bounded window, applied here because kubectl has no
-          `--until-time`. A line with no timestamp at all is kept: it is a
-          continuation of the event above it, and dropping stack frames out
-          from under the error that produced them is worse than showing a
-          little past the end.
-        */
-        if (opts.toMs !== undefined && parsed.ts !== undefined && parsed.ts > opts.toMs) {
-          past = true;
+        if (held) {
+          /* The format is still being worked out. Hold the line rather than
+             parse it now and throw the parse away a moment later. */
+          held.push(raw);
+          /* Started on the first line, not on the spawn: a pod that says
+             nothing for a minute should not spend its deadline in silence and
+             then decide the format from one line. */
+          if (held.length === 1 && !deadline) {
+            deadline = setTimeout(() => { void release(); }, FORMAT_DEADLINE_MS);
+          }
+          if (held.length >= FORMAT_SAMPLE_LINES) void release();
           continue;
         }
-        seq++;
-        pending.push(parsed);
-        remember(parsed);
+        take(raw);
       }
+
+      /* Nothing below can judge what it has not parsed yet. */
+      if (held) return;
 
       /* Everything after this point is outside the window, and the log only
          goes forwards — so stop reading rather than stream the rest to the
@@ -540,12 +658,27 @@ export function streamLogs(
     child.stderr?.setEncoding('utf8');
     child.stderr?.on('data', (d: string) => { stderrTail = (stderrTail + d).slice(-400); });
 
-    child.on('exit', (code) => {
+    child.on('exit', (code) => void (async () => {
       if (timer) clearInterval(timer);
       // Nothing more after stop(). kill() triggers this handler, and a caller
       // that has stopped may already have torn down what these lines were for.
       // The final flush below is only correct for an exit we did not cause.
       if (stopped) return;
+
+      /*
+        A log shorter than the sample ends before the format is decided.
+
+        Every line of it is still held at this point, and flushing without
+        releasing would end the stream having shown nothing at all — which is
+        most pods: a snapshot of two hundred lines that arrives in one burst
+        never reaches the line count or the deadline. The carry is folded in
+        first so the last line is part of the sample it belongs to.
+      */
+      if (held) {
+        if (carry) { held.push(carry); carry = ''; }
+        await release();
+      }
+
       if (carry) {
         pending.push(parseLine(carry, seq++, opts.timestamps !== false, compiled, meter, prev));
         remember(pending[pending.length - 1]);
@@ -561,7 +694,7 @@ export function streamLogs(
           ? (opts.follow ? 'the container stopped producing output' : 'snapshot complete')
           : `kubectl exited ${code}`),
       );
-    });
+    })());
 
     child.on('error', (err) => {
       if (timer) clearInterval(timer);

@@ -972,49 +972,59 @@ async function resolveFormatFor(
   context: string,
   namespace: string,
   pod: string,
+  sample: string[],
   pinnedId?: string,
 ): Promise<{ format?: LogFormat; via: string }> {
   const available = allFormats();
   const pinned = pinnedId ? available.find(f => f.id === pinnedId) : undefined;
+  if (pinned) return { format: pinned, via: 'pinned' };
 
+  /*
+    What the pod is, for matching a format by image or label.
+
+    One call, and it no longer holds the log up: the stream starts at the same
+    moment and this is awaited only when the sample is ready. It used to run
+    first, in front of a second `kubectl logs` that fetched the very window the
+    stream was about to fetch again — three round trips, in series, before a
+    single line could appear.
+  */
   let ctx: PodContext = { namespace, pod };
-  let sample: string[] = [];
-
-  // Only pay for the pod spec and the sample when they can change the answer.
-  if (!pinned) {
-    const spec = await run(
-      ['--context', context, '-n', namespace, 'get', 'pod', pod, '-o', 'json'],
-      { timeoutMs: 15_000 },
-    );
-    if (spec.ok) {
-      try {
-        const parsed = JSON.parse(spec.stdout);
-        ctx = {
-          namespace, pod,
-          image: parsed.spec?.containers?.[0]?.image,
-          labels: parsed.metadata?.labels ?? {},
-        };
-      } catch { /* match on name and namespace alone */ }
-    }
-
-    /*
-      A window, not a handful of lines.
-
-      This was `--tail=25`, which is fine for a healthy pod and useless for a
-      broken one: a CrashLoopBackOff container dies inside a stack trace, so
-      its last 25 lines are 25 frames and the probe sees no events at all. 200
-      is enough to reach past a Hibernate trace to the events above it, and it
-      is one call paid once per stream.
-    */
-    const head = await run(
-      ['--context', context, '-n', namespace, 'logs', pod, '--tail=200'],
-      { timeoutMs: 20_000, maxBuffer: 4 * 1024 * 1024 },
-    );
-    if (head.ok) sample = head.stdout.split('\n').filter(l => l.trim());
+  const spec = await run(
+    ['--context', context, '-n', namespace, 'get', 'pod', pod, '-o', 'json'],
+    { timeoutMs: 15_000 },
+  );
+  if (spec.ok) {
+    try {
+      const parsed = JSON.parse(spec.stdout);
+      ctx = {
+        namespace, pod,
+        image: parsed.spec?.containers?.[0]?.image,
+        labels: parsed.metadata?.labels ?? {},
+      };
+    } catch { /* match on name and namespace alone */ }
   }
+  return pickFormat(ctx, sample);
+}
 
+/**
+ * Which format fits, given what the pod is and what it printed.
+ *
+ * The sample is the log's own first lines, handed over by the stream that is
+ * already reading them. It used to come from a `kubectl logs --tail=200` of
+ * its own, immediately before the stream ran the same query again — the same
+ * window across the network twice, one after the other.
+ *
+ * Two hundred lines because a CrashLoopBackOff container dies inside a stack
+ * trace: its last twenty-five lines are twenty-five frames, and a smaller
+ * sample sees no events at all.
+ */
+function pickFormat(
+  ctx: PodContext,
+  sample: string[],
+): { format?: LogFormat; via: string } {
   const chosen = chooseFormat({
-    pinned, saved: state().logFormats ?? [], builtins: BUILTIN_FORMATS, ctx, sample,
+    pinned: undefined, saved: state().logFormats ?? [],
+    builtins: BUILTIN_FORMATS, ctx, sample,
   });
   if (chosen.format) return { format: chosen.format, via: chosen.via };
 
@@ -1046,19 +1056,37 @@ export async function handleDk8sLogsOpen(
   const pod = String(msg.pod ?? '');
   if (!context || !namespace || !pod) return;
 
-  const { format, via } = await resolveFormatFor(
-    context, namespace, pod, msg.formatId as string | undefined,
-  );
-  // Named on screen, so it is always clear which format is running and how it
-  // was picked — a wrong format is much easier to spot than to debug.
-  postMessage({
-    type: 'dk8s:logFormat', pod,
-    formatId: format?.id, formatName: format?.name, via,
-  });
+  const pinnedId = msg.formatId as string | undefined;
+  const pinned = pinnedId ? allFormats().find(f => f.id === pinnedId) : undefined;
+
+  /* A pinned format needs nothing worked out, so it is named before a line
+     arrives. Everything else is decided from the log's own first lines, by the
+     stream that is already reading them. */
+  if (pinned) {
+    postMessage({
+      type: 'dk8s:logFormat', pod,
+      formatId: pinned.id, formatName: pinned.name, via: 'pinned',
+    });
+  }
+
+  let via = 'pinned';
 
   logStream?.stop();
   logStream = streamLogs(context, namespace, pod, {
-    format,
+    format: pinned,
+    /*
+      Worked out from the stream's own first lines.
+
+      This used to be a `kubectl logs --tail=200` run to completion before the
+      stream was opened — the same window fetched twice, in series, so nothing
+      reached the screen until both had crossed the network. Across a VPN that
+      was most of "why does opening a log take so long".
+    */
+    resolveFormat: pinned ? undefined : async (sample) => {
+      const picked = await resolveFormatFor(context, namespace, pod, sample, pinnedId);
+      via = picked.via;
+      return picked.format;
+    },
     // Follow only when asked. The default is a snapshot of the tail.
     follow: !!msg.follow,
     container: msg.container as string | undefined,
@@ -1072,6 +1100,12 @@ export async function handleDk8sLogsOpen(
     fromIso: msg.fromIso as string | undefined,
     toMs: msg.toMs as number | undefined,
   }, {
+    // Named on screen, so it is always clear which format is running and how
+    // it was picked — a wrong format is much easier to spot than to debug.
+    onFormat: (format) => postMessage({
+      type: 'dk8s:logFormat', pod,
+      formatId: format?.id, formatName: format?.name, via,
+    }),
     onLines: (lines) => postMessage({ type: 'dk8s:logLines', pod, lines }),
     onStatus: (status, detail) => postMessage({ type: 'dk8s:logStatus', pod, status, detail }),
     onDropped: (count) => postMessage({ type: 'dk8s:logDropped', pod, count }),

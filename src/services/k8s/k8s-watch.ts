@@ -101,10 +101,21 @@ export function toPodSummary(raw: RawPod): PodSummary {
   const readyCount = containers.filter(c => c.ready).length;
   const total = containers.length || (spec.containers?.length ?? 1);
 
-  // Prefer a live reason, then the reason the last run ended, then the pod's.
+  /*
+    Prefer a live reason, then the reason the last run ended, then the pod's.
+
+    `Completed` and `Unknown` are both dropped, for the same reason: neither
+    tells anybody anything, and both replace the phase on the card. A pod that
+    is up reading `Unknown` looks like dk8s failed to work out its state — and
+    `Unknown` is exactly what a kubelet reports for a container it lost track
+    of across a node or runtime restart, so every pod on a machine that was
+    rebooted wore it.
+  */
+  const uninformative = (r: string | undefined) =>
+    !r || r === 'Completed' || r === 'Unknown';
   const reason =
     containers.find(c => c.reason)?.reason ??
-    containers.find(c => c.lastReason && c.lastReason !== 'Completed')?.lastReason ??
+    containers.find(c => !uninformative(c.lastReason))?.lastReason ??
     status.reason;
 
   const deleting = !!meta.deletionTimestamp;
