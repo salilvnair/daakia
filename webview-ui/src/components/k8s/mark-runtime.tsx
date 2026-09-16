@@ -29,6 +29,9 @@ import { CpuIcon, CheckIcon } from '../../icons';
 
 export type PodRuntime = 'java' | 'python' | 'node' | 'go' | 'dotnet';
 
+/** The colour the entry wears when nothing is marked yet. */
+const MENU_MARK = 'var(--color-ctx-close-batch)';
+
 /** What each is called on screen. `dotnet` is not a word anybody says. */
 export const RUNTIME_LABEL: Record<PodRuntime, string> = {
   java: 'Java',
@@ -39,6 +42,20 @@ export const RUNTIME_LABEL: Record<PodRuntime, string> = {
 };
 
 export const RUNTIMES = Object.keys(RUNTIME_LABEL) as PodRuntime[];
+
+/**
+ * A colour per runtime, borrowed where the language has one worth borrowing.
+ *
+ * Five identical grey chips is a list you read one row at a time; five
+ * colours is one you recognise.
+ */
+export const RUNTIME_COLOR: Record<PodRuntime, string> = {
+  java: '#E76F51',
+  python: '#4B8BBE',
+  node: '#6DB33F',
+  go: '#00ADD8',
+  dotnet: '#A78BFA',
+};
 
 export interface MarkTarget {
   context: string;
@@ -76,6 +93,10 @@ function runtimeItems(
     id: `mark-${scope}-${r}`,
     label: RUNTIME_LABEL[r],
     icon: on === r ? <CheckIcon size={13} /> : <CpuIcon size={13} />,
+    /* Each runtime in its own colour, and the marked one in the colour that
+       means "this is set". A grey icon is what a row you cannot use looks
+       like, and every one of these is a row you can use. */
+    iconColor: on === r ? 'var(--color-success)' : RUNTIME_COLOR[r],
     description: on === r ? 'Marked — choose again to clear' : undefined,
     onClick: () => markRuntime(target, scope, on === r ? undefined : r, container),
   }));
@@ -107,6 +128,7 @@ export function markRuntimeItems(
   return [{
     id: 'mark-runtime',
     label: `Mark ${target.workload ? 'app' : 'pod'}${mark ? ` · ${labelOf(mark.runtime)}` : ''}`,
+    iconColor: mark ? RUNTIME_COLOR[mark.runtime as PodRuntime] ?? 'var(--color-success)' : MENU_MARK,
     description: target.workload
       ? `${target.workload.kind} ${target.workload.name} — survives a rollout`
       : 'This pod has no owning workload, so its own name is all there is',

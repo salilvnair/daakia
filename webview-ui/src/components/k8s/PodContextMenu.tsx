@@ -237,13 +237,17 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
         children: [
           {
             id: 'copy-pod', label: 'Pod name', shortcut: 'P',
-            icon: <CopyIcon size={IconSize.item} />, onClick: copy(pod.name),
+            icon: <CopyIcon size={IconSize.item} />, iconColor: MENU.copy,
+            onClick: copy(pod.name),
           },
           {
             id: 'copy-workload',
             label: pod.workload ? `${pod.workload.kind} name` : 'Workload name',
             shortcut: 'D',
             icon: <CopyIcon size={IconSize.item} />,
+            /* Left uncoloured only where it is disabled: grey is what a row you
+               cannot use looks like, so it must not be worn by one you can. */
+            iconColor: pod.workload ? MENU.copy : undefined,
             // A bare pod has no owning workload, and copying its own name
             // under a second label would look like it had one.
             disabled: !pod.workload,
@@ -252,19 +256,20 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
           },
           {
             id: 'copy-ns', label: 'Namespace', shortcut: 'N',
-            icon: <CopyIcon size={IconSize.item} />, onClick: copy(pod.namespace),
+            icon: <CopyIcon size={IconSize.item} />, iconColor: MENU.copy,
+            onClick: copy(pod.namespace),
           },
           { id: 'copy-sep', label: '', separator: true },
           {
             id: 'copy-describe', label: 'Describe',
             description: 'Fetches it first, then copies.',
-            icon: <FileTextIcon size={IconSize.item} />,
+            icon: <FileTextIcon size={IconSize.item} />, iconColor: MENU.read,
             onClick: () => { copyPodText(pod, 'describe'); onClose(); },
           },
           {
             id: 'copy-yaml', label: 'YAML',
             description: 'Fetches it first, then copies.',
-            icon: <FileTextIcon size={IconSize.item} />,
+            icon: <FileTextIcon size={IconSize.item} />, iconColor: MENU.read,
             onClick: () => { copyPodText(pod, 'yaml'); onClose(); },
           },
         ],
@@ -285,6 +290,7 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
         id: 'explorer',
         label: 'Browse files',
         icon: <FolderOpenIcon size={IconSize.item} />,
+        iconColor: MENU.pin,
         onClick: () => { onOpen(pod, 'explorer'); onClose(); },
       },
       { id: 'sep-3', label: '', separator: true },
