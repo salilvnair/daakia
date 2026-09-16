@@ -646,10 +646,43 @@ function startWatch(target: WatchTarget, postMessage: PostMessage): void {
   };
   watches.set(key, live);
 
+  /*
+    Metrics wait for the pod list, and do not race it.
+
+    `top pods` is a second kubectl process against the same cluster, and it was
+    fired the instant a watch started — so the slowest moment dk8s has, the one
+    where somebody is staring at an empty grid, was also the moment it opened a
+    competing connection. On a link where the pod list is already the
+    bottleneck that is bandwidth taken from the only call anybody is waiting
+    on, to fill a column that means nothing until the rows exist.
+
+    Nothing is lost by waiting: usage is drawn per pod, and there are no pods
+    until the snapshot lands.
+  */
+  // Metrics are polled rather than watched — there is no watch API for them.
+  // Absent metrics-server is normal, so a null result hides the column instead
+  // of reporting a failure the user cannot act on.
+  const poll = async () => {
+    const usage = await topPods(context, namespace);
+    if (!watches.has(key)) return;    // target dropped while we were waiting
+    live.usage = usage;
+    live.usageAvailable = usage !== null;
+    postMessage({ type: 'dk8s:podUsage', context, namespace, usage, available: usage !== null });
+  };
+
+  let metricsStarted = false;
+  const startMetrics = () => {
+    if (metricsStarted) return;
+    metricsStarted = true;
+    void poll();
+    live.metricsTimer = setInterval(poll, METRICS_INTERVAL_MS);
+  };
+
   live.handle = watchPods(context, namespace, {
     onSnapshot: (pods) => {
       live.pods = pods;
       postMessage({ type: 'dk8s:podSnapshot', context, namespace, pods });
+      startMetrics();
     },
     // Spread AFTER `type` would overwrite the message type with the watch
     // event's own ADDED/MODIFIED/DELETED and break routing entirely, so the
@@ -665,18 +698,6 @@ function startWatch(target: WatchTarget, postMessage: PostMessage): void {
     },
   });
 
-  // Metrics are polled rather than watched — there is no watch API for them.
-  // Absent metrics-server is normal, so a null result hides the column instead
-  // of reporting a failure the user cannot act on.
-  const poll = async () => {
-    const usage = await topPods(context, namespace);
-    if (!watches.has(key)) return;    // target dropped while we were waiting
-    live.usage = usage;
-    live.usageAvailable = usage !== null;
-    postMessage({ type: 'dk8s:podUsage', context, namespace, usage, available: usage !== null });
-  };
-  void poll();
-  live.metricsTimer = setInterval(poll, METRICS_INTERVAL_MS);
 }
 
 /**

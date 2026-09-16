@@ -16,8 +16,14 @@
  * It is the same string the audit records, from the same event, so what a
  * loading state shows and what actually ran cannot drift apart.
  *
- * Nothing is rendered when there is nothing to show — a screen with no command
- * behind it should not grow an empty box to say so.
+ * On a loader it always renders. It used to disappear when no command matched,
+ * which made the card look like a decoration some screens happened to have —
+ * and the screens where the match can come up empty are exactly the ones where
+ * somebody is asking "is it even running anything?". Silence is the one answer
+ * that question must never get, so an empty card says it is empty.
+ *
+ * A screen showing a RESULT is different, and still renders nothing when there
+ * was no command behind it.
  */
 import { useEffect, useState } from 'react';
 import { CopyButtonView } from '@salilvnair/dui';
@@ -98,7 +104,47 @@ export function RunningCommand({ match, now: pinnedNow, width = 1040, mode = 'wa
     The rule itself is in `running-command-pick.ts`, where a test can reach it.
   */
   const cmd = showable({ commands, context, now, match, mode, since });
-  if (!cmd) return null;
+
+  /*
+    A loader always carries a card, even when there is nothing in it yet.
+
+    This used to render nothing when no command matched, which made the card
+    look optional — a spinner with one under it and a spinner without one were
+    two different screens for no reason the reader could see, and the screens
+    that most needed it (a pod list that never arrives) were the ones where the
+    match could come up empty. "Is dk8s even running anything?" is precisely
+    the question this box exists to answer, and silence is the one answer it
+    must never give.
+
+    A settled screen is different: it shows a RESULT, and a result that had no
+    command behind it should not grow an empty box to say so.
+  */
+  if (!cmd) {
+    if (mode !== 'waiting') return null;
+    return (
+      <div
+        className="flex items-center gap-2 rounded-lg px-4 py-3 mt-2.5 mx-auto text-left"
+        style={{
+          width: 'max-content',
+          maxWidth: `min(94%, ${width}px)`,
+          minWidth: 'min(94%, 380px)',
+          background: 'var(--color-surface)',
+          border: '1px dashed var(--color-surface-border)',
+        }}
+      >
+        <span className="text-[11px] uppercase tracking-wider"
+              style={{ color: 'var(--color-text-muted)' }}>
+          Running
+        </span>
+        <span className="text-[11.5px]" style={{ color: 'var(--color-text-muted)' }}>
+          {/* Said plainly, because it is a real state: dk8s is between calls,
+              or the one it is waiting on belongs to another cluster. Either
+              way the honest answer is that nothing is running here. */}
+          nothing for this cluster yet &mdash; no kubectl call has started
+        </span>
+      </div>
+    );
+  }
 
   const failed = cmd.ok === false;
 

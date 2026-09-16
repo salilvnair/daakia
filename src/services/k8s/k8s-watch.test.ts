@@ -1,0 +1,121 @@
+/**
+ * What the pod watch is allowed to ask the cluster for.
+ *
+ * These read the source rather than run kubectl, because the thing worth
+ * holding to is the shape of the command line — and the cost of getting it
+ * wrong is invisible on a fast link and brutal on a slow one. A regression
+ * here does not fail; it just moves several megabytes nobody needed, and shows
+ * up as "dk8s is slow" on somebody's VPN weeks later.
+ */
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
+import * as path from 'path';
+import { toPodSummary } from './k8s-watch';
+
+const source = readFileSync(path.join(__dirname, 'k8s-watch.ts'), 'utf8');
+
+describe('the watch command', () => {
+  it('does not ask for the list it has already fetched', () => {
+    /*
+      `kubectl get --watch` replays the whole current state as ADDED events
+      before it starts watching, and `watchPods` has just fetched exactly that
+      with its own `get pods -o json`. Measured on a four-pod namespace:
+      23,372 bytes replayed by `--watch`, 0 by `--watch-only`. Every pod list
+      was being paid for twice, on every start and every reconnect.
+    */
+    expect(source).toContain("'--watch-only'");
+  });
+
+  it('never opens a plain --watch', () => {
+    // The flag that would quietly bring the duplicate back.
+    expect(source).not.toMatch(/'--watch'/);
+  });
+
+  it('still asks for watch events, which carry the deletions', () => {
+    /* Without this kubectl emits bare objects and a DELETED is
+       indistinguishable from an update — pods would never leave the grid. */
+    expect(source).toContain("'--output-watch-events'");
+  });
+
+  it('lists once, before the stream', () => {
+    expect(source).toContain("'get', 'pods', '-o', 'json'");
+  });
+});
+
+describe('reading a pod into the grid', () => {
+  const raw = (over: Record<string, unknown> = {}) => ({
+    metadata: { name: 'prodapp-bc8f7bf84-mhz5f', namespace: 'pvfix', uid: 'u1' },
+    spec: { nodeName: 'node-1', containers: [{ image: 'prodapp:1.2.3' }] },
+    status: {
+      phase: 'Running',
+      startTime: '2026-09-16T00:00:00Z',
+      containerStatuses: [{ name: 'app', ready: true, restartCount: 0, image: 'prodapp:1.2.3' }],
+    },
+    ...over,
+  });
+
+  it('takes the fields the grid draws', () => {
+    const p = toPodSummary(raw() as never);
+    expect(p).toMatchObject({
+      name: 'prodapp-bc8f7bf84-mhz5f',
+      namespace: 'pvfix',
+      phase: 'Running',
+      node: 'node-1',
+      image: 'prodapp:1.2.3',
+      healthy: true,
+    });
+    expect(p.ready).toEqual({ current: 1, total: 1 });
+  });
+
+  it('calls a pod being deleted Terminating, whatever its phase still says', () => {
+    /* The API reports a deleting pod as Running until the kubelet is done, so
+       the deletion timestamp is the only thing that knows. */
+    const p = toPodSummary(raw({
+      metadata: { name: 'x', namespace: 'pvfix', uid: 'u1', deletionTimestamp: '2026-09-16T01:00:00Z' },
+    }) as never);
+    expect(p.phase).toBe('Terminating');
+    expect(p.deleting).toBe(true);
+    expect(p.healthy).toBe(false);
+  });
+
+  it('counts restarts across every container', () => {
+    const p = toPodSummary(raw({
+      status: {
+        phase: 'Running',
+        containerStatuses: [
+          { name: 'app', ready: true, restartCount: 2 },
+          { name: 'sidecar', ready: false, restartCount: 3 },
+        ],
+      },
+    }) as never);
+    expect(p.restarts).toBe(5);
+    expect(p.ready).toEqual({ current: 1, total: 2 });
+    expect(p.healthy).toBe(false);
+  });
+
+  it('prefers a live reason over the one the last run ended with', () => {
+    const p = toPodSummary(raw({
+      status: {
+        phase: 'Pending',
+        containerStatuses: [{
+          name: 'app', ready: false, restartCount: 1,
+          state: { waiting: { reason: 'ImagePullBackOff' } },
+          lastState: { terminated: { reason: 'Error', finishedAt: '2026-09-16T00:30:00Z' } },
+        }],
+      },
+    }) as never);
+    expect(p.reason).toBe('ImagePullBackOff');
+    expect(p.lastRestartAt).toBe('2026-09-16T00:30:00Z');
+  });
+
+  it('survives a pod with no container statuses yet', () => {
+    // Between scheduling and the kubelet reporting, this is every pod.
+    const p = toPodSummary({
+      metadata: { name: 'new', namespace: 'pvfix' },
+      spec: { containers: [{ image: 'x' }] },
+      status: { phase: 'Pending' },
+    } as never);
+    expect(p.ready).toEqual({ current: 0, total: 1 });
+    expect(p.restarts).toBe(0);
+  });
+});
