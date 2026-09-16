@@ -249,3 +249,27 @@ export function pulse(pods: PodSummary[], now = Date.now()): PulseCounts {
   }
   return { total: pods.length, ready, degraded, critical, restartsLastHour };
 }
+
+/**
+ * A colour per workload kind, so the badge means the same thing everywhere.
+ *
+ * Deployment and CronJob are the two seen most and they mean opposite things
+ * — one is meant to be up, the other is meant to have finished — so they are
+ * the two furthest apart on the scale.
+ *
+ * It lived inside the pod grid, which is why the pod table and the search
+ * picker had no type column at all: the thing that would have drawn one was
+ * not reachable from either.
+ */
+export const WORKLOAD_COLOR: Record<string, string> = {
+  Deployment: 'var(--color-method-get)',
+  StatefulSet: 'var(--color-method-put)',
+  DaemonSet: 'var(--color-method-patch)',
+  CronJob: 'var(--color-info)',
+  Job: 'var(--color-method-post)',
+};
+
+/** A kind nobody has a colour for is grey rather than invented. */
+export function workloadColor(kind: string): string {
+  return WORKLOAD_COLOR[kind] ?? 'var(--color-text-muted)';
+}

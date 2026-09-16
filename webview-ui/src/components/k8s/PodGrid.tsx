@@ -37,7 +37,7 @@ import {
 import {
   sortPods, severityOf, severityColor, matchesFilter, shortAge,
   formatBytes, formatCpu, restartLabel, pulse, isRecentRestart, groupPods,
-  type Severity, type PodGroup,
+  type Severity, type PodGroup, workloadColor,
 } from './pod-view';
 
 import { ACCENT, OK, MUTED, MATCH } from './tone';
@@ -55,17 +55,6 @@ const SCHEDULED_COLOR = 'var(--color-info)';
  * things — one is meant to be up, the other is meant to have finished — so
  * they are the two furthest apart.
  */
-const WORKLOAD_COLOR: Record<string, string> = {
-  Deployment: 'var(--color-method-get)',
-  StatefulSet: 'var(--color-method-put)',
-  DaemonSet: 'var(--color-method-patch)',
-  CronJob: 'var(--color-info)',
-  Job: 'var(--color-method-post)',
-};
-
-function workloadColor(kind: string): string {
-  return WORKLOAD_COLOR[kind] ?? 'var(--color-text-muted)';
-}
 const FAV_COLOR = 'var(--color-warning)';
 
 // ── Cluster pulse ───────────────────────────────────────────────────────────
@@ -471,7 +460,11 @@ function PodTable({ pods, onOpen, onMenu }: {
   // is a column of identical text.
   const cols = [
     ...(selectMode ? [SELECT_COL] : []),
-    'Name', 'Ready', 'Status', '\u21bb', 'Node', 'Age',
+    /* Type, next to the name it qualifies. A namespace with a CronJob firing
+       every five minutes fills with finished runs, and "is this meant to be
+       up" is the first question asked of every row in it — the cards have
+       said so all along and the table was the one view that did not. */
+    'Name', 'Type', 'Ready', 'Status', '\u21bb', 'Node', 'Age',
     ...(metrics ? ['Memory', 'CPU'] : []),
   ];
 
@@ -588,6 +581,25 @@ function PodTable({ pods, onOpen, onMenu }: {
                     {pod.name}
                     <FavoriteStar pod={pod} size={IconSize.inline} />
                   </span>
+                </td>
+                <td className="text-[11px] px-3 py-1.5" style={cell}>
+                  {pod.workload ? (
+                    <span
+                      className="text-[9px] px-1 py-px rounded uppercase tracking-wide"
+                      title={`${pod.workload.kind}/${pod.workload.name}`}
+                      style={{
+                        color: workloadColor(pod.workload.kind),
+                        background: `color-mix(in srgb, ${workloadColor(pod.workload.kind)} 14%, transparent)`,
+                      }}
+                    >
+                      {pod.workload.kind}
+                    </span>
+                  ) : (
+                    /* A pod with no owner is a real thing — one somebody
+                       applied by hand — and saying nothing is the honest way
+                       to show it. */
+                    <span style={{ color: 'var(--color-text-muted)' }}>—</span>
+                  )}
                 </td>
                 <td className="text-[11px] font-mono px-3 py-1.5 tabular-nums" style={cell}>
                   {pod.ready.current}/{pod.ready.total}

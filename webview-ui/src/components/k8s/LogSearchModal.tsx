@@ -34,7 +34,7 @@ import {
   useDk8sSearchStore, groupKey, type SearchMatch, type PodGroup, type PvFileResult,
 } from '../../store/dk8s-search-store';
 import { levelColor } from './log-view';
-import { severityOf, severityColor, shortAge } from './pod-view';
+import { severityOf, severityColor, shortAge, workloadColor } from './pod-view';
 import { softPrimary } from './button-style';
 
 import { ACCENT, MUTED } from './tone';
@@ -602,7 +602,11 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                 <table className="w-full" style={{ borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: 'var(--color-surface)' }}>
-                      {['', 'pod', 'namespace', 'status', 'restarts', 'age'].map((h, i) => (
+                      {/* Type sits beside the pod it qualifies. Picking pods
+                          to search is exactly when "is this a service or last
+                          night's job" decides whether a row belongs in the
+                          search at all. */}
+                      {['', 'pod', 'type', 'namespace', 'status', 'restarts', 'age'].map((h, i) => (
                         <th key={i}
                             className={`text-left text-[9.5px] uppercase tracking-wider py-1.5 sticky top-0 ${i === 0 ? '' : 'px-2'}`}
                             style={{
@@ -672,6 +676,23 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                           </td>
                           <td className="px-2 py-1.5 text-[11px] font-mono"
                               style={{ color: 'var(--color-text-primary)' }}>{p.name}</td>
+                          <td className="px-2 py-1.5">
+                            {p.workload ? (
+                              <span
+                                className="text-[9px] px-1 py-px rounded uppercase tracking-wide"
+                                title={`${p.workload.kind}/${p.workload.name}`}
+                                style={{
+                                  color: workloadColor(p.workload.kind),
+                                  background: `color-mix(in srgb, ${workloadColor(p.workload.kind)} 14%, transparent)`,
+                                }}
+                              >
+                                {p.workload.kind}
+                              </span>
+                            ) : (
+                              <span className="text-[10.5px]"
+                                    style={{ color: 'var(--color-text-muted)' }}>—</span>
+                            )}
+                          </td>
                           <td className="px-2 py-1.5 text-[10.5px]"
                               style={{ color: 'var(--color-text-muted)' }}>{p.namespace}</td>
                           <td className="px-2 py-1.5 text-[10.5px]"
