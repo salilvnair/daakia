@@ -50,7 +50,7 @@ export type BodyMode = 'none' | 'json' | 'raw' | 'form-data' | 'x-www-form-urlen
 
 export type AuthType = 'none' | 'bearer' | 'basic' | 'api-key' | 'oauth2';
 
-export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki' | 'dk8s' | 'dkgh' | 'workspace';
+export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki' | 'dk8s' | 'dk8s-results' | 'dkgh' | 'workspace';
 
 export type Protocol = 'rest' | 'graphql' | 'websocket' | 'grpc' | 'soap' | 'ai' | 'mcp';
 
@@ -546,6 +546,8 @@ interface TabsState {
   openSettingsTab: (section?: string) => void;
   openMockServerTab: () => void;
   openDk8sTab: () => void;
+  /** Open (or reuse) the page a search result is read on. */
+  openDk8sResultsTab: (name: string) => void;
   openDkghTab: () => void;
   openWorkspaceTab: () => void;
   openDaakiaAiTab: () => void;
@@ -661,6 +663,32 @@ export const useTabsStore = create<TabsState>((set, get) => {
           previousTabId: activeTabId,
         }));
       }
+    },
+
+    /*
+      One results page, reused.
+
+      A tab per search would be a tab bar full of `Search: "timeout"` within a
+      morning, all of them stale but the newest. The page is where you read the
+      answer you just got; the one before it is a search you can run again.
+    */
+    openDk8sResultsTab: (name) => {
+      const { tabs, activeTabId } = get();
+      const existing = tabs.find(t => t.type === 'dk8s-results');
+      if (existing) {
+        set(s => ({
+          tabs: s.tabs.map(t => (t.id === existing.id ? { ...t, name } : t)),
+          activeTabId: existing.id,
+          previousTabId: activeTabId,
+        }));
+        return;
+      }
+      const tab = createDefaultTab({ type: 'dk8s-results', name });
+      set(s => ({
+        tabs: [...s.tabs, tab],
+        activeTabId: tab.id,
+        previousTabId: activeTabId,
+      }));
     },
 
     openDkghTab: () => {

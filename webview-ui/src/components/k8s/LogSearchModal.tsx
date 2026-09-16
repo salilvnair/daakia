@@ -19,6 +19,8 @@ import {
   SearchIcon, SpinnerIcon, WarningTriangleIcon, ChevronDownIcon, ChevronRightIcon,
   FolderExportIcon, FilterIcon, ClockIcon, CodeIcon, RefreshIcon, StopSquareIcon,
 } from '../../icons';
+import { useResultTabStore } from '../../store/dk8s-result-tab-store';
+import { useTabsStore } from '../../store/tabs-store';
 import { useK8sStore } from '../../store/k8s-store';
 import { favoriteKey, useFavoriteKeys } from '../../store/dk8s-favorites-store';
 import { useFileSearch, FileSearchResults, type HitTarget } from './FileSearchPane';
@@ -897,6 +899,44 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                 >
                   {allTicked ? 'clear' : `select all ${matchedKeys.length}`}
                 </button>
+                {/*
+                  Out of the dialog and onto a page.
+
+                  This box answers "did it find anything". Reading is what
+                  people do next, and a few hits per pod in a scrolling box
+                  inside a modal is the wrong place for it — the pods are off
+                  screen, there is no way to narrow what came back, and closing
+                  this to go and look at something loses the answer.
+                */}
+                <ButtonView
+                  label="Open as page"
+                  size="sm" variant="secondary"
+                  iconLeft={<SearchIcon size={IconSize.inline} />}
+                  onClick={() => {
+                    useResultTabStore.getState().open({
+                      query: options.query,
+                      regex: options.regex,
+                      caseSensitive: options.caseSensitive,
+                      groups,
+                      scanned: summary?.scanned ?? 0,
+                      archiveRoots: summary?.archiveRoots ?? [],
+                      /* Every pod it covered, so the Overview can show the
+                         ones that matched nothing — `groups` drops those. */
+                      searched: chosen.map(p2 => ({
+                        pod: p2.name, namespace: p2.namespace,
+                      })),
+                    });
+                    useTabsStore.getState().openDk8sResultsTab(
+                      `Search: ${options.query.length > 22
+                        ? `${options.query.slice(0, 22)}…`
+                        : options.query}`,
+                    );
+                    onClose();
+                  }}
+                  title="Read these results full width, with a filter and the pods they came from"
+                  accentColor={ACCENT} color={ACCENT}
+                  style={{ height: 24 }}
+                />
                 <ButtonView
                   label={`Export ${ticked.length || ''}`.trim()}
                   size="sm" variant="secondary"

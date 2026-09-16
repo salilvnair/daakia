@@ -5,7 +5,7 @@ import { useEnvStore, GLOBAL_ENV_ID } from '../../store/env-store';
 import { selectedEnvId } from './env-selector';
 import { getProtocolAccent } from '../../colors';
 import { MethodBadge, ConfirmDialog, ContextMenu, type ContextMenuItem, type ContextMenuSubItem } from '../shared';
-import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, GeneralAssistantIcon, FilterIcon, BookOpenIcon, Dk8sIcon, IssueOpenedIcon, StethoscopeIcon, LayoutGridIcon, PinIcon, UnpinIcon } from '../../icons';
+import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, GeneralAssistantIcon, FilterIcon, BookOpenIcon, Dk8sIcon, SearchIcon, IssueOpenedIcon, StethoscopeIcon, LayoutGridIcon, PinIcon, UnpinIcon } from '../../icons';
 import { IconButtonView, StateMachineIcon, SelectInputView, type SelectOption } from '@salilvnair/dui';
 import { logUiEvent } from '../../store/ui-audit-store';
 
@@ -440,10 +440,13 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
           const isStateMachine = tab.type === 'state-machine';
           const isWiki = tab.type === 'wiki';
           const isDk8s = tab.type === 'dk8s';
+          /* A search result wears dk8s's colour and a magnifier: it belongs to
+             dk8s, and it is not the pods. */
+          const isDk8sResults = tab.type === 'dk8s-results';
           const isDkgh = tab.type === 'dkgh';
           const isWorkspace = tab.type === 'workspace';
           const SM_ACCENT = 'var(--color-sm-tab, #f59e0b)';
-          const tabAccent = isSettings ? 'var(--color-settings)' : isMockServer ? 'var(--color-mock-server)' : isDaakiaAi ? 'var(--color-protocol-ai)' : isStateMachine ? SM_ACCENT : isWiki ? 'var(--color-wiki)' : isDk8s ? 'var(--color-dk8s)' : isDkgh ? 'var(--color-dkgh)' : isWorkspace ? 'var(--color-workspace)' : (tab.protocol ? getProtocolAccent(tab.protocol) : requestAccentColor);
+          const tabAccent = isSettings ? 'var(--color-settings)' : isMockServer ? 'var(--color-mock-server)' : isDaakiaAi ? 'var(--color-protocol-ai)' : isStateMachine ? SM_ACCENT : isWiki ? 'var(--color-wiki)' : isDk8s || isDk8sResults ? 'var(--color-dk8s)' : isDkgh ? 'var(--color-dkgh)' : isWorkspace ? 'var(--color-workspace)' : (tab.protocol ? getProtocolAccent(tab.protocol) : requestAccentColor);
           const isDragOver = dragOverIdx === idx && dragIdx !== idx;
           return (
             <div
@@ -483,6 +486,8 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
                 <BookOpenIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-wiki)' }} />
               ) : isDk8s ? (
                 <Dk8sIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />
+              ) : isDk8sResults ? (
+                <SearchIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />
               ) : isDkgh ? (
                 <IssueOpenedIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dkgh)' }} />
               ) : isWorkspace ? (

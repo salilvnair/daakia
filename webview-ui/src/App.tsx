@@ -20,6 +20,7 @@ import { AppSidebar, SidebarSection } from './components/sidebar';
 import { SettingsPanel } from './components/sidebar/SettingsPanel';
 import { MockServerPanel } from './components/mock/MockServerPanel';
 import { K8sPanel } from './components/k8s/K8sPanel';
+import { SearchResultsPage } from './components/k8s/SearchResultsPage';
 import { WorkspacePage, railWorkspaceName } from './components/workspace/WorkspacePage';
 import { useWorkspaceStore } from './store/workspace-store';
 import { SmStateMachineTabPage } from './components/mock/SmStateMachineTabPage';
@@ -102,7 +103,10 @@ export default function App() {
   const activeProtocol = useTabsStore(s => s.activeProtocol);
   // Tabs that take over the whole surface, so the protocol rail should show
   // nothing as selected while one of them is open.
-  const STANDALONE_TABS = ['settings', 'mock-server', 'dk8s', 'dkgh', 'state-machine', 'wiki', 'daakia-ai', 'workspace'];
+  /* A tab that draws its own whole page. Leaving one out of this list does
+     not hide its panel — it renders the REQUEST editor underneath it as
+     well, which is how a search result came to have a URL bar below it. */
+  const STANDALONE_TABS = ['settings', 'mock-server', 'dk8s', 'dk8s-results', 'dkgh', 'state-machine', 'wiki', 'daakia-ai', 'workspace'];
   const switchProtocol = useTabsStore(s => s.switchProtocol);
   const devToolsOpen = useDevToolsStore(s => s.isOpen);
   const protocolAccent = getProtocolAccent(activeProtocol);
@@ -277,7 +281,7 @@ export default function App() {
     const accent = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
       : activeTab?.type === 'workspace' ? 'var(--color-workspace)'
       : activeTab?.type === 'dkgh' ? 'var(--color-dkgh)'
-      : activeTab?.type === 'dk8s' ? 'var(--color-dk8s)'
+      : activeTab?.type === 'dk8s' || activeTab?.type === 'dk8s-results' ? 'var(--color-dk8s)'
       : activeTab?.type === 'state-machine' ? 'var(--color-mock-server)'
       : activeTab?.type === 'settings' ? 'var(--color-settings)'
       : activeTab?.type === 'wiki' ? 'var(--color-wiki)'
@@ -614,7 +618,7 @@ export default function App() {
   const accentVar = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
     : activeTab?.type === 'workspace' ? 'var(--color-workspace)'
     : activeTab?.type === 'dkgh' ? 'var(--color-dkgh)'
-    : activeTab?.type === 'dk8s' ? 'var(--color-dk8s)'
+    : activeTab?.type === 'dk8s' || activeTab?.type === 'dk8s-results' ? 'var(--color-dk8s)'
     : activeTab?.type === 'state-machine' ? 'var(--color-mock-server)'
     : activeTab?.type === 'settings' ? 'var(--color-settings)'
     : activeTab?.type === 'wiki' ? 'var(--color-wiki)'
@@ -879,6 +883,18 @@ export default function App() {
           </div>
         )}
 
+        {/* The page a search result is read on. Kept mounted like the dk8s
+            panel, so switching to the pods and back does not rebuild a result
+            somebody opened in order to keep. */}
+        {tabs.some(t => t.type === 'dk8s-results') && (
+          <div
+            className="flex-1 flex flex-col min-w-0 overflow-hidden"
+            style={{ display: activeTab?.type === 'dk8s-results' ? 'flex' : 'none' }}
+          >
+            <SearchResultsPage />
+          </div>
+        )}
+
         {tabs.some(t => t.type === 'dkgh') && (
           <div
             className="flex-1 flex flex-col min-w-0 overflow-hidden"
@@ -1012,7 +1028,7 @@ export default function App() {
         </div>
 
         {/* Sidebar splitter — only for protocol tabs that have an expandable panel */}
-        {!(activeTab?.type === 'mock-server' || activeTab?.type === 'dk8s' || activeTab?.type === 'state-machine' || activeTab?.type === 'settings') && (
+        {!(activeTab?.type === 'mock-server' || activeTab?.type === 'dk8s' || activeTab?.type === 'dk8s-results' || activeTab?.type === 'state-machine' || activeTab?.type === 'settings') && (
           <div
             className="w-[6px] flex-shrink-0 cursor-col-resize relative select-none group"
             onPointerDown={handleSidebarPointerDown}
