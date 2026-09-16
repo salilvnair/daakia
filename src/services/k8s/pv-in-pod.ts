@@ -397,3 +397,71 @@ export function explain(stderr: string, root: string): string {
   }
   return s.split('\n')[0]?.slice(0, 200) || `Could not read ${root}.`;
 }
+
+/* ── Fetching one file out ──────────────────────────────────────────────── */
+
+/**
+ * How much of an archived file is worth pulling over an exec.
+ *
+ * This exists to be read, and nobody reads a gigabyte. Past this the tail is
+ * taken rather than the head, because a log's newest lines are the ones a
+ * search was about — and the caller is told, so a truncated file never passes
+ * for a whole one.
+ */
+export const MAX_FETCH_BYTES = 8 * 1024 * 1024;
+
+export interface PvFetched {
+  path: string;
+  text: string;
+  command: string;
+  /** True when only the last `MAX_FETCH_BYTES` came back. */
+  truncated?: boolean;
+  /** Roughly how many lines the truncation dropped off the front. */
+  droppedLines?: number;
+  error?: string;
+}
+
+/**
+ * Read one file out of the pod.
+ *
+ * Opening an archived hit used to hand its path straight to the editor, which
+ * is right only when the volume is on this machine: `/prodapp-prod-pvc/…`
+ * either failed to open or, on Windows, resolved against a drive letter. The
+ * file is inside the container, so it is fetched from there.
+ */
+export async function fetchFromPod(t: PodTarget, file: string): Promise<PvFetched> {
+  const clean = cleanPath(file);
+  if (!clean) return { path: file, text: '', command: '', error: absoluteOnly(file) };
+
+  /* Size first, so a file too big to be worth fetching is tailed rather than
+     streamed whole and then mostly thrown away. One extra exec, against the
+     chance of pulling a gigabyte nobody asked for. */
+  const sizeArgs = execArgs(t, ['sh', '-c', `wc -c < ${shellQuote(clean)} 2>/dev/null`]);
+  const sizeRun = await run(sizeArgs, { timeoutMs: 20_000 });
+  const bytes = Number((sizeRun.stdout ?? '').trim()) || 0;
+  const big = bytes > MAX_FETCH_BYTES;
+
+  const script = big
+    ? `tail -c ${MAX_FETCH_BYTES} ${shellQuote(clean)}`
+    : `cat ${shellQuote(clean)}`;
+  const args = execArgs(t, ['sh', '-c', script]);
+  const command = showCommand(args);
+  const r = await run(args, { timeoutMs: 120_000 });
+
+  if (!r.ok && !(r.stdout ?? '').length) {
+    return { path: clean, text: '', command, error: explain(r.stderr ?? '', clean) };
+  }
+
+  let text = r.stdout ?? '';
+  let droppedLines: number | undefined;
+  if (big) {
+    /* A byte-bounded tail lands mid-line. Dropping that fragment costs one
+       line and keeps every line in the file a real one. */
+    const nl = text.indexOf('\n');
+    if (nl >= 0) text = text.slice(nl + 1);
+    const perLine = Math.max(1, text.length / Math.max(1, text.split('\n').length));
+    droppedLines = Math.max(0, Math.round((bytes - MAX_FETCH_BYTES) / perLine));
+  }
+
+  return { path: clean, text, command, truncated: big || undefined, droppedLines };
+}

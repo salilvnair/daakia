@@ -15,7 +15,11 @@ import { probeAccess, forbiddenReason } from '../../../services/k8s/k8s-access';
 import {
   clearPvCache, mountsOf, type PvLogConfig,
 } from '../../../services/k8s/pv-logs';
-import { searchPvForPod, type PvMatch } from '../../../services/k8s/pv-search';
+import { type PvMatch } from '../../../services/k8s/pv-search';
+import { searchPvInPod } from '../../../services/k8s/pv-search-in-pod';
+import { fetchFromPod } from '../../../services/k8s/pv-in-pod';
+import * as path from 'path';
+import { promises as fs } from 'fs';
 import {
   listContexts, checkReachable, listNamespaces, defaultNamespace, looksLikeProduction,
 } from '../../../services/k8s/kube-context';
@@ -2077,9 +2081,12 @@ function pvConfig(): PvLogConfig | undefined {
 /**
  * The archive half of a search.
  *
- * One pod at a time and sequential: this is local disk, and reading four
- * multi-gigabyte files at once is slower than reading them in turn, not
- * faster. Progress is reported per pod so the dialog keeps moving.
+ * One pod at a time and sequential. It used to be that way because this was
+ * local disk and four multi-gigabyte reads at once are slower than four in a
+ * row; it stays that way because each pod now costs an exec into a container,
+ * and a fan-out of those against a namespace is a burst the API server sees as
+ * one client misbehaving. Progress is reported per pod so the dialog keeps
+ * moving either way.
  */
 async function searchArchives(
   cfg: PvLogConfig,
@@ -2092,6 +2099,16 @@ async function searchArchives(
   let matched = live.matched;
   let scanned = live.scanned;
   let done = 0;
+  /*
+    Everywhere this looked, whether or not anything was in it.
+
+    An archive search that finds nothing and one that looked in the wrong place
+    are the same empty list on screen, and the paths are what tell them apart.
+    Collected across the pods and reported once at the end, because they are
+    the same paths for every pod nearly every time and a line per pod saying so
+    would bury the results.
+  */
+  const roots = new Set<string>();
 
   for (const t of targets) {
     if (signal.cancelled) break;
@@ -2100,7 +2117,7 @@ async function searchArchives(
     try {
       // The context travels with the ref: it is what `{env}` resolves from,
       // and without it a prod pod would read every environment's claim.
-      out = await searchPvForPod(
+      out = await searchPvInPod(
         cfg,
         { namespace: t.namespace, pod: t.pod, context: t.context, workload: t.workload },
         opts, signal,
@@ -2117,13 +2134,20 @@ async function searchArchives(
       done++;
       continue;
     }
-    const r = out.result as { matched: number; scanned: number; files: unknown[] };
+    const r = out.result as {
+      matched: number; scanned: number; files: unknown[]; roots?: string[];
+    };
+    for (const root of r.roots ?? []) roots.add(root);
     matched += r.matched;
     scanned += r.scanned;
     done++;
-    // Only pods with something to show: a row per pod that has no archive is
-    // noise in a result list that already has the live half in it.
-    if (r.matched > 0 || r.files.length > 0) {
+    /*
+      Only pods with something to say. A row per pod that simply has no
+      archive is noise in a list that already carries the live half — but a
+      pod whose archive could not be READ has something to say, and hiding
+      that row turned "no grep in this image" into "no matches".
+    */
+    if (r.matched > 0 || r.files.length > 0 || (out.result as { error?: string }).error) {
       postMessage({ type: 'dk8s:searchArchivePod', result: out.result, matches: out.matches });
     }
   }
@@ -2134,6 +2158,7 @@ async function searchArchives(
     matched,
     scanned,
     stopped: live.stopped || signal.cancelled,
+    archiveRoots: [...roots],
   });
 }
 
@@ -2179,12 +2204,60 @@ export function handleDk8sCancelSearch(postMessage: PostMessage): void {
  * is opened read-only in a normal editor tab, where the search, folding and
  * navigation people already know all work.
  */
+/**
+ * Open an archived log at the line that matched.
+ *
+ * The file is inside a container, so it is fetched out of the pod and written
+ * where the editor can open it. Handing the in-pod path straight to
+ * `Uri.file` was right only when the volume was mounted here: on Windows it
+ * resolved `/prodapp-prod-pvc/prodapp.log` against a drive letter and failed
+ * on a path nobody typed.
+ *
+ * Read-only, and named after the pod it came from. This is a copy of
+ * somebody else's file taken at a moment in time; an editor that let you save
+ * over it would be offering to write somewhere it cannot reach.
+ */
 export async function handleDk8sOpenLogFile(msg: Record<string, unknown>): Promise<void> {
   const file = String(msg.file ?? '');
   if (!file) return;
   const line = Math.max(0, Number(msg.line ?? 1) - 1);
+
+  const pod = String(msg.pod ?? '');
+  const namespace = String(msg.namespace ?? '');
+  const context = String(msg.context ?? state().context ?? '');
+
   try {
-    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
+    let uri: vscode.Uri;
+
+    if (pod && namespace && context) {
+      const got = await fetchFromPod({ context, namespace, pod }, file);
+      if (got.error) {
+        vscode.window.showErrorMessage(`Could not open ${file}: ${got.error}`);
+        return;
+      }
+      /* Somewhere the editor can open and the user can throw away. The pod is
+         in the name because two pods can hold files of the same name and a
+         tab called `prodapp.log` would not say which one this is. */
+      const dir = path.join(os.tmpdir(), 'dk8s-archive');
+      await fs.mkdir(dir, { recursive: true });
+      const local = path.join(dir, `${pod}-${path.basename(got.path)}`);
+      await fs.writeFile(local, got.text, 'utf8');
+      uri = vscode.Uri.file(local);
+
+      if (got.truncated) {
+        vscode.window.showWarningMessage(
+          `${path.basename(got.path)} is larger than dk8s fetches, so this is the end of it`
+          + `${got.droppedLines ? ` — about ${got.droppedLines.toLocaleString()} earlier lines are not here` : ''}.`
+          + ' Line numbers will not match the file in the pod.',
+        );
+      }
+    } else {
+      /* No pod on the message: an older result, or an archive genuinely on
+         this machine. The original behaviour, which is right for that. */
+      uri = vscode.Uri.file(file);
+    }
+
+    const doc = await vscode.workspace.openTextDocument(uri);
     const editor = await vscode.window.showTextDocument(doc, { preview: false });
     const at = new vscode.Position(Math.min(line, doc.lineCount - 1), 0);
     editor.selection = new vscode.Selection(at, at);

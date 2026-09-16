@@ -152,7 +152,17 @@ interface SearchState {
   };
   setFileSearch: (patch: Partial<SearchState['fileSearch']>) => void;
   addFileSearchPod: (r: SearchState['fileSearch']['results'][number]) => void;
-  summary?: { pods: number; matched: number; scanned: number; stopped: boolean };
+  summary?: {
+    pods: number; matched: number; scanned: number; stopped: boolean;
+    /**
+     * The archive paths this search actually looked under, inside the pods.
+     *
+     * An archive search that found nothing and one that looked in the wrong
+     * place are the same empty list, and the paths are what tell them apart —
+     * so they are shown whether or not anything came back.
+     */
+    archiveRoots?: string[];
+  };
   /** Pods the user has collapsed in the result list. */
   collapsed: string[];
   /** Whether this search included the mounted volume. */
@@ -584,6 +594,7 @@ export const useDk8sSearchStore = create<SearchState>((set, get) => ({
             matched: msg.matched as number,
             scanned: msg.scanned as number,
             stopped: !!msg.stopped,
+            archiveRoots: (msg.archiveRoots as string[] | undefined) ?? [],
           },
         });
         break;

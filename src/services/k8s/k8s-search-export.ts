@@ -19,7 +19,7 @@
 import { join } from 'path';
 import { mkdir, writeFile } from 'fs/promises';
 import { searchLogs, type SearchTarget, type SearchOptions, type SearchMatch } from './k8s-log-search';
-import { searchPvForPod } from './pv-search';
+import { searchPvInPod } from './pv-search-in-pod';
 import type { PvLogConfig } from './pv-logs';
 import type { ExportResult } from './k8s-logs';
 
@@ -179,15 +179,19 @@ export async function exportSearchResults(
   /*
     The archived half, searched the same way the screen searches it.
 
-    Sequential rather than concurrent: these are file reads on one volume, and
-    a fan-out over a mounted share is slower than walking it in order, not
-    faster.
+    Literally the same way: an export that quietly used a different engine
+    than the panel would hand somebody a file that disagrees with what they
+    were looking at when they pressed the button.
+
+    Sequential rather than concurrent, because each pod is now an exec into a
+    container and a fan-out of those across a namespace is a burst the API
+    server sees as one client misbehaving.
   */
   if (opts.pv?.enabled) {
     const signal = { cancelled: false };
     for (const t of targets) {
       try {
-        const out = await searchPvForPod(
+        const out = await searchPvInPod(
           opts.pv,
           { namespace: t.namespace, pod: t.pod, context: t.context, workload: t.workload },
           search, signal,

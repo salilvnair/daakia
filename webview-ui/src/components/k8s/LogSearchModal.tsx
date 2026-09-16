@@ -70,8 +70,18 @@ function buildRows(
         rows.push({ kind: 'file', file: f, pod: group.result.pod, key: `${key}:${f.rel}` });
       }
     }
-    for (const m of group.matches) {
-      const id = `${m.pod}:${m.line}`;
+    for (const [i, m] of group.matches.entries()) {
+      /*
+        The file, and the position in the list, both belong in the key.
+
+        A pod plus a line number is not unique in an archive: a week of
+        rotated files each begin at line 1, so three hits on line 1 of three
+        different days collided — React kept one row and dropped the others,
+        or reused the wrong one on the next render. The index settles the last
+        case, where one file genuinely has two hits reported at one line.
+      */
+      const file = (m as { file?: string }).file ?? '';
+      const id = `${m.pod}:${file}:${m.line}:${i}`;
       if (contextLines > 0) {
         m.before.forEach((t, i) => rows.push({ kind: 'context', text: t, pod: m.pod, key: `${id}b${i}` }));
       }
@@ -337,10 +347,20 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
       log is on the volume in the first place — so sending you to a live log
       would either land on a different container or do nothing at all. The file
       opens in the editor at the line that matched.
+
+      The pod travels with it all the same: the file lives inside a container,
+      and this is the only way back in to fetch it.
     */
     const archive = m as SearchMatch & { source?: string; file?: string };
     if (archive.source === 'archive' && archive.file) {
-      postMsg({ type: 'dk8s:openLogFile', file: archive.file, line: m.line });
+      postMsg({
+        type: 'dk8s:openLogFile',
+        file: archive.file,
+        line: m.line,
+        pod: m.pod,
+        namespace: m.namespace,
+        context: m.context,
+      });
       return;
     }
 
@@ -828,6 +848,26 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                 · {summary.scanned.toLocaleString()} lines scanned
               </span>
             )}
+            {/*
+              Where the archive half looked, whether or not it found anything.
+
+              An empty archive and a mistyped path are the same empty list on
+              screen. Shown once rather than per pod: it is the same set of
+              paths for every pod nearly every time, and a line each would
+              bury the results it is supposed to explain.
+            */}
+            {!running && !!summary?.archiveRoots?.length && (
+              <span
+                className="truncate"
+                title={summary.archiveRoots.join('\n')}
+                style={{ color: 'var(--color-text-muted)', maxWidth: '40%' }}
+              >
+                · searched in-pod under{' '}
+                <code style={{ fontFamily: 'var(--font-mono, monospace)' }}>
+                  {summary.archiveRoots.join('  ')}
+                </code>
+              </span>
+            )}
             {running && (
               <div className="flex-1" style={{ height: 3, borderRadius: 2, background: 'var(--color-surface)' }}>
                 <div style={{
@@ -1005,7 +1045,14 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                   variant="medallion"
                   icon={<SearchIcon size={IconSize.medallion} />}
                   title="No pod matched"
-                  message="Nothing left this machine — the logs were read and matched here, and only hits would have come back."
+                  /* Two different machines do the work now, and the claim
+                     has to cover both: a pod's live log is matched here, an
+                     archive is matched by `grep` inside the pod. Neither
+                     sends anything anywhere — which is the part this line is
+                     actually for. */
+                  message={archiveSearched
+                    ? 'Nothing was sent anywhere — live logs were matched here, archives by grep inside the pod, and only hits would have come back.'
+                    : 'Nothing left this machine — the logs were read and matched here, and only hits would have come back.'}
                   accentColor={ACCENT}
                   hints={[
                     { key: <ClockIcon size={IconSize.action} />,
@@ -1103,8 +1150,17 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                                 (showing first {row.group.matches.length})
                               </span>
                             )}
+                            {/*
+                              `grep` in the pod says what matched, never how
+                              much it read — buying that number costs a second
+                              pass over every byte, which is the whole saving.
+                              So it says what it did instead of printing a 0
+                              that reads as "scanned nothing".
+                            */}
                             <span style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-                              {r.scanned.toLocaleString()} lines
+                              {(r as { inPod?: boolean }).inPod
+                                ? 'grep in pod'
+                                : `${r.scanned.toLocaleString()} lines`}
                             </span>
                             {row.group.source === 'archive' && (row.group.files?.length ?? 0) > 0 && (
                               <button
@@ -1208,10 +1264,16 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
             </>
           ) : (
             <>
-              Logs are read and matched on this machine, a line at a time — nothing is buffered
-              whole and nothing leaves. Click a live hit to open that pod&rsquo;s log
+              A pod&rsquo;s live log is read and matched here, a line at a time &mdash; nothing
+              is buffered whole and nothing leaves. Click a live hit to open that
+              pod&rsquo;s log
               {archiveSearched && ', or an archived one to open the file it came from'}.
-              {archiveSearched && ' Archived logs on the mounted volume are searched too.'}
+              {archiveSearched && (
+                <> Archived logs are searched with <code style={{
+                  fontFamily: 'var(--font-mono, monospace)',
+                }}>grep</code> inside the pod, so only the matching lines cross the
+                wire &mdash; the paths it looked under are named above.</>
+              )}
             </>
           )}
         </span>

@@ -58,6 +58,28 @@ export interface PvPodResult {
   elapsedMs: number;
   files: PvFileResult[];
   error?: string;
+
+  /**
+   * True when this was searched with `grep` inside the pod rather than read
+   * from a volume on this machine.
+   *
+   * It changes what the numbers mean. `grep` says what matched and never how
+   * much it read, so `scanned` is 0 — and a result list that printed that as
+   * "0 lines scanned" would be reporting a measurement nobody took.
+   */
+  inPod?: boolean;
+
+  /**
+   * The paths this looked under, whether or not anything was found in them.
+   *
+   * "No matches" and "looked in the wrong place" are the same empty list on
+   * screen, and telling them apart is most of what makes an empty search
+   * actionable. This is the half a reader can check against the pod.
+   */
+  roots?: string[];
+
+  /** Every command it ran, so an answer can be reproduced by hand. */
+  commands?: string[];
 }
 
 /** Same shape as a live match, with the file it came from. */
