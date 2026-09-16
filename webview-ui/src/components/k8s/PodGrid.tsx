@@ -522,8 +522,12 @@ function PodTable({ pods, onOpen, onMenu }: {
               color: rowColor,
               whiteSpace: 'nowrap' as const,
             };
+            /* Keyed by name, not uid. The grid paints first from a table row,
+               which has no uid to give — so keying on one would remount every
+               row the moment the full list replaced it, and the flash would
+               land exactly when the detail appeared. */
             return (
-              <tr key={pod.uid}
+              <tr key={`${pod.namespace}/${pod.name}`}
                   onPointerDown={e => {
                     // Which row is under the finger, for the shared timer.
                     held.current = pod;
@@ -727,8 +731,11 @@ function NamespaceGroup({ group, onOpen, onMenu, collapsed, onToggle }: {
       {!collapsed && (
         <div className="grid gap-2.5"
              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
+          {/* Keyed by name: a card drawn from a table row has no uid yet, and
+              a key that changes when the full list lands remounts the card
+              under the reader. */}
           {group.pods.map(p => (
-            <PodCard key={p.uid} pod={p} onOpen={() => onOpen(p)} onMenu={onMenu} />
+            <PodCard key={`${p.namespace}/${p.name}`} pod={p} onOpen={() => onOpen(p)} onMenu={onMenu} />
           ))}
         </div>
       )}

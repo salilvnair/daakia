@@ -227,6 +227,16 @@ export interface PodSummary {
   image?: string;
   healthy: boolean;
   deleting: boolean;
+  /**
+   * True while this pod is only what a table row could say.
+   *
+   * The grid paints from `kubectl get pods -o wide` first, because that is
+   * what comes back in the time a terminal takes; the full JSON follows and
+   * clears the flag. Until it does there is no uid, no owning workload, no
+   * image and no per-container detail — absent because they were never asked
+   * for, not because the cluster said there were none.
+   */
+  partial?: boolean;
 }
 
 export interface PodUsage {

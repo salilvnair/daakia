@@ -15,6 +15,7 @@
 import type { ChildProcess } from 'child_process';
 import { run, spawnKubectl, createJsonObjectSplitter } from './kubectl';
 import { clusterTimeoutMs } from './k8s-timeouts';
+import { podsTable } from './pods-table';
 import { resolveWorkload } from './workload';
 
 export interface ContainerSummary {
@@ -50,6 +51,15 @@ export interface PodSummary {
   containers: ContainerSummary[];
   workload?: { kind: string; name: string };
   image?: string;
+  /**
+   * True when this came from a table row rather than from the pod's JSON.
+   *
+   * A row is what makes the grid appear at terminal speed, and it cannot carry
+   * the uid, the owning workload, the images or the per-container detail. The
+   * flag exists so nothing downstream reads a field a row never had as a field
+   * the cluster said was empty. It is gone the moment the full snapshot lands.
+   */
+  partial?: boolean;
   /** True when the pod is Ready and nothing is waiting or terminating. */
   healthy: boolean;
   deleting: boolean;
@@ -157,12 +167,40 @@ export function watchPods(
   const start = async () => {
     if (stopped) return;
 
-    // List first. Also proves we can read pods at all before opening a stream
-    // that would otherwise fail silently in the background.
+    /*
+      Two lists, sent together, and the cheap one paints first.
+
+      `get pods -o json` asks for every pod in full — roughly 10 KB each, where
+      the row a terminal prints is 62 bytes. That is why the same namespace
+      comes back in a second or two in PowerShell and left this grid empty for
+      half a minute across a VPN: not a slower cluster, a payload two orders of
+      magnitude larger.
+
+      The JSON is still needed — the workload badge, the container states, the
+      images and the uid only exist there. It just does not have to be what the
+      reader waits on. The table is served by the API server's own Table
+      endpoint, comes back in the time the terminal takes, and fills the grid;
+      the JSON replaces it when it lands.
+
+      In parallel, not in sequence: the table is a few hundred bytes and adds
+      no measurable delay to the JSON, so the full answer is no later than it
+      was before and the first one is far earlier.
+    */
+    /* On a fast link the JSON can win the race, and a table landing after it
+       would replace a full snapshot with a partial one — the grid would lose
+       its badges and images a moment after drawing them. */
+    let full = false;
+
+    const fast = podsTable(context, namespace).then((table) => {
+      if (stopped || full || !table.pods.length) return;
+      cb.onSnapshot(table.pods);
+    }).catch(() => { /* the JSON below is the real answer; this was a head start */ });
+
     const listed = await run(
       ['--context', context, '-n', namespace, 'get', 'pods', '-o', 'json'],
       { timeoutMs: clusterTimeoutMs() },
     );
+    void fast;
     if (stopped) return;
 
     if (!listed.ok) {
@@ -173,6 +211,7 @@ export function watchPods(
 
     try {
       const items: RawPod[] = JSON.parse(listed.stdout).items ?? [];
+      full = true;
       cb.onSnapshot(items.map(toPodSummary));
     } catch (err) {
       cb.onStatus('reconnecting', `could not parse pod list: ${(err as Error).message}`);
