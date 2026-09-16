@@ -23,6 +23,7 @@ import { LayersIcon, SearchIcon, ClockIcon } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
 import { LogFormatSettings } from './LogFormatSettings';
 import { PvLogSettings } from './PvLogSettings';
+import { PvPodCheck } from './PvPodCheck';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -243,6 +244,7 @@ export function Dk8sLogSettings() {
 
       <LogFormatSettings />
       <PvLogSettings />
+      <PvPodCheck />
     </div>
   );
 }
