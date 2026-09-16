@@ -158,6 +158,45 @@ export interface WatchCallbacks {
 const MAX_BACKOFF_MS = 30_000;
 
 /**
+ * How often the watch is checked against reality.
+ *
+ * ── The failure this exists for ──
+ *
+ * A `kubectl get --watch` can be alive and deaf. It reconnects internally when
+ * the API server closes a watch normally, so the process staying up is not
+ * evidence of anything — and when the connection breaks in a way TCP does not
+ * notice (a laptop that slept, a Docker Desktop restart, a VPN that dropped
+ * and came back) kubectl sits there receiving nothing, forever, while dk8s
+ * reports "watching".
+ *
+ * Found exactly that way: a watch process five hours old, parented to the
+ * running server, that had not delivered an event in hours. Pods created in
+ * the namespace never appeared, and nothing on screen said why.
+ *
+ * Silence alone is not proof — a quiet namespace is quiet for hours at a time.
+ * So this asks the cluster instead, with the cheap table call, and compares
+ * what is really there against what the watch has delivered. The two agreeing
+ * is the only evidence that a silent watch is healthy.
+ */
+const RECONCILE_MS = 60_000;
+
+/**
+ * Does the watch still describe the namespace?
+ *
+ * By name and only by name. Everything else about a pod changes every few
+ * seconds — phase, restarts, readiness — and telling us about those is the
+ * watch's whole job; comparing them would make this a second, slower watch.
+ * The question here is narrower and has a yes-or-no answer: does the namespace
+ * hold the pods the stream thinks it does. A pod that appeared or disappeared
+ * without an event is proof the stream is deaf, and nothing else needs
+ * checking to know it.
+ */
+export function watchAgrees(known: Set<string>, real: string[]): boolean {
+  if (real.length !== known.size) return false;
+  return real.every(name => known.has(name));
+}
+
+/**
  * Watch one namespace until stopped.
  *
  * A snapshot goes first so the grid paints immediately, then deltas. On a
@@ -173,6 +212,9 @@ export function watchPods(
   let child: ChildProcess | undefined;
   let stopped = false;
   let backoff = 1_000;
+  /** What the watch believes is in the namespace, by pod name. */
+  let known = new Set<string>();
+  let reconcile: NodeJS.Timeout | undefined;
   let retryTimer: NodeJS.Timeout | undefined;
 
   const start = async () => {
@@ -223,7 +265,11 @@ export function watchPods(
     try {
       const items: RawPod[] = JSON.parse(listed.stdout).items ?? [];
       full = true;
-      cb.onSnapshot(items.map(toPodSummary));
+      const summaries = items.map(toPodSummary);
+      /* What the watch is now accountable for. Every reconcile compares the
+         cluster against this. */
+      known = new Set(summaries.map(p => p.name));
+      cb.onSnapshot(summaries);
     } catch (err) {
       cb.onStatus('reconnecting', `could not parse pod list: ${(err as Error).message}`);
       schedule();
@@ -253,6 +299,7 @@ export function watchPods(
 
     cb.onStatus('connected');
     backoff = 1_000;
+    startReconcile();
 
     const feed = createJsonObjectSplitter((value) => {
       const evt = value as { type?: string; object?: RawPod };
@@ -262,7 +309,9 @@ export function watchPods(
       const type = (evt?.type ?? 'MODIFIED') as WatchEventType;
       const raw = evt?.object ?? (value as RawPod);
       if (!raw?.metadata) return;
-      cb.onEvent({ type, pod: toPodSummary(raw) });
+      const pod = toPodSummary(raw);
+      if (type === 'DELETED') known.delete(pod.name); else known.add(pod.name);
+      cb.onEvent({ type, pod });
     });
 
     child.stdout?.setEncoding('utf8');
@@ -288,6 +337,37 @@ export function watchPods(
     });
   };
 
+  /*
+    Ask the cluster what is really there, and restart a watch that disagrees.
+
+    The comparison is by name and only by name. Everything else about a pod
+    changes constantly — phase, restarts, readiness — and the watch is supposed
+    to be the thing that tells us about those; the question here is narrower
+    and answerable: does the namespace hold the pods the watch thinks it does.
+    A pod appearing or disappearing without an event is proof the stream is
+    deaf, and nothing else needs to be compared to know it.
+
+    It costs a table call a minute — a few hundred bytes — which is what makes
+    it affordable to run forever. Before the pod list was served by the Table
+    endpoint this check would itself have been a download.
+  */
+  const startReconcile = () => {
+    if (reconcile) clearInterval(reconcile);
+    reconcile = setInterval(() => void (async () => {
+      if (stopped || !child) return;
+      const table = await podsTable(context, namespace);
+      if (stopped || table.error) return;
+
+      if (watchAgrees(known, table.pods.map(p => p.name))) return;
+
+      /* Say so rather than quietly healing. A watch that went deaf is worth
+         a line in the status, because the reader was looking at a stale grid
+         until this moment and has no other way to know that. */
+      cb.onStatus('reconnecting', 'the watch missed a change — re-reading');
+      child?.kill();
+    })(), RECONCILE_MS);
+  };
+
   const schedule = () => {
     if (stopped) return;
     retryTimer = setTimeout(start, backoff);
@@ -300,6 +380,10 @@ export function watchPods(
     stop: () => {
       stopped = true;
       if (retryTimer) clearTimeout(retryTimer);
+      /* The reconcile outlives the child otherwise, and would keep asking the
+         cluster about a namespace nobody is watching. */
+      if (reconcile) clearInterval(reconcile);
+      reconcile = undefined;
       child?.kill();
       child = undefined;
       cb.onStatus('stopped');

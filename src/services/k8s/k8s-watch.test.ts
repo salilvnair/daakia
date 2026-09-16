@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import * as path from 'path';
-import { toPodSummary } from './k8s-watch';
+import { toPodSummary, watchAgrees } from './k8s-watch';
 
 const source = readFileSync(path.join(__dirname, 'k8s-watch.ts'), 'utf8');
 
@@ -159,5 +159,39 @@ describe('reading a pod into the grid', () => {
     } as never);
     expect(p.ready).toEqual({ current: 0, total: 1 });
     expect(p.restarts).toBe(0);
+  });
+});
+
+describe('whether a watch still describes reality', () => {
+  it('agrees when the same pods are there', () => {
+    expect(watchAgrees(new Set(['a', 'b']), ['b', 'a'])).toBe(true);
+  });
+
+  it('disagrees when a pod appeared without an event', () => {
+    /*
+      The failure this whole check exists for. A `kubectl get --watch` can be
+      alive and deaf — it reconnects internally when the API server closes a
+      watch normally, so the process being up proves nothing, and a connection
+      broken in a way TCP does not notice leaves it receiving silence forever.
+      Found exactly that: a five-hour-old watch, parented to the running
+      server, that had missed every pod created in its namespace.
+    */
+    expect(watchAgrees(new Set(['a']), ['a', 'b'])).toBe(false);
+  });
+
+  it('disagrees when a pod went without an event', () => {
+    expect(watchAgrees(new Set(['a', 'b']), ['a'])).toBe(false);
+  });
+
+  it('agrees on an empty namespace, which is a real answer', () => {
+    // Not "we heard nothing" — the cluster said there is nothing.
+    expect(watchAgrees(new Set(), [])).toBe(true);
+  });
+
+  it('disagrees on a swap that keeps the count', () => {
+    /* A pod replaced by another between two checks. Comparing only the size
+       would call this healthy and leave a dead pod on screen beside a missing
+       live one. */
+    expect(watchAgrees(new Set(['a', 'b']), ['a', 'c'])).toBe(false);
   });
 });
