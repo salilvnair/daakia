@@ -44,11 +44,22 @@ export type Access = Record<AccessKey, boolean> & {
    * knows not to claim it checked.
    */
   probed: boolean;
+  /**
+   * What the cluster said when it would not answer.
+   *
+   * "The cluster did not answer the permission check" is true and useless. A
+   * credential plugin that timed out, an expired token and a proxy in the way
+   * are three different problems with three different fixes, and kubectl says
+   * which on stderr — so the one line it said is carried through rather than
+   * replaced by a paragraph listing all the possibilities.
+   */
+  detail?: string;
 };
 
-const ALL_ALLOWED = (probed: boolean): Access => ({
+const ALL_ALLOWED = (probed: boolean, detail?: string): Access => ({
   logs: true, exec: true, get: true, events: true,
   portForward: true, delete: true, patch: true, probed,
+  ...(detail ? { detail } : {}),
 });
 
 /**
@@ -98,9 +109,19 @@ export function readCanI(
 /** One `kubectl auth can-i`. Never throws; anything unclear reads as allowed. */
 async function canI(
   context: string, namespace: string, check: AccessCheck,
-): Promise<boolean | undefined> {
+): Promise<{ answer: boolean | undefined; said?: string }> {
   const res = await run(canIArgs(check, context, namespace), { timeoutMs: 10_000 });
-  return readCanI(res);
+  const said = `${res.stderr ?? ''}${res.failure ?? ''}`.trim();
+  return { answer: readCanI(res), said: said || undefined };
+}
+
+/** The checks one after another, for when firing them together did not work. */
+async function inTurn(
+  context: string, namespace: string,
+): Promise<{ answer: boolean | undefined; said?: string }[]> {
+  const out: { answer: boolean | undefined; said?: string }[] = [];
+  for (const c of ACCESS_CHECKS) out.push(await canI(context, namespace, c));
+  return out;
 }
 
 export async function probeAccess(
@@ -113,27 +134,55 @@ export async function probeAccess(
   if (hit && now - hit.at < CACHE_TTL_MS) return hit.access;
 
   const keys = ACCESS_CHECKS.map(c => c.key);
-  let results: (boolean | undefined)[];
+  let results: { answer: boolean | undefined; said?: string }[];
   try {
-    // In parallel: seven SelfSubjectAccessReviews are cheap, and doing them in
-    // turn would put a visible pause in front of the first pod you open.
-    results = await Promise.all(ACCESS_CHECKS.map(c => canI(context, namespace, c)));
+    /*
+      The first one alone, then the rest together.
+
+      Seven SelfSubjectAccessReviews are cheap and firing them at once keeps a
+      visible pause off the first pod you open — but on a cluster reached
+      through an exec credential plugin (EKS, AKS, a corporate SSO helper)
+      kubectl runs that helper once per call, and seven at once contend on the
+      one token cache the helper keeps. They then time out together, and seven
+      timeouts read as seven unknowns: "0 allowed, 7 not established" on a
+      cluster where you have everything.
+
+      One call first warms the token. The other six find it already there.
+    */
+    const [first, ...rest] = ACCESS_CHECKS;
+    const firstResult = await canI(context, namespace, first);
+    results = [
+      firstResult,
+      ...await Promise.all(rest.map(c => canI(context, namespace, c))),
+    ];
   } catch {
     return ALL_ALLOWED(false);
+  }
+
+  /*
+    Nothing definite from the whole batch is a probe that did not work, whatever
+    the exit codes said — so try once more, one at a time. A helper that choked
+    on six at once usually answers fine in turn, and the alternative is telling
+    somebody with full access that the cluster would not say.
+  */
+  if (results.every(r => r.answer === undefined)) {
+    try { results = await inTurn(context, namespace); } catch { /* keep what we have */ }
   }
 
   const access = ALL_ALLOWED(true);
   let anyKnown = false;
   keys.forEach((k, i) => {
-    const r = results[i];
+    const r = results[i]?.answer;
     if (r === undefined) return;      // unknown: leave it allowed
     anyKnown = true;
     access[k] = r;
   });
 
-  // Not a single definite answer means the probe did not really work, whatever
-  // the exit codes said.
-  if (!anyKnown) return ALL_ALLOWED(false);
+  if (!anyKnown) {
+    /* What kubectl actually said, so the panel can name the problem rather
+       than list every problem this could be. */
+    return ALL_ALLOWED(false, firstLine(results.find(r => r.said)?.said));
+  }
 
   cache.set(key, { at: now, access });
   return access;
@@ -165,4 +214,10 @@ export function forbiddenReason(stderr: string): string | undefined {
       + 'refresh them and try again.';
   }
   return 'Your account does not have permission for this.';
+}
+
+/** The first line of what kubectl said, capped for a panel. */
+function firstLine(text: string | undefined): string | undefined {
+  const line = (text ?? '').split(/\r?\n/).map(l => l.trim()).find(Boolean);
+  return line ? line.slice(0, 200) : undefined;
 }

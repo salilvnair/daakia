@@ -25,6 +25,14 @@ export interface Access {
   patch: boolean;
   /** False when the probe could not run — nothing was actually checked. */
   probed: boolean;
+  /**
+   * The line kubectl said when it would not answer.
+   *
+   * Listing every possible cause is true and useless: a credential helper that
+   * timed out and an expired token need different things done, and the cluster
+   * already named which.
+   */
+  detail?: string;
 }
 
 /** One kubectl invocation, as the host reported it. Mirrors kubectl-audit. */

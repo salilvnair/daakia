@@ -189,11 +189,26 @@ export function AccessTab({ context, namespace }: { context: string; namespace: 
                  color: 'var(--color-warning)',
                }}>
             <span style={{ fontWeight: 600 }}>The cluster did not answer the permission check.</span>
+            {/* What kubectl actually said, where it said anything.
+
+                Listing every possible cause is true and useless: a credential
+                helper that timed out and an expired token need different
+                things done, and the cluster already named which. */}
+            {access?.detail ? (
+              <span className="font-mono text-[11px]"
+                    style={{ color: 'var(--color-text-secondary)', overflowWrap: 'anywhere' }}>
+                {access.detail}
+              </span>
+            ) : (
+              <span style={{ color: 'var(--color-text-secondary)' }}>
+                An expired credential, a cluster that will not run SelfSubjectAccessReview, or a
+                proxy in the way all look like this.
+              </span>
+            )}
             <span style={{ color: 'var(--color-text-secondary)' }}>
-              An expired credential, a cluster that will not run SelfSubjectAccessReview, or a proxy
-              in the way all look like this. dk8s leaves every action enabled rather than hiding one
-              that would have worked &mdash; so what you see below is what it does not know, not what
-              you cannot do. Run a line and the cluster will tell you which.
+              dk8s leaves every action enabled rather than hiding one that would have worked
+              &mdash; so what you see below is what it does not know, not what you cannot do. Run
+              a line and the cluster will tell you which.
             </span>
           </div>
         )}
