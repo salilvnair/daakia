@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { favoriteKey, favoritesFirst } from './dk8s-favorites-store';
+import {
+  favoriteKey, favoritesFirst, favoriteChoices, starredKeyOf,
+} from './dk8s-favorites-store';
 import type { PodSummary } from './k8s-store';
 
 const pod = (over: Partial<PodSummary>): PodSummary => ({
@@ -90,5 +92,48 @@ describe('favoritesFirst', () => {
     const r2 = pod({ name: 'api-2', uid: '2', workload: { kind: 'Deployment', name: 'api' } });
     const out = favoritesFirst([a, r1, b, r2], ['/default/Deployment/api']);
     expect(out.map(p => p.name)).toEqual(['api-1', 'api-2', 'a', 'b']);
+  });
+});
+
+describe('what a star can be attached to', () => {
+  const pod = {
+    name: 'api-7bb88bcc45-27sqb', namespace: 'prod', context: 'kind-dk8s',
+    workload: { kind: 'Deployment', name: 'api' },
+  };
+
+  it('offers the workload first, because that is nearly always the answer', () => {
+    const [first] = favoriteChoices(pod);
+    expect(first.mode).toBe('workload');
+    expect(first.key).toBe('kind-dk8s/prod/Deployment/api');
+  });
+
+  it('offers the pod itself, for the one replica that keeps falling over', () => {
+    const pick = favoriteChoices(pod).find(c => c.mode === 'pod');
+    expect(pick?.key).toBe('kind-dk8s/prod/Pod/api-7bb88bcc45-27sqb');
+  });
+
+  it('has only one answer for a pod with no owner', () => {
+    const bare = { name: 'debug', namespace: 'prod', context: 'kind-dk8s' };
+    expect(favoriteChoices(bare)).toHaveLength(1);
+    expect(favoriteChoices(bare)[0].mode).toBe('pod');
+  });
+
+  it('finds whichever one is actually starred', () => {
+    expect(starredKeyOf(pod, ['kind-dk8s/prod/Pod/api-7bb88bcc45-27sqb']))
+      .toBe('kind-dk8s/prod/Pod/api-7bb88bcc45-27sqb');
+    expect(starredKeyOf(pod, ['kind-dk8s/prod/Deployment/api']))
+      .toBe('kind-dk8s/prod/Deployment/api');
+    expect(starredKeyOf(pod, [])).toBeUndefined();
+  });
+
+  it('lifts a pod starred either way', () => {
+    /* Somebody who starred one replica by name means that row, and it has to
+       rise the same way the workload star lifts its pods. */
+    const other = { ...pod, name: 'api-7bb88bcc45-zzzzz' };
+    const sorted = favoritesFirst(
+      [other, pod] as never[],
+      ['kind-dk8s/prod/Pod/api-7bb88bcc45-27sqb'],
+    );
+    expect((sorted[0] as typeof pod).name).toBe('api-7bb88bcc45-27sqb');
   });
 });

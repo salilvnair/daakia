@@ -43,11 +43,55 @@ const PREF = 'dk8s.favorites';
 export function favoriteKey(pod: {
   name: string; namespace: string; context?: string;
   workload?: { kind: string; name: string };
-}): string {
+}, mode: FavoriteMode = 'workload'): string {
   const scope = `${pod.context ?? ''}/${pod.namespace}`;
-  return pod.workload
+  return pod.workload && mode === 'workload'
     ? `${scope}/${pod.workload.kind}/${pod.workload.name}`
     : `${scope}/Pod/${pod.name}`;
+}
+
+/**
+ * Which of the two things a star can be on.
+ *
+ * `workload` is nearly always what somebody means and stays the default. But
+ * a pod is sometimes the subject in its own right — one replica of five that
+ * keeps falling over, the one run of a Job that failed — and a star that
+ * silently widened to the whole Deployment gave them five starred pods and no
+ * way to say otherwise.
+ */
+export type FavoriteMode = 'workload' | 'pod';
+
+/** What a star on this pod would be attached to, either way. */
+export function favoriteChoices(pod: {
+  name: string; namespace: string; context?: string;
+  workload?: { kind: string; name: string };
+}): { mode: FavoriteMode; key: string; label: string; detail: string }[] {
+  const out: { mode: FavoriteMode; key: string; label: string; detail: string }[] = [];
+  if (pod.workload) {
+    out.push({
+      mode: 'workload',
+      key: favoriteKey(pod, 'workload'),
+      label: `${pod.workload.kind} · ${pod.workload.name}`,
+      detail: 'Every pod of it, including the ones that replace this one',
+    });
+  }
+  out.push({
+    mode: 'pod',
+    key: favoriteKey(pod, 'pod'),
+    label: `Pod · ${pod.name}`,
+    detail: pod.workload
+      ? 'Only this one. It goes away when the pod does.'
+      : 'This pod has no owning workload, so its own name is all there is.',
+  });
+  return out;
+}
+
+/** Whichever key is actually starred for this pod, if either is. */
+export function starredKeyOf(pod: {
+  name: string; namespace: string; context?: string;
+  workload?: { kind: string; name: string };
+}, keys: string[]): string | undefined {
+  return favoriteChoices(pod).map(c => c.key).find(k => keys.includes(k));
 }
 
 function parse(raw: string | undefined): string[] {
@@ -102,6 +146,11 @@ export function favoritesFirst<T extends PodSummary>(pods: T[], keys: string[]):
   const fav = new Set(keys);
   const starred: T[] = [];
   const rest: T[] = [];
-  for (const p of pods) (fav.has(favoriteKey(p)) ? starred : rest).push(p);
+  /* Either kind of star lifts a pod: somebody who starred one replica by name
+     means that row, and it has to rise the same way. */
+  for (const p of pods) {
+    const on = fav.has(favoriteKey(p, 'workload')) || fav.has(favoriteKey(p, 'pod'));
+    (on ? starred : rest).push(p);
+  }
   return [...starred, ...rest];
 }

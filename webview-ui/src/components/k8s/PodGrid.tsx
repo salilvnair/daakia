@@ -21,8 +21,10 @@ import { PodContextMenu } from './PodContextMenu';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import {
   useFavoriteKeys, toggleFavorite, favoriteKey, favoritesFirst,
+  favoriteChoices, starredKeyOf,
 } from '../../store/dk8s-favorites-store';
 import { isScheduled } from '@daakia/k8s-workload';
+import { ContextMenuView, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { ExportLogsModal } from './ExportLogsModal';
 import { LogSearchModal } from './LogSearchModal';
@@ -229,36 +231,79 @@ function StatusLine({ pod, severity }: { pod: PodSummary; severity: Severity }) 
  * so nothing shifts as it toggles.
  */
 function FavoriteStar({ pod, size = 13 }: { pod: PodSummary; size?: number }) {
-  const key = favoriteKey(pod);
-  const on = useFavoriteKeys().includes(key);
+  const keys = useFavoriteKeys();
+  const starred = starredKeyOf(pod, keys);
+  const on = !!starred;
+  const choices = favoriteChoices(pod);
+
+  /*
+    Starring asks what it is starring.
+
+    It used to pick the workload silently whenever there was one, which is
+    right nearly always and wrong in the case people actually complain about:
+    the one replica of five that keeps falling over, or the single run of a
+    Job that failed. A star that quietly widened to the whole Deployment gave
+    them five starred pods and no way to say otherwise.
+
+    Only ever asked on the way ON, and only when there is something to ask —
+    a pod with no owning workload has one answer, and taking a star off is not
+    a question.
+  */
+  const [asking, setAsking] = useState<{ x: number; y: number } | null>(null);
+
+  const click = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (on) { toggleFavorite(starred!); return; }
+    if (choices.length === 1) { toggleFavorite(choices[0].key); return; }
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setAsking({ x: r.left, y: r.bottom + 4 });
+  };
 
   return (
-    <span
-      role="button"
-      tabIndex={-1}
-      aria-pressed={on}
-      title={on
-        ? `Unstar ${pod.workload ? `${pod.workload.kind}/${pod.workload.name}` : pod.name}`
-        : `Star ${pod.workload ? `${pod.workload.kind}/${pod.workload.name}` : pod.name} — keeps it at the top`}
-      onClick={e => { e.stopPropagation(); toggleFavorite(key); }}
-      /*
-        Off-stars appear on hover; on-stars are always there.
+    <>
+      <span
+        role="button"
+        tabIndex={-1}
+        aria-pressed={on}
+        title={on
+          ? `Unstar ${starred?.split('/').slice(-2).join('/')}`
+          : 'Star this — keeps it at the top'}
+        onClick={click}
+        /*
+          Off-stars appear on hover; on-stars are always there.
 
-        A grey star on every row is twenty-eight pieces of furniture for a
-        feature most rows are not using — and worse, it makes the handful of
-        real stars hard to pick out, which is the one thing the star is for.
-        Hovering a row is already how you find out what you can do to it.
-      */
-      className={`flex items-center justify-center shrink-0 cursor-pointer transition-opacity ${
-        on ? 'opacity-100' : 'opacity-0 group-hover:opacity-45 hover:!opacity-100'
-      }`}
-      style={{
-        width: size + 6, height: size + 6, borderRadius: 4,
-        color: on ? FAV_COLOR : 'var(--color-text-muted)',
-      }}
-    >
-      <StarIcon size={size} filled={on} />
-    </span>
+          A grey star on every row is twenty-eight pieces of furniture for a
+          feature most rows are not using — and worse, it makes the handful of
+          real stars hard to pick out, which is the one thing the star is for.
+          Hovering a row is already how you find out what you can do to it.
+        */
+        className={`flex items-center justify-center shrink-0 cursor-pointer transition-opacity ${
+          on ? 'opacity-100' : 'opacity-0 group-hover:opacity-45 hover:!opacity-100'
+        }`}
+        style={{
+          width: size + 6, height: size + 6, borderRadius: 4,
+          color: on ? FAV_COLOR : 'var(--color-text-muted)',
+        }}
+      >
+        <StarIcon size={size} filled={on} />
+      </span>
+
+      {asking && (
+        <ContextMenuView
+          open
+          anchorEl={null}
+          position={asking}
+          onClose={() => setAsking(null)}
+          items={choices.map((c): DuiContextMenuItem => ({
+            id: c.mode,
+            label: c.label,
+            description: c.detail,
+            icon: <StarIcon size={13} filled={c.mode === 'workload'} />,
+            onClick: () => { toggleFavorite(c.key); setAsking(null); },
+          }))}
+        />
+      )}
+    </>
   );
 }
 
@@ -869,13 +914,13 @@ export function PodGrid() {
   */
   const selectedPods = pods.filter(p => selected.includes(p.uid));
   const newlyStarred = new Set(
-    selectedPods.map(favoriteKey).filter(k => !favKeys.includes(k)),
+    selectedPods.map(p => favoriteKey(p)).filter(k => !favKeys.includes(k)),
   ).size;
   const starSelected = () => {
     // Each key is toggled at most once and only when it is not already
     // starred, so `favKeys` — the snapshot this render was built from — stays
     // correct for the whole loop even though every call writes.
-    for (const k of new Set(selectedPods.map(favoriteKey))) {
+    for (const k of new Set(selectedPods.map(p => favoriteKey(p)))) {
       if (!favKeys.includes(k)) toggleFavorite(k);
     }
   };
