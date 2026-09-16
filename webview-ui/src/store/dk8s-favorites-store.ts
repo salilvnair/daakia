@@ -53,11 +53,15 @@ export function favoriteKey(pod: {
 /**
  * Which of the two things a star can be on.
  *
- * `workload` is nearly always what somebody means and stays the default. But
- * a pod is sometimes the subject in its own right — one replica of five that
- * keeps falling over, the one run of a Job that failed — and a star that
- * silently widened to the whole Deployment gave them five starred pods and no
- * way to say otherwise.
+ * `workload` is what a star means. `pod` exists for the pod that has no
+ * owning workload — a debug shell, a bare pod — where its own name is all
+ * there is, and for removing a pod-scoped star made before starring stopped
+ * offering the choice.
+ *
+ * It was offered as a choice for a while. A pod name carries a generated
+ * suffix that changes on every rollout, so that answer was a star which
+ * quietly stopped referring to anything — and asking made people decide
+ * between a right answer and a wrong one.
  */
 export type FavoriteMode = 'workload' | 'pod';
 
