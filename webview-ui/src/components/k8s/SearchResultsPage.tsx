@@ -271,7 +271,7 @@ function DownloadModal({ lines, name, namespace, onClose }: {
 export function SearchResultsPage() {
   const {
     query, groups, at, scanned, searched,
-    tab, setTab, filter, setFilter, levels, setLevels,
+    tab, setTab, filter, setFilter, levels, setLevels, contextLines,
     fields, addField, removeField, wrap, setWrap,
   } = useResultTabStore();
   const openDk8sTab = useTabsStore(s => s.openDk8sTab);
@@ -387,10 +387,12 @@ export function SearchResultsPage() {
     closeLogExport: () => {},
     closeDetail: openDk8sTab,
     isSnapshot: true,
+    /* The page can only show neighbours the search brought back. */
+    contextCap: contextLines,
     title: query,
   } as unknown as LogSource), [
     lines, filter, levels, fields, wrap, logLineNumbers, asPod, at, sums, query,
-    addField, removeField, setFilter, setLevels, setWrap, openDk8sTab,
+    addField, removeField, setFilter, setLevels, setWrap, openDk8sTab, contextLines,
   ]);
 
   if (!groups.length && !searched.length) {

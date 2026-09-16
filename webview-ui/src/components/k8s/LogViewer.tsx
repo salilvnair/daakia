@@ -555,7 +555,7 @@ export function LogViewer() {
     /* From the source, not the store: a results page clears ITS filters and
        closes ITS view, and reaching past the source for either would act on
        whichever pod happened to be open behind it. */
-    clearFieldFilters, closeDetail, isSnapshot,
+    clearFieldFilters, closeDetail, isSnapshot, contextCap,
   } = useLogSource();
 
   /* Every "how many lines" ladder in this view, from Settings → DK8S → Logs. */
@@ -787,6 +787,19 @@ export function LogViewer() {
     Starts at 0 — the old behaviour — so nobody's filter changes under them.
   */
   const [findContext, setFindContext] = useState(0);
+
+  /*
+    Which widths this buffer can actually honour — see the note on the
+    selector below.
+  */
+  const contextRungs = useMemo(() => {
+    const all = lineSettings.contextLadder;
+    if (contextCap === undefined) return all;
+    const within = all.filter(v => v <= contextCap);
+    /* Always at least "none" and the width it was searched at, even when the
+       cap falls between two rungs. */
+    return within.length ? within : [0];
+  }, [lineSettings.contextLadder, contextCap]);
 
   const visible = useMemo(
     () => filterLines(logs, {
@@ -1245,11 +1258,27 @@ export function LogViewer() {
           the count would read "0 matches" for a log nobody has searched.
         */}
         {logFilter.trim() !== '' && (
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div
+            className="flex items-center gap-1.5 shrink-0"
+            title={contextCap !== undefined
+              ? `This result was searched with ${contextCap} line${contextCap === 1 ? '' : 's'} either side, `
+                + 'so that is as wide as it goes here. Search again with more to see further.'
+              : undefined}
+          >
+            {/*
+              The ladder stops where the lines do.
+
+              A live log holds everything it fetched, so every rung can be
+              satisfied from the buffer. A search result holds each hit plus
+              the few lines the search asked for either side — and offering
+              "±100 lines around" over a buffer that has two would change the
+              dropdown and nothing else. A control that does nothing is worse
+              than one that is not there.
+            */}
             <SelectInputView
-              value={String(onLadder(findContext, lineSettings.contextLadder, 0))}
+              value={String(onLadder(findContext, contextRungs, 0))}
               onChange={v => setFindContext(Number(v))}
-              options={lineSettings.contextLadder.map(v => ({
+              options={contextRungs.map(v => ({
                 value: String(v), label: contextLabel(v),
               }))}
               size={CTL_SIZE}

@@ -58,6 +58,16 @@ export type LogSource = Pick<K8sStore,
   isSnapshot?: boolean;
   /** What the view calls this log, where it is not one pod's. */
   title?: string;
+  /**
+   * The most surrounding lines this buffer can supply.
+   *
+   * A live log holds everything it fetched, so any rung of the context ladder
+   * can be satisfied from it. A search result holds each hit plus the few
+   * lines the search asked for either side — so the rungs above that would
+   * change the dropdown and not the page, which is the worst kind of control.
+   * Set it and the ladder stops where the lines do.
+   */
+  contextCap?: number;
 };
 
 const Ctx = createContext<LogSource | null>(null);

@@ -24,6 +24,15 @@ export interface ResultTabState {
   query: string;
   regex: boolean;
   caseSensitive: boolean;
+  /**
+   * How many lines either side of each hit the SEARCH brought back.
+   *
+   * It is a hard ceiling on this page. The neighbours of a hit are only here
+   * because the search fetched them; nothing on a result can reach back into
+   * the pod for more, so a "±100 lines around" that the search ran at ±2 would
+   * be a control that silently does nothing.
+   */
+  contextLines: number;
   /** Every pod's results, exactly as they were when the page was opened. */
   groups: PodGroup[];
   /** When the search ran, so a page kept open says how old it is. */
@@ -61,7 +70,7 @@ export interface ResultTabState {
   setWrap: (w: boolean) => void;
 
   open: (snapshot: {
-    query: string; regex: boolean; caseSensitive: boolean;
+    query: string; regex: boolean; caseSensitive: boolean; contextLines: number;
     groups: PodGroup[]; scanned: number; archiveRoots: string[];
     searched: { pod: string; namespace: string }[];
   }) => void;
@@ -71,6 +80,7 @@ export const useResultTabStore = create<ResultTabState>((set, get) => ({
   query: '',
   regex: false,
   caseSensitive: false,
+  contextLines: 0,
   groups: [],
   at: 0,
   scanned: 0,

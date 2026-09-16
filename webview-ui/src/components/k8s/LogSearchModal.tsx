@@ -948,6 +948,9 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                       query: options.query,
                       regex: options.regex,
                       caseSensitive: options.caseSensitive,
+                      /* The ceiling for the page's own context selector: it
+                         can only show neighbours the search brought back. */
+                      contextLines: options.contextLines,
                       groups,
                       scanned: summary?.scanned ?? 0,
                       archiveRoots: summary?.archiveRoots ?? [],
