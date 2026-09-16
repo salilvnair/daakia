@@ -764,8 +764,7 @@ export function disposeDk8s(): void {
   stopAllWatches();
   activeSearch?.cancel();
   activeSearch = undefined;
-  logStream?.stop();
-  logStream = undefined;
+  stopLogStreams();
   closeAllTerminals();
 }
 
@@ -957,8 +956,35 @@ export async function handleDk8sExportSearch(
 
 // ── Pod detail: logs, describe, shell ───────────────────────────────────────
 
-/** One follow per tab. Opening a second pod replaces the first. */
-let logStream: LogStreamHandle | undefined;
+/**
+ * The log streams that are open, keyed by the pod each belongs to.
+ *
+ * It used to be one handle: opening a pod stopped whatever was streaming and
+ * took its place, which is right for a detail view that shows one pod and
+ * impossible for a split that shows two. Following two replicas of the same
+ * app to see which of them is the one failing is the whole point of a split,
+ * and one handle could never do it.
+ *
+ * Keyed by cluster, namespace and pod together. Two namespaces can hold a pod
+ * of the same name, and on a key that was only the name the second one's lines
+ * would arrive under the first one's pane.
+ */
+const logStreams = new Map<string, LogStreamHandle>();
+
+function streamKey(context: string, namespace: string, pod: string): string {
+  return `${context}/${namespace}/${pod}`;
+}
+
+/** Stop one stream, or every one of them. */
+function stopLogStreams(key?: string): void {
+  if (key) {
+    logStreams.get(key)?.stop();
+    logStreams.delete(key);
+    return;
+  }
+  for (const h of logStreams.values()) h.stop();
+  logStreams.clear();
+}
 
 /**
  * Work out which log format applies to a pod.
@@ -1071,8 +1097,17 @@ export async function handleDk8sLogsOpen(
 
   let via = 'pinned';
 
-  logStream?.stop();
-  logStream = streamLogs(context, namespace, pod, {
+  /*
+    A pane keeps the others running; the detail view does not.
+
+    Opening a pod from the grid means "show me this pod", and leaving the
+    previous one streaming would keep a kubectl process alive for a pod nobody
+    is looking at. Opening one INTO a split means "and this one as well".
+  */
+  const key = streamKey(context, namespace, pod);
+  if (msg.alongside) stopLogStreams(key); else stopLogStreams();
+
+  logStreams.set(key, streamLogs(context, namespace, pod, {
     format: pinned,
     /*
       Worked out from the stream's own first lines.
@@ -1106,15 +1141,33 @@ export async function handleDk8sLogsOpen(
       type: 'dk8s:logFormat', pod,
       formatId: format?.id, formatName: format?.name, via,
     }),
-    onLines: (lines) => postMessage({ type: 'dk8s:logLines', pod, lines }),
-    onStatus: (status, detail) => postMessage({ type: 'dk8s:logStatus', pod, status, detail }),
-    onDropped: (count) => postMessage({ type: 'dk8s:logDropped', pod, count }),
-  });
+    /* Namespace and cluster travel with every line. With two panes open the
+       pod name alone is not an address — two namespaces can hold a pod called
+       the same thing, and its lines would land in the other one's pane. */
+    onLines: (lines) => postMessage({ type: 'dk8s:logLines', pod, namespace, context, lines }),
+    onStatus: (status, detail) => postMessage({
+      type: 'dk8s:logStatus', pod, namespace, context, status, detail,
+    }),
+    onDropped: (count) => postMessage({
+      type: 'dk8s:logDropped', pod, namespace, context, count,
+    }),
+  }));
 }
 
-export function handleDk8sLogsClose(): void {
-  logStream?.stop();
-  logStream = undefined;
+/**
+ * Close one pod's stream, or all of them.
+ *
+ * A pane closing takes its own stream with it and leaves the others running;
+ * the detail view, which owns the whole screen, closes everything.
+ */
+export function handleDk8sLogsClose(msg: Record<string, unknown> = {}): void {
+  const pod = String(msg.pod ?? '');
+  if (!pod) { stopLogStreams(); return; }
+  stopLogStreams(streamKey(
+    String(msg.context ?? state().context ?? ''),
+    String(msg.namespace ?? ''),
+    pod,
+  ));
 }
 
 /** describe + YAML in one round trip: the detail panel shows both. */

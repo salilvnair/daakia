@@ -19,6 +19,7 @@ import { SensitivityPrompt, UnreachableNotice } from './ContextPicker';
 import { ClusterPicker, NamespaceMultiPicker } from './MultiPicker';
 import { PodGrid } from './PodGrid';
 import { PodDetail } from './PodDetail';
+import { SplitLogs } from './SplitLogs';
 import { useDk8sAiStore, applyDk8sAiError } from '../../store/dk8s-ai-store';
 import { useDk8sDoctorStore } from '../../store/dk8s-doctor-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
@@ -413,6 +414,10 @@ export function K8sPanel() {
       )}
 
       {detail && <PodDetail />}
+
+      {/* Over the panel like the pod detail, and above it in the same sense:
+          a split is a place you went, not a layer over the grid. */}
+      <SplitLogs />
 
       {/* Over the panel, like the pod detail: an analysis is one artifact you
           opened, not a place you navigate to. */}

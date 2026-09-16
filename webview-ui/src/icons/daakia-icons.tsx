@@ -1232,6 +1232,23 @@ export function ColumnsIcon(props: IconProps) {
   );
 }
 
+/**
+ * Panes stacked, the way `ColumnsIcon` shows them side by side.
+ *
+ * The same three bars turned through ninety degrees, so the pair reads as one
+ * choice with two answers rather than as two unrelated glyphs.
+ */
+export function RowsIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <rect x="4" y="3" width="16" height="5" rx="1" />
+      <rect x="4" y="9.5" width="11" height="5" rx="1" />
+      <rect x="4" y="16" width="14" height="5" rx="1" />
+    </svg>
+  );
+}
+
+
 /** Two people — an account list, a team, an assignee facet. */
 export function UsersIcon(props: IconProps) {
   return (

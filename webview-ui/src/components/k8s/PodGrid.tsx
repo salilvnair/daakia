@@ -25,6 +25,8 @@ import {
   starredKeyOf,
 } from '../../store/dk8s-favorites-store';
 import { isScheduled } from '@daakia/k8s-workload';
+import { useSplitStore, MAX_PANES, type SplitMode } from '../../store/dk8s-split-store';
+import { logLineSettings } from './log-settings';
 import { HIDE_CRONJOBS_PREF } from '../settings/cronjob-visibility';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { ExportLogsModal } from './ExportLogsModal';
@@ -32,7 +34,7 @@ import { LogSearchModal } from './LogSearchModal';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import {
   FolderExportIcon, CloseIcon, SearchIcon, LayersIcon, ChevronDownIcon, ChevronRightIcon,
-  StarIcon, Dk8sIcon,
+  StarIcon, Dk8sIcon, ColumnsIcon, RowsIcon, LayoutGridIcon,
 } from '../../icons';
 import {
   sortPods, severityOf, severityColor, matchesFilter, shortAge,
@@ -56,6 +58,20 @@ const SCHEDULED_COLOR = 'var(--color-info)';
  * they are the two furthest apart.
  */
 const FAV_COLOR = 'var(--color-warning)';
+
+/**
+ * The arrangements a selection can be opened in.
+ *
+ * Which one reads best depends on the log rather than on the count — long
+ * lines want rows so each gets the full width, short ones want columns so more
+ * of the history fits. Nobody knows which until the logs are on screen, so it
+ * is a choice here and changeable there.
+ */
+const SPLIT_MODES: { id: SplitMode; label: string; Icon: typeof ColumnsIcon }[] = [
+  { id: 'vertical', label: 'Side by side', Icon: ColumnsIcon },
+  { id: 'horizontal', label: 'Stacked', Icon: RowsIcon },
+  { id: 'grid', label: 'Grid', Icon: LayoutGridIcon },
+];
 
 // ── Cluster pulse ───────────────────────────────────────────────────────────
 
@@ -915,6 +931,13 @@ export function PodGrid() {
   const setGridFilter = useK8sStore(s2 => s2.setGridFilter);
   /* "Where would a search look for this pod?" — opened from the pod's menu. */
   const [pvCheck, setPvCheck] = useState<PodSummary | undefined>();
+  /* Which arrangement, asked once when the panes are opened. */
+  const [splitMenu, setSplitMenu] = useState(false);
+  const openSplit = useSplitStore(s => s.open);
+  /* The tail each pane opens on, from Settings → DK8S → Logs, so a pane and
+     the detail view start on the same number of lines. */
+  const splitPrefs = useUiStateStore(s2 => s2.prefs);
+  const lineSettings = useMemo(() => logLineSettings(splitPrefs), [splitPrefs]);
   /*
     Published for the panel's surface menu rather than rendered here — the
     right-click lands on a div this component owns, but the menu is built where
@@ -1057,6 +1080,84 @@ export function PodGrid() {
               : `Select all ${visible.length} visible`}
           </button>
           <div className="flex-1" />
+
+          {/*
+            Open the selection as panes.
+
+            Two replicas serving the same traffic and one of them is the reason
+            a request failed: reading them one after the other does not answer
+            that, because by the time the second is on screen the first has
+            moved on. The submenu is the arrangement, which is worth asking —
+            long lines want rows and short ones want columns, and nobody knows
+            which until the logs are up.
+          */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setSplitMenu(v => !v)}
+              disabled={selected.length < 2}
+              title={selected.length < 2
+                ? 'Pick two or more pods to open them side by side'
+                : `Open ${selected.length} pods as panes`}
+              className="text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors flex items-center gap-1.5"
+              style={{
+                background: selected.length > 1
+                  ? `color-mix(in srgb, ${ACCENT} 16%, transparent)`
+                  : 'transparent',
+                color: selected.length > 1 ? ACCENT : 'var(--color-text-muted)',
+                border: `1px solid ${selected.length > 1
+                  ? `color-mix(in srgb, ${ACCENT} 45%, transparent)`
+                  : 'var(--color-surface-border)'}`,
+                fontWeight: 600,
+                cursor: selected.length > 1 ? 'pointer' : 'not-allowed',
+              }}
+            >
+              <ColumnsIcon size={IconSize.action} strokeWidth={2} />
+              Split open
+            </button>
+
+            {splitMenu && selected.length > 1 && (
+              <div
+                className="absolute right-0 bottom-full mb-1.5 rounded-lg overflow-hidden z-40"
+                style={{
+                  background: 'var(--color-surface)',
+                  border: '1px solid var(--color-surface-border)',
+                  boxShadow: '0 8px 24px rgba(0,0,0,.34)',
+                  minWidth: 210,
+                }}
+              >
+                {SPLIT_MODES.map(({ id, label, Icon }) => {
+                  const room = Math.min(selected.length, MAX_PANES[id]);
+                  return (
+                    <button
+                      key={id} type="button"
+                      onClick={() => {
+                        setSplitMenu(false);
+                        openSplit(
+                          pods.filter(p => selected.includes(p.uid)),
+                          id,
+                          lineSettings.tailDefault,
+                        );
+                      }}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-[11.5px] cursor-pointer border-none bg-transparent text-left"
+                      style={{ color: 'var(--color-text-primary)' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 12%, transparent)`; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      <Icon size={IconSize.item} color={ACCENT} />
+                      <span className="flex-1">{label}</span>
+                      {/* Said before it is chosen: picking five pods and a mode
+                          that holds three is a choice about which two get
+                          dropped, and it should not be a surprise. */}
+                      <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
+                        {room < selected.length ? `first ${room}` : `${room} panes`}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {/* Search sits beside Export because they take the same selection.
               Searching is the cheaper of the two — it reads the logs and keeps

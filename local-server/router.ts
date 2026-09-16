@@ -494,7 +494,7 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       await handleDk8sLogsOpen(msg, post);
       break;
     case 'dk8s:closeLogs':
-      handleDk8sLogsClose();
+      handleDk8sLogsClose(msg);
       break;
     case 'dk8s:describe':
       await handleDk8sDescribe(msg, post);

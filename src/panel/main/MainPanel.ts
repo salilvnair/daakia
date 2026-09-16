@@ -697,7 +697,7 @@ export class MainPanel {
         void handleDk8sLogsOpen(msg, this._post);
         break;
       case 'dk8s:closeLogs':
-        handleDk8sLogsClose();
+        handleDk8sLogsClose(msg);
         break;
       case 'dk8s:describe':
         handleDk8sDescribe(msg, this._post);
