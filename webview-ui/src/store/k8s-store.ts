@@ -628,9 +628,19 @@ interface K8sState {
   /** How many lines the snapshot asks for. */
   logTail: number;
   /** Which end of the log — the tail, or what the pod said on startup. */
-  logDirection: 'last' | 'first';
+  logDirection: 'last' | 'first' | 'between';
   /** Range pushed down to kubectl. */
   logSince: 'all' | 'restart' | '15m' | '1h' | '6h';
+  /**
+   * The two ends of a `between` window, as the reader's own clock reads them.
+   *
+   * `YYYY-MM-DDTHH:mm`, no zone — this is the time on the screen of the person
+   * choosing it, which their device already knows. The zone that has to be
+   * stated is the one the LOG is written in, and that belongs to the log.
+   */
+  logFrom: string;
+  logTo: string;
+  setLogWindow: (from: string, to: string) => void;
   /** Per-pod Download, using the same options as the grid's bulk export. */
   logExportOpen: boolean;
   logWrap: boolean;
@@ -737,7 +747,7 @@ interface K8sState {
   setLogFollow: (v: boolean) => void;
   setLogLive: (v: boolean) => void;
   setLogTail: (n: number) => void;
-  setLogDirection: (d: 'last' | 'first') => void;
+  setLogDirection: (d: 'last' | 'first' | 'between') => void;
   setLogSince: (v: 'all' | 'restart' | '15m' | '1h' | '6h') => void;
   fetchLogs: () => void;
   openLogExport: () => void;
@@ -824,6 +834,8 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   logTail: 200,
   logDirection: 'last',
   logSince: 'all',
+  logFrom: '',
+  logTo: '',
   logExportOpen: false,
   // Wrap on by default. A stack frame or a JSON payload running off the right
   // edge is the common case in a pod log, and horizontal scrolling to read it
@@ -1060,8 +1072,28 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   // Fetch is pressed — a selector that refetches on change is exactly the
   // "it keeps refreshing" behaviour this view is supposed to avoid.
   setLogTail: (logTail) => set({ logTail }),
-  setLogDirection: (logDirection) => set({ logDirection }),
+  setLogDirection: (logDirection) => set(s => {
+    /*
+      Choosing `between` with two empty boxes would send no window at all and
+      quietly fetch the whole log — the opposite of what was asked for, and
+      indistinguishable on screen from a window that happened to match
+      everything. An hour back to now is a real window and an obvious one to
+      edit.
+    */
+    if (logDirection !== 'between' || (s.logFrom && s.logTo)) return { logDirection };
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const local = (d: Date) =>
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+      + `T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const now = new Date();
+    return {
+      logDirection,
+      logFrom: s.logFrom || local(new Date(now.getTime() - 3600_000)),
+      logTo: s.logTo || local(now),
+    };
+  }),
   setLogSince: (logSince) => set({ logSince }),
+  setLogWindow: (logFrom, logTo) => set({ logFrom, logTo }),
 
   fetchLogs: () => get().reloadLogs(),
 
@@ -1073,12 +1105,27 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   setLogContainer: (logContainer) => { set({ logContainer }); get().reloadLogs(); },
 
   reloadLogs: () => {
-    const { detail, logPrevious, logContainer, logLive, logTail, logDirection, logSince } = get();
+    const {
+      detail, logPrevious, logContainer, logLive, logTail, logDirection, logSince,
+      logFrom, logTo,
+    } = get();
     if (!detail) return;
     set({
       logs: [], logDropped: 0, logStatus: 'loading',
       logDetail: undefined, logSelection: undefined, logRequestedAt: Date.now(),
     });
+
+    /* `datetime-local` gives a zoneless local reading; the server wants
+       RFC3339 and the local end wants epoch ms. `Date.parse` of a zoneless
+       string uses the device's own zone, which is exactly what was meant. */
+    const isoOf = (v: string): string | undefined => {
+      const ms = Date.parse(v);
+      return Number.isFinite(ms) ? new Date(ms).toISOString() : undefined;
+    };
+    const msOf = (v: string): number | undefined => {
+      const ms = Date.parse(v);
+      return Number.isFinite(ms) ? ms : undefined;
+    };
 
     const SINCE: Record<string, number | undefined> = {
       all: undefined, '15m': 900, '1h': 3600, '6h': 21600,
@@ -1095,9 +1142,17 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       previous: logPrevious, container: logContainer,
       // Following always tails: a head slice cannot grow.
       follow: logLive,
-      direction: logLive ? 'last' : logDirection,
+      /*
+        `between` is not a direction the stream knows — it is a window. It
+        reads as a third choice beside last and first because that is how
+        somebody picks it, but what goes over the wire is a start, an end, and
+        a tail from the end of that window.
+      */
+      direction: logLive || logDirection === 'between' ? 'last' : logDirection,
       tailLines: logTail,
-      sinceSeconds: SINCE[logSince],
+      ...(logDirection === 'between' && !logLive
+        ? { fromIso: isoOf(logFrom), toMs: msOf(logTo) }
+        : { sinceSeconds: SINCE[logSince] }),
     });
   },
 

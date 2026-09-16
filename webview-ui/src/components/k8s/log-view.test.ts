@@ -669,3 +669,73 @@ describe('filterLines highlights what is on screen', () => {
       'settlement failed'.slice(a, b).toLowerCase() !== 'tenant')).toBe(true);
   });
 });
+
+describe('keeping what is around a hit', () => {
+  /* The question somebody actually has is never "which line says this" — it
+     is "what happened around the moment it said it". */
+  const lines = Array.from({ length: 10 }, (_, i) =>
+    line(i, 'info', i === 4 ? 'boom CheckoutService failed' : `line ${i}`));
+
+  it('is the hit alone when no context is asked for', () => {
+    const out = filterLines(lines, { query: 'boom', levels: [] });
+    expect(out.map(l => l.seq)).toEqual([4]);
+  });
+
+  it('keeps the lines either side', () => {
+    const out = filterLines(lines, { query: 'boom', levels: [], contextLines: 2 });
+    expect(out.map(l => l.seq)).toEqual([2, 3, 4, 5, 6]);
+  });
+
+  it('marks the neighbours as context so the hit is still findable', () => {
+    const out = filterLines(lines, { query: 'boom', levels: [], contextLines: 1 });
+    expect(out.filter(l => !l.context).map(l => l.seq)).toEqual([4]);
+    expect(out.filter(l => l.context).map(l => l.seq)).toEqual([3, 5]);
+  });
+
+  it('does not run off either end', () => {
+    const out = filterLines(
+      [line(0, 'info', 'boom'), line(1, 'info', 'a')],
+      { query: 'boom', levels: [], contextLines: 5 },
+    );
+    expect(out.map(l => l.seq)).toEqual([0, 1]);
+  });
+
+  it('shows an overlapping line once, not twice', () => {
+    /* Two hits three apart with two lines of context share one. Emitting a
+       window per hit would print it twice and put the log out of order. */
+    const two = Array.from({ length: 8 }, (_, i) =>
+      line(i, 'info', i === 2 || i === 5 ? 'boom' : `line ${i}`));
+    const out = filterLines(two, { query: 'boom', levels: [], contextLines: 2 });
+    expect(out.map(l => l.seq)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(new Set(out.map(l => l.seq)).size).toBe(out.length);
+  });
+
+  it('stays in the order the pod wrote them', () => {
+    const three = Array.from({ length: 12 }, (_, i) =>
+      line(i, 'info', i === 1 || i === 9 ? 'boom' : `line ${i}`));
+    const out = filterLines(three, { query: 'boom', levels: [], contextLines: 1 });
+    expect(out.map(l => l.seq)).toEqual([0, 1, 2, 8, 9, 10]);
+  });
+
+  it('is nothing at all when nothing matched', () => {
+    expect(filterLines(lines, { query: 'nothing', levels: [], contextLines: 3 })).toEqual([]);
+  });
+
+  it('does not invent context when there is no query', () => {
+    const out = filterLines(lines, { query: '', levels: [], contextLines: 3 });
+    expect(out).toHaveLength(lines.length);
+    expect(out.every(l => !l.context)).toBe(true);
+  });
+
+  it('only considers lines the level filter kept', () => {
+    /* Context must not smuggle back a line the reader excluded by level. */
+    const mixed = [
+      line(0, 'debug', 'debug noise'),
+      line(1, 'error', 'boom'),
+      line(2, 'debug', 'debug noise'),
+      line(3, 'error', 'after'),
+    ];
+    const out = filterLines(mixed, { query: 'boom', levels: ['error'], contextLines: 2 });
+    expect(out.map(l => l.seq)).toEqual([1, 3]);
+  });
+});

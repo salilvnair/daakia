@@ -1039,6 +1039,11 @@ export async function handleDk8sLogsOpen(
     tailLines: (msg.tailLines as number) ?? 200,
     direction: msg.direction === 'first' ? 'first' : 'last',
     sinceSeconds: msg.sinceSeconds as number | undefined,
+    /* A window with two fixed ends. The start is pushed to the server as
+       `--since-time`; the end is filtered in the stream, because kubectl has
+       no `--until-time`. */
+    fromIso: msg.fromIso as string | undefined,
+    toMs: msg.toMs as number | undefined,
   }, {
     onLines: (lines) => postMessage({ type: 'dk8s:logLines', pod, lines }),
     onStatus: (status, detail) => postMessage({ type: 'dk8s:logStatus', pod, status, detail }),

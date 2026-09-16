@@ -108,6 +108,23 @@ export interface LogStreamOptions {
    */
   direction?: 'last' | 'first';
   sinceSeconds?: number;
+  /**
+   * An absolute start, for a window with two fixed ends.
+   *
+   * "Last 15 minutes" answers what is happening; it cannot answer what
+   * happened during an incident that ended on Tuesday, because by the time
+   * you look the window has moved past it. Wins over `sinceSeconds` when both
+   * are set — a preset is the relative shorthand and this is the real thing.
+   */
+  fromIso?: string;
+  /**
+   * The end of that window, in epoch ms.
+   *
+   * kubectl has `--since-time` and no `--until-time`, so this cannot be pushed
+   * to the server and is applied here — which is why a bounded window needs
+   * timestamps on, and why it is a filter rather than an argument.
+   */
+  toMs?: number;
   timestamps?: boolean;
 }
 
@@ -407,7 +424,9 @@ export function streamLogs(
     ...(opts.container ? ['-c', opts.container] : []),
     ...(opts.previous ? ['--previous'] : []),
     ...(opts.timestamps !== false ? ['--timestamps'] : []),
-    ...(opts.sinceSeconds ? [`--since=${opts.sinceSeconds}s`] : []),
+    ...(opts.fromIso
+      ? [`--since-time=${opts.fromIso}`]
+      : opts.sinceSeconds ? [`--since=${opts.sinceSeconds}s`] : []),
     // Asking for the head means asking for everything and stopping early.
     opts.direction === 'first' ? '--tail=-1' : `--tail=${opts.tailLines ?? 200}`,
   ];
@@ -422,6 +441,8 @@ export function streamLogs(
   let child: ChildProcess | undefined;
   let stopped = false;
   let seq = 0;
+  /** A line past the end of a bounded window has been seen. */
+  let past = false;
   let pending: LogLine[] = [];
   let carry = '';
   /**
@@ -475,8 +496,33 @@ export function streamLogs(
       carry = parts.pop() ?? '';
       for (const raw of parts) {
         if (!raw) continue;
-        pending.push(parseLine(raw, seq++, opts.timestamps !== false, compiled, meter, prev));
-        remember(pending[pending.length - 1]);
+        const parsed = parseLine(raw, seq, opts.timestamps !== false, compiled, meter, prev);
+        /*
+          The far end of a bounded window, applied here because kubectl has no
+          `--until-time`. A line with no timestamp at all is kept: it is a
+          continuation of the event above it, and dropping stack frames out
+          from under the error that produced them is worse than showing a
+          little past the end.
+        */
+        if (opts.toMs !== undefined && parsed.ts !== undefined && parsed.ts > opts.toMs) {
+          past = true;
+          continue;
+        }
+        seq++;
+        pending.push(parsed);
+        remember(parsed);
+      }
+
+      /* Everything after this point is outside the window, and the log only
+         goes forwards — so stop reading rather than stream the rest to the
+         floor. */
+      if (past) {
+        flush();
+        stopped = true;
+        child?.kill();
+        if (timer) clearInterval(timer);
+        cb.onStatus('ended', 'end of the window');
+        return;
       }
       // Head mode: once we have what was asked for, stop reading. Streaming a
       // 400MB log to the floor to show its first 200 lines is not a thing to

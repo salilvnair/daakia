@@ -18,7 +18,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   FilterInputView, SelectInputView, SegmentedControlView, CheckboxView, ButtonView,
-  BadgeChipView, IconSize, SplitPanelView } from '@salilvnair/dui';
+  BadgeChipView, IconSize, SplitPanelView, DateTimeInputView } from '@salilvnair/dui';
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
   WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon, CloseIcon,
@@ -29,7 +29,7 @@ import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { buildFacets, filterTermFor } from './log-facets';
 import { useUiStateStore } from '../../store/ui-state-store';
-import { logLineSettings, onLadder, tailLabel } from './log-settings';
+import { logLineSettings, onLadder, tailLabel, contextLabel } from './log-settings';
 import { FacetRail } from './FacetRail';
 import { LogSkeleton } from './LogSkeleton';
 import {
@@ -546,6 +546,7 @@ export function LogViewer() {
     logs, logStatus, logDetail, logDropped, logFilter, logLevels, logRequestedAt,
     logFieldFilters, addFieldFilter, removeFieldFilter,
     logFollow, logLive, logTail, logDirection, logSince, logWrap, logPrevious,
+    logFrom, logTo, setLogWindow,
     detail, runtime,
     setLogFilter, setLogFollow, setLogLive, setLogTail, setLogDirection,
     setLogSince, setLogWrap, setLogPrevious, setLogSelection,
@@ -770,10 +771,28 @@ export function LogViewer() {
     { text: string; raw: string; first: number; last: number; count: number } | null
   >(null);
 
+  /*
+    How much of a hit's surroundings the filter keeps.
+
+    Searching a log is almost never about the matching line on its own: you
+    look for a logger name to find the moment, and what you need is what
+    happened just before it and what it did next. Filtering to the hits alone
+    answers "where" and throws away "what".
+
+    Starts at 0 — the old behaviour — so nobody's filter changes under them.
+  */
+  const [findContext, setFindContext] = useState(0);
+
   const visible = useMemo(
-    () => filterLines(logs, { query: logFilter, levels: logLevels, fields: logFieldFilters }),
-    [logs, logFilter, logLevels, logFieldFilters],
+    () => filterLines(logs, {
+      query: logFilter, levels: logLevels, fields: logFieldFilters,
+      contextLines: findContext,
+    }),
+    [logs, logFilter, logLevels, logFieldFilters, findContext],
   );
+
+  /* The hits themselves, for the counter and for stepping between them. */
+  const hits = useMemo(() => visible.filter(l => !l.context), [visible]);
 
   // Fold, then expand the ones the user opened. Expansion is keyed on the
   // heading line's seq so it survives new lines arriving above it.
@@ -1213,6 +1232,36 @@ export function LogViewer() {
           />
         </div>
 
+        {/*
+          How much of each hit's surroundings to keep, and how many there are.
+
+          Only while there is something to find: a context selector beside an
+          empty filter box is a control for a state that does not exist, and
+          the count would read "0 matches" for a log nobody has searched.
+        */}
+        {logFilter.trim() !== '' && (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <SelectInputView
+              value={String(onLadder(findContext, lineSettings.contextLadder, 0))}
+              onChange={v => setFindContext(Number(v))}
+              options={lineSettings.contextLadder.map(v => ({
+                value: String(v), label: contextLabel(v),
+              }))}
+              size={CTL_SIZE}
+              accentColor={ACCENT}
+            />
+            <span
+              className="text-[11px] tabular-nums shrink-0"
+              style={{ color: hits.length ? ACCENT : 'var(--color-text-muted)' }}
+              title={findContext > 0
+                ? `${hits.length} matching lines, with ${findContext} either side`
+                : `${hits.length} matching lines`}
+            >
+              {hits.length.toLocaleString()} {hits.length === 1 ? 'match' : 'matches'}
+            </span>
+          </div>
+        )}
+
         {containers.length > 1 && (
           <div className="flex items-center gap-1">
             {containers.map(c => <ContainerChip key={c.name} name={c.name} />)}
@@ -1257,10 +1306,17 @@ export function LogViewer() {
                         size={CTL_SIZE} accentColor="var(--color-warning)" />
         )}
 
+        {/* A third choice, because "last 15 minutes" cannot answer what
+            happened during an incident that ended on Tuesday — by the time you
+            look, the window has moved past it. */}
         <SegmentedControlView
           value={logDirection}
-          onChange={v => setLogDirection(v as 'last' | 'first')}
-          options={[{ value: 'last', label: 'last' }, { value: 'first', label: 'first' }]}
+          onChange={v => setLogDirection(v as 'last' | 'first' | 'between')}
+          options={[
+            { value: 'last', label: 'last' },
+            { value: 'first', label: 'first' },
+            { value: 'between', label: 'btw' },
+          ]}
           size={CTL_SIZE}
           // dui defaults to `pill`, and a fully round track next to a row of
           // rounded-rectangle selects and buttons is the one shape that does
@@ -1287,6 +1343,23 @@ export function LogViewer() {
           accentColor={ACCENT}
         />
 
+        {logDirection === 'between' ? (
+          /* The window itself, where the relative presets would have been —
+             the same place in the bar, because it answers the same question. */
+          <div className="flex items-center gap-1.5">
+            <DateTimeInputView
+              value={logFrom}
+              onChange={(v: string) => setLogWindow(v, logTo)}
+              size={CTL_SIZE}
+            />
+            <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>to</span>
+            <DateTimeInputView
+              value={logTo}
+              onChange={(v: string) => setLogWindow(logFrom, v)}
+              size={CTL_SIZE}
+            />
+          </div>
+        ) : (
         <SelectInputView
           value={logSince}
           onChange={v => setLogSince(v as 'all' | 'restart' | '15m' | '1h' | '6h')}
@@ -1300,6 +1373,7 @@ export function LogViewer() {
           size={CTL_SIZE}
           accentColor={ACCENT}
         />
+        )}
 
         {/* The only accented button in the bar: it is what acts on the query
             the three controls to its left just composed. Everything else is
@@ -1603,7 +1677,14 @@ export function LogViewer() {
                             removing it would take away the context that makes
                             your frames mean something.
                           */
-                          opacity: row.isFrame && frameOrigin(line.text) === 'library' ? 0.55 : 1,
+                          /*
+                            A line kept only for what it is next to recedes too
+                            — otherwise a search for one logger returns a
+                            screenful in which nothing marks the thing you
+                            searched for.
+                          */
+                          opacity: line.context ? 0.5
+                            : row.isFrame && frameOrigin(line.text) === 'library' ? 0.55 : 1,
                           flex: logWrap ? 1 : undefined,
                           minWidth: 0,
                         }}>

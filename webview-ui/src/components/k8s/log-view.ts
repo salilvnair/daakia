@@ -64,6 +64,17 @@ export interface LogFilterSpec {
   levels: LogLevel[];
   /** Field filters, if any. Empty behaves exactly as before. */
   fields?: FieldFilter[];
+  /**
+   * Lines either side of a hit to keep, as context.
+   *
+   * Searching a log is almost never about the matching line on its own. You
+   * look for a logger name to find the moment, and what you need is what
+   * happened just before it and what it did next — a filter that shows only
+   * the hits has answered "where" and thrown away "what".
+   *
+   * Zero, or absent, is the old behaviour exactly: hits and nothing else.
+   */
+  contextLines?: number;
 }
 
 /** `pool-*-thread-1` → a matcher. `*` is the only special character. */
@@ -138,6 +149,13 @@ export function matchesFieldFilters(
 export interface MatchedLine extends LogLine {
   /** Character ranges of the query hit, in `displayText`. */
   hits?: [number, number][];
+  /**
+   * Kept for what is around it rather than for itself.
+   *
+   * The view dims these and the match navigation steps past them — otherwise
+   * "next match" walks through context and the count means nothing.
+   */
+  context?: boolean;
 }
 
 /**
@@ -219,6 +237,15 @@ export function filterLines(lines: LogLine[], spec: LogFilterSpec): MatchedLine[
     somebody excluded one noisy logger.
   */
   let keepingEvent = !fields.some(f => f.mode === 'include');
+  /* Every line that survived the level and field filters, plus which of them
+     were hits — the context pass needs both, and needs them in order. */
+  /* Context only means something around a hit. With no query every surviving
+     line is shown, and treating context as active would send the whole view
+     through a pass that collects windows around no hits at all — which is an
+     empty log for somebody who simply has not typed anything yet. */
+  const context = match ? Math.max(0, Math.round(spec.contextLines ?? 0)) : 0;
+  const candidates: MatchedLine[] = [];
+  const hitAt = new Set<number>();
 
   const out: MatchedLine[] = [];
   for (const line of lines) {
@@ -250,6 +277,7 @@ export function filterLines(lines: LogLine[], spec: LogFilterSpec): MatchedLine[
         if (!keepingEvent) continue;
       }
     }
+    /* No query: every surviving line is shown, and context means nothing. */
     if (!match) { out.push(line); continue; }
     /*
       Matched against the raw line, highlighted in the shown one.
@@ -260,11 +288,40 @@ export function filterLines(lines: LogLine[], spec: LogFilterSpec): MatchedLine[
       pass over the string actually on screen. A query that only matches a key
       name keeps the row and highlights nothing, which is the honest result.
     */
-    if (!match(line.text)) continue;
+    if (!match(line.text)) {
+      /* Not a hit, but it may be worth keeping for one nearby. Held rather
+         than dropped, and resolved in the pass below where both sides of
+         every hit are known. */
+      if (context > 0) candidates.push(line);
+      continue;
+    }
     const shown = displayText(line);
-    out.push({ ...line, hits: (shown === line.text ? null : match(shown)) ?? match(line.text) ?? undefined });
+    const hit: MatchedLine = {
+      ...line,
+      hits: (shown === line.text ? null : match(shown)) ?? match(line.text) ?? undefined,
+    };
+    if (context > 0) { candidates.push(hit); hitAt.add(candidates.length - 1); }
+    else out.push(hit);
   }
-  return out;
+
+  if (context === 0) return out;
+
+  /*
+    Keep a hit and the lines around it, and nothing else.
+
+    Windows overlap and must not duplicate a line: two hits three apart with
+    two lines of context share one. So the indices to keep are collected as a
+    set and emitted once, in order — not by concatenating a window per hit.
+  */
+  const keep = new Set<number>();
+  for (const i of hitAt) {
+    for (let j = Math.max(0, i - context); j <= Math.min(candidates.length - 1, i + context); j++) {
+      keep.add(j);
+    }
+  }
+  return [...keep].sort((a, b) => a - b).map(i => (
+    hitAt.has(i) ? candidates[i] : { ...candidates[i], context: true }
+  ));
 }
 
 // ── Density ribbon ──────────────────────────────────────────────────────────
