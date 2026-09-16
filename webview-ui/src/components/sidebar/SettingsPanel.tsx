@@ -51,7 +51,7 @@ import { AuditConfigTab } from '../settings/devtools/AuditConfigTab';
 import { setFixedPortEnabled, useFixedPortEnabled } from '../mock/fixed-port';
 import { AboutPanel } from '../settings/AboutPanel';
 import { Dk8sGeneralSettings, DkghGeneralSettings } from '../settings/SurfaceGeneralSettings';
-import { Dk8sCommandAudit } from '../settings/Dk8sCommandAudit';
+import { Dk8sCommandsSection } from '../settings/Dk8sCommandsSection';
 
 type SettingsSection = 'general' | 'theme' | 'keymap' | 'about' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'code-scan' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-general' | 'dk8s-cluster' | 'dk8s-logs' | 'dk8s-terminal' | 'dk8s-commands' | 'dkgh-general' | 'dkgh';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
@@ -219,7 +219,7 @@ export function SettingsPanel() {
             ) : activeSection === 'dkgh-general' ? (
               <DkghGeneralSettings />
             ) : activeSection === 'dk8s-commands' ? (
-              <Dk8sCommandAudit />
+              <Dk8sCommandsSection />
             ) : activeSection === 'dk8s-cluster' ? (
               <Dk8sClusterSettings />
             ) : activeSection === 'dk8s-logs' ? (

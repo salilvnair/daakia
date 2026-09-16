@@ -81,4 +81,13 @@ export const SHARED_ALIASES = {
     says one thing and a star attaches to another.
   */
   '@daakia/k8s-workload': resolve(__dirname, '..', 'src', 'services', 'k8s', 'workload.ts'),
+
+  /*
+    The catalogue of kubectl calls dk8s makes.
+
+    The host classifies each call into a kind; Settings renders the same
+    catalogue to switch them on and off. Two copies of a list like this stay
+    agreed only for as long as somebody remembers both.
+  */
+  '@daakia/command-kinds': resolve(__dirname, '..', 'src', 'services', 'k8s', 'command-kinds.ts'),
 };

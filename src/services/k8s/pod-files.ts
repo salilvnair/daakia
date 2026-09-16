@@ -56,7 +56,7 @@ export interface FileEntry {
   denied?: boolean;
 }
 
-function execArgs(t: PodTarget, cmd: string[]): string[] {
+export function execArgs(t: PodTarget, cmd: string[]): string[] {
   return [
     '--context', t.context, '-n', t.namespace, 'exec', t.pod,
     ...(t.container ? ['-c', t.container] : []),

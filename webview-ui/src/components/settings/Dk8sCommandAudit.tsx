@@ -18,6 +18,7 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { postMsg } from '../../vscode';
 import { useUiStateStore } from '../../store/ui-state-store';
+import { useEnabledCommandKinds } from './Dk8sCommandConfig';
 import { COMMAND_AUDIT_LIMIT_KEY, commandAuditLimit } from './CommandAuditLimit';
 import { CopyButtonView } from '@salilvnair/dui';
 import {
@@ -46,6 +47,8 @@ interface Meta {
   bytes?: number;
   /** `poll` is a refresh on a timer that nobody pressed. Absent on old rows. */
   source?: 'user' | 'poll';
+  /** Which kind of call — see command-kinds. Absent on rows recorded before it. */
+  op?: string;
 }
 
 function readMeta(row: UiRow): Meta {
@@ -122,7 +125,22 @@ export function Dk8sCommandAudit() {
   */
   const [showPolls, setShowPolls] = useState(false);
   const polls = rows.filter(r => readMeta(r).source === 'poll');
-  const base = showPolls ? rows : rows.filter(r => readMeta(r).source !== 'poll');
+
+  /*
+    Which kinds reach the screen at all — Settings → DK8S → Commands → Config.
+
+    A row recorded before kinds existed has no `op`; it is shown rather than
+    hidden, because a filter that silently swallows history is worse than one
+    that shows a little more than asked.
+  */
+  const kinds = useEnabledCommandKinds();
+  const byKind = rows.filter(r => {
+    const op = readMeta(r).op;
+    return op === undefined || kinds.has(op);
+  });
+
+  const base = showPolls ? byKind : byKind.filter(r => readMeta(r).source !== 'poll');
+  const hiddenByKind = rows.length - byKind.length;
 
   const q = search.trim().toLowerCase();
   const shown = q
@@ -168,6 +186,15 @@ export function Dk8sCommandAudit() {
             </span>
           )}
         </div>
+        {hiddenByKind > 0 && (
+          <span
+            className="text-[10.5px] px-2 py-0.5 rounded-full shrink-0 tabular-nums"
+            title="Settings → DK8S → Commands → Config decides which kinds are listed"
+            style={{ color: 'var(--color-text-muted)', border: '1px solid var(--color-surface-border)' }}
+          >
+            {hiddenByKind} hidden by Config
+          </span>
+        )}
         {polls.length > 0 && (
           <button
             type="button"
@@ -204,9 +231,11 @@ export function Dk8sCommandAudit() {
           <div className="flex items-center justify-center h-full text-[11px] text-[var(--color-text-muted)]">
             {rows.length === 0
               ? 'Nothing yet — open dk8s and every command it runs appears here'
-              : base.length === 0
-                ? 'Only background refreshes so far — show them to see what dk8s has been doing'
-                : 'No matches'}
+              : hiddenByKind === rows.length
+                ? 'Every command so far is a kind that Config is hiding'
+                : base.length === 0
+                  ? 'Only background refreshes so far — show them to see what dk8s has been doing'
+                  : 'No matches'}
           </div>
         ) : (
           <table className="w-full text-[11px]">

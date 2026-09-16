@@ -196,6 +196,8 @@ export function installKubectlAudit(postMessage: PostMessage): void {
              poll every fifteen seconds per namespace does not bury the
              commands somebody actually ran. */
           source: event.source,
+          /* The kind, so Settings → DK8S → Commands can group by it. */
+          op: event.op,
         }),
       });
     } catch { /* auditing must never be why a cluster call fails */ }

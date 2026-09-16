@@ -61,6 +61,14 @@ export interface KubectlEvent {
    * commands somebody actually ran are buried among them.
    */
   source: 'user' | 'poll';
+  /**
+   * Which kind of call this is — see command-kinds.
+   *
+   * `what` carries the pod name, which is right on a row and useless for
+   * grouping: "stop showing me permission probes" is not something you can
+   * say about `logs reporting-api-547958c846-24rwc`.
+   */
+  op: string;
   /** `run` for a call that completes, `stream` for a long-lived process. */
   kind: 'run' | 'stream';
   /** Absent while a stream is still open. */
@@ -74,6 +82,7 @@ export interface KubectlEvent {
 }
 
 import { redact, REDACTED } from './redact';
+import { commandKind } from './command-kinds';
 
 /** What a masked value looks like. */
 const MASK = '******';
@@ -210,6 +219,7 @@ export function kubectlEvent(
   return {
     id,
     source,
+    op: commandKind(args),
     command: commandLine(bin, args),
     what: describeArgs(args),
     context: flagValue(args, '--context'),
