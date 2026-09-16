@@ -18,6 +18,7 @@ import {
   LoadingStateView } from '@salilvnair/dui';
 import { useLongPress } from './use-long-press';
 import { PodContextMenu } from './PodContextMenu';
+import { PvCheckModal } from './PvCheckModal';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import {
   useFavoriteKeys, toggleFavorite, favoriteKey, favoritesFirst,
@@ -893,6 +894,8 @@ export function PodGrid() {
   }, [hideRuns]);
   const runCount = useMemo(() => pods.filter(p => isScheduled(p.workload)).length, [pods]);
   const setGridFilter = useK8sStore(s2 => s2.setGridFilter);
+  /* "Where would a search look for this pod?" — opened from the pod's menu. */
+  const [pvCheck, setPvCheck] = useState<PodSummary | undefined>();
   /*
     Published for the panel's surface menu rather than rendered here — the
     right-click lands on a div this component owns, but the menu is built where
@@ -1309,11 +1312,14 @@ export function PodGrid() {
         )}
       </div>
 
+      {pvCheck && <PvCheckModal pod={pvCheck} onClose={() => setPvCheck(undefined)} />}
+
       <PodContextMenu
         pod={menu?.pod}
         at={menu?.at}
         onClose={closeMenu}
         onConfirmUnfavorite={setUnstar}
+        onTestPv={setPvCheck}
         onOpen={(pod, tab) => {
           openDetail(pod);
           // The tab is set after opening, because opening resets it to

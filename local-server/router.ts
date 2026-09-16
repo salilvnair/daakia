@@ -79,10 +79,10 @@ import {
   handleDk8sLogsOpen, handleDk8sLogsClose, handleDk8sDescribe,
   handleDk8sShell, handleDk8sProbePod, handleDk8sMarkRuntime, handleDk8sAsk,
   handleDk8sCollect, handleDk8sAnalyze, handleDk8sRevealArtifacts,
-  handleDk8sProbePv, handleDk8sSavePv, handleDk8sOpenLogFile, handleDk8sSetLogLineNumbers,
+  handleDk8sLoadPv, handleDk8sSavePv, handleDk8sOpenLogFile, handleDk8sSetLogLineNumbers,
 } from '../src/panel/main/handlers/k8s-handler';
 import {
-  handleDk8sPodMounts, handleDk8sPvList, handleDk8sPvSearch,
+  handleDk8sPodMounts, handleDk8sPvList, handleDk8sPvSearch, handleDk8sPodPicker,
 } from '../src/panel/main/handlers/pv-in-pod-handler';
 import { handleDk8sHeapInvestigate } from '../src/panel/main/handlers/heap-investigate';
 import { handleSseConnect, handleSseDisconnect } from '../src/panel/main/handlers/sse-handler';
@@ -373,8 +373,8 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
     case 'dk8s:savePv':
       await handleDk8sSavePv(msg, post);
       break;
-    case 'dk8s:probePv':
-      await handleDk8sProbePv(msg, post);
+    case 'dk8s:loadPv':
+      handleDk8sLoadPv(msg, post);
       break;
     case 'dk8s:openLogFile':
       await handleDk8sOpenLogFile(msg);
@@ -528,6 +528,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dk8s:pvSearch':
       await handleDk8sPvSearch(msg, post);
+      break;
+    case 'dk8s:podPicker':
+      await handleDk8sPodPicker(msg, post);
       break;
     case 'dk8s:ask':
       await handleDk8sAsk(msg, post);

@@ -37,6 +37,13 @@ export interface CheckedFile {
   mtime?: number;
 }
 
+/** A pod the check can be run against — never a finished CronJob run. */
+export interface PickablePod {
+  name: string;
+  app: string;
+  phase: string;
+}
+
 export interface CheckedPath {
   root: string;
   files: CheckedFile[];
@@ -48,11 +55,26 @@ export interface CheckedPath {
 }
 
 interface PodCheckState {
-  /** What was typed, not what was found — so a failed check keeps the input. */
+  /** The chosen target. Narrowed context → namespace → pod, in that order. */
   pod: string;
   namespace: string;
   context: string;
   setTarget: (t: Partial<Pick<PodCheckState, 'pod' | 'namespace' | 'context'>>) => void;
+
+  /*
+    What there is to choose from.
+
+    Typed by hand, a pod name is a guess that fails as an empty result rather
+    than an error — the same failure mode as a mistyped path, and this box
+    exists to end that one. So the cluster is asked what is actually there and
+    the answer is the menu.
+  */
+  namespaces: string[];
+  pods: PickablePod[];
+  loadingPicker: boolean;
+  pickerError?: string;
+  /** Ask for the namespaces in a context, and the pods in one of them. */
+  loadPicker: (context: string, namespace?: string) => void;
 
   busy: boolean;
   /** Which pod the current answers are about, so a stale reply is ignored. */
@@ -74,8 +96,42 @@ export const usePodCheckStore = create<PodCheckState>((set, get) => ({
   context: '',
   busy: false,
   paths: {},
+  namespaces: [],
+  pods: [],
+  loadingPicker: false,
 
-  setTarget: (t) => set(t),
+  /*
+    Choosing wider throws away what was chosen narrower.
+
+    A pod name is only meaningful inside the namespace it was picked from, so
+    leaving it on screen after the namespace changes shows a target that does
+    not exist — and the check would then fail on it, blaming the pod.
+
+    A value given in the same call always wins over that clearing. Opening on
+    a known pod means naming all three at once, and a cascade that wiped two
+    of them would make the common case the one that does not work.
+  */
+  setTarget: (t) => set(s => {
+    const context = t.context ?? s.context;
+    const contextMoved = context !== s.context;
+
+    const namespace = t.namespace ?? (contextMoved ? '' : s.namespace);
+    const namespaceMoved = namespace !== s.namespace;
+
+    const pod = t.pod ?? (contextMoved || namespaceMoved ? '' : s.pod);
+
+    return {
+      context, namespace, pod,
+      ...(contextMoved ? { namespaces: [], pods: [] } : {}),
+      ...(namespaceMoved ? { pods: [] } : {}),
+    };
+  }),
+
+  loadPicker: (context, namespace) => {
+    if (!context) return;
+    set({ loadingPicker: true, pickerError: undefined });
+    postMsg({ type: 'dk8s:podPicker', context, namespace: namespace ?? '' });
+  },
 
   clear: () => set({
     busy: false, checked: undefined, mounts: undefined,
@@ -137,6 +193,22 @@ export const usePodCheckStore = create<PodCheckState>((set, get) => ({
             },
           },
         }));
+        break;
+      }
+
+      case 'dk8s:podPicker': {
+        /* A reply for a context or namespace already moved on from would
+           populate the menus with somewhere else's names. */
+        const { context, namespace } = get();
+        if (msg.context !== context) break;
+        const forThisNamespace = (msg.namespace ?? '') === namespace;
+        set({
+          loadingPicker: false,
+          namespaces: (msg.namespaces as string[]) ?? [],
+          ...(forThisNamespace ? { pods: (msg.pods as PickablePod[]) ?? [] } : {}),
+          pickerError: (msg.namespacesError as string | undefined)
+            ?? (forThisNamespace ? (msg.podsError as string | undefined) : undefined),
+        });
         break;
       }
 

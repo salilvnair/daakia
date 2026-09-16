@@ -140,3 +140,80 @@ export async function podMounts(
 function firstLine(s: string | undefined): string | undefined {
   return (s ?? '').split('\n').map(l => l.trim()).find(Boolean)?.slice(0, 200);
 }
+
+/* ── Which pods are worth offering ──────────────────────────────────────── */
+
+/**
+ * A pod that is a run of something, rather than something that stays up.
+ *
+ * Read from the owner alone, not from the name: `nightly-billing-29825510`
+ * looks like a run and `prodapp-bc8f7bf84-mhz5f` looks like one too if you
+ * squint at the suffix. The owner is the only thing that actually knows.
+ */
+export function isRunPod(owners: { kind?: string }[] | undefined): boolean {
+  return (owners ?? []).some(o => o.kind === 'Job' || o.kind === 'CronJob');
+}
+
+export interface PickablePod {
+  name: string;
+  /** Best guess at the app this pod belongs to — what a path is keyed on. */
+  app: string;
+  phase: string;
+}
+
+/**
+ * The pods a PV check can sensibly be run against.
+ *
+ * Finished CronJob runs are left out. The question a check answers is where
+ * this app's logs pile up over time, and a run that exited answers it for
+ * nobody — it is gone, and the paths worth checking belong to the app that is
+ * still up. Offering one in a picker is offering a wrong answer.
+ */
+export async function listAppPods(
+  context: string, namespace: string,
+): Promise<{ pods: PickablePod[]; command: string; error?: string }> {
+  const args = [
+    '--context', context, '-n', namespace, 'get', 'pods', '-o', 'json',
+  ];
+  const command = `kubectl ${args.join(' ')}`;
+  const r = await run(args, { timeoutMs: 20_000 });
+  if (!r.ok) {
+    return { pods: [], command, error: firstLine(r.stderr) || `Could not list pods in ${namespace}.` };
+  }
+
+  let parsed: {
+    items?: {
+      metadata?: { name?: string; ownerReferences?: { kind?: string; name?: string }[];
+        labels?: Record<string, string> };
+      status?: { phase?: string };
+    }[];
+  };
+  try {
+    parsed = JSON.parse(r.stdout);
+  } catch {
+    return { pods: [], command, error: 'The pod list could not be read.' };
+  }
+
+  const pods: PickablePod[] = [];
+  for (const item of parsed.items ?? []) {
+    const name = item.metadata?.name;
+    if (!name) continue;
+    if (isRunPod(item.metadata?.ownerReferences)) continue;
+    pods.push({
+      name,
+      app: item.metadata?.labels?.app
+        ?? item.metadata?.labels?.['app.kubernetes.io/name']
+        ?? item.metadata?.ownerReferences?.[0]?.name
+        ?? name,
+      phase: item.status?.phase ?? '',
+    });
+  }
+
+  /* Running first: a check against a pod that is not up fails at the exec,
+     and the picker should not lead with the one that cannot answer. */
+  pods.sort((a, b) =>
+    Number(b.phase === 'Running') - Number(a.phase === 'Running')
+    || a.name.localeCompare(b.name));
+
+  return { pods, command };
+}

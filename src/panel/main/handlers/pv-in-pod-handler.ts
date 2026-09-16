@@ -11,7 +11,8 @@
  * is not a nicety.
  */
 import { listInPod, searchInPod } from '../../../services/k8s/pv-in-pod';
-import { podMounts } from '../../../services/k8s/pod-mounts';
+import { podMounts, listAppPods } from '../../../services/k8s/pod-mounts';
+import { listNamespaces } from '../../../services/k8s/kube-context';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -62,4 +63,36 @@ export async function handleDk8sPvSearch(
     maxLines: Number(msg.maxLines) || undefined,
   });
   postMessage({ type: 'dk8s:pvSearched', pod: t.pod, ...result });
+}
+
+/**
+ * What the pod picker can offer: the namespaces in a context, and the pods in
+ * one of them.
+ *
+ * Both in one reply because they are one question — "which pod" is answered by
+ * narrowing, and a picker that has to round-trip twice to fill its second box
+ * shows an empty list for as long as that takes.
+ */
+export async function handleDk8sPodPicker(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const context = String(msg.context ?? '');
+  const namespace = String(msg.namespace ?? '');
+  if (!context) return;
+
+  const ns = await listNamespaces(context);
+  const pods = namespace
+    ? await listAppPods(context, namespace)
+    : { pods: [], command: '' };
+
+  postMessage({
+    type: 'dk8s:podPicker',
+    context,
+    namespace,
+    namespaces: ns.namespaces,
+    namespacesError: ns.forbidden ? 'Not allowed to list namespaces here.' : ns.error,
+    pods: pods.pods,
+    podsError: pods.error,
+  });
 }

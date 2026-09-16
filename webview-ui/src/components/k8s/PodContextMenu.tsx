@@ -22,6 +22,7 @@ import {
   StarIcon, CopyIcon, TerminalIcon, FileTextIcon, StethoscopeIcon, FolderOpenIcon,
   CheckCircleIcon, XCircleIcon, CpuIcon, MemoryIcon, NetworkIcon, TimelineIcon,
 } from '../../icons';
+import { isScheduled } from '@daakia/k8s-workload';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import {
   useDk8sDoctorStore, ARTIFACT_META, type ArtifactKind,
@@ -74,12 +75,14 @@ function costColor(kind: ArtifactKind): string {
       : 'var(--color-success)';
 }
 
-export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }: {
+export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onTestPv, onOpen }: {
   pod: PodSummary | undefined;
   at: { x: number; y: number } | undefined;
   onClose: () => void;
   /** Ask before un-starring — the grid owns the dialog. */
   onConfirmUnfavorite: (pod: PodSummary) => void;
+  /** Opens the "where would a search look" check for this pod. */
+  onTestPv: (pod: PodSummary) => void;
   /** Open the pod's detail view, for the items that are a way in. */
   onOpen: (pod: PodSummary, tab?: 'logs' | 'doctor' | 'explorer') => void;
 }) {
@@ -281,6 +284,27 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
         iconColor: ACCENT,
         children: doctor,
       },
+      /*
+        Where a log search would look, for this pod.
+
+        Here rather than only in Settings because this is where the question
+        occurs to you: a search came back empty and you want to know whether
+        it looked in the wrong place or found nothing in the right one. Those
+        are the same result on screen and different problems entirely.
+
+        Never on a finished run. The question is where this app's logs pile
+        up over time, and a CronJob run answers it for nobody: it is gone,
+        its filesystem with it, and the paths worth checking belong to the
+        app that is still up.
+      */
+      ...(isScheduled(pod.workload) ? [] : [{
+        id: 'pv-check',
+        label: 'Test PV config',
+        description: 'Run every configured log path against this pod.',
+        icon: <StethoscopeIcon size={IconSize.item} />,
+        iconColor: MENU.narrow,
+        onClick: () => { onTestPv(pod); onClose(); },
+      }]),
       {
         /*
           Browsing is one exec, so it is offered exactly where the shell is —
@@ -318,7 +342,7 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
         },
       },
     ];
-  }, [pod, favorites, selected, menuProbe, guardHeapDump, access, running, detail, runtimeMark, contextName,
+  }, [pod, favorites, selected, menuProbe, guardHeapDump, access, running, detail, runtimeMark, contextName, onTestPv,
     beginSelection, togglePodSelected, copyPodText, openShellFor, collect,
     onClose, onConfirmUnfavorite, onOpen]);
 

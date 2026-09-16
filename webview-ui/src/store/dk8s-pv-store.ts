@@ -1,11 +1,15 @@
 /**
- * Archived logs on a mounted volume — the settings side.
+ * Archived logs on a volume — the settings side.
  *
- * The draft is kept separate from what is saved so the probe can be run
- * against a path you are still typing: confirming a template against the real
- * tree before saving is the difference between "no matches because nothing
- * matched" and "no matches because the path was wrong", and those two look
- * identical from a result list.
+ * Every path here is a path *inside the pod*. The page used to describe a
+ * volume mounted on this machine and check it with `fs`, which answered about
+ * `C:\prodapp-prod-pvc\…` when asked about `/prodapp-prod-pvc/…` — a drive
+ * letter nobody typed, on a machine that was never involved. A claim lives in
+ * the cluster and only a pod can reach it, so the pod is what gets asked; see
+ * `dk8s-pod-check-store`.
+ *
+ * The draft is kept separate from what is saved because a search uses what was
+ * saved, and a half-typed path should not change where logs are looked for.
  */
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
@@ -52,52 +56,6 @@ export interface PvLogConfig {
   pathByPod?: Record<string, string>;
 }
 
-export interface PvSampleFile { rel: string; bytes: number; mtime: number }
-
-export interface PvMountProbe {
-  ok: boolean;
-  error?: string;
-  path: string;
-  label?: string;
-  resolved: string;
-  topLevel: string[];
-  fileCount: number;
-  totalBytes: number;
-  newest?: number;
-  oldest?: number;
-  sample: PvSampleFile[];
-  /**
-   * Per layout id: the real files that row claims on the probed volume.
-   *
-   * Computed host-side, where the walk already happened. An id missing from
-   * here was not in the config when the probe ran — a row added or edited
-   * since — and has to read as unknown rather than as nothing found.
-   */
-  layouts?: Record<string, { rel: string[]; count: number }>;
-}
-
-export interface PvProbe {
-  ok: boolean;
-  error?: string;
-  mounts: PvMountProbe[];
-  fileCount: number;
-  totalBytes: number;
-  newest?: number;
-  oldest?: number;
-  sample: PvSampleFile[];
-  /**
-   * Per layout id: the real files that row claims on the probed volume.
-   *
-   * Computed host-side, where the walk already happened. An id missing from
-   * here was not in the config when the probe ran — a row added or edited
-   * since — and has to read as unknown rather than as nothing found.
-   */
-  layouts?: Record<string, { rel: string[]; count: number }>;
-}
-
-/** The key the probe reports the in-force template under. See PvLogSettings. */
-const CURRENT_LAYOUT = '@current';
-
 export const DEFAULT_PV: PvLogConfig = {
   enabled: false,
   mounts: [{ path: '' }],
@@ -125,63 +83,27 @@ interface PvState {
   config: PvLogConfig;
   /** Unsaved edits. Saved config is what a search actually uses. */
   draft: PvLogConfig;
-  probe?: PvProbe;
-  probing: boolean;
   dirty: boolean;
 
   load: () => void;
   patch: (p: Partial<PvLogConfig>) => void;
-  runProbe: () => void;
   save: () => void;
   reset: () => void;
   apply: (msg: Record<string, unknown>) => void;
 }
 
-/** Value equality, so retyping the same path does not discard a good probe. */
-function same(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-}
-
 export const useDk8sPvStore = create<PvState>((set, get) => ({
   config: DEFAULT_PV,
   draft: DEFAULT_PV,
-  probing: false,
   dirty: false,
 
-  load: () => postMsg({ type: 'dk8s:probePv' }),
+  load: () => postMsg({ type: 'dk8s:loadPv' }),
 
-  /*
-    Editing what the walk reads throws the last probe away.
-
-    The panel is a report on a specific set of mounts, and it outlived them:
-    clearing the mount path left the file listing, the byte total and the
-    resolved path from the previous walk on screen, describing a directory the
-    config no longer names. The most confusing possible moment to keep showing
-    an answer is right after the question changed.
-
-    Only the fields the walk actually consumes count. Editing the template
-    leaves the listing standing, which is the point of "check your template
-    against these" — you change the template and compare it to the files that
-    are still there.
-  */
-  patch: (p) => set(s => {
-    const walked: (keyof PvLogConfig)[] = ['mounts', 'root', 'extensions', 'maxAgeDays', 'logTimeZone'];
-    const stale = walked.some(k => k in p && !same(p[k], s.draft[k]));
-    return {
-      draft: { ...s.draft, ...p },
-      dirty: true,
-      ...(stale ? { probe: undefined } : {}),
-    };
-  }),
-
-  runProbe: () => {
-    set({ probing: true });
-    postMsg({ type: 'dk8s:probePv', config: get().draft });
-  },
+  patch: (p) => set(s => ({ draft: { ...s.draft, ...p }, dirty: true })),
 
   save: () => {
     const cfg = get().draft;
-    set({ config: cfg, dirty: false, probing: true });
+    set({ config: cfg, dirty: false });
     /*
       The record says what was saved, not merely that something was.
 
@@ -191,18 +113,12 @@ export const useDk8sPvStore = create<PvState>((set, get) => ({
       would say out loud for it; and the match count is the only field that
       says whether the thing just saved finds anything at all.
     */
-    const probe = get().probe;
     const layout = layoutFor(cfg.template, cfg.layouts);
-    const found = probe?.layouts?.[layout?.id ?? CURRENT_LAYOUT];
     logUiEvent('dk8s.pv_mapping_save', {
       enabled: cfg.enabled,
       mounts: cfg.mounts?.length ?? 0,
       layout: layout?.name ?? '(not a saved layout)',
       template: cfg.template,
-      // Only from a probe of this same config; stale numbers would be worse
-      // than none, because a count reads as a measurement.
-      filesItFinds: found?.count,
-      filesSeen: probe?.fileCount,
       layouts: cfg.layouts?.length,
       pattern: cfg.pattern,
       extensions: cfg.extensions,
@@ -224,9 +140,6 @@ export const useDk8sPvStore = create<PvState>((set, get) => ({
         }));
         break;
       }
-      case 'dk8s:pvProbe':
-        set({ probe: msg.probe as PvProbe, probing: false });
-        break;
     }
   },
 }));

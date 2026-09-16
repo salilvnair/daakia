@@ -1,12 +1,19 @@
 /**
- * Archived logs on a mounted volume.
+ * Archived logs on a volume, and the paths a search should look under.
  *
- * The page is built around one idea: never configure a path blind. The probe
- * runs against what is in the boxes right now — not what was saved — and
- * shows the directories it found and a handful of real file paths, so a
- * template can be checked by eye before any search depends on it.
+ * Every path on this page is a path *inside the pod* — the absolute path the
+ * volume is mounted at in the container. The page used to describe a volume
+ * mounted on this machine and check it with `fs`, and that model was wrong
+ * about the ordinary case: a PersistentVolumeClaim exists only in the cluster,
+ * so asked about `/prodapp-prod-pvc/prodapp_prod_logs` it answered about
+ * `C:\prodapp-prod-pvc\prodapp_prod_logs` — a drive letter nobody typed, on a
+ * machine that was never involved.
  *
- * Without that, a wrong path and an empty archive produce the same result: no
+ * The rule the page is still built around is never configure a path blind, and
+ * "Check against a pod" below is what keeps it: it names a pod, reads what
+ * that pod mounts and what is really under each configured path with
+ * `kubectl exec`, and reports the command it ran. Without a check of some
+ * kind, a wrong path and an empty archive produce the same result — no
  * matches, and no way to tell which one you are looking at.
  */
 import { useEffect, useState } from 'react';
@@ -22,10 +29,12 @@ import {
   trade than a constant in two places.
 */
 const CURRENT_LAYOUT = '@current';
+
 import {
   ButtonView, TextInputView, CheckboxView, SpinnerIcon, TimeZoneSelectView, localTimeZone,
 } from '@salilvnair/dui';
 import { Hint, Lit, Why } from './prose';
+import { pathComplaint } from './pod-path';
 import {
   FolderOpenIcon, WarningTriangleIcon, CheckCircleIcon, TrashIcon, PlusIcon, PencilIcon,
   CheckIcon,
@@ -34,6 +43,7 @@ import { useDk8sPvStore } from '../../store/dk8s-pv-store';
 import { logUiEvent } from '../../store/ui-audit-store';
 
 const ACCENT = 'var(--color-dk8s)';
+
 
 function bytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -170,11 +180,9 @@ function Field({ label, hint, after, children }: {
  * layout correctly drops the highlight: what is shown then is a custom
  * template, which is what it has become.
  */
-function LayoutTable({ value, layouts, found, onChange }: {
+function LayoutTable({ value, layouts, onChange }: {
   value: string | undefined;
   layouts: PvLayout[] | undefined;
-  /** Per layout id: what it claims on the probed volume, once probed. */
-  found?: Record<string, { rel: string[]; count: number }>;
   onChange: (over: { layouts?: PvLayout[]; template?: string }) => void;
 }) {
   /*
@@ -228,14 +236,13 @@ function LayoutTable({ value, layouts, found, onChange }: {
       A deleted layout is the one change nothing else can reconstruct.
 
       The saved config afterwards shows what remains; only this row says what
-      was there and what it was finding when it went. Recorded at the moment
-      of the delete rather than on the next save, because the two are not the
-      same event and a delete may never be followed by one.
+      was there when it went. Recorded at the moment of the delete rather than
+      on the next save, because the two are not the same event and a delete
+      may never be followed by one.
     */
     logUiEvent('dk8s.pv_layout_delete', {
       layout: gone.name || '(unnamed)',
       template: gone.template,
-      filesItFound: found?.[gone.id]?.count,
       shipped: !gone.custom,
       remaining: rows.length - 1,
     });
@@ -308,7 +315,7 @@ function LayoutTable({ value, layouts, found, onChange }: {
             }}>
               <th style={cell}>Layout</th>
               <th style={cell}>Path template</th>
-              <th style={cell}>{found ? 'Files it finds here' : 'Files it finds'}</th>
+              <th style={cell}>Files it finds</th>
               <th style={cell} aria-label="Actions" />
             </tr>
           </thead>
@@ -316,10 +323,6 @@ function LayoutTable({ value, layouts, found, onChange }: {
             {rows.map((l, i) => {
               const on = !!l.template.trim() && l.template.trim() === active;
               const open_ = editing === l.id;
-              // Only for rows that were in the config when it was probed:
-              // a row added or edited since has no answer yet, and an
-              // absent one must read as unknown rather than as zero.
-              const hit = found?.[l.id];
               return (
                 <tr
                   key={l.id}
@@ -397,39 +400,19 @@ function LayoutTable({ value, layouts, found, onChange }: {
                     color: 'var(--color-text-muted)', wordBreak: 'break-all',
                   }}>
                     {/*
-                      Your files once the mount has been probed, invented ones
-                      until then.
+                      Invented paths, and said to be: what a glob means is
+                      shown far better by two examples than by prose.
 
-                      Two made-up paths explain what a glob means; the files it
-                      claims on your own volume answer the question you are
-                      actually asking, which is which of these rows describes
-                      the disk in front of you. The counts rank them.
+                      What these rows find on your own volume is a question
+                      only a pod can answer, and "Check against a pod" below
+                      answers it — against the pod you name, which is the only
+                      place the path exists.
                     */}
-                    {hit ? (
-                      hit.count ? (
-                        <>
-                          {hit.rel.map(e => <div key={e}>{e}</div>)}
-                          {hit.count > hit.rel.length && (
-                            <div style={{ fontFamily: 'inherit', opacity: 0.75 }}>
-                              +{(hit.count - hit.rel.length).toLocaleString()} more
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <span style={{ fontFamily: 'inherit', fontStyle: 'italic',
-                                       opacity: 0.7 }}>
-                          nothing on this volume
-                        </span>
-                      )
-                    ) : (
-                      <>
-                        {(l.example ?? []).map(e => <div key={e}>{e}</div>)}
-                        {!l.example && (
-                          <span style={{ fontFamily: 'inherit', fontStyle: 'italic' }}>
-                            yours
-                          </span>
-                        )}
-                      </>
+                    {(l.example ?? []).map(e => <div key={e}>{e}</div>)}
+                    {!l.example && (
+                      <span style={{ fontFamily: 'inherit', fontStyle: 'italic' }}>
+                        yours
+                      </span>
                     )}
                   </td>
                   <td style={{ ...cell, textAlign: 'center' }}>
@@ -515,7 +498,7 @@ function LayoutTable({ value, layouts, found, onChange }: {
 
 export function PvLogSettings() {
   const {
-    draft, probe, probing, dirty, load, patch, runProbe, save, reset, apply,
+    draft, dirty, load, patch, save, reset, apply,
   } = useDk8sPvStore();
 
   // A config written before mounts existed still has `root`; showing it as the
@@ -543,7 +526,7 @@ export function PvLogSettings() {
   useEffect(() => {
     const handler = (e: MessageEvent) => {
       const msg = e.data as Record<string, unknown>;
-      if (msg?.type === 'dk8s:pvConfig' || msg?.type === 'dk8s:pvProbe') apply(msg);
+      if (msg?.type === 'dk8s:pvConfig') apply(msg);
     };
     window.addEventListener('message', handler);
     load();
@@ -580,8 +563,9 @@ export function PvLogSettings() {
             mattered.
           </>}
           points={[
-            <>If your cluster ships logs to a volume mounted on this machine, point dk8s at
-              it and Search Everywhere looks there too, alongside the live pods.</>,
+            <>If the pod also writes its logs to a volume, say where it is mounted
+              <em>inside the pod</em> and Search Everywhere reads it there, through the
+              pod, alongside what the container is printing now.</>,
           ]}
         />
       </div>
@@ -601,60 +585,66 @@ export function PvLogSettings() {
              opacity: draft.enabled ? 1 : 0.55,
            }}>
         <Field
-          label="mount paths"
+          label="1 · where the volume is mounted, inside the pod"
           hint={
-            'Where the volumes are mounted on this machine. Nothing is ever written here — '
-            + 'the files are only read. Add more than one when separate shares are mounted '
-            + 'separately; a single share holding every claim needs only one.'
+            'The absolute path the volume is mounted at in the container — what '
+            + '`kubectl exec … ls` would show, starting with "/". Not a path on this '
+            + 'machine: a claim lives in the cluster and only a pod can reach it. This is '
+            + 'the root; everything below is written relative to it. Add a row per root, '
+            + 'for apps that mount their logs somewhere else.'
           }
         >
           <div className="flex flex-col gap-2">
-            {mounts.map((m, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <TextInputView
-                  value={m.path} size="md" accentColor={ACCENT}
-                  placeholder={'\\\\\\\\fileserver\\\\pvcs   or   /mnt/pvcs'}
-                  onChange={e => setMount(i, { path: e.target.value })}
-                  style={{ width: '100%', fontFamily: 'monospace' }}
-                />
-                {mounts.length > 1 && (
-                  <DeleteButton
-                    title="Remove this mount"
-                    onClick={() => patch({ mounts: mounts.filter((_, j) => j !== i) })}
-                  />
-                )}
-              </div>
-            ))}
-            <div className="flex items-center gap-2">
-              <ButtonView
-                label="Add a mount" size="sm" variant="secondary"
-                iconLeft={<PlusIcon size={11} />}
-                onClick={() => patch({ mounts: [...mounts, { path: '' }] })}
-                style={{ background: 'transparent' }}
-              />
-              <div className="flex-1" />
-              <ButtonView
-                label={probing ? 'Checking…' : 'Check'}
-                size="md" variant="secondary"
-                accentColor={ACCENT} color={ACCENT}
-                disabled={probing || !mounts.some(m => m.path.trim())}
-                iconLeft={probing ? <SpinnerIcon size={12} /> : <FolderOpenIcon size={12} />}
-                onClick={runProbe}
-                style={{
-                  background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
-                  borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`,
-                  whiteSpace: 'nowrap',
-                }}
-              />
-            </div>
+            {mounts.map((m, i) => {
+              /* Said while it is being typed, not after a search comes back
+                 with nothing. A wrong path here does not fail — it finds
+                 nothing, which looks exactly like an app with no archive. */
+              const bad = pathComplaint(m.path);
+              return (
+                <div key={i} className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <TextInputView
+                      value={m.path} size="md" accentColor={ACCENT}
+                      placeholder={'/prodapp-prod-pvc/prodapp_prod_logs'}
+                      onChange={e => setMount(i, { path: e.target.value })}
+                      style={{
+                        width: '100%',
+                        fontFamily: 'monospace',
+                        borderColor: bad ? 'var(--color-error)' : undefined,
+                      }}
+                    />
+                    {mounts.length > 1 && (
+                      <DeleteButton
+                        title="Remove this path"
+                        onClick={() => patch({ mounts: mounts.filter((_, j) => j !== i) })}
+                      />
+                    )}
+                  </div>
+                  {bad && (
+                    <span className="text-[10.5px] flex items-center gap-1.5"
+                          style={{ color: 'var(--color-error)' }}>
+                      <WarningTriangleIcon size={11} color="var(--color-error)" />
+                      {bad}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+            <ButtonView
+              label="Add a path" size="sm" variant="secondary"
+              iconLeft={<PlusIcon size={11} />}
+              onClick={() => patch({ mounts: [...mounts, { path: '' }] })}
+              style={{ background: 'transparent', alignSelf: 'flex-start' }}
+            />
           </div>
         </Field>
 
         <Field
-          label="layout"
+          label="2 · where one pod's files sit under that root"
           hint={
             <Hint
-              lead={<>Where one pod&rsquo;s files live, relative to the mount.</>}
+              lead={<>The shape every pod is expected to follow, relative to the
+                path above &mdash; not another path of its own.</>}
               points={[
                 <>Click a row to use it, edit any row in place, and delete the ones
                   that describe nothing here.</>,
@@ -675,7 +665,6 @@ export function PvLogSettings() {
           <LayoutTable
             value={draft.template}
             layouts={draft.layouts}
-            found={probe?.layouts}
             onChange={patch}
           />
         </Field>
@@ -741,10 +730,12 @@ export function PvLogSettings() {
         </Field>
 
         <Field
-          label="a path for one pod"
+          label="3 · an exception, for one pod that breaks the shape"
           hint={
             <Hint
-              lead={<>One pod that lives somewhere the rows above do not describe.</>}
+              lead={<>Only for a pod the row above gets wrong. Everything else is
+                already covered &mdash; this is not where a normal pod&rsquo;s path
+                goes.</>}
               points={[
                 <>Left: a pod name. A glob when it contains <Lit>*</Lit> or <Lit>?</Lit>{' '}
                   (<Lit>zp-backend-*</Lit>), otherwise any pod whose name contains it.</>,
@@ -816,132 +807,7 @@ export function PvLogSettings() {
           />
         </Field>
 
-        {probe && <ProbeReport />}
       </div>
-    </div>
-  );
-}
-
-/** What each mount actually holds — the point of the Check button. */
-function ProbeReport() {
-  const probe = useDk8sPvStore(s => s.probe);
-  if (!probe) return null;
-
-  if (probe.error) {
-    return (
-      <div className="flex items-start gap-2 px-3 py-2 rounded-md"
-           style={{
-             background: 'color-mix(in srgb, var(--color-error) 10%, var(--color-surface))',
-             border: '1px solid color-mix(in srgb, var(--color-error) 28%, transparent)',
-           }}>
-        <WarningTriangleIcon size={13} color="var(--color-error)" />
-        <span className="text-[11.5px]" style={{ color: 'var(--color-error)' }}>{probe.error}</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-2">
-      {/* One block per mount. A working prod volume beside a mistyped dev one
-          has to say exactly that, rather than a single verdict that hides
-          half of what was asked for. */}
-      {/*
-        A probe that came back with neither mounts nor an error still has to
-        render. This one took the whole panel down with it — there is no error
-        boundary above here, so `undefined.map` on a reply shaped slightly
-        differently than expected blanked the entire webview, and nothing on
-        screen connected that to a stale probe result sitting in the store.
-      */}
-      {(probe.mounts ?? []).map((m, i) => <MountReport key={i} m={m} />)}
-    </div>
-  );
-}
-
-function MountReport({ m }: { m: import('../../store/dk8s-pv-store').PvMountProbe }) {
-  if (!m.ok) {
-    return (
-      <div className="flex items-start gap-2 px-3 py-2 rounded-md"
-           style={{
-             background: 'color-mix(in srgb, var(--color-error) 10%, var(--color-surface))',
-             border: '1px solid color-mix(in srgb, var(--color-error) 28%, transparent)',
-           }}>
-        <WarningTriangleIcon size={13} color="var(--color-error)" />
-        <div className="flex flex-col gap-0.5 min-w-0">
-          <span className="text-[11.5px]" style={{ color: 'var(--color-error)' }}>
-            {m.error ?? 'Could not read that path.'}
-          </span>
-          <span className="text-[10.5px] font-mono truncate" style={{ color: 'var(--color-text-muted)' }}>
-            {m.resolved || m.path}
-          </span>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-2 px-3 py-2.5 rounded-md"
-         style={{
-           background: 'var(--color-surface-hover)',
-           border: '1px solid var(--color-surface-border)',
-         }}>
-      <div className="flex items-center gap-2 flex-wrap">
-        <CheckCircleIcon size={13} color="var(--color-success)" />
-        <span className="text-[11.5px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-          {m.fileCount.toLocaleString()} file{m.fileCount === 1 ? '' : 's'}
-        </span>
-        <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-          {bytes(m.totalBytes)} · {when(m.oldest)} → {when(m.newest)}
-        </span>
-        <div className="flex-1" />
-        <span className="text-[10px] font-mono truncate" style={{ color: 'var(--color-text-muted)', maxWidth: '40%' }}>
-          {m.resolved}
-        </span>
-      </div>
-
-      {m.topLevel.length > 0 && (
-        <div className="flex items-baseline gap-2 flex-wrap">
-          <span className="text-[9.5px] uppercase tracking-wider shrink-0"
-                style={{ color: 'var(--color-text-muted)' }}>
-            top level
-          </span>
-          <span className="text-[10.5px] font-mono" style={{ color: 'var(--color-text-secondary)' }}>
-            {m.topLevel.slice(0, 12).join(', ')}
-            {m.topLevel.length > 12 && ` … +${m.topLevel.length - 12}`}
-          </span>
-        </div>
-      )}
-
-      {m.sample.length > 0 && (
-        <div className="flex flex-col gap-0.5">
-          <span className="text-[9.5px] uppercase tracking-wider"
-                style={{ color: 'var(--color-text-muted)' }}>
-            {/* Says how many of how many, because a list that stops at eight
-                and does not admit it reads as everything the walk found. */}
-            {m.sample.length < m.fileCount
-              ? `newest ${m.sample.length} of ${m.fileCount.toLocaleString()} files`
-              : 'newest files'}
-            {' '}— check your template against these
-          </span>
-          {m.sample.map(f => (
-            <div key={f.rel} className="flex items-baseline gap-2 text-[10.5px] font-mono">
-              <span className="truncate flex-1" style={{ color: 'var(--color-text-secondary)' }}>
-                {f.rel}
-              </span>
-              <span className="shrink-0" style={{ color: 'var(--color-text-muted)' }}>{bytes(f.bytes)}</span>
-              <span className="shrink-0" style={{ color: 'var(--color-text-muted)' }}>
-                {when(f.mtime)}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {m.fileCount === 0 && (
-        <span className="text-[11px]" style={{ color: 'var(--color-warning)' }}>
-          The path is readable but nothing under it matched. Check the extension filter and the
-          age limit before the template — those exclude files before the template is even tried.
-        </span>
-      )}
     </div>
   );
 }

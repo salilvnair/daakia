@@ -2,19 +2,21 @@
  * Settings → DK8S → Logs — "check this against a real pod".
  *
  * Never configure a path blind is the rule the whole PV page is built on, and
- * this is the part that finally keeps it for a volume inside the cluster. The
- * probe next door reads the mount with `fs`, which only works when the volume
- * is on this machine; ask it about `/prodapp-prod-pvc/prodapp_prod_logs` and
- * it answers about `C:\prodapp-prod-pvc\prodapp_prod_logs`, which is not a
- * place and not the question.
+ * this is the part that keeps it. The page used to check its paths with `fs`
+ * on this machine; asked about `/prodapp-prod-pvc/prodapp_prod_logs` it
+ * answered about `C:\prodapp-prod-pvc\prodapp_prod_logs`, which is not a
+ * place and not the question. That walk is gone — a claim lives in the
+ * cluster, and the only thing that can read it is a pod.
  *
- * So this asks a pod. Name one, and it reports what that pod says it mounts
- * and what is really under each path you have configured — with the command
- * that produced each answer, because a check you cannot reproduce by hand is
+ * So a pod is picked, not typed. Context narrows to namespace narrows to pod,
+ * each menu filled from the cluster, and finished CronJob runs are left out:
+ * a run that exited cannot answer where an app's logs pile up. Then it reports
+ * what that pod mounts and what is really under each configured path, with the
+ * command that produced each answer — a check you cannot reproduce by hand is
  * one you have to take on faith.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { ButtonView } from '@salilvnair/dui';
+import { ButtonView, SelectInputView } from '@salilvnair/dui';
 import { useK8sStore } from '../../store/k8s-store';
 import { useDk8sPvStore } from '../../store/dk8s-pv-store';
 import { usePodCheckStore, type CheckedMount } from '../../store/dk8s-pod-check-store';
@@ -28,30 +30,45 @@ const cardStyle: React.CSSProperties = {
   maxWidth: '100%',
 };
 
-function Field({ label, value, onChange, placeholder, width }: {
-  label: string; value: string; onChange: (v: string) => void;
-  placeholder: string; width?: number;
+/**
+ * One step of the narrowing, as a menu of what is really there.
+ *
+ * These were three text boxes. A pod name typed from memory is a guess, and a
+ * wrong guess does not fail — it comes back with nothing, which is the exact
+ * failure this box was built to end. The cluster knows the answer, so the
+ * cluster is asked and the answer is the menu.
+ */
+function Picker({ label, value, options, onChange, disabled, empty, width, busy }: {
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  /** What the menu says when it has nothing to offer — never a blank list. */
+  empty: string;
+  width?: number | string;
+  busy?: boolean;
 }) {
   return (
-    <label className="flex flex-col gap-1" style={{ width: width ?? undefined, flex: width ? undefined : 1 }}>
+    <div className="flex flex-col gap-1"
+         style={{ width: width ?? undefined, flex: width ? undefined : 1, minWidth: 0 }}>
       <span className="text-[9.5px] uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>
         {label}
       </span>
-      <input
+      <SelectInputView
         value={value}
-        spellCheck={false}
-        placeholder={placeholder}
-        onChange={e => onChange(e.target.value)}
-        className="text-[11.5px] px-2.5 py-1.5 rounded-md w-full"
-        style={{
-          fontFamily: 'var(--font-mono, monospace)',
-          background: 'var(--color-panel)',
-          border: '1px solid var(--color-surface-border)',
-          color: 'var(--color-text-primary)',
-          outlineColor: ACCENT,
-        }}
+        options={options}
+        onChange={onChange}
+        size="sm"
+        accentColor={ACCENT}
+        width="100%"
+        disabled={disabled || busy}
+        /* The placeholder says which of three states this is in: nothing
+           chosen upstream yet, nothing came back, or still asking. */
+        placeholder={busy ? 'loading…' : options.length ? `${label}…` : empty}
+        style={{ fontFamily: 'var(--font-mono, monospace)' }}
       />
-    </label>
+    </div>
   );
 }
 
@@ -63,7 +80,9 @@ function bytes(n: number): string {
 
 /** What the pod says it has, which is where a configured path should come from. */
 function MountRow({ m, configured, onUse }: {
-  m: CheckedMount; configured: boolean; onUse: () => void;
+  m: CheckedMount; configured: boolean;
+  /** Absent where there is nothing to add it to — a read-only view of the same facts. */
+  onUse?: () => void;
 }) {
   return (
     <div className="flex items-baseline gap-2 px-3 py-1.5"
@@ -88,7 +107,7 @@ function MountRow({ m, configured, onUse }: {
         <span className="text-[10px] shrink-0 flex items-center gap-1" style={{ color: 'var(--color-success)' }}>
           <CheckIcon size={10} /> configured
         </span>
-      ) : (
+      ) : onUse ? (
         <button
           type="button"
           onClick={onUse}
@@ -101,13 +120,15 @@ function MountRow({ m, configured, onUse }: {
         >
           Use this
         </button>
-      )}
+      ) : null}
     </div>
   );
 }
 
 export function PvPodCheck() {
   const storeContext = useK8sStore(s => s.context);
+  const storeNamespace = useK8sStore(s => s.namespace);
+  const contexts = useK8sStore(s => s.contexts);
   const detail = useK8sStore(s => s.detail);
   const draft = useDk8sPvStore(s => s.draft);
   const patch = useDk8sPvStore(s => s.patch);
@@ -127,7 +148,8 @@ export function PvPodCheck() {
 
   const {
     pod, namespace, context, busy, checked, mounts, mountsError, mountsCommand, paths,
-    setTarget, check, clear, apply,
+    namespaces, pods, loadingPicker, pickerError,
+    setTarget, check, clear, apply, loadPicker,
   } = usePodCheckStore();
 
   /* The host's replies land here. Settings can be open without dk8s ever
@@ -135,25 +157,36 @@ export function PvPodCheck() {
   useEffect(() => {
     const handler = (e: MessageEvent) => {
       const t = e.data?.type;
-      if (t === 'dk8s:podMounts' || t === 'dk8s:pvListed') apply(e.data);
+      if (t === 'dk8s:podMounts' || t === 'dk8s:pvListed' || t === 'dk8s:podPicker') apply(e.data);
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
   }, [apply]);
 
-  /* Seeded from whatever dk8s is looking at, because the pod you want to check
-     is nearly always the one already on screen. Only as a starting value —
-     typing over it is the point of the box. */
+  /*
+    Opens on whatever dk8s is already looking at.
+
+    The pod you want to check is nearly always the one on screen, and starting
+    on it means the common case is one click — Check — rather than three
+    menus. Only a starting point: every one of them is still a menu.
+  */
   const [seeded, setSeeded] = useState(false);
   useEffect(() => {
-    if (seeded || !detail) return;
+    if (seeded) return;
+    const ctx = detail?.context ?? storeContext ?? '';
+    if (!ctx) return;
     setSeeded(true);
     setTarget({
-      pod: detail.name,
-      namespace: detail.namespace,
-      context: detail.context ?? storeContext ?? '',
+      context: ctx,
+      namespace: detail?.namespace ?? storeNamespace ?? '',
+      pod: detail?.name ?? '',
     });
-  }, [detail, seeded, setTarget, storeContext]);
+  }, [detail, seeded, setTarget, storeContext, storeNamespace]);
+
+  /* The menus below the chosen context, refilled whenever it narrows. */
+  useEffect(() => {
+    if (context) loadPicker(context, namespace);
+  }, [context, namespace, loadPicker]);
 
   /* The mounts as configured, which is what this is checking. */
   const roots = useMemo(() => {
@@ -161,7 +194,14 @@ export function PvPodCheck() {
     return [...new Set(list)];
   }, [draft.mounts]);
 
-  const ready = !!pod.trim() && !!namespace.trim();
+  /* Labelled by app, not only by pod: a template is written in terms of
+     `{app}`, and three replicas of one Deployment are one answer. */
+  const podOptions = useMemo(() => pods.map(p => ({
+    value: p.name,
+    label: p.phase && p.phase !== 'Running' ? `${p.name}  (${p.phase})` : p.name,
+  })), [pods]);
+
+  const ready = !!pod.trim() && !!namespace.trim() && !!context.trim();
   const pathList = Object.values(paths);
 
   return (
@@ -178,27 +218,48 @@ export function PvPodCheck() {
           <StethoscopeIcon size={15} style={{ color: ACCENT, marginTop: 2, flexShrink: 0 }} />
           <div className="flex flex-col gap-1.5 min-w-0 flex-1">
             <span className="text-[13px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-              Name a pod and see what is really there
+Pick a pod and see what is really there
             </span>
             <span className="text-[11.5px] leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
-              The mounts above are checked on <em>this</em> machine, which only works for a volume
-              you have mounted here. A claim that lives in the cluster is somewhere only a pod can
-              reach &mdash; so this asks one: what it mounts, and what is under each path you have
-              configured, read with <code style={{ fontFamily: 'var(--font-mono, monospace)' }}>kubectl exec</code>.
+              The paths above live inside a container, so nothing on this machine can confirm
+              one. Pick a pod and this asks it directly &mdash; what it mounts, and what is
+              really under each path you configured, read
+              with <code style={{ fontFamily: 'var(--font-mono, monospace)' }}>kubectl exec</code>.
+              Every answer carries the command that produced it.
             </span>
           </div>
         </div>
 
+        {/* Context, then namespace, then pod — the order the choice is
+            actually made in. Each menu is filled by the one to its left, and
+            choosing again to the left empties what is to the right rather
+            than leaving a pod that belongs to somewhere else on screen. */}
         <div className="flex items-end gap-2 flex-wrap">
-          {/* Deliberately not example values. A placeholder that looks like a
-              real pod name reads as a filled-in field, and the first Check
-              then does nothing at all with no way to see why. */}
-          <Field label="pod" value={pod} onChange={v => setTarget({ pod: v })}
-                 placeholder="a pod name…" />
-          <Field label="namespace" value={namespace} onChange={v => setTarget({ namespace: v })}
-                 placeholder="namespace…" width={180} />
-          <Field label="context" value={context} onChange={v => setTarget({ context: v })}
-                 placeholder="context…" width={180} />
+          <Picker
+            label="context" value={context} width={210}
+            options={contexts.map(c => ({ value: c.name, label: c.name }))}
+            empty="no contexts"
+            onChange={v => setTarget({ context: v })}
+          />
+          <Picker
+            label="namespace" value={namespace} width={190}
+            options={namespaces.map(n => ({ value: n, label: n }))}
+            disabled={!context}
+            busy={loadingPicker && !namespaces.length}
+            empty={context ? 'none visible' : 'pick a context'}
+            onChange={v => setTarget({ namespace: v })}
+          />
+          {/* Apps only. A finished CronJob run is gone, and where its logs
+              went is the owning app's question — offering one here is
+              offering an answer that cannot be right. */}
+          <Picker
+            label="pod" value={pod}
+            options={podOptions}
+            disabled={!namespace}
+            busy={loadingPicker && !!namespace && !pods.length}
+            empty={namespace ? 'no app pods here' : 'pick a namespace'}
+            onChange={v => setTarget({ pod: v })}
+          />
           <ButtonView
             label={busy ? 'Checking…' : 'Check'}
             size="sm" variant="secondary"
@@ -212,6 +273,55 @@ export function PvPodCheck() {
           )}
         </div>
 
+        {pickerError && (
+          <span className="text-[11px]" style={{ color: 'var(--color-warning)' }}>
+            {pickerError}
+          </span>
+        )}
+
+        <PvCheckResults roots={roots} onUse={addMount} />
+
+        {checked && !busy && roots.length === 0 && (
+          <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+            No mount paths configured above, so there was nothing of yours to check &mdash; the
+            list of what this pod mounts is the place to start.
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** What produced the answer above it. Selectable, because it is meant to be run. */
+function Command({ text }: { text: string }) {
+  return (
+    <div className="px-3 py-1.5" style={{ borderTop: '1px solid color-mix(in srgb, var(--color-surface-border) 45%, transparent)' }}>
+      <code className="text-[10px]" style={{
+        fontFamily: 'var(--font-mono, monospace)',
+        color: 'var(--color-text-muted)',
+        userSelect: 'text',
+        overflowWrap: 'anywhere',
+      }}>{text}</code>
+    </div>
+  );
+}
+
+/**
+ * What the check found, wherever it was run from.
+ *
+ * The same body serves the Settings page and the modal the pod menu opens —
+ * two screens answering one question would drift, and this is a question
+ * people will ask from whichever of the two they happen to be looking at.
+ */
+export function PvCheckResults({ roots, onUse }: {
+  roots: string[];
+  onUse?: (path: string) => void;
+}) {
+  const { checked, mounts, mountsError, mountsCommand, paths } = usePodCheckStore();
+  const pathList = Object.values(paths);
+
+  return (
+    <>
         {/* ── What the pod says it mounts ── */}
         {mountsError && (
           <div className="text-[11.5px] px-3 py-2 rounded-md" style={{
@@ -236,7 +346,7 @@ export function PvPodCheck() {
                      listing and into a box two sections up is exactly where a
                      character goes missing. */
                   configured={roots.includes(m.path)}
-                  onUse={() => { addMount(m.path); check([...roots, m.path]); }}
+                  onUse={onUse ? () => onUse(m.path) : undefined}
                 />
               ))}
             </div>
@@ -312,27 +422,6 @@ export function PvPodCheck() {
           </div>
         )}
 
-        {checked && !busy && roots.length === 0 && (
-          <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-            No mount paths configured above, so there was nothing of yours to check &mdash; the
-            list of what this pod mounts is the place to start.
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** What produced the answer above it. Selectable, because it is meant to be run. */
-function Command({ text }: { text: string }) {
-  return (
-    <div className="px-3 py-1.5" style={{ borderTop: '1px solid color-mix(in srgb, var(--color-surface-border) 45%, transparent)' }}>
-      <code className="text-[10px]" style={{
-        fontFamily: 'var(--font-mono, monospace)',
-        color: 'var(--color-text-muted)',
-        userSelect: 'text',
-        overflowWrap: 'anywhere',
-      }}>{text}</code>
-    </div>
+    </>
   );
 }

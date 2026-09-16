@@ -7,7 +7,7 @@
  * reading rather than a dump of every mount Kubernetes added.
  */
 import { describe, it, expect } from 'vitest';
-import { volumeKind, mountScore } from './pod-mounts';
+import { volumeKind, mountScore, isRunPod } from './pod-mounts';
 
 describe('what kind of volume it is', () => {
   it('reads a claim, and its name', () => {
@@ -53,5 +53,27 @@ describe('which mount to offer first', () => {
   it('puts the token Kubernetes mounts on every pod last', () => {
     /* It is on every pod in the cluster and is never what anybody wants. */
     expect(score('/var/run/secrets/kubernetes.io/serviceaccount', 'projected')).toBe(-1);
+  });
+});
+
+describe('a pod worth checking', () => {
+  it('leaves out a run of something', () => {
+    /* A finished CronJob run is gone, and where its logs went is the owning
+       app's question. Offering one in the picker offers a wrong answer. */
+    expect(isRunPod([{ kind: 'Job' }])).toBe(true);
+    expect(isRunPod([{ kind: 'CronJob' }])).toBe(true);
+  });
+
+  it('keeps what stays up', () => {
+    expect(isRunPod([{ kind: 'ReplicaSet' }])).toBe(false);
+    expect(isRunPod([{ kind: 'StatefulSet' }])).toBe(false);
+  });
+
+  it('reads the owner, never the name', () => {
+    /* `nightly-billing-29825510` looks like a run and
+       `prodapp-bc8f7bf84-mhz5f` looks like one too if you squint at the
+       suffix. Only the owner actually knows. */
+    expect(isRunPod(undefined)).toBe(false);
+    expect(isRunPod([])).toBe(false);
   });
 });

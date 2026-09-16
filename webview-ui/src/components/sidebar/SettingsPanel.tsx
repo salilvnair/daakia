@@ -35,6 +35,7 @@ import type { AiPromptTemplateKey } from '../../store/prompt-template';
 import { AiAuditPanel } from './AiAuditPanel';
 import { useMockStore } from '../../store/mock-store';
 import { useUiStateStore, usePersistedPref } from '../../store/ui-state-store';
+import { useRememberedScroll } from '../../store/remembered-scroll';
 import { CookieManager } from '../power/CookieManager';
 import { ProxySettings } from '../power/ProxySettings';
 import { ClientCertificates } from '../power/ClientCertificates';
@@ -138,6 +139,10 @@ export function SettingsPanel() {
   const [activeSection, setActiveSection] = usePersistedPref<ActiveNavId>(
     'settings.section', 'general', [...ALL_SECTION_IDS] as ActiveNavId[],
   );
+
+  /* Where this section was left, so the control you came back for is where
+     you left it rather than somewhere below the fold again. */
+  const rememberScroll = useRememberedScroll(`settings.scroll.${activeSection}`);
   const [promptTarget, setPromptTarget] = useState<AiPromptTemplateKey | null>(null);
 
   /*
@@ -189,7 +194,11 @@ export function SettingsPanel() {
           />
         }
         second={
-          <div className="h-full flex-1 overflow-y-auto">
+          /* Keyed by section, not by the panel: each page keeps its own
+             place, so coming back to Logs does not land you where you left
+             Theme. See `remembered-scroll` for why restoring is not one
+             assignment. */
+          <div className="h-full flex-1 overflow-y-auto" ref={rememberScroll}>
             {activeSection === 'general' ? (
               <GeneralSettings />
             ) : activeSection === 'keymap' ? (

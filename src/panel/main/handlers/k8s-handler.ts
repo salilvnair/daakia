@@ -13,7 +13,7 @@ import { probeEnvironment, setKubectlPath } from '../../../services/k8s/kubectl'
 import { connEvidence } from '../../../services/k8s/conn-summary';
 import { probeAccess, forbiddenReason } from '../../../services/k8s/k8s-access';
 import {
-  probePv, clearPvCache, mountsOf, type PvLogConfig,
+  clearPvCache, mountsOf, type PvLogConfig,
 } from '../../../services/k8s/pv-logs';
 import { searchPvForPod, type PvMatch } from '../../../services/k8s/pv-search';
 import {
@@ -2137,29 +2137,20 @@ async function searchArchives(
   });
 }
 
-/** Whether a volume is configured, and what it can see — for the settings page. */
-export async function handleDk8sProbePv(
-  msg: Record<string, unknown>,
+/**
+ * The saved volume configuration, for the settings page opening.
+ *
+ * It used to walk the configured paths as well and report what was under
+ * them. That walk ran `fs` on this machine, so a path inside a container came
+ * back resolved against a drive letter — the answer to a question nobody
+ * asked. The paths are in-pod paths now, and the only thing that can read one
+ * is a pod: see `handleDk8sPvList`.
+ */
+export function handleDk8sLoadPv(
+  _msg: Record<string, unknown>,
   postMessage: PostMessage,
-): Promise<void> {
-  const draft = msg.config as PvLogConfig | undefined;
-  const cfg = draft ?? pvConfig();
-
-  // A probe with no draft is the settings page opening, so it also needs what
-  // is stored — otherwise the page would render empty over a real config.
-  if (!draft) postMessage({ type: 'dk8s:pvConfig', config: cfg ?? null });
-
-  if (!cfg) {
-    postMessage({
-      type: 'dk8s:pvProbe',
-      probe: { ok: false, root: '', topLevel: [], fileCount: 0, totalBytes: 0, sample: [] },
-    });
-    return;
-  }
-  // A probe is the user asking "is this right now?", so it never answers from
-  // a cache built before they changed the path.
-  clearPvCache();
-  postMessage({ type: 'dk8s:pvProbe', probe: await probePv(cfg) });
+): void {
+  postMessage({ type: 'dk8s:pvConfig', config: pvConfig() ?? null });
 }
 
 /** Save the volume configuration and hand back what it now sees. */
@@ -2171,11 +2162,6 @@ export async function handleDk8sSavePv(
   saveState({ pvLogs: cfg });
   clearPvCache();
   postMessage({ type: 'dk8s:pvConfig', config: cfg });
-  // Same reason as above: a config with mounts and no legacy root would save
-  // without ever reporting whether the path it named actually exists.
-  if (cfg && mountsOf(cfg).length > 0) {
-    postMessage({ type: 'dk8s:pvProbe', probe: await probePv(cfg) });
-  }
 }
 
 export function handleDk8sCancelSearch(postMessage: PostMessage): void {

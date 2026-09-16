@@ -96,7 +96,7 @@ import { noteSessionConnect, auditSessionMessage, flushOpenSessions } from '../.
 import {
   handleDk8sProbe, handleDk8sCommands, handleDk8sSetClusterTimeout, handleDk8sUseContext, handleDk8sSetDefaultContext, handleDk8sNamespaces,
   handleDk8sSetNamespace, handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSetLogLineNumbers, handleDk8sSearchLogs, handleDk8sCancelSearch, handleDk8sCancelExport,
-  handleDk8sProbePv, handleDk8sSavePv, handleDk8sOpenLogFile, handleDk8sProbeAccess,
+  handleDk8sLoadPv, handleDk8sSavePv, handleDk8sOpenLogFile, handleDk8sProbeAccess,
   handleDk8sGetFormats, handleDk8sSaveFormat, handleDk8sDeleteFormat,
   handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat,
   handleDk8sListArtifacts, handleDk8sImportArtifact, handleDk8sDeleteArtifact,
@@ -112,7 +112,7 @@ import {
   handleDk8sProbePod, handleDk8sMarkRuntime,
 } from './handlers/k8s-handler';
 import {
-  handleDk8sPodMounts, handleDk8sPvList, handleDk8sPvSearch,
+  handleDk8sPodMounts, handleDk8sPvList, handleDk8sPvSearch, handleDk8sPodPicker,
 } from './handlers/pv-in-pod-handler';
 import {
   handleDk8sAsk, handleDk8sCollect, handleDk8sAnalyze, handleDk8sRevealArtifacts,
@@ -636,8 +636,8 @@ export class MainPanel {
       case 'dk8s:setLogLineNumbers':
         handleDk8sSetLogLineNumbers(msg, this._post);
         break;
-      case 'dk8s:probePv':
-        void handleDk8sProbePv(msg, this._post);
+      case 'dk8s:loadPv':
+        handleDk8sLoadPv(msg, this._post);
         break;
       case 'dk8s:savePv':
         void handleDk8sSavePv(msg, this._post);
@@ -731,6 +731,9 @@ export class MainPanel {
         break;
       case 'dk8s:pvSearch':
         void handleDk8sPvSearch(msg, this._post);
+        break;
+      case 'dk8s:podPicker':
+        void handleDk8sPodPicker(msg, this._post);
         break;
       case 'dk8s:ask':
         handleDk8sAsk(msg, this._post);
