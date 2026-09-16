@@ -52,6 +52,15 @@ export interface KubectlEvent {
   what: string;
   context?: string;
   namespace?: string;
+  /**
+   * Who asked for it.
+   *
+   * `poll` is a background refresh on a timer that nobody pressed — metrics,
+   * which have no watch API and so are re-read every few seconds per watched
+   * namespace. Left unmarked they are most of the audit, and the handful of
+   * commands somebody actually ran are buried among them.
+   */
+  source: 'user' | 'poll';
   /** `run` for a call that completes, `stream` for a long-lived process. */
   kind: 'run' | 'stream';
   /** Absent while a stream is still open. */
@@ -196,9 +205,11 @@ export function kubectlEvent(
   ms: number | undefined,
   kind: 'run' | 'stream' = 'run',
   id: string = nextKubectlId(),
+  source: 'user' | 'poll' = 'user',
 ): KubectlEvent {
   return {
     id,
+    source,
     command: commandLine(bin, args),
     what: describeArgs(args),
     context: flagValue(args, '--context'),

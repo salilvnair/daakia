@@ -24,6 +24,14 @@ export interface RunOptions {
   env?: Record<string, string>;
   stdin?: string;
   /**
+   * A refresh on a timer that nobody pressed.
+   *
+   * It still runs and is still recorded — an audit with holes in it is not an
+   * audit. It is marked so the Commands tab can keep a metrics poll every
+   * fifteen seconds per namespace from burying the commands you ran.
+   */
+  background?: boolean;
+  /**
    * Kills the child when it fires.
    *
    * The only way to actually stop a long `kubectl exec` — a loop that stops
@@ -236,12 +244,13 @@ export async function run(args: string[], opts: RunOptions = {}): Promise<RunRes
     it comes back.
   */
   const id = nextKubectlId();
-  recordKubectl(kubectlEvent(bin, args, {}, undefined, 'run', id));
+  const source = opts.background ? 'poll' as const : 'user' as const;
+  recordKubectl(kubectlEvent(bin, args, {}, undefined, 'run', id, source));
   const res = await runRaw(bin, args, opts);
   recordKubectl(kubectlEvent(bin, args, {
     ok: res.ok, code: res.code, stderr: res.stderr, failure: res.failure,
     bytes: res.stdout?.length,
-  }, Date.now() - started, 'run', id));
+  }, Date.now() - started, 'run', id, source));
   return res;
 }
 

@@ -263,8 +263,11 @@ export interface PodUsage {
 export async function topPods(context: string, namespace: string): Promise<PodUsage[] | null> {
   const res = await run(
     ['--context', context, '-n', namespace, 'top', 'pods', '--no-headers'],
-    /* Metrics are a nicety: bounded by the same setting, never longer. */
-    { timeoutMs: Math.min(15_000, clusterTimeoutMs()) },
+    /* Metrics are a nicety: bounded by the same setting, never longer.
+       Marked as a poll — nobody pressed anything to make this run, and it
+       runs again every fifteen seconds for as long as the namespace is
+       watched. */
+    { timeoutMs: Math.min(15_000, clusterTimeoutMs()), background: true },
   );
   if (!res.ok) return null;
 

@@ -44,6 +44,8 @@ interface Meta {
   ok?: boolean;
   said?: string;
   bytes?: number;
+  /** `poll` is a refresh on a timer that nobody pressed. Absent on old rows. */
+  source?: 'user' | 'poll';
 }
 
 function readMeta(row: UiRow): Meta {
@@ -108,10 +110,24 @@ export function Dk8sCommandAudit() {
     return () => window.removeEventListener('message', handler);
   }, [load]);
 
+  /*
+    Background polls are off by default.
+
+    Metrics have no watch API, so `top pods` re-runs every fifteen seconds for
+    every namespace being watched — leave them in and a morning's work is a
+    page of them with the handful of commands somebody actually ran buried
+    somewhere inside. They are still recorded, still here behind the toggle,
+    and the count says how many are being held back so nothing is hidden
+    silently.
+  */
+  const [showPolls, setShowPolls] = useState(false);
+  const polls = rows.filter(r => readMeta(r).source === 'poll');
+  const base = showPolls ? rows : rows.filter(r => readMeta(r).source !== 'poll');
+
   const q = search.trim().toLowerCase();
   const shown = q
-    ? rows.filter(r => `${r.action ?? ''} ${r.button ?? ''} ${r.metadata ?? ''}`.toLowerCase().includes(q))
-    : rows;
+    ? base.filter(r => `${r.action ?? ''} ${r.button ?? ''} ${r.metadata ?? ''}`.toLowerCase().includes(q))
+    : base;
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -152,6 +168,25 @@ export function Dk8sCommandAudit() {
             </span>
           )}
         </div>
+        {polls.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowPolls(v => !v)}
+            title={showPolls
+              ? 'Hide the background refreshes again'
+              : 'Metrics are polled every 15s per watched namespace — nobody pressed anything to run these'}
+            className="text-[10.5px] px-2 py-0.5 rounded-full cursor-pointer shrink-0 tabular-nums transition-colors"
+            style={{
+              color: showPolls ? ACCENT : 'var(--color-text-muted)',
+              background: showPolls ? `color-mix(in srgb, ${ACCENT} 12%, transparent)` : 'transparent',
+              border: `1px solid ${showPolls
+                ? `color-mix(in srgb, ${ACCENT} 30%, transparent)`
+                : 'var(--color-surface-border)'}`,
+            }}
+          >
+            {showPolls ? 'hiding nothing' : `${polls.length} background`}
+          </button>
+        )}
         <button type="button" onClick={load} title="Refresh"
                 className="w-6 h-6 flex items-center justify-center rounded cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors">
           <RefreshIcon size={12} />
@@ -169,7 +204,9 @@ export function Dk8sCommandAudit() {
           <div className="flex items-center justify-center h-full text-[11px] text-[var(--color-text-muted)]">
             {rows.length === 0
               ? 'Nothing yet — open dk8s and every command it runs appears here'
-              : 'No matches'}
+              : base.length === 0
+                ? 'Only background refreshes so far — show them to see what dk8s has been doing'
+                : 'No matches'}
           </div>
         ) : (
           <table className="w-full text-[11px]">

@@ -188,6 +188,10 @@ export function installKubectlAudit(postMessage: PostMessage): void {
           context: event.context, namespace: event.namespace,
           ms: event.ms, exit: event.code, ok: event.ok,
           said: event.said, bytes: event.bytes,
+          /* Recorded, so the audit stays complete — and marked, so a metrics
+             poll every fifteen seconds per namespace does not bury the
+             commands somebody actually ran. */
+          source: event.source,
         }),
       });
     } catch { /* auditing must never be why a cluster call fails */ }
