@@ -133,3 +133,38 @@ export function contextLabel(n: number): string {
 export function tailLabel(n: number): string {
   return `${n.toLocaleString()} line${n === 1 ? '' : 's'}`;
 }
+
+/**
+ * Read every line the pod still holds, however many that is.
+ *
+ * `kubectl logs --tail=-1` is kubectl's own way of saying "all of it", so the
+ * sentinel is the flag: it travels to `searchArgs` and is interpolated
+ * straight in, with nothing along the way needing to know it is special.
+ *
+ * Only the SEARCH offers it. A search keeps matching lines and discards the
+ * rest as they stream past, so the cost is bandwidth and time; the log VIEW
+ * would have to hold every line it read, and "show me a million lines" is not
+ * a thing to offer behind an innocent dropdown.
+ */
+export const ALL_LINES = -1;
+
+/**
+ * How far back a search reads, said in words.
+ *
+ * "last 5,000" is a bound and reads like one. Everything is not a bound, and
+ * calling it "last -1" or "last 999,999" would be pretending it is.
+ */
+export function searchDepthLabel(n: number): string {
+  return n === ALL_LINES ? 'everything the pod holds' : `last ${n.toLocaleString()}`;
+}
+
+/**
+ * Whether a depth is going to read the whole log.
+ *
+ * The screen says so before the search runs. A pod with a week of output
+ * behind it is a large transfer, and across a VPN the difference between
+ * "last 5,000" and everything is the difference between a search and a wait.
+ */
+export function readsEverything(n: number): boolean {
+  return n === ALL_LINES;
+}

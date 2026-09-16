@@ -13,6 +13,7 @@ import {
   DEFAULT_TAIL, DEFAULT_CONTEXT, MAX_LINES,
   LOG_TAIL_LADDER_KEY, LOG_TAIL_DEFAULT_KEY,
   LOG_CONTEXT_LADDER_KEY, LOG_CONTEXT_DEFAULT_KEY, LOG_ARCHIVE_LADDER_KEY,
+  ALL_LINES, searchDepthLabel, readsEverything,
 } from './log-settings';
 
 describe('a stored ladder', () => {
@@ -133,5 +134,31 @@ describe('the labels', () => {
 
   it('groups the thousands, because 100000 is unreadable', () => {
     expect(tailLabel(100000)).toBe('100,000 lines');
+  });
+});
+
+describe('how far back a search reads', () => {
+  it('names a bound as a bound', () => {
+    expect(searchDepthLabel(5000)).toBe('last 5,000');
+    expect(searchDepthLabel(100000)).toBe('last 100,000');
+  });
+
+  it('does not pretend everything is a number', () => {
+    /* `last -1` and `last 999,999` both read as a limit. It is not one — it
+       is kubectl's `--tail=-1`, which is the whole log. */
+    expect(searchDepthLabel(ALL_LINES)).toBe('everything the pod holds');
+  });
+
+  it('is the flag kubectl already uses, so nothing has to translate it', () => {
+    /* `searchArgs` interpolates this straight into `--tail=`. A sentinel that
+       needed unwrapping somewhere would be a sentinel somebody forgets to
+       unwrap. */
+    expect(ALL_LINES).toBe(-1);
+  });
+
+  it('knows which depth is going to read the lot', () => {
+    expect(readsEverything(ALL_LINES)).toBe(true);
+    expect(readsEverything(100000)).toBe(false);
+    expect(readsEverything(0)).toBe(false);
   });
 });

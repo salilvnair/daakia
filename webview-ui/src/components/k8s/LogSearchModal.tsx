@@ -39,7 +39,10 @@ import { softPrimary } from './button-style';
 
 import { ACCENT, MUTED } from './tone';
 import { useUiStateStore } from '../../store/ui-state-store';
-import { logLineSettings, onLadder, contextLabel } from './log-settings';
+import {
+  logLineSettings, onLadder, contextLabel,
+  ALL_LINES, searchDepthLabel, readsEverything,
+} from './log-settings';
 const ROW_H = 19;
 const OVERSCAN = 20;
 
@@ -765,14 +768,26 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                         onChange={v => setOptions({ includePrevious: v })} />
           )}
           <div className="flex-1" />
+          {/*
+            How far back each pod is read.
+
+            Every rung but the last is a bound — the last N lines, which is a
+            server-side slice and costs what it says. `everything` is the one
+            that guarantees a hit cannot be missed for being old, and it is
+            also the one that pulls the pod's whole log across the wire, so it
+            says so underneath rather than surprising somebody on a VPN.
+          */}
           {searchIn === 'logs' && (
           <SelectInputView
             value={String(options.tailLines)}
             onChange={v => setOptions({ tailLines: Number(v) })}
-            options={lineSettings.archiveLadder.map(v => ({
-              value: String(v), label: `last ${v.toLocaleString()}`,
-            }))}
-            size="md" width={148} accentColor={ACCENT}
+            options={[
+              ...lineSettings.archiveLadder.map(v => ({
+                value: String(v), label: searchDepthLabel(v),
+              })),
+              { value: String(ALL_LINES), label: searchDepthLabel(ALL_LINES) },
+            ]}
+            size="md" width={186} accentColor={ACCENT}
           />
           )}
           {/*
@@ -817,6 +832,32 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                 style={{ color: windowProblem ? 'var(--color-error)' : 'var(--color-text-muted)' }}>
             {describeWindow(timeWindow)}
           </span>
+
+          {/*
+            Said before it runs, not after it has been running a while.
+
+            Every other depth is a bound the API server applies before anything
+            crosses the wire. This one is the pod's whole log, and on a chatty
+            service behind a VPN that is the difference between a search and a
+            wait — worth knowing while the choice is still in front of you.
+
+            A time window takes the edge off it, because `--since-time` IS
+            server-side: everything, bounded to the hour that matters, reads
+            far less than everything.
+          */}
+          {readsEverything(options.tailLines) && (
+            <span className="text-[10.5px] px-2.5 py-1.5 rounded-md"
+                  style={{
+                    color: 'var(--color-warning)',
+                    background: 'color-mix(in srgb, var(--color-warning) 9%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--color-warning) 26%, transparent)',
+                  }}>
+              Reading every line each pod still holds — nothing is capped, so a
+              hit cannot be missed for being old. It is also the whole log across
+              the wire per pod; narrowing the window above keeps that in hand,
+              since the start of a window is applied by the cluster.
+            </span>
+          )}
         </div>
         )}
 
