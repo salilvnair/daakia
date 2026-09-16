@@ -152,7 +152,7 @@ export function Dk8sCommandAudit() {
       {/* ── What this is ── */}
       <div className="flex flex-col gap-1.5 px-5 pt-4 pb-3">
         <span className="text-[14px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-          Commands
+          Command Log
         </span>
         <span className="text-[11.5px] leading-relaxed"
               style={{ color: 'var(--color-text-muted)', maxWidth: '110ch' }}>
@@ -189,7 +189,7 @@ export function Dk8sCommandAudit() {
         {hiddenByKind > 0 && (
           <span
             className="text-[10.5px] px-2 py-0.5 rounded-full shrink-0 tabular-nums"
-            title="Settings → DK8S → Commands → Config decides which kinds are listed"
+            title="Command Config decides which kinds are listed"
             style={{ color: 'var(--color-text-muted)', border: '1px solid var(--color-surface-border)' }}
           >
             {hiddenByKind} hidden by Config

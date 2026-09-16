@@ -31,6 +31,8 @@
 
 export interface CommandKind {
   id: string;
+  /** Which section of the config page it sits under. */
+  group: CommandGroup;
   /** What it is called, in the words of the thing you pressed. */
   label: string;
   /** Where in dk8s it comes from — the answer to "why did this run?". */
@@ -42,6 +44,33 @@ export interface CommandKind {
 }
 
 /**
+ * The sections, in the order they are shown.
+ *
+ * Grouped by what the call touches rather than by whether it is noisy — the
+ * noisy ones are already obvious from being off, and somebody asking "why is
+ * it reading pods so often" wants every pod call in one place.
+ */
+export const COMMAND_GROUPS = [
+  { id: 'pods', label: 'Pods', color: 'var(--color-dk8s)' },
+  { id: 'logs', label: 'Logs', color: 'var(--color-info)' },
+  { id: 'container', label: 'Inside a container', color: 'var(--color-method-post)' },
+  { id: 'cluster', label: 'Cluster and context', color: 'var(--color-method-get)' },
+  { id: 'changes', label: 'Changes to a pod', color: 'var(--color-warning)' },
+  { id: 'probes', label: 'What dk8s asks on your behalf', color: 'var(--color-text-muted)' },
+  { id: 'other', label: 'Everything else', color: 'var(--color-text-muted)' },
+] as const;
+
+export type CommandGroup = typeof COMMAND_GROUPS[number]['id'];
+
+export function groupColor(id: string): string {
+  return COMMAND_GROUPS.find(g => g.id === id)?.color ?? 'var(--color-text-muted)';
+}
+
+export function groupLabel(id: string): string {
+  return COMMAND_GROUPS.find(g => g.id === id)?.label ?? id;
+}
+
+/**
  * Ordered most-used first, which is also roughly the order somebody meets
  * them. The list is the catalogue AND the classifier's precedence: the first
  * `match` that accepts an argv wins, so narrower patterns come before wider
@@ -50,6 +79,7 @@ export interface CommandKind {
 export const COMMAND_KINDS: (CommandKind & { match: (words: string[], argv: string[]) => boolean })[] = [
   {
     id: 'logs',
+    group: 'logs',
     label: 'Read a log',
     where: 'The Logs tab, log search, and exporting a log to a file.',
     command: 'kubectl logs <pod>',
@@ -58,6 +88,7 @@ export const COMMAND_KINDS: (CommandKind & { match: (words: string[], argv: stri
   },
   {
     id: 'get-pods',
+    group: 'pods',
     label: 'List the pods',
     where: 'The pod grid, and the watch that keeps it up to date.',
     command: 'kubectl get pods',
@@ -66,6 +97,7 @@ export const COMMAND_KINDS: (CommandKind & { match: (words: string[], argv: stri
   },
   {
     id: 'get-pod',
+    group: 'pods',
     label: 'Re-read one pod',
     where: 'Opening a pod, and every refresh of the one already open.',
     command: 'kubectl get pod <pod> -o json',
@@ -76,6 +108,7 @@ export const COMMAND_KINDS: (CommandKind & { match: (words: string[], argv: stri
   },
   {
     id: 'describe',
+    group: 'pods',
     label: 'Describe a pod',
     where: 'The Describe tab, and the events listed under it.',
     command: 'kubectl describe pod <pod>',
@@ -84,6 +117,7 @@ export const COMMAND_KINDS: (CommandKind & { match: (words: string[], argv: stri
   },
   {
     id: 'exec',
+    group: 'container',
     label: 'Run something in a container',
     where: 'Terminal, Explorer, file search, and everything Doctor collects.',
     command: 'kubectl exec <pod> -- …',
@@ -92,6 +126,7 @@ export const COMMAND_KINDS: (CommandKind & { match: (words: string[], argv: stri
   },
   {
     id: 'cp',
+    group: 'container',
     label: 'Copy a file out',
     where: 'Downloading a file from Explorer, and collecting a dump.',
     command: 'kubectl cp <pod>:<path> <local>',
@@ -100,6 +135,7 @@ export const COMMAND_KINDS: (CommandKind & { match: (words: string[], argv: stri
   },
   {
     id: 'port-forward',
+    group: 'container',
     label: 'Forward a port',
     where: 'Reaching a port on a pod from this machine.',
     command: 'kubectl port-forward <pod> …',
@@ -108,6 +144,7 @@ export const COMMAND_KINDS: (CommandKind & { match: (words: string[], argv: stri
   },
   {
     id: 'events',
+    group: 'pods',
     label: 'Read the namespace events',
     where: 'The event list under Describe, where a scheduling failure explains itself.',
     command: 'kubectl get events',
@@ -116,6 +153,7 @@ export const COMMAND_KINDS: (CommandKind & { match: (words: string[], argv: stri
   },
   {
     id: 'namespaces',
+    group: 'pods',
     label: 'List the namespaces',
     where: 'The namespace picker.',
     command: 'kubectl get namespaces',
@@ -124,6 +162,7 @@ export const COMMAND_KINDS: (CommandKind & { match: (words: string[], argv: stri
   },
   {
     id: 'contexts',
+    group: 'cluster',
     label: 'List the contexts',
     where: 'The cluster picker, and the list dk8s starts from.',
     command: 'kubectl config get-contexts',
@@ -132,6 +171,7 @@ export const COMMAND_KINDS: (CommandKind & { match: (words: string[], argv: stri
   },
   {
     id: 'use-context',
+    group: 'cluster',
     label: 'Switch context',
     where: 'Choosing a different cluster.',
     command: 'kubectl config use-context <name>',
@@ -140,6 +180,7 @@ export const COMMAND_KINDS: (CommandKind & { match: (words: string[], argv: stri
   },
   {
     id: 'config-view',
+    group: 'cluster',
     label: 'Read the kubeconfig',
     where: 'Working out which clusters exist and how they authenticate.',
     command: 'kubectl config view',
@@ -148,6 +189,7 @@ export const COMMAND_KINDS: (CommandKind & { match: (words: string[], argv: stri
   },
   {
     id: 'delete',
+    group: 'changes',
     label: 'Delete a pod',
     where: 'Restarting a pod by letting its controller replace it.',
     command: 'kubectl delete pod <pod>',
@@ -156,6 +198,7 @@ export const COMMAND_KINDS: (CommandKind & { match: (words: string[], argv: stri
   },
   {
     id: 'patch',
+    group: 'changes',
     label: 'Change a pod’s labels',
     where: 'Detaching a pod from its Service before a heap dump.',
     command: 'kubectl patch pod <pod> …',
@@ -164,6 +207,7 @@ export const COMMAND_KINDS: (CommandKind & { match: (words: string[], argv: stri
   },
   {
     id: 'can-i',
+    group: 'probes',
     label: 'Check a permission',
     where: 'Before a button is drawn, so a refused action is not offered.',
     command: 'kubectl auth can-i <verb> <resource>',
@@ -173,6 +217,7 @@ export const COMMAND_KINDS: (CommandKind & { match: (words: string[], argv: stri
   },
   {
     id: 'top',
+    group: 'probes',
     label: 'Read CPU and memory',
     where: 'The usage column, refreshed on a timer because metrics have no watch API.',
     command: 'kubectl top pods',
@@ -182,6 +227,7 @@ export const COMMAND_KINDS: (CommandKind & { match: (words: string[], argv: stri
   },
   {
     id: 'version',
+    group: 'cluster',
     label: 'Check the cluster answers',
     where: 'Before dk8s trusts a context, and when one stops responding.',
     command: 'kubectl version',
@@ -193,6 +239,7 @@ export const COMMAND_KINDS: (CommandKind & { match: (words: string[], argv: stri
 /** Anything the list above does not name. Always shown; never silently lost. */
 export const OTHER_KIND: CommandKind = {
   id: 'other',
+  group: 'other',
   label: 'Everything else',
   where: 'Any call this list does not name yet.',
   command: 'kubectl …',

@@ -17,7 +17,7 @@ const TABS = ['log', 'config'] as const;
 type Tab = typeof TABS[number];
 
 const ITEMS: TabItem[] = [
-  { id: 'log', label: 'Commands' },
+  { id: 'log', label: 'Command Log' },
   { id: 'config', label: 'Command Config' },
 ];
 
@@ -28,11 +28,16 @@ export function Dk8sCommandsSection() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="px-4 pt-2 shrink-0" style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+      {/* The same strip Developer Tools → Audit Log / Audit Config uses, down to
+          the variant: two sub-tabs over one subject read as tabs, and a
+          segmented control reads as a mode switch on one screen. */}
+      <div className="px-3 pt-2 pb-0 border-b border-[var(--color-surface-border)] shrink-0">
         <TabView
           tabs={ITEMS}
           activeTab={tab}
           onChange={(id: string) => setTab(id as Tab)}
+          variant="underline"
+          size="sm"
           accentColor="var(--color-dk8s)"
         />
       </div>
