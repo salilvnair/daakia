@@ -9,9 +9,10 @@
  * M1 is the way in: find kubectl, choose a cluster and namespace, and never
  * dead-end when a cluster says no.
  */
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { IconSize, LoadingStateView } from '@salilvnair/dui';
-import { Dk8sIcon, EyeIcon, StethoscopeIcon, TerminalIcon } from '../../icons';
+import { Dk8sIcon, EyeIcon, StethoscopeIcon, TerminalIcon, CheckIcon, FilterIcon } from '../../icons';
+import { useSurfaceMenu, MENU } from '../shared/menu/SurfaceMenu';
 import { useK8sStore, type Dk8sView } from '../../store/k8s-store';
 import { KubectlSetupGuide } from './KubectlSetupGuide';
 import { SensitivityPrompt, UnreachableNotice } from './ContextPicker';
@@ -322,10 +323,59 @@ export function K8sPanel() {
     return () => window.removeEventListener('message', handler);
   }, [apply, probe, applyAi, applyDoctor, applySearch, applyArtifacts]);
 
+  /*
+    One menu for the whole panel.
+
+    `useSurfaceMenu` walks up from whatever was right-clicked to the nearest
+    `data-menu`, so a surface offers verbs by marking itself rather than by
+    threading a handler down the tree. The pod grid marks its background; every
+    other patch of dk8s falls through to `dk8s` and gets nothing, which
+    suppresses the browser menu without inventing verbs nobody asked for.
+  */
+  const gridFilter = useK8sStore(s2 => s2.gridFilter);
+  const surfaceMenu = useSurfaceMenu(useCallback((surface) => {
+    if (surface.kind !== 'pod-grid' || !gridFilter) return undefined;
+    const { kind, setKind, counts } = gridFilter;
+    const rows: { id: 'all' | 'pods' | 'runs'; label: string; n: number }[] = [
+      { id: 'all', label: 'All pods', n: counts.all },
+      { id: 'pods', label: 'Pods', n: counts.pods },
+      { id: 'runs', label: 'CronJob runs', n: counts.runs },
+    ];
+    /* Under `Filter`, not at the top level. The background of a pod list has
+       more than one thing to say about itself and this is the first of them —
+       a flat list of three would have to be taken apart to add a second. */
+    return [{
+      id: 'filter',
+      label: 'Filter',
+      icon: <FilterIcon size={13} />,
+      iconColor: MENU.read,
+      children: rows.map(r => ({
+        id: r.id,
+        label: r.label,
+        icon: kind === r.id ? <CheckIcon size={13} /> : undefined,
+        iconColor: MENU.read,
+        /* The count on the right, where a shortcut would go — a quantity, so
+           it reads as one rather than as part of the name. */
+        shortcut: String(r.n),
+        onClick: () => setKind(r.id),
+      })),
+    }];
+  }, [gridFilter]));
+
   return (
     // `relative` so the detail overlay can pin to this panel rather than the
     // whole window — the sidebar and tab bar stay visible and usable.
-    <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+    //
+    // `data-menu="dk8s"` and the handler below are what keep the browser's own
+    // Copy / Select All off every empty patch of this panel. It is a menu about
+    // text, offered on screens made of pods and verdicts; where dk8s has
+    // nothing better to say it now says nothing, which is the honest answer.
+    <div
+      className="flex-1 flex flex-col min-w-0 overflow-hidden relative"
+      data-menu="dk8s"
+      onContextMenu={surfaceMenu.onContextMenu}
+    >
+      {surfaceMenu.node}
       {/* Always present once past the probe. Hiding it on Artifacts and
           Analyze removed a 34px bar and shifted everything under it, so
           switching tabs flickered. The cluster and namespace crumbs are what

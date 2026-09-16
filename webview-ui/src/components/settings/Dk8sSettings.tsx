@@ -14,8 +14,6 @@
 import { useEffect } from 'react';
 import { Dk8sIcon, MemoryIcon, WarningTriangleIcon, StethoscopeIcon } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
-import { LogFormatSettings } from './LogFormatSettings';
-import { PvLogSettings } from './PvLogSettings';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -102,24 +100,6 @@ export function Dk8sClusterSettings() {
         How Dk8s — Daakia K8s — behaves against a live cluster.
       </span>
 
-      <div className="flex items-center gap-1.5 mt-1">
-        <span className="text-[9.5px] uppercase tracking-wider"
-              style={{ color: 'var(--color-text-muted)' }}>
-          log view
-        </span>
-        <div className="flex-1 h-px" style={{ background: 'var(--color-surface-border)' }} />
-      </div>
-
-      <Toggle
-        on={logLineNumbers}
-        onChange={setLogLineNumbers}
-        label="Show line numbers"
-        description={
-          'A numbered gutter down the left of a pod’s log, like an editor. On by default — '
-          + 'turn it off on a narrow panel, where the width a long line needs matters more.'
-        }
-      />
-
       {/* Sub-heading, so the page can grow other groups (log formats, artifact
           retention) without the diagnostics switches losing their context. */}
       <div className="flex items-center gap-1.5 mt-1">
@@ -176,9 +156,7 @@ export function Dk8sClusterSettings() {
         never blocked by this — none of them writes a file the size of the heap.
       </span>
 
-      <div className="mt-3" />
-      <LogFormatSettings />
-      <PvLogSettings />
+
     </div>
   );
 }

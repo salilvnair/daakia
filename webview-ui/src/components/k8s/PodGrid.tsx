@@ -892,6 +892,19 @@ export function PodGrid() {
     setKind(hideRuns ? 'pods' : 'all');
   }, [hideRuns]);
   const runCount = useMemo(() => pods.filter(p => isScheduled(p.workload)).length, [pods]);
+  const setGridFilter = useK8sStore(s2 => s2.setGridFilter);
+  /*
+    Published for the panel's surface menu rather than rendered here — the
+    right-click lands on a div this component owns, but the menu is built where
+    every other dk8s menu is built.
+  */
+  useEffect(() => {
+    setGridFilter({
+      kind,
+      setKind,
+      counts: { all: pods.length, pods: pods.length - runCount, runs: runCount },
+    });
+  }, [kind, pods.length, runCount, setGridFilter]);
 
   const visible = useMemo(() => {
     const matched = pods.filter(p => matchesFilter(p, filter));
@@ -984,22 +997,6 @@ export function PodGrid() {
           Hidden until something is starred: a filter whose only setting shows
           nothing is a dead end, and there is no way to star from inside it.
         */}
-        {/* Only where there is something to separate: a namespace with no
-            scheduled work does not need to be asked about it. */}
-        {runCount > 0 && (
-          <SegmentedControlView
-            value={kind}
-            onChange={v => setKind(v as 'all' | 'pods' | 'runs')}
-            options={[
-              { value: 'all', label: 'all' },
-              { value: 'pods', label: 'pods' },
-              { value: 'runs', label: `cronjobs ${runCount}` },
-            ]}
-            size="md"
-            variant="rounded"
-            accentColor={SCHEDULED_COLOR}
-          />
-        )}
 
         {favKeys.length > 0 && (
           <SegmentedControlView
@@ -1160,7 +1157,20 @@ export function PodGrid() {
         </div>
       )}
 
-      <div className="flex-1 overflow-auto px-4 pt-3 pb-4">
+      {/*
+        Right-clicking the background asks what should be in the list.
+
+        It used to raise the editor's own Copy / Select All, which is a menu
+        about text on a screen with no text in it. The filter was a segmented
+        control in the toolbar, where it sat next to seven other controls and
+        was the only one most people never touch — so it moves here, to the
+        empty space that had nothing to offer.
+
+        Marked rather than handled: `useSurfaceMenu` in K8sPanel walks up from
+        whatever was clicked to the nearest `data-menu`, which is how every
+        other panel in the app does this.
+      */}
+      <div className="flex-1 overflow-auto px-4 pt-3 pb-4" data-menu="pod-grid">
         {!pods.length ? (
           /*
             A column, not a row.

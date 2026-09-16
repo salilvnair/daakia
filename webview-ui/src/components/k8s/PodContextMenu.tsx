@@ -31,6 +31,7 @@ import {
 } from '../../store/dk8s-favorites-store';
 
 import { ACCENT } from './tone';
+import { MENU } from '../shared/menu/SurfaceMenu';
 import { markRuntimeItems, targetOf } from './mark-runtime';
 
 /*
@@ -190,7 +191,7 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
           ? 'Drop this pod from the selection.'
           : 'Pick this pod, and others, to search or export together.',
         icon: picked ? <XCircleIcon size={IconSize.item} /> : <CheckCircleIcon size={IconSize.item} />,
-        iconColor: picked ? 'var(--color-warning)' : undefined,
+        iconColor: picked ? 'var(--color-warning)' : MENU.narrow,
         onClick: () => {
           if (picked) togglePodSelected(pod.uid); else beginSelection(pod.uid);
           onClose();
@@ -199,12 +200,14 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
       { id: 'sep-1', label: '', separator: true },
       {
         id: 'logs',
+        iconColor: MENU.read,
         label: 'Show logs',
         icon: <FileTextIcon size={IconSize.item} />,
         onClick: () => { onOpen(pod, 'logs'); onClose(); },
       },
       {
         id: 'shell',
+        iconColor: MENU.make,
         label: 'Open shell',
         icon: <TerminalIcon size={IconSize.item} />,
         // Offered only where it will work: a shell that opens on a 403 is a
@@ -228,6 +231,7 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
       { id: 'sep-mark', label: '', separator: true },
       {
         id: 'copy',
+        iconColor: MENU.copy,
         label: 'Copy',
         icon: <CopyIcon size={IconSize.item} />,
         children: [
@@ -296,7 +300,7 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
         id: 'favorite',
         label: starred ? 'Remove from favourites' : 'Add to favourites',
         icon: <StarIcon size={IconSize.item} filled={starred} />,
-        iconColor: starred ? 'var(--color-warning)' : undefined,
+        iconColor: 'var(--color-warning)',
         /* The app, the same as the star on the row — a pod-scoped star stopped
            referring to anything the moment the pod was replaced. */
         description: pod.workload

@@ -564,6 +564,20 @@ interface K8sState {
    */
   lastEventAt?: number;
   podScope: 'fav' | 'all';
+  /**
+   * What the pod grid is filtered to, published so the panel's context menu
+   * can offer it.
+   *
+   * The right-click lands on a div the grid owns, but every dk8s menu is built
+   * in one place — so the grid says what it can offer rather than rendering a
+   * menu of its own beside the others.
+   */
+  gridFilter?: {
+    kind: 'all' | 'pods' | 'runs';
+    setKind: (k: 'all' | 'pods' | 'runs') => void;
+    counts: { all: number; pods: number; runs: number };
+  };
+  setGridFilter: (f: K8sState['gridFilter']) => void;
   setPodScope: (v: 'fav' | 'all') => void;
   selectMode: boolean;
   /** Pod uids ticked for export. */
@@ -816,6 +830,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   filter: '',
   view: 'cards',
   podScope: 'fav',
+  setGridFilter: (gridFilter) => set({ gridFilter }),
   setPodScope: (podScope) => set({ podScope }),
   selectMode: false,
   selected: [],
