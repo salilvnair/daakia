@@ -118,6 +118,27 @@ export function facetOptions(pods: PodSummary[], f: PodFilter, facet: PodFacet):
     .sort((a, b) => a.value.localeCompare(b.value));
 }
 
+/**
+ * Narrow a facet's own values by a typed query.
+ *
+ * A cluster has two values and a fleet has ninety apps, so the same list is
+ * both "read it at a glance" and "find the one you mean". Substring, on the
+ * value itself, case-insensitively: these are names somebody half-remembers,
+ * and anything cleverer would need explaining in a box four rows tall.
+ *
+ * A value already chosen is always kept, however the query reads. Filtering it
+ * out of its own list makes an active narrowing invisible in the one place it
+ * should be obvious, and the only way back is to clear the query you just
+ * typed to find something else.
+ */
+export function matchOptions(
+  options: FacetOption[], query: string, chosen: string[],
+): FacetOption[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return options;
+  return options.filter(o => chosen.includes(o.value) || o.value.toLowerCase().includes(q));
+}
+
 /** How many pods each `kind` would leave, under the other facets. */
 export function kindCounts(pods: PodSummary[], f: PodFilter): Record<PodKind, number> {
   const others: PodFilter = { ...f, kind: 'all' };

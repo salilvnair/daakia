@@ -37,8 +37,8 @@ import {
 } from '../../icons';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import {
-  facetOptions, kindCounts, toggleFacet, isEmptyFilter, NO_POD_FILTER,
-  type PodFacet, type PodFilter, type PodKind,
+  facetOptions, kindCounts, toggleFacet, isEmptyFilter, matchOptions, NO_POD_FILTER,
+  type FacetOption, type PodFacet, type PodFilter, type PodKind,
 } from './pod-filter';
 import { ACCENT } from './tone';
 
@@ -52,10 +52,27 @@ const FACET_TONE = 'var(--color-ctx-close-batch)';
  * down the panel is the same movement as narrowing down the fleet, and the
  * counts to the right shrink as you go.
  */
-const FACETS: { id: PodFacet; label: string; hint: string; Icon: typeof ServerIcon }[] = [
-  { id: 'contexts', label: 'Cluster', hint: 'Which cluster the pod is in', Icon: ServerIcon },
-  { id: 'namespaces', label: 'Namespace', hint: 'Which namespace it lives in', Icon: FolderIcon },
-  { id: 'workloads', label: 'App', hint: 'The Deployment, StatefulSet or CronJob behind it', Icon: TagIcon },
+const FACETS: {
+  id: PodFacet; label: string; hint: string; find: string; Icon: typeof ServerIcon;
+}[] = [
+  {
+    id: 'contexts', label: 'Cluster', Icon: ServerIcon,
+    hint: 'Which cluster the pod is in',
+    /* Spelt out per facet rather than built from the label — `Find a ${label}`
+       gives "Find a app", and an article that does not agree is the kind of
+       thing that makes a panel feel unfinished. */
+    find: 'Find a cluster…',
+  },
+  {
+    id: 'namespaces', label: 'Namespace', Icon: FolderIcon,
+    hint: 'Which namespace it lives in',
+    find: 'Find a namespace…',
+  },
+  {
+    id: 'workloads', label: 'App', Icon: TagIcon,
+    hint: 'The Deployment, StatefulSet or CronJob behind it',
+    find: 'Find an app…',
+  },
 ];
 
 const KINDS: { id: PodKind; label: string }[] = [
@@ -65,8 +82,33 @@ const KINDS: { id: PodKind; label: string }[] = [
 ];
 
 const WIDTH = 300;
-const MAX_H = 420;
+const MAX_H = 460;
 const MARGIN = 8;
+
+/**
+ * How tall one facet may grow before it scrolls on its own.
+ *
+ * ── Why each facet scrolls rather than the panel ──
+ *
+ * Four facets in one scrolling column is fine for a fixture cluster and wrong
+ * for a real one: ninety apps makes the App list the whole panel, and Cluster
+ * and Namespace — two rows each, the ones you actually reach for — are pushed
+ * off the top and have to be scrolled back to. The panel's height stops being
+ * about the filter and starts being about whichever facet is longest.
+ *
+ * Capping each facet keeps all four headings on screen at once, whatever the
+ * fleet looks like. About six rows: enough that two or three values need no
+ * scrolling at all, small enough that four capped facets still fit together.
+ */
+const FACET_MAX_H = 150;
+
+/**
+ * And past this many values, reading the list is no longer the way to use it.
+ *
+ * A dozen you skim; ninety you search. The box appears only when it would
+ * earn its two rows of height.
+ */
+const ROWS_BEFORE_SEARCH = 8;
 
 function Row({ label, count, on, onClick }: {
   label: string; count: number; on: boolean; onClick: () => void;
@@ -94,8 +136,8 @@ function Row({ label, count, on, onClick }: {
   );
 }
 
-function Heading({ label, hint, Icon }: {
-  label: string; hint?: string; Icon: typeof ServerIcon;
+function Heading({ label, hint, Icon, count }: {
+  label: string; hint?: string; Icon: typeof ServerIcon; count?: number;
 }) {
   return (
     <span className="flex items-center gap-1.5 text-[9.5px] uppercase tracking-wider px-2 pb-0.5"
@@ -103,7 +145,73 @@ function Heading({ label, hint, Icon }: {
           style={{ color: 'var(--color-text-muted)' }}>
       <Icon size={11} color={FACET_TONE} />
       {label}
+      {/* How many there are, so a capped list says what it is a window onto. */}
+      {count !== undefined && count > ROWS_BEFORE_SEARCH && (
+        <span className="tabular-nums" style={{ opacity: 0.7 }}>{count}</span>
+      )}
     </span>
+  );
+}
+
+/**
+ * One facet: a heading, a search once it is long, and its own scroll.
+ *
+ * The search is per-facet rather than one box for the panel because the
+ * question is "which app", not "which of these hundred and six strings" — a
+ * single box would match a namespace while you were looking for a Deployment
+ * and quietly change what the other three facets were offering.
+ */
+function Facet({ label, hint, find, Icon, options, chosen, onPick }: {
+  label: string;
+  hint: string;
+  find: string;
+  Icon: typeof ServerIcon;
+  options: FacetOption[];
+  chosen: string[];
+  onPick: (value: string) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const shown = useMemo(() => matchOptions(options, query, chosen), [options, query, chosen]);
+
+  return (
+    <section className="flex flex-col gap-0.5">
+      <Heading label={label} hint={hint} Icon={Icon} count={options.length} />
+
+      {options.length >= ROWS_BEFORE_SEARCH && (
+        <div className="px-2 pb-1">
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder={find}
+            className="w-full text-[11px] px-2 py-1 rounded font-mono"
+            style={{
+              background: 'var(--color-panel)',
+              border: '1px solid var(--color-surface-border)',
+              color: 'var(--color-text-primary)',
+              outline: 'none',
+            }}
+          />
+        </div>
+      )}
+
+      <div style={{ maxHeight: FACET_MAX_H, overflowY: 'auto' }}>
+        {shown.map(o => (
+          <Row
+            key={o.value} label={o.value} count={o.count}
+            on={chosen.includes(o.value)}
+            onClick={() => onPick(o.value)}
+          />
+        ))}
+        {/* A search that matches nothing says so, rather than leaving a gap
+            where the list was and no sign the query is why. */}
+        {!shown.length && (
+          <span className="block px-2 py-1 text-[10.5px]"
+                style={{ color: 'var(--color-text-muted)' }}>
+            Nothing matches &ldquo;{query.trim()}&rdquo;.
+          </span>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -232,16 +340,12 @@ export function PodFilterPopup({ pods, anchorRef, onClose }: {
              list, which is how a filter panel stops being read. */
           if (rows.length < 2) return null;
           return (
-            <section key={f.id} className="flex flex-col gap-0.5">
-              <Heading label={f.label} hint={f.hint} Icon={f.Icon} />
-              {rows.map(o => (
-                <Row
-                  key={o.value} label={o.value} count={o.count}
-                  on={filter[f.id].includes(o.value)}
-                  onClick={() => setFilter(toggleFacet(filter, f.id, o.value))}
-                />
-              ))}
-            </section>
+            <Facet
+              key={f.id} label={f.label} hint={f.hint} find={f.find} Icon={f.Icon}
+              options={rows}
+              chosen={filter[f.id]}
+              onPick={value => setFilter(toggleFacet(filter, f.id, value))}
+            />
           );
         })}
       </div>

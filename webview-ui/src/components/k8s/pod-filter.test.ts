@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   NO_POD_FILTER, matchesPodFilter, toggleFacet, facetOptions, kindCounts,
-  filterChips, withoutChip, isEmptyFilter, workloadOf, type PodFilter,
+  filterChips, withoutChip, isEmptyFilter, workloadOf, matchOptions, type PodFilter,
 } from './pod-filter';
 import type { PodSummary } from '../../store/k8s-store';
 
@@ -85,6 +85,31 @@ describe('pod filter', () => {
       expect(kindCounts(FLEET, NO_POD_FILTER)).toEqual({ all: 5, pods: 4, runs: 1 });
       const lab = toggleFacet(NO_POD_FILTER, 'contexts', 'lab');
       expect(kindCounts(FLEET, lab)).toEqual({ all: 3, pods: 3, runs: 0 });
+    });
+  });
+
+  describe('finding a value in a long facet', () => {
+    const opts = [
+      { value: 'orders-api', count: 4 },
+      { value: 'orders-worker', count: 2 },
+      { value: 'reporting-api', count: 4 },
+    ];
+
+    it('shows everything until something is typed', () => {
+      expect(matchOptions(opts, '   ', [])).toEqual(opts);
+    });
+
+    it('matches anywhere in the name, in any case', () => {
+      expect(matchOptions(opts, 'API', []).map(o => o.value))
+        .toEqual(['orders-api', 'reporting-api']);
+      expect(matchOptions(opts, 'work', []).map(o => o.value)).toEqual(['orders-worker']);
+    });
+
+    it('never hides a value that is already chosen', () => {
+      // Otherwise an active narrowing disappears from the one list that should
+      // show it, and the only way back is to clear the query you just typed.
+      expect(matchOptions(opts, 'zzz', ['orders-worker']).map(o => o.value))
+        .toEqual(['orders-worker']);
     });
   });
 
