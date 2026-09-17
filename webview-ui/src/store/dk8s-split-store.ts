@@ -25,6 +25,7 @@
  */
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
+import { useK8sStore } from './k8s-store';
 import type { LogLine, LogLevel, LogStatus, PodSummary } from './k8s-store';
 import type { FieldFilter } from '../components/k8s/log-view';
 
@@ -105,6 +106,36 @@ function keyOf(p: { context: string; namespace: string; pod: string }): string {
   return `${p.context}/${p.namespace}/${p.pod}`;
 }
 
+/**
+ * The pod behind a pane, for handing to the detail view.
+ *
+ * The grid's own row when it still has one, because it carries the health, the
+ * workload and the real container list. What the pane recorded when it does
+ * not — a pod deleted while its pane was open still has a detail worth
+ * opening, and refusing to open it would be a dead end at exactly the moment
+ * somebody wants to know what happened.
+ */
+function podForPane(pane: SplitPane): PodSummary {
+  const live = useK8sStore.getState().pods.find(
+    p => p.name === pane.pod && p.namespace === pane.namespace
+      && (p.context ?? '') === pane.context,
+  );
+  return live ?? ({
+    name: pane.pod,
+    namespace: pane.namespace,
+    context: pane.context,
+    uid: pane.id,
+    phase: 'Unknown',
+    ready: { current: 0, total: 0 },
+    restarts: 0,
+    containers: pane.containers.map(name => ({
+      name, ready: false, restarts: 0, image: '',
+    })),
+    healthy: false,
+    deleting: false,
+  } as PodSummary);
+}
+
 /** How many lines a pane keeps. The same ceiling the single view uses. */
 const MAX_LINES = 20_000;
 
@@ -177,16 +208,34 @@ export const useSplitStore = create<SplitState>((set, get) => ({
         context: pane.context, namespace: pane.namespace, pod: pane.pod,
       });
     }
-    set(s => {
-      const panes = s.panes.filter(p => p.id !== id);
-      return {
-        panes,
-        /* A split of one is not a split. Closing the last but one puts the
-           reader back where they were rather than leaving a single pane
-           wearing a split's chrome. */
-        focused: s.focused === id ? panes[0]?.id : s.focused,
-      };
-    });
+
+    const left = get().panes.filter(p => p.id !== id);
+
+    /*
+      A split of one is not a split.
+
+      Closing panes until one is left used to leave that pod in a pane: a title
+      strip, a mode switcher offering to arrange one thing three ways, and a
+      log view with none of the rest of the pod behind it. Everything the
+      detail view has — Overview, Terminal, Doctor, Explorer, Describe, YAML —
+      was two steps away, through a Back that went to the grid.
+
+      Closing the last but one is a statement about which pod you care about,
+      so it opens that pod properly. `openDetail` starts its own log stream
+      without `alongside`, which closes the pane's, so nothing is left running
+      behind it.
+    */
+    if (left.length === 1) {
+      const last = left[0];
+      set({ panes: [], focused: undefined, origin: undefined });
+      useK8sStore.getState().openDetail(podForPane(last));
+      return;
+    }
+
+    set(s => ({
+      panes: left,
+      focused: s.focused === id ? left[0]?.id : s.focused,
+    }));
   },
 
   setMode: (mode) => {
