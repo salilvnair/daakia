@@ -986,6 +986,7 @@ export function PodGrid() {
   */
   const [unstar, setUnstar] = useState<PodSummary>();
   const probePodForMenu = useK8sStore(s => s.probePodForMenu);
+  const leaveSelection = useK8sStore(s => s.leaveSelection);
   const closePodMenu = useK8sStore(s => s.closePodMenu);
   const refreshing = useK8sStore(s => s.refreshing);
   const openMenu = useCallback((pod: PodSummary, at: { x: number; y: number }) => {
@@ -1068,11 +1069,26 @@ export function PodGrid() {
         searchRef.current?.querySelector('input')?.focus();
       } else if (e.key === 'Escape' && typing) {
         (target as HTMLInputElement).blur?.();
+      } else if (e.key === 'Escape' && selectMode) {
+        /*
+          Out of selection, the way you got in.
+
+          A long press puts the grid into a mode where clicking a pod ticks it
+          instead of opening it, and the only way back was to find the small
+          checkbox that started it. Escape is what every other mode in this app
+          answers to, and it is what a hand already on the keyboard reaches for.
+
+          After the typing case, not before: Escape in the search box means
+          "leave this box", and taking the grid out of selection instead would
+          answer a question nobody asked.
+        */
+        e.preventDefault();
+        leaveSelection();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [selectMode, leaveSelection]);
 
   /*
     ── Starred, and what "default to starred" has to mean ──

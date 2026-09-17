@@ -201,6 +201,23 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
     const tab = tabs.find(t => t.id === tabId);
     const tabIdx = tabs.findIndex(t => t.id === tabId);
     const isRequest = tab?.type === 'request';
+    /*
+      The surfaces there is only ever one of.
+
+      Each of these opens by name — `openDk8sTab`, `openSettingsTab` — and
+      returns the existing tab when there is one, because they are places
+      rather than documents: a second Settings is the same Settings, and two
+      dk8s tabs are two views of one cluster watch that fight over it.
+      Offering Duplicate on them promised a copy the app then refused to make,
+      so the entry did nothing and looked broken.
+
+      `dk8s-results` is deliberately not here — it holds one search's output,
+      which is a document, and a second copy of it is a reasonable thing to
+      want while a new search runs.
+    */
+    const isSingleton = tab !== undefined && ([
+      'dk8s', 'dkgh', 'settings', 'mock-server', 'daakia-ai', 'wiki', 'workspace',
+    ] as const).includes(tab.type as 'dk8s');
     const isPinned = tab?.pinned;
     const hasTabsToRight = tabIdx < tabs.length - 1;
     const hasTabsToLeft = tabIdx > 0;
@@ -212,7 +229,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
 
     const items: ContextMenuItem[] = [];
     if (isRequest) items.push({ id: 'rename', label: 'Rename', shortcut: 'R', icon: <RenameIcon size={13} />, iconColor: 'var(--color-ctx-rename)' });
-    items.push({ id: 'duplicate', label: 'Duplicate', shortcut: 'D', icon: <CopyIcon size={13} />, iconColor: 'var(--color-ctx-duplicate)' });
+    if (!isSingleton) items.push({ id: 'duplicate', label: 'Duplicate', shortcut: 'D', icon: <CopyIcon size={13} />, iconColor: 'var(--color-ctx-duplicate)' });
  if (isRequest) items.push({ id: isPinned ? 'unpin': 'pin', label: isPinned ? 'Unpin': 'Pin', shortcut: isPinned ? 'U': 'P', icon: isPinned ? <UnpinIcon size={13} /> : <PinIcon size={13} />, iconColor: 'var(--color-ctx-pin)'});
 
     if (hasRequestTabs && uniqueProtocols.length >= 1) {

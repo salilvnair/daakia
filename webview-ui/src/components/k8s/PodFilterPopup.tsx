@@ -33,7 +33,8 @@ import { useMemo, useRef, useEffect, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { IconSize } from '@salilvnair/dui';
 import {
-  CheckIcon, CloseIcon, FilterOffIcon, LayersIcon, ServerIcon, FolderIcon, TagIcon,
+  CheckIcon, CloseIcon, FilterOffIcon, LayersIcon, Dk8sIcon, FolderIcon, TagIcon,
+  ChevronDownIcon, ChevronRightIcon,
 } from '../../icons';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import {
@@ -53,10 +54,10 @@ const FACET_TONE = 'var(--color-ctx-close-batch)';
  * counts to the right shrink as you go.
  */
 const FACETS: {
-  id: PodFacet; label: string; hint: string; find: string; Icon: typeof ServerIcon;
+  id: PodFacet; label: string; hint: string; find: string; Icon: typeof Dk8sIcon;
 }[] = [
   {
-    id: 'contexts', label: 'Cluster', Icon: ServerIcon,
+    id: 'contexts', label: 'Cluster', Icon: Dk8sIcon,
     hint: 'Which cluster the pod is in',
     /* Spelt out per facet rather than built from the label — `Find a ${label}`
        gives "Find a app", and an article that does not agree is the kind of
@@ -82,31 +83,41 @@ const KINDS: { id: PodKind; label: string }[] = [
 ];
 
 const WIDTH = 300;
-const MAX_H = 460;
+
+/**
+ * How tall the panel may get.
+ *
+ * Generous, because the alternative is worse. Capping it low and letting each
+ * facet scroll inside its own box gave the panel two scrollbars side by side —
+ * one for the facet, one for the panel — and a reader who scrolls the wrong
+ * one sees nothing move. Taller, with the long facets folded away, is one
+ * scrollbar and usually none.
+ */
+const MAX_H = 640;
 const MARGIN = 8;
 
 /**
- * How tall one facet may grow before it scrolls on its own.
+ * Past this many values a facet opens folded.
  *
- * ── Why each facet scrolls rather than the panel ──
+ * ── Why folding rather than a scrollbox each ──
  *
- * Four facets in one scrolling column is fine for a fixture cluster and wrong
- * for a real one: ninety apps makes the App list the whole panel, and Cluster
- * and Namespace — two rows each, the ones you actually reach for — are pushed
- * off the top and have to be scrolled back to. The panel's height stops being
- * about the filter and starts being about whichever facet is longest.
+ * Ninety apps makes the App list the whole panel, and Cluster and Namespace —
+ * two rows each, the ones actually reached for — get pushed off the top. The
+ * first fix was to cap each facet and let it scroll inside itself, which
+ * solved that and bought a worse problem: two scrollbars, a finger's width
+ * apart, and no way to tell which one you are about to move.
  *
- * Capping each facet keeps all four headings on screen at once, whatever the
- * fleet looks like. About six rows: enough that two or three values need no
- * scrolling at all, small enough that four capped facets still fit together.
+ * Folded, a long facet costs one row until it is asked for. Three or fewer
+ * stays open because folding those hides nothing worth hiding and costs a
+ * click to see two lines.
  */
-const FACET_MAX_H = 150;
+const ROWS_BEFORE_FOLD = 3;
 
 /**
  * And past this many values, reading the list is no longer the way to use it.
  *
- * A dozen you skim; ninety you search. The box appears only when it would
- * earn its two rows of height.
+ * A dozen you skim; ninety you find. The box appears only when it would earn
+ * its two rows of height.
  */
 const ROWS_BEFORE_SEARCH = 8;
 
@@ -136,19 +147,48 @@ function Row({ label, count, on, onClick }: {
   );
 }
 
-function Heading({ label, hint, Icon, count }: {
-  label: string; hint?: string; Icon: typeof ServerIcon; count?: number;
+function Heading({ label, hint, Icon, count, open, chosen, onToggle }: {
+  label: string; hint?: string; Icon: typeof Dk8sIcon;
+  count?: number; open?: boolean; chosen?: number;
+  onToggle?: () => void;
 }) {
-  return (
-    <span className="flex items-center gap-1.5 text-[9.5px] uppercase tracking-wider px-2 pb-0.5"
-          title={hint}
-          style={{ color: 'var(--color-text-muted)' }}>
+  const body = (
+    <>
+      {onToggle && (
+        open
+          ? <ChevronDownIcon size={10} color="currentColor" />
+          : <ChevronRightIcon size={10} color="currentColor" />
+      )}
       <Icon size={11} color={FACET_TONE} />
       {label}
-      {/* How many there are, so a capped list says what it is a window onto. */}
-      {count !== undefined && count > ROWS_BEFORE_SEARCH && (
+      {/* How many are in there, so a folded facet says what it is hiding. */}
+      {count !== undefined && count > ROWS_BEFORE_FOLD && (
         <span className="tabular-nums" style={{ opacity: 0.7 }}>{count}</span>
       )}
+      {/* And how many are chosen, because a narrowing folded out of sight
+          would otherwise leave nothing on this row to say it is on. */}
+      {!!chosen && (
+        <span className="tabular-nums px-1 rounded"
+              style={{
+                color: ACCENT,
+                background: `color-mix(in srgb, ${ACCENT} 16%, transparent)`,
+              }}>
+          {chosen}
+        </span>
+      )}
+    </>
+  );
+
+  const cls = 'flex items-center gap-1.5 w-full text-[9.5px] uppercase tracking-wider px-2 pb-0.5';
+  return onToggle ? (
+    <button type="button" onClick={onToggle} title={hint}
+            className={`${cls} cursor-pointer border-none bg-transparent text-left`}
+            style={{ color: 'var(--color-text-muted)' }}>
+      {body}
+    </button>
+  ) : (
+    <span className={cls} title={hint} style={{ color: 'var(--color-text-muted)' }}>
+      {body}
     </span>
   );
 }
@@ -165,19 +205,34 @@ function Facet({ label, hint, find, Icon, options, chosen, onPick }: {
   label: string;
   hint: string;
   find: string;
-  Icon: typeof ServerIcon;
+  Icon: typeof Dk8sIcon;
   options: FacetOption[];
   chosen: string[];
   onPick: (value: string) => void;
 }) {
   const [query, setQuery] = useState('');
+  /*
+    Long facets open folded, and one with a choice in it opens anyway.
+
+    Folding away a narrowing that is currently on would hide the reason the
+    grid is short, in the panel whose whole job is to say why.
+  */
+  const [open, setOpen] = useState(
+    () => options.length <= ROWS_BEFORE_FOLD || chosen.length > 0,
+  );
   const shown = useMemo(() => matchOptions(options, query, chosen), [options, query, chosen]);
 
   return (
     <section className="flex flex-col gap-0.5">
-      <Heading label={label} hint={hint} Icon={Icon} count={options.length} />
+      <Heading
+        label={label} hint={hint} Icon={Icon}
+        count={options.length}
+        chosen={chosen.length}
+        open={open}
+        onToggle={options.length > ROWS_BEFORE_FOLD ? () => setOpen(v => !v) : undefined}
+      />
 
-      {options.length >= ROWS_BEFORE_SEARCH && (
+      {open && options.length >= ROWS_BEFORE_SEARCH && (
         <div className="px-2 pb-1">
           <input
             value={query}
@@ -194,23 +249,26 @@ function Facet({ label, hint, find, Icon, options, chosen, onPick }: {
         </div>
       )}
 
-      <div style={{ maxHeight: FACET_MAX_H, overflowY: 'auto' }}>
-        {shown.map(o => (
-          <Row
-            key={o.value} label={o.value} count={o.count}
-            on={chosen.includes(o.value)}
-            onClick={() => onPick(o.value)}
-          />
-        ))}
-        {/* A search that matches nothing says so, rather than leaving a gap
-            where the list was and no sign the query is why. */}
-        {!shown.length && (
-          <span className="block px-2 py-1 text-[10.5px]"
-                style={{ color: 'var(--color-text-muted)' }}>
-            Nothing matches &ldquo;{query.trim()}&rdquo;.
-          </span>
-        )}
-      </div>
+      {/* No inner scroll: the panel has one scrollbar and this is not it. */}
+      {open && (
+        <div>
+          {shown.map(o => (
+            <Row
+              key={o.value} label={o.value} count={o.count}
+              on={chosen.includes(o.value)}
+              onClick={() => onPick(o.value)}
+            />
+          ))}
+          {/* A search that matches nothing says so, rather than leaving a gap
+              where the list was and no sign the query is why. */}
+          {!shown.length && (
+            <span className="block px-2 py-1 text-[10.5px]"
+                  style={{ color: 'var(--color-text-muted)' }}>
+              Nothing matches &ldquo;{query.trim()}&rdquo;.
+            </span>
+          )}
+        </div>
+      )}
     </section>
   );
 }

@@ -20,7 +20,7 @@
  * toolbar button is for. These rows are the shortcut, not the interface.
  */
 import {
-  CheckIcon, FilterIcon, FilterOffIcon, LayersIcon, ServerIcon, FolderIcon, TagIcon,
+  CheckIcon, FilterIcon, FilterOffIcon, LayersIcon, Dk8sIcon, FolderIcon, TagIcon,
 } from '../../icons';
 import type { PodSummary } from '../../store/k8s-store';
 import {
@@ -53,8 +53,8 @@ const KINDS: { id: PodKind; label: string }[] = [
  * a tag. Every row in a dk8s menu carries a coloured icon; four that did not
  * read as a submenu that had not finished loading.
  */
-const FACETS: { id: PodFacet; label: string; Icon: typeof ServerIcon }[] = [
-  { id: 'contexts', label: 'Cluster', Icon: ServerIcon },
+const FACETS: { id: PodFacet; label: string; Icon: typeof Dk8sIcon }[] = [
+  { id: 'contexts', label: 'Cluster', Icon: Dk8sIcon },
   { id: 'namespaces', label: 'Namespace', Icon: FolderIcon },
   { id: 'workloads', label: 'App', Icon: TagIcon },
 ];

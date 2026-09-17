@@ -839,6 +839,8 @@ interface K8sState {
   toggleSelectMode: () => void;
   togglePodSelected: (uid: string) => void;
   beginSelection: (uid: string) => void;
+  /** Leave selection mode and drop the ticks — what Escape does. */
+  leaveSelection: () => void;
   probePodForMenu: (pod: PodSummary) => void;
   closePodMenu: () => void;
   copyPodText: (pod: PodSummary, kind: 'describe' | 'yaml') => void;
@@ -1358,6 +1360,11 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     selectMode: true,
     selected: s.selected.includes(uid) ? s.selected : [...s.selected, uid],
   })),
+
+  /* The ticks go with the mode. Leaving and coming back to a set somebody
+     assembled three minutes ago, against a pod list that has moved on, is a
+     selection they did not make. */
+  leaveSelection: () => set({ selectMode: false, selected: [] }),
 
   /*
     What this pod can actually be asked for, fetched when its menu opens.
