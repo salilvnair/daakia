@@ -25,7 +25,8 @@ import {
   starredKeyOf,
 } from '../../store/dk8s-favorites-store';
 import { isScheduled } from '@daakia/k8s-workload';
-import { useSplitStore, MAX_PANES, type SplitMode } from '../../store/dk8s-split-store';
+import { useSplitStore, MAX_PANES } from '../../store/dk8s-split-store';
+import { SPLIT_MODES } from './SplitLogs';
 import { logLineSettings } from './log-settings';
 import { HIDE_CRONJOBS_PREF } from '../settings/cronjob-visibility';
 import { useUiStateStore } from '../../store/ui-state-store';
@@ -59,19 +60,6 @@ const SCHEDULED_COLOR = 'var(--color-info)';
  */
 const FAV_COLOR = 'var(--color-warning)';
 
-/**
- * The arrangements a selection can be opened in.
- *
- * Which one reads best depends on the log rather than on the count — long
- * lines want rows so each gets the full width, short ones want columns so more
- * of the history fits. Nobody knows which until the logs are on screen, so it
- * is a choice here and changeable there.
- */
-const SPLIT_MODES: { id: SplitMode; label: string; Icon: typeof ColumnsIcon }[] = [
-  { id: 'vertical', label: 'Side by side', Icon: ColumnsIcon },
-  { id: 'horizontal', label: 'Stacked', Icon: RowsIcon },
-  { id: 'grid', label: 'Grid', Icon: LayoutGridIcon },
-];
 
 // ── Cluster pulse ───────────────────────────────────────────────────────────
 

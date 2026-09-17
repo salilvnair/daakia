@@ -21,8 +21,13 @@ import { ContextMenuView, type ContextMenuItem, IconSize } from '@salilvnair/dui
 import {
   StarIcon, CopyIcon, TerminalIcon, FileTextIcon, StethoscopeIcon, FolderOpenIcon,
   CheckCircleIcon, XCircleIcon, CpuIcon, MemoryIcon, NetworkIcon, TimelineIcon,
+  ColumnsIcon,
 } from '../../icons';
 import { isScheduled } from '@daakia/k8s-workload';
+import { useSplitStore, MAX_PANES } from '../../store/dk8s-split-store';
+import { useUiStateStore } from '../../store/ui-state-store';
+import { logLineSettings } from './log-settings';
+import { SPLIT_MODES } from './SplitLogs';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import {
   useDk8sDoctorStore, ARTIFACT_META, type ArtifactKind,
@@ -89,6 +94,24 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onTestPv
   const beginSelection = useK8sStore(s => s.beginSelection);
   const togglePodSelected = useK8sStore(s => s.togglePodSelected);
   const selected = useK8sStore(s => s.selected);
+  /*
+    The pods behind the ticks, for the split — it opens panes from summaries
+    rather than from uids.
+
+    Derived with `useMemo` rather than inside the selector. A selector that
+    filters returns a new array on every call, zustand compares it by identity,
+    finds it different every time and re-renders forever — which is what this
+    did: "getSnapshot should be cached", then maximum update depth, then a
+    blank panel.
+  */
+  const allPods = useK8sStore(s => s.pods);
+  const selectedPods = useMemo(
+    () => allPods.filter(p => selected.includes(p.uid)),
+    [allPods, selected],
+  );
+  const openSplit = useSplitStore(s => s.open);
+  const splitPrefs = useUiStateStore(s => s.prefs);
+  const splitTail = useMemo(() => logLineSettings(splitPrefs).tailDefault, [splitPrefs]);
   const copyPodText = useK8sStore(s => s.copyPodText);
   const openShellFor = useK8sStore(s => s.openShellFor);
   const menuProbe = useK8sStore(s => s.menuProbe);
@@ -208,6 +231,44 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onTestPv
         icon: <FileTextIcon size={IconSize.item} />,
         onClick: () => { onOpen(pod, 'logs'); onClose(); },
       },
+      /*
+        Split open, where the selection can fill more than one pane.
+
+        Only with two or more picked, because a split of one is the log view
+        with extra chrome. It sits under Show logs rather than beside Select,
+        since it is the other answer to the same question — show me this
+        output — and the one that applies when there is more than one pod to
+        show.
+
+        The same submenu the action bar carries. A reader who found the
+        selection through the menu should not have to go and find a button to
+        act on it.
+      */
+      ...(selectedPods.length > 1 ? [{
+        id: 'split',
+        label: `Split open ${selectedPods.length} pods`,
+        description: 'Follow them side by side, each in its own log view.',
+        icon: <ColumnsIcon size={IconSize.item} />,
+        iconColor: MENU.read,
+        children: SPLIT_MODES.map(({ id, label, Icon }) => {
+          const room = Math.min(selectedPods.length, MAX_PANES[id]);
+          return {
+            id: `split-${id}`,
+            label,
+            /* Said before it is chosen: picking five pods and a mode that
+               holds three is a decision about which two get dropped. */
+            description: room < selectedPods.length
+              ? `The first ${room} of them.`
+              : `${room} panes.`,
+            icon: <Icon size={IconSize.item} />,
+            iconColor: MENU.read,
+            onClick: () => {
+              openSplit(selectedPods, id, splitTail);
+              onClose();
+            },
+          };
+        }),
+      }] : []),
       {
         id: 'shell',
         iconColor: MENU.make,
@@ -342,7 +403,7 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onTestPv
         },
       },
     ];
-  }, [pod, favorites, selected, menuProbe, guardHeapDump, access, running, detail, runtimeMark, contextName, onTestPv,
+  }, [pod, favorites, selected, selectedPods, openSplit, splitTail, menuProbe, guardHeapDump, access, running, detail, runtimeMark, contextName, onTestPv,
     beginSelection, togglePodSelected, copyPodText, openShellFor, collect,
     onClose, onConfirmUnfavorite, onOpen]);
 

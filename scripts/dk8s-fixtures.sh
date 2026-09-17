@@ -29,8 +29,13 @@ set -euo pipefail
 
 # Every context/namespace pair the fixtures live in. Missing ones are skipped,
 # so this is safe on a machine that only has one of the two clusters.
-CONTEXTS=("docker-desktop" "kind-dk8s-lab")
-NAMESPACES=("dk8s-test" "zp-platform" "payments")
+CONTEXTS=("docker-desktop" "kind-dk8s-lab" "kind-dk8s-prod")
+# `pvfix` holds the archive-on-a-volume scenario — a PVC mounted inside the
+# pod, a CronJob leaving finished runs behind, and `twin-api`, two replicas of
+# one Deployment that both log continuously. That last one is what a split
+# view has to be tested against: following two pods at once cannot be checked
+# with one pod, or with two that say nothing.
+NAMESPACES=("dk8s-test" "zp-platform" "payments" "pvfix" "checkout" "orders" "reporting")
 
 SNAPSHOT_DIR="src/test/fixtures/k8s/snapshot"
 

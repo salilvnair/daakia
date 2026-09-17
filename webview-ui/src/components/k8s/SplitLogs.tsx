@@ -34,7 +34,19 @@ import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import { severityColor, severityOf, workloadColor } from './pod-view';
 import { ACCENT } from './tone';
 
-const MODES: { id: SplitMode; label: string; Icon: typeof ColumnsIcon }[] = [
+/**
+ * The arrangements a selection can be opened in.
+ *
+ * Exported because two places offer them — the action bar and the pod's own
+ * right-click menu — and a second copy would be two lists that drift, with the
+ * menu offering a mode the bar does not.
+ *
+ * Which one reads best depends on the log rather than the count: long lines
+ * want rows so each gets the full width, short ones want columns so more
+ * history fits. Nobody knows which until the logs are up, so it stays
+ * changeable once they are.
+ */
+export const SPLIT_MODES: { id: SplitMode; label: string; Icon: typeof ColumnsIcon }[] = [
   { id: 'vertical', label: 'Side by side', Icon: ColumnsIcon },
   { id: 'horizontal', label: 'Stacked', Icon: RowsIcon },
   { id: 'grid', label: 'Grid', Icon: LayoutGridIcon },
@@ -242,7 +254,7 @@ export function SplitLogs() {
         {/* The layout, changeable without reopening. Which arrangement reads
             best depends on the log — long lines want rows, short ones want
             columns — and that is not knowable until they are on screen. */}
-        {MODES.map(({ id, label, Icon }) => (
+        {SPLIT_MODES.map(({ id, label, Icon }) => (
           <button
             key={id} type="button"
             onClick={() => setMode(id)}

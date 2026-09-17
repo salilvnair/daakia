@@ -15,11 +15,12 @@
  * draws — same row height, same badges, same expand-for-detail — because a
  * second audit that looked different would read as a different kind of record.
  */
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { postMsg } from '../../vscode';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { useEnabledCommandKinds } from './Dk8sCommandConfig';
 import { COMMAND_AUDIT_LIMIT_KEY, commandAuditLimit } from './CommandAuditLimit';
+import { timings, overall, ms } from './command-timings';
 import { CopyButtonView } from '@salilvnair/dui';
 import {
   RefreshIcon, TrashIcon, SearchIcon, CloseIcon, ChevronRightIcon, ChevronDownIcon,
@@ -49,6 +50,68 @@ interface Meta {
   source?: 'user' | 'poll';
   /** Which kind of call — see command-kinds. Absent on rows recorded before it. */
   op?: string;
+}
+
+/**
+ * The rollup strip: every verb, what it usually costs, and what it cost in
+ * total — worst offender first.
+ */
+function Timings({ rows }: { rows: UiRow[] }) {
+  const stats = useMemo(() => timings(rows.map(r => {
+    const m = readMeta(r);
+    return { what: r.button ?? r.action ?? '?', ms: m.ms, source: m.source, ok: m.ok };
+  })), [rows]);
+  const all = useMemo(() => overall(stats), [stats]);
+
+  if (!stats.length) return null;
+
+  return (
+    <div className="flex flex-col gap-1.5 px-4 py-2.5 shrink-0"
+         style={{ borderTop: '1px solid var(--color-surface-border)' }}>
+      <div className="flex items-baseline gap-2">
+        <span className="text-[9.5px] uppercase tracking-wider"
+              style={{ color: 'var(--color-text-muted)' }}>
+          where the time went
+        </span>
+        <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
+          {all.calls.toLocaleString()} finished call{all.calls === 1 ? '' : 's'} ·{' '}
+          {ms(all.total)} of cluster time
+        </span>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        {stats.slice(0, 10).map(t => (
+          <div
+            key={t.what}
+            title={`${t.calls} call${t.calls === 1 ? '' : 's'} · usually ${ms(t.median)}`
+              + ` · worst ${ms(t.worst)} · ${ms(t.total)} altogether`
+              + (t.failed ? ` · ${t.failed} failed` : '')
+              + (t.background ? ' · polled, nobody waited on these' : '')}
+            className="flex items-baseline gap-1.5 px-2 py-1 rounded-md"
+            style={{
+              background: 'var(--color-surface)',
+              border: `1px solid ${t.failed
+                ? 'color-mix(in srgb, var(--color-warning) 38%, transparent)'
+                : 'var(--color-surface-border)'}`,
+              /* A polled verb recedes. Its cost is real and nobody is sitting
+                 through it, so it should not read like a wait. */
+              opacity: t.background ? 0.65 : 1,
+            }}
+          >
+            <span className="text-[10.5px] font-mono"
+                  style={{ color: 'var(--color-text-primary)' }}>{t.what}</span>
+            <span className="text-[10.5px] tabular-nums" style={{ color: ACCENT }}>
+              {ms(t.median)}
+            </span>
+            <span className="text-[9.5px] tabular-nums"
+                  style={{ color: 'var(--color-text-muted)' }}>
+              ×{t.calls}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function readMeta(row: UiRow): Meta {
@@ -162,6 +225,18 @@ export function Dk8sCommandAudit() {
           they are what makes a row worth reading.
         </span>
       </div>
+
+      {/*
+        How long it all took, before the rows that took it.
+
+        The log answers "what did it run"; this answers "why was that slow",
+        which is the question somebody actually opens this screen with. Reading
+        it off two hundred rows means doing the arithmetic by hand, and the
+        arithmetic IS the answer: one call at four hundred milliseconds is a
+        cluster far away, forty at ninety is dk8s asking too often, and as rows
+        those two look identical.
+      */}
+      <Timings rows={rows} />
 
       {/* ── Filter and actions — the Developer Tools audit bar ── */}
       <div className="flex items-center gap-2 px-4 py-1.5 border-y border-[var(--color-surface-border)] shrink-0">
