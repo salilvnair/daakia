@@ -80,7 +80,17 @@ interface SplitState {
   /** Which pane the keyboard and the "one pane" actions belong to. */
   focused?: string;
 
-  open: (pods: PodSummary[], mode: SplitMode, tail: number) => void;
+  /*
+    Where Back goes.
+
+    A split opened from the pod grid closes onto the grid, which is where it
+    came from. One opened from a search result has a whole screen behind it —
+    the hits that named these pods in the first place — and dropping the reader
+    on the grid instead makes them find their way back to a result they were
+    reading a moment ago.
+  */
+  origin?: 'pods' | 'results';
+  open: (pods: PodSummary[], mode: SplitMode, tail: number, origin?: 'pods' | 'results') => void;
   close: () => void;
   closePane: (id: string) => void;
   setMode: (mode: SplitMode) => void;
@@ -102,7 +112,7 @@ export const useSplitStore = create<SplitState>((set, get) => ({
   panes: [],
   mode: 'vertical',
 
-  open: (pods, mode, tail) => {
+  open: (pods, mode, tail, origin = 'pods') => {
     const capped = pods.slice(0, MAX_PANES[mode]);
     const panes: SplitPane[] = capped.map(p => ({
       id: keyOf({ context: p.context ?? '', namespace: p.namespace, pod: p.name }),
@@ -125,7 +135,7 @@ export const useSplitStore = create<SplitState>((set, get) => ({
       requestedAt: Date.now(),
     }));
 
-    set({ panes, mode, focused: panes[0]?.id });
+    set({ panes, mode, focused: panes[0]?.id, origin });
 
     /*
       Every pane asks at once, and every one but the first says `alongside`.
@@ -153,7 +163,7 @@ export const useSplitStore = create<SplitState>((set, get) => ({
         context: pane.context, namespace: pane.namespace, pod: pane.pod,
       });
     }
-    set({ panes: [], focused: undefined });
+    set({ panes: [], focused: undefined, origin: undefined });
   },
 
   closePane: (id) => {

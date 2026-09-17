@@ -548,6 +548,15 @@ interface TabsState {
   openDk8sTab: () => void;
   /** Open (or reuse) the page a search result is read on. */
   openDk8sResultsTab: (name: string) => void;
+  /**
+   * Bring an existing search-result tab back to the front, if there is one.
+   *
+   * Unlike `openDk8sResultsTab` it never creates one and never renames it:
+   * this is the way BACK to a page that is already open, and the caller —
+   * a split closing onto the result it was opened from — has no name to give
+   * and no business making a second one. Returns whether it found it.
+   */
+  focusDk8sResultsTab: () => boolean;
   openDkghTab: () => void;
   openWorkspaceTab: () => void;
   openDaakiaAiTab: () => void;
@@ -672,6 +681,14 @@ export const useTabsStore = create<TabsState>((set, get) => {
       morning, all of them stale but the newest. The page is where you read the
       answer you just got; the one before it is a search you can run again.
     */
+    focusDk8sResultsTab: () => {
+      const { tabs, activeTabId } = get();
+      const existing = tabs.find(t => t.type === 'dk8s-results');
+      if (!existing) return false;
+      set({ activeTabId: existing.id, previousTabId: activeTabId });
+      return true;
+    },
+
     openDk8sResultsTab: (name) => {
       const { tabs, activeTabId } = get();
       const existing = tabs.find(t => t.type === 'dk8s-results');

@@ -609,6 +609,31 @@ export function handleDk8sSetGuardHeapDump(
 
 interface LiveWatch {
   handle: WatchHandle;
+  /*
+    Where this watch's output goes — always the newest webview, never the one
+    that started it.
+
+    ── The failure this exists for ──
+
+    A webview reload does not restart the host, so a watch outlives the page
+    that asked for it. It used to keep that page's `postMessage`, captured when
+    it started, and go on calling it: the pod list was read, parsed and posted
+    into a channel nobody was listening to any more.
+
+    On screen that is indistinguishable from a watch that has gone deaf. The
+    reattaching page got one replayed snapshot — correct at that instant — and
+    then nothing, forever. No events, no reconcile result, and Refresh running
+    a perfectly successful `kubectl get pods` whose answer went nowhere.
+
+    Found by pressing Refresh and watching the audit record the call at 96ms
+    with 57,882 bytes returned, while the grid sat on a pod list three CronJob
+    runs out of date and the button span "refreshing…" until its own deadline
+    gave up.
+
+    So the pipe is a field rather than a closure, and every reattach points it
+    at the page that is actually on screen.
+  */
+  post: PostMessage;
   /** Replayed to a webview that re-attaches after a reload. */
   pods: unknown[];
   status: 'connected' | 'reconnecting' | 'stopped';
@@ -724,6 +749,7 @@ function startWatch(target: WatchTarget, postMessage: PostMessage): void {
 
   const live: LiveWatch = {
     handle: undefined as unknown as WatchHandle,
+    post: postMessage,
     pods: [], status: 'reconnecting', usage: null, usageAvailable: false,
   };
   watches.set(key, live);
@@ -760,7 +786,7 @@ function startWatch(target: WatchTarget, postMessage: PostMessage): void {
     if (!watches.has(key)) return;    // target dropped while we were waiting
     live.usage = usage;
     live.usageAvailable = usage !== null;
-    postMessage({ type: 'dk8s:podUsage', context, namespace, usage, available: usage !== null });
+    live.post({ type: 'dk8s:podUsage', context, namespace, usage, available: usage !== null });
 
     /*
       Back off while the numbers stand still, and snap back the moment one
@@ -796,20 +822,20 @@ function startWatch(target: WatchTarget, postMessage: PostMessage): void {
   live.handle = watchPods(context, namespace, {
     onSnapshot: (pods) => {
       live.pods = pods;
-      postMessage({ type: 'dk8s:podSnapshot', context, namespace, pods });
+      live.post({ type: 'dk8s:podSnapshot', context, namespace, pods });
       startMetrics();
     },
     // Spread AFTER `type` would overwrite the message type with the watch
     // event's own ADDED/MODIFIED/DELETED and break routing entirely, so the
     // event kind travels under its own name.
-    onEvent: (event) => postMessage({
+    onEvent: (event) => live.post({
       type: 'dk8s:podEvent', context, namespace,
       eventType: event.type, pod: event.pod,
     }),
     onStatus: (status, detail) => {
       live.status = status;
       live.detail = detail;
-      postMessage({ type: 'dk8s:watchStatus', context, namespace, status, detail });
+      live.post({ type: 'dk8s:watchStatus', context, namespace, status, detail });
     },
   });
 
@@ -858,7 +884,13 @@ export function handleDk8sWatchPods(
     const key = targetKey(target);
     const live = watches.get(key);
     if (live) {
-      // Already watching — catch the new page up instead of restarting.
+      /*
+        Already watching — catch the new page up instead of restarting, and
+        hand the watch this page's channel. Without that second half the
+        replay below is the last thing it ever hears: the watch keeps posting
+        into the reloaded page's dead pipe and the grid is frozen.
+      */
+      live.post = postMessage;
       postMessage({ type: 'dk8s:podSnapshot', context: target.context, namespace: target.namespace, pods: live.pods });
       postMessage({ type: 'dk8s:watchStatus', context: target.context, namespace: target.namespace, status: live.status, detail: live.detail });
       if (live.usageAvailable) {
@@ -2528,6 +2560,8 @@ export async function handleDk8sPodUsageOnce(
  */
 export function handleDk8sRefreshPods(postMessage: PostMessage): void {
   const live = [...watches.values()];
+  /* Whoever pressed it is the page the answer belongs to. */
+  for (const w of live) w.post = postMessage;
   /*
     Nothing watched means nothing to re-read, and the webview is sitting there
     saying "refreshing" until something comes back. It has to hear that

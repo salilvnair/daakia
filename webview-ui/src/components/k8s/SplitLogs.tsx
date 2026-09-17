@@ -20,7 +20,7 @@
  * panes following two pods means two streams, two filters and two tails, and
  * the single-pod store has one of each.
  */
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { IconSize, SplitPanelView, type SplitDirection } from '@salilvnair/dui';
 import {
   CloseIcon, ChevronLeftIcon, ColumnsIcon, RowsIcon, LayoutGridIcon,
@@ -31,6 +31,7 @@ import {
   useSplitStore, MAX_PANES, type SplitMode, type SplitPane,
 } from '../../store/dk8s-split-store';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
+import { useTabsStore } from '../../store/tabs-store';
 import { severityColor, severityOf, workloadColor } from './pod-view';
 import { ACCENT } from './tone';
 
@@ -149,7 +150,21 @@ function Pane({ pane, focused }: { pane: SplitPane; focused: boolean }) {
 
   return (
     <div
-      className="flex flex-col min-w-0 min-h-0 overflow-hidden"
+      /*
+        `h-full`, because the panel around this one is a block box.
+
+        Without a height of its own the pane is as tall as its log — six
+        thousand pixels of it — and the panel simply clips what will not fit.
+        On a wide screen that went unnoticed: the lines were short, the content
+        happened to come out near the panel's height, and it looked right. Narrow
+        the window until the lines wrap and the pane grows past the bottom of
+        the screen, taking its own scrollbar with it: the log no longer scrolls
+        inside the pane, it is just cut off.
+
+        With a height, the pane fills the panel and the log list under it
+        scrolls where it is supposed to, at any width.
+      */
+      className="flex flex-col h-full w-full min-w-0 min-h-0 overflow-hidden"
       onFocusCapture={() => focus(pane.id)}
       onMouseDown={() => focus(pane.id)}
       style={{
@@ -287,7 +302,21 @@ function Arrangement({ mode, nodes }: { mode: SplitMode; nodes: React.ReactNode[
 }
 
 export function SplitLogs() {
-  const { panes, mode, focused, setMode, close, apply } = useSplitStore();
+  const { panes, mode, focused, setMode, close, apply, origin } = useSplitStore();
+  const focusResults = useTabsStore(s => s.focusDk8sResultsTab);
+
+  /*
+    Back goes one step, to whatever this was opened from.
+
+    From the pod grid that is the grid. From a search result it is the result
+    — the screen that named these pods in the first place — and landing on the
+    grid instead makes the reader find their way back to something they were
+    reading a moment ago.
+  */
+  const goBack = useCallback(() => {
+    close();
+    if (origin === 'results') focusResults();
+  }, [close, origin, focusResults]);
 
   /* The host's lines land here. Routed by cluster, namespace and pod, because
      a pod name on its own is not an address once two panes are open. */
@@ -311,12 +340,16 @@ export function SplitLogs() {
              borderBottom: '1px solid var(--color-surface-border)',
              background: `linear-gradient(to right, color-mix(in srgb, ${ACCENT} 8%, transparent), transparent 60%)`,
            }}>
-        <button type="button" onClick={close} title="Back to pods"
+        <button type="button" onClick={goBack}
+                title={origin === 'results' ? 'Back to the search results' : 'Back to pods'}
                 className="p-1 rounded cursor-pointer border-none bg-transparent">
           <ChevronLeftIcon size={IconSize.nav} color="var(--color-text-secondary)" />
         </button>
         <span className="text-[12.5px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-          {panes.length} pod{panes.length === 1 ? '' : 's'}, side by side
+          {/* The arrangement is changeable from the buttons on the right, so
+              the title says which one is on rather than the one it opened in. */}
+          {panes.length} pod{panes.length === 1 ? '' : 's'},{' '}
+          {(SPLIT_MODES.find(m => m.id === mode)?.label ?? '').toLowerCase()}
         </span>
 
         <span className="flex-1" />

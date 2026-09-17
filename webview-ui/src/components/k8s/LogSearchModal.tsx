@@ -1033,7 +1033,18 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                         ? `${options.query.slice(0, 22)}…`
                         : options.query}`,
                     );
-                    onClose();
+                    /*
+                      A jump rather than a close — the same one a hit's pod
+                      takes. The dialog goes off screen with its query, its
+                      counts and its rows intact, so the page's own Back can
+                      put the reader back in front of them.
+
+                      `onClose` here would wipe all of it, and Back would land
+                      on an empty dialog: the question retyped, the search run
+                      again, for a result that was on screen a second ago.
+                    */
+                    useDk8sSearchStore.getState()
+                      .jumpedToPod(scrollRef.current?.scrollTop ?? 0);
                   }}
                   title="Read these results full width, with a filter and the pods they came from"
                   style={{

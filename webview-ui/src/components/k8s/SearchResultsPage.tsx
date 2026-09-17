@@ -23,7 +23,7 @@
  * to the cluster is hidden by `isSnapshot`. What is left works on lines, and
  * works the same either way.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { IconSize, ModalView, ButtonView, CheckboxView } from '@salilvnair/dui';
 import {
   TimeWindowPicker, windowError, windowOptions, type TimeWindow,
@@ -44,6 +44,7 @@ import { SPLIT_MODES } from './SplitLogs';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import { useTabsStore } from '../../store/tabs-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
+import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { AiSplit } from './AiAnswerPanel';
 import { resultLines, podsLabel, podsIn, timings, totals, type ResultLine } from './search-results';
 import { filterLines } from './log-view';
@@ -486,7 +487,9 @@ function SplitOpenResults({ searched }: { searched: SearchedPod[] }) {
   const openAs = (mode: SplitMode) => {
     setMenu(false);
     logUiEvent('dk8s.results_split_open', { mode, pods: podsToOpen.length });
-    openSplit(podsToOpen, mode, tailDefault);
+    /* Marked as coming from here, so the split's own Back lands on this page
+       rather than on the grid — one step back, not two. */
+    openSplit(podsToOpen, mode, tailDefault, 'results');
     openDk8sTab();
   };
 
@@ -550,6 +553,25 @@ export function SearchResultsPage() {
     fields, addField, removeField, wrap, setWrap,
   } = useResultTabStore();
   const openDk8sTab = useTabsStore(s => s.openDk8sTab);
+  /*
+    Back reopens the dialog this page came out of.
+
+    The page IS the result of that search, so the thing behind it is the
+    search — with its other pods, its tabs and its options — not the pod grid
+    two screens further back. `cameFromSearch` is set by "Open as page" for
+    exactly this, and is false for a page restored on a fresh session, where
+    there is no dialog to go back to and the grid is the honest answer.
+  */
+  const cameFromSearch = useDk8sSearchStore(s => s.cameFromSearch);
+  const returnToSearch = useDk8sSearchStore(s => s.returnToSearch);
+  const goBack = useCallback(() => {
+    if (cameFromSearch) {
+      openDk8sTab();
+      returnToSearch();
+      return;
+    }
+    openDk8sTab();
+  }, [cameFromSearch, openDk8sTab, returnToSearch]);
   const logLineNumbers = useK8sStore(s => s.logLineNumbers);
   const aiOpen = useDk8sAiStore(s => s.open);
   const openAi = useDk8sAiStore(s => s.openPanel);
@@ -660,14 +682,14 @@ export function SearchResultsPage() {
     fetchLogs: () => {},
     openLogExport: () => setDownloadOpen(true),
     closeLogExport: () => {},
-    closeDetail: openDk8sTab,
+    closeDetail: goBack,
     isSnapshot: true,
     /* The page can only show neighbours the search brought back. */
     contextCap: contextLines,
     title: query,
   } as unknown as LogSource), [
     lines, filter, levels, fields, wrap, logLineNumbers, asPod, at, sums, query,
-    addField, removeField, setFilter, setLevels, setWrap, openDk8sTab, contextLines,
+    addField, removeField, setFilter, setLevels, setWrap, goBack, contextLines,
   ]);
 
   if (!groups.length && !searched.length) {
@@ -699,7 +721,8 @@ export function SearchResultsPage() {
              borderBottom: '1px solid var(--color-surface-border)',
              background: `linear-gradient(to right, color-mix(in srgb, ${ACCENT} 8%, transparent), transparent 60%)`,
            }}>
-        <button type="button" onClick={openDk8sTab} title="Back to pods"
+        <button type="button" onClick={goBack}
+                title={cameFromSearch ? 'Back to the search' : 'Back to pods'}
                 className="p-1 rounded cursor-pointer border-none bg-transparent">
           <ChevronLeftIcon size={IconSize.nav} color="var(--color-text-secondary)" />
         </button>

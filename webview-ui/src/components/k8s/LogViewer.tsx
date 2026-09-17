@@ -70,6 +70,17 @@ const LIVE_ACCENT = 'var(--color-success)';
 
 
 const ROW_HEIGHT = 19;
+
+/**
+ * How wide the view must be before the field rail is worth its space.
+ *
+ * The rail is about 330px. Below this the lines beside it are too narrow to
+ * read, which is the whole point of the screen — so the rail steps aside and
+ * comes back when there is room. Measured rather than guessed at a breakpoint:
+ * a pane in a split, the detail view and a narrow window are all the same
+ * question, and only the element's own width answers it.
+ */
+const RAIL_MIN_WIDTH = 720;
 const OVERSCAN = 25;
 /** Width of the ribbon column, including its gutter. */
 const RIBBON_W = 38;
@@ -615,7 +626,33 @@ export function LogViewer() {
     show a rail that has something in it.
   */
   const hasFacets = useMemo(() => buildFacets(logs).length > 0, [logs]);
-  const facetsOpen = facetsWanted && hasFacets;
+
+  /*
+    ── And only when there is room for it ──
+
+    The rail is a fixed ~330px beside the lines, which is most of a pane in a
+    three-way split or of the whole view on a narrow window. At 640px across,
+    a pane gave the rail two hundred and sixty pixels and the log about thirty:
+    the field counts were perfectly readable and not one log line was, which is
+    the exact opposite of what the screen is for.
+
+    So the rail is the part that yields. It is an aid to reading the lines, and
+    an aid that leaves no lines to read has stopped being one — the toggle is
+    still there, and widening the pane brings it straight back.
+  */
+  const viewerRef = useRef<HTMLDivElement>(null);
+  const [roomForRail, setRoomForRail] = useState(true);
+  useEffect(() => {
+    const el = viewerRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([entry]) => {
+      setRoomForRail(entry.contentRect.width >= RAIL_MIN_WIDTH);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const facetsOpen = facetsWanted && hasFacets && roomForRail;
   const toggleFacets = () => setFacetsWanted(v => {
     try { localStorage.setItem('dk8s.logs.facets', v ? 'off' : 'on'); } catch { /* private mode */ }
     return !v;
@@ -1179,7 +1216,7 @@ export function LogViewer() {
   const oldest = logs.find(l => l.ts !== undefined)?.ts;
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div ref={viewerRef} className="flex flex-col h-full min-h-0">
       {/* ── Controls: every strip lives up here ── */}
       <div className="flex flex-col shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
