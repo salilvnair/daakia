@@ -1312,9 +1312,19 @@ export function PodGrid() {
               if (looksLikePodLink(v)) {
                 const target = parsePodLink(v);
                 if (target) {
+                  /*
+                    Whatever happens next, the link does not stay in the box.
+
+                    Leaving it there when the pod is not watched filtered the
+                    grid by a URL: "No pod matches" under a notice already
+                    explaining the real reason, so the screen gave two answers
+                    and the wrong one was louder. A link is a destination; the
+                    notice is what it has to say when it cannot get there.
+                  */
                   const how = useK8sStore.getState().openPodLink(target);
                   setLinkMiss(how === 'no-pod' ? target : undefined);
-                  if (how !== 'no-pod') { setFilter(''); return; }
+                  setFilter('');
+                  return;
                 }
               }
               setFilter(v);

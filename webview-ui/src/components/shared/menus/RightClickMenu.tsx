@@ -10,10 +10,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ContextMenu, type ContextMenuItem } from './ContextMenu';
-import { UndoIcon, RedoIcon, CutIcon, CopyIcon, PasteIcon, SelectAllIcon, SearchIcon, WrapLinesIcon, ChevronRightIcon, ChevronDownIcon, SparkleIcon, HelpCircleIcon, FilterIcon, FilterClearIcon, BracesIcon, XmlTagIcon, ClipboardCompareIcon } from '../../../icons';
+import { UndoIcon, RedoIcon, CutIcon, CopyIcon, PasteIcon, SelectAllIcon, SearchIcon, WrapLinesIcon, ChevronRightIcon, ChevronDownIcon, SparkleIcon, HelpCircleIcon, FilterIcon, LinkIcon, FilterClearIcon, BracesIcon, XmlTagIcon, ClipboardCompareIcon } from '../../../icons';
 import { candidatesFrom, pickComparable, type Comparable } from '../../../services/compare/comparable-text';
 import { openCompareWithClipboard } from '../../../services/compare/open-compare';
 import { getFilterMenu, type FilterMenu } from './filter-provider';
+import { podLogLinkForOs } from '../../k8s/pod-link';
 import { jsonPathLevels, xPathLevels } from '@salilvnair/dui';
 import { readClipboard } from '../../../services/compare/read-clipboard';
 
@@ -795,6 +796,33 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
 
 // --- Main RightClickMenu ---
 
+/**
+ * The link a log row is offering, if it is one.
+ *
+ * Reads what the row declared rather than knowing anything about dk8s: the
+ * line's own timestamp and text from the row, the pod they belong to from the
+ * scroller above it. A row without a pod above it — a search result, which is
+ * not a place a link can point — offers nothing.
+ */
+function logLineLink(target?: HTMLElement | null): string | undefined {
+  const row = target?.closest('[data-log-text]') as HTMLElement | null;
+  if (!row) return undefined;
+  const scroller = row.closest('[data-log-pod]') as HTMLElement | null;
+  const pod = scroller?.dataset.logPod;
+  const namespace = scroller?.dataset.logNs;
+  if (!pod || !namespace) return undefined;
+
+  const ts = Number(row.dataset.logTs);
+  return podLogLinkForOs({
+    context: scroller?.dataset.logCtx ?? '',
+    namespace,
+    pod,
+    container: scroller?.dataset.logContainer || undefined,
+    ts: Number.isFinite(ts) && ts > 0 ? ts : undefined,
+    text: row.dataset.logText,
+  });
+}
+
 export function RightClickMenu() {
   const [menu, setMenu] = useState<MenuState | null>(null);
 
@@ -868,6 +896,12 @@ export function RightClickMenu() {
     // argument is why Search Here and Search Everywhere did nothing.
     const action = subId ?? id;
     setMenu(null);
+
+    if (action === 'dk8s:copyLineLink') {
+      const link = logLineLink(target);
+      if (link) await navigator.clipboard?.writeText(link);
+      return;
+    }
 
     if (action === 'compareClipboard') {
       /* Read the clipboard at click time — it is the one input genuinely
@@ -994,9 +1028,35 @@ export function RightClickMenu() {
     ? [{ id: 'compare-sep', label: '', separator: true }, COMPARE_ITEM]
     : [];
 
+  /*
+    A log line can be linked to.
+
+    The row says what it is with `data-log-*` and the pod it belongs to is on
+    the scroller above it; nothing here knows about dk8s beyond reading those.
+    It lands on this menu rather than on one of the log view's own because this
+    one listens in the capture phase — a handler on the row fires after this
+    has already decided what to show, so the row's menu never opened at all.
+
+    First in the list, and above the separator the selection actions start
+    with: it is about the line under the cursor, which is what was clicked,
+    while everything below acts on whatever text happens to be highlighted.
+  */
+  const linkItems: ContextMenuItem[] = logLineLink(menu.target)
+    ? [
+        {
+          id: 'dk8s:copyLineLink',
+          label: 'Copy link to this line',
+          icon: <LinkIcon size={13} />,
+          iconColor: 'var(--color-ctx-duplicate)',
+        },
+        { id: 'dk8s:link-sep', label: '', separator: true },
+      ]
+    : [];
+
   const items = menu.context === 'input'
     ? [...INPUT_ITEMS, ...compareItems]
     : [
+        ...linkItems,
         ...SELECTION_ITEMS,
         ...(wantsAi ? aiItems(lineCount, hasSelection) : []),
         ...(wantsSearch ? (wantsAi ? SEARCH_ITEMS : [{ id: 'search-sep', label: '', separator: true }, ...SEARCH_ITEMS]) : []),

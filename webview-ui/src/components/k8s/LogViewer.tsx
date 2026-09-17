@@ -18,14 +18,12 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   FilterInputView, SelectInputView, SegmentedControlView, CheckboxView, ButtonView,
-  BadgeChipView, IconSize, SplitPanelView, DateTimeInputView,
-  ContextMenuView, type ContextMenuItem } from '@salilvnair/dui';
+  BadgeChipView, IconSize, SplitPanelView, DateTimeInputView } from '@salilvnair/dui';
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
   WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon, CloseIcon,
-  ChevronLeftIcon, SidebarLeftIcon, LinkIcon, CopyIcon,
+  ChevronLeftIcon, SidebarLeftIcon,
 } from '../../icons';
-import { podLogLinkForOs } from './pod-link';
 import { useK8sStore, type LogLevel } from '../../store/k8s-store';
 import { useLogSource } from './log-source';
 import {
@@ -805,16 +803,6 @@ export function LogViewer() {
      again. */
   const foldDefault = useLogFoldDefault();
   const [foldTraces, setFoldTraces] = useState(foldDefault);
-  /*
-    One line's own menu.
-
-    Held here rather than per row: thirty rows are on screen at any moment and
-    a menu each would be thirty portals mounted to show at most one. The row
-    that was right-clicked is the only thing that varies.
-  */
-  const [lineMenu, setLineMenu] = useState<{
-    line: { ts?: number; text: string }; at: { x: number; y: number };
-  }>();
 
   /*
     The line a link asked for.
@@ -1758,6 +1746,13 @@ export function LogViewer() {
           <div
             ref={attachScroll}
             onScroll={onScroll}
+            /* Once, here, rather than on every row: thirty rows carrying the
+               same three strings is thirty copies of one fact. A snapshot is
+               left out — a search result is not a place a link can point. */
+            data-log-pod={isSnapshot ? undefined : detail?.name}
+            data-log-ns={isSnapshot ? undefined : detail?.namespace}
+            data-log-ctx={isSnapshot ? undefined : (detail?.context ?? '')}
+            data-log-container={logContainer}
             className="flex-1 overflow-auto pl-4 pr-1 py-2 font-mono min-h-0 dk8s-no-scrollbar"
             style={{ fontSize: 11.5, lineHeight: `${ROW_HEIGHT}px` }}
           >
@@ -1785,13 +1780,26 @@ export function LogViewer() {
                         key={`${line.seq}-${i}`}
                         ref={el => measureRow(first + i, el)}
                         data-seq={line.seq}
-                        /* A line is the unit somebody wants to send to
-                           somebody else, so the verb lives on the line. */
                         data-linked={line.seq === linkedSeq ? '1' : undefined}
-                        onContextMenu={e => {
-                          e.preventDefault();
-                          setLineMenu({ line, at: { x: e.clientX, y: e.clientY } });
-                        }}
+                        /*
+                          What this line is, for whoever right-clicks it.
+
+                          Declared on the row rather than handled here: the app
+                          has one context menu, `RightClickMenu`, and it listens
+                          on `document` in the CAPTURE phase so that Monaco
+                          cannot open its own. A handler on this row is
+                          therefore always too late — it fires during bubbling,
+                          after the global menu has already decided what to
+                          show, so the row's menu never appeared at all.
+
+                          So the row says what it is and the global menu adds
+                          the verb. That also keeps the selection actions the
+                          footer advertises — Ask AI, Search, Filter — on the
+                          same menu, instead of replacing them with a shorter
+                          one about links.
+                        */
+                        data-log-ts={line.ts}
+                        data-log-text={line.text}
                         className="flex gap-2.5 items-start"
                         style={{
                           minHeight: ROW_HEIGHT,
@@ -2083,65 +2091,6 @@ export function LogViewer() {
         <span>select any text to ask AI about it</span>
       </div>
 
-      {/*
-        The line's menu.
-
-        Built here rather than from the panel's surface menu because the log
-        view is used on three screens — the pod detail, a split pane, and a
-        search result — and only one of them sits under that handler. A verb
-        about a line should work wherever the line is drawn.
-      */}
-      <ContextMenuView
-        open={!!lineMenu}
-        anchorEl={null}
-        position={lineMenu?.at}
-        onClose={() => setLineMenu(undefined)}
-        width={250}
-        items={lineMenu ? ([
-          {
-            /*
-              The `vscode://` spelling, because that is the one that survives
-              leaving daakia: pasted into a chat it opens the editor here, and
-              pasted back into dk8s's own search it is understood there too.
-
-              The line is found again by its timestamp and its text, never by
-              its position — see `pod-link`. A line number would keep opening
-              something long after it stopped being this line.
-            */
-            id: 'copy-line-link',
-            label: 'Copy link to this line',
-            description: detail
-              ? 'Opens this pod and finds this line again.'
-              : 'Needs a pod to link to.',
-            icon: <LinkIcon size={IconSize.item} />,
-            iconColor: detail ? 'var(--color-ctx-duplicate)' : undefined,
-            disabled: !detail,
-            onClick: () => {
-              if (detail) {
-                void navigator.clipboard?.writeText(podLogLinkForOs({
-                  context: detail.context ?? '',
-                  namespace: detail.namespace,
-                  pod: detail.name,
-                  container: logContainer,
-                  ts: lineMenu.line.ts,
-                  text: lineMenu.line.text,
-                }));
-              }
-              setLineMenu(undefined);
-            },
-          },
-          {
-            id: 'copy-line-text',
-            label: 'Copy the line',
-            icon: <CopyIcon size={IconSize.item} />,
-            iconColor: 'var(--color-ctx-duplicate)',
-            onClick: () => {
-              void navigator.clipboard?.writeText(lineMenu.line.text);
-              setLineMenu(undefined);
-            },
-          },
-        ] as ContextMenuItem[]) : []}
-      />
     </div>
   );
 }
