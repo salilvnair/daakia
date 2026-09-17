@@ -4,3 +4,4 @@ export {
   formatCombo, comboFromEvent, combosEqual, isModifierKey, IS_MAC,
 } from './keymap';
 export type { KeyCombo, KeymapOverrides } from './keymap';
+export { installPasteBridge } from './paste-bridge';

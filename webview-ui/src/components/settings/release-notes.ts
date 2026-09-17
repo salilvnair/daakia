@@ -49,6 +49,53 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '3.1.1',
+    date: '2026-09-17',
+    headline: 'dk8s stops guessing: it says what it ran, finds what a pod still holds, and notices when it has been talking to nobody.',
+    lines: [
+      // ── Search ──
+      { kind: 'feature', area: 'dk8s', text: 'Search what a pod still holds, not just its tail. Search Everywhere greps inside the container, over the log directory the pod actually mounts, so a line rotated out of kubectl logs is still found.' },
+      { kind: 'feature', area: 'dk8s', text: 'A configured log path is a path inside the pod, checked against a pod you name — not a host path guessed from a mount table.' },
+      { kind: 'feature', area: 'dk8s', text: 'A search result is a page, not a dialog — the same log view, with the same filter, level chips, field rail, stack folding, wrap and Analyze.' },
+      { kind: 'feature', area: 'dk8s', text: 'Download a result by time and by how much of it you want. The window opens on the span the hits cover, and ±100 through ±10,000 surrounding lines is a choice.' },
+      { kind: 'feature', area: 'dk8s', text: 'Find a logger and keep what is around it, with a window that can be bounded at both ends.' },
+
+      // ── Logs ──
+      { kind: 'feature', area: 'dk8s', text: 'Follow several pods at once, side by side. Two to four panes, each a complete log view with its own filter, tail and Following — side by side, stacked or a grid, with a draggable divider on every boundary.' },
+      { kind: 'feature', area: 'dk8s', text: 'A link to a pod and to one line of its log. Right-click a line, Copy link, send it: the recipient lands on that pod with that line highlighted. It carries the timestamp and the text, never a line number, because kubectl logs is a moving window over a file that rotates.' },
+      { kind: 'feature', area: 'dk8s', text: 'How many lines, and how far the context reaches, are settings — Settings → DK8S → Logs — rather than numbers baked into the view.' },
+
+      // ── Pods ──
+      { kind: 'feature', area: 'dk8s', text: 'Filter the pod list by cluster, namespace and app as well as by type. Each facet counts against what the others already allow, and chips say what is in force.' },
+      { kind: 'feature', area: 'dk8s', text: 'Every row says what kind of thing it is — DEPLOYMENT, CRONJOB, NODE — in both the cards and the table.' },
+      { kind: 'feature', area: 'dk8s', text: 'A CronJob run is badged as one and hidden by default; finished runs stopped counting as pods needing attention.' },
+      { kind: 'feature', area: 'dk8s', text: 'Starring stars the app rather than the pod, so a star survives a rollout. A long press starts a selection and Escape ends one.' },
+
+      // ── Commands ──
+      { kind: 'feature', area: 'dk8s', text: 'The command audit says how long each call took, grouped by verb with a median, a worst case and a total — which is how top pods was found to be 324 of 494 calls in one session.' },
+      { kind: 'feature', area: 'dk8s', text: 'Command Config decides which kinds of call the Commands tab lists.' },
+
+      // ── Speed ──
+      { kind: 'change', area: 'dk8s', text: 'A log opens with one kubectl call instead of three, and the pod grid paints from the cheap list first — the table a terminal is fast at — filling in from the full one when it lands.' },
+      { kind: 'change', area: 'dk8s', text: 'A watch no longer fetches every pod list twice. --watch replays the entire current state before it starts watching; --watch-only does not. Measured on four pods: 23,372 bytes replayed against 0.' },
+      { kind: 'change', area: 'dk8s', text: 'CPU and memory are asked for rather than polled. live keeps them current when you want that, stops when the panel is not in front, and backs off while the numbers stand still.' },
+
+      // ── Reliability ──
+      { kind: 'fix', area: 'dk8s', text: 'A watch that had gone deaf is found and restarted. A kubectl get --watch can be alive and receiving nothing — a slept laptop, a dropped VPN — and nothing on screen said so.' },
+      { kind: 'fix', area: 'dk8s', text: 'A watch that was talking to a page that had gone. A webview reload does not restart the host, so a watch kept posting into the channel of the page that started it: one replayed snapshot, then silence.' },
+      { kind: 'fix', area: 'dk8s', text: 'Refresh ends. It said "refreshing" until a snapshot arrived and cleared nowhere else, so a failed list left the word on screen forever.' },
+      { kind: 'fix', area: 'dk8s', text: "A cluster's namespaces sit together instead of interleaving with another cluster's by name." },
+      { kind: 'fix', area: 'dk8s', text: 'Closing a split down to one pod opens that pod properly, with its Overview, Terminal, Doctor and Explorer, rather than leaving it in a pane.' },
+      { kind: 'fix', area: 'dk8s', text: 'An export says where it went before the notice goes away, a metrics poll is no longer reported as a command you ran, and the context ladder stops where the lines do.' },
+
+      // ── Everywhere ──
+      { kind: 'fix', area: 'Editing', text: 'Ctrl+V pastes again, in every field in the app — a URL bar, a JSON body, a script, a header value. Copy and Cut always worked because they push text out, which needs no permission; a webview denies the clipboard-read that paste needs, so the keystroke did nothing at all. It now takes the same route right-click → Paste already took, through the extension host.' },
+
+      // ── dkgh ──
+      { kind: 'fix', area: 'dkgh', text: "A bar chart's count stays inside its card. The stacked track was sized as a share of the whole row rather than of the space left in it, so the longest row pushed its number past the border." },
+    ],
+  },
+  {
     version: '3.1.0',
     date: '2026-09-15',
     headline: 'Point daakia at a repository and it reads the routes out of the source.',

@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import '@salilvnair/convengine-chat/style.css';
 import { installDaakiaBridges } from './ai/DaakiaVsCodeBridge';
 import { installKeyboardListener } from './services/keyboard';
+import { installPasteBridge } from './services/keyboard/paste-bridge';
 
 // Install bridges before any React render so ConvEngineChat fetch/EventSource is ready
 installDaakiaBridges();
@@ -260,6 +261,8 @@ export default function App() {
 
   // Install centralized keyboard listener
   useEffect(() => installKeyboardListener(), []);
+  /* Ctrl+V, which a webview cannot do for itself — see `paste-bridge`. */
+  useEffect(() => installPasteBridge(), []);
 
   // Register SM workflow consumer once — loads persisted workflows from extension host DB
   useEffect(() => {

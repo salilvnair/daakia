@@ -4,6 +4,132 @@ All notable changes to the Daakia API Client extension are documented here.
 
 ---
 
+## [3.1.1] — 2026-09-17
+
+dk8s stops guessing: it says what it ran, finds what a pod still holds, and
+notices when it has been talking to nobody.
+
+Forty-seven changes, almost all of them dk8s. The shape of the release is
+three questions the tool could not previously answer — *where is that line*,
+*which pods are these*, and *is what I am looking at still true*.
+
+### Added — Search
+
+- **Search what a pod still holds, not just its tail.** `Search Everywhere`
+  runs `grep -rn` inside the container, over the log directory the pod
+  actually mounts, so a line written this morning and rotated out of
+  `kubectl logs` is still found. A 30,000-line archive with the match at line
+  four comes back with it.
+- **Search a volume where it lives.** Configured log paths are paths *inside
+  the pod*, checked against a pod you name — not host paths guessed from a
+  mount table.
+- **A result is a page, not a dialog.** It is the log view: the same filter
+  box, level chips, field rail, stack folding, wrap, line numbers and Analyze,
+  reading a result instead of a stream.
+- **Download a result by time and by how much of it you want.** The window
+  opens on the span the hits actually cover, and ±100 through ±10,000 lines of
+  surrounding log is a choice — with the dialog saying when that means reading
+  the cluster again rather than writing what is on screen.
+- **Keep what is around a logger.** Find a logger and the lines it sits
+  between come with it, and a window can be bounded at both ends.
+
+### Added — Logs
+
+- **Follow several pods at once, side by side.** Two to four panes, each a
+  complete log view with its own filter, tail and Following. Side by side,
+  stacked, or a grid — changeable while they are open, with a draggable
+  divider on every boundary and both axes in a grid.
+- **A link to a pod, and to one line of its log.** Right-click a line, Copy
+  link, send it: the recipient lands on that pod with that line highlighted.
+  It carries the pod's address, the moment the line was written and enough of
+  its text to recognise it — never a line number, because `kubectl logs` is a
+  moving window over a file that rotates.
+- **How many lines, and how far the context reaches, are settings** —
+  Settings → DK8S → Logs — rather than numbers baked into the view.
+
+### Added — Pods
+
+- **Filter by cluster, namespace and app**, as well as by type. Each facet
+  counts against what the others already allow, so a number says what picking
+  it would actually leave. Chips say what is in force, and each removes only
+  itself.
+- **Every row says what kind of thing it is** — DEPLOYMENT, CRONJOB, NODE —
+  in both the cards and the table.
+- **A CronJob run is badged as one, and hidden by default.** Finished runs
+  stopped counting as pods that need attention.
+- **Starring stars the app, not the pod**, so a star survives a rollout.
+- **A long press starts a selection, and Escape ends one.**
+
+### Added — Commands
+
+- **Command Config** decides which kinds of call the Commands tab lists.
+- **The audit says how long each call took**, grouped by verb with a median, a
+  worst case and a total — which is how `top pods` was found to be 324 of 494
+  calls in one session.
+
+### Changed — Speed
+
+- **A log opens with one kubectl call instead of three.**
+- **The pod grid paints from the cheap list first** — the table a terminal is
+  fast at — and fills in from the full one when it lands.
+- **A watch no longer fetches every pod list twice.** `--watch` replays the
+  entire current state before it starts watching; `--watch-only` does not.
+  Measured on four pods: 23,372 bytes replayed against 0.
+- **CPU and memory are asked for, not polled.** `live` keeps them current when
+  you want that, stops when the panel is not in front, and backs off while the
+  numbers stand still.
+
+### Fixed — dk8s
+
+- **A watch that had gone deaf is found and restarted.** A `kubectl get
+  --watch` can be alive and receiving nothing — a slept laptop, a dropped VPN
+  — and nothing on screen said so. The cluster is now asked, cheaply, and what
+  it says is compared against what the watch has delivered.
+- **A watch that was talking to a page that had gone.** A webview reload does
+  not restart the host, so a watch kept posting into the channel of the page
+  that started it: one replayed snapshot, then silence, while Refresh ran a
+  perfectly good `kubectl get pods` whose answer went nowhere.
+- **Refresh ends.** It said "refreshing" until a snapshot arrived and cleared
+  nowhere else, so a failed list left the word on screen forever.
+- **A cluster's namespaces sit together** instead of interleaving with another
+  cluster's by name.
+- **Closing a split down to one pod opens that pod properly**, with its
+  Overview, Terminal, Doctor and Explorer, rather than leaving it in a pane.
+- **An export says where it went** before the notice goes away.
+- **A metrics poll is no longer reported as a command you ran.**
+- **The context ladder stops where the lines do.**
+- **A menu icon has a colour unless the row is disabled** — grey is what an
+  unusable row looks like, so a usable one must not wear it.
+
+### Fixed — Everywhere
+
+- **Ctrl+V pastes again.** Copy and Cut always worked; paste did nothing, in
+  every field in the app — a URL bar, a JSON body, a script, a header value.
+  Right-click → Paste worked the whole time, which is what made it confusing
+  to report.
+
+  A VS Code webview routinely denies the `clipboard-read` permission, so the
+  browser never turns Ctrl+V into a paste event: nothing fires, silently, and
+  it is indistinguishable from an empty clipboard. Copy and Cut push text out,
+  which needs no permission, which is why only one direction was broken.
+
+  The keystroke now takes the same route the right-click menu already took —
+  it asks the extension host, which has no such restriction — and inserts at
+  the caret. Native fields, contenteditable fields and Monaco all handled.
+
+### Fixed — dkgh
+
+- **A bar chart's count stays inside its card.** The stacked track was sized
+  as a share of the whole row rather than of the space left in it, so the
+  longest row in each card pushed its number past the border.
+
+### Changed — Dependencies
+
+- `@salilvnair/dui` 1.0.13 — a select menu that stays inside a short window,
+  and a list short enough to fit that no longer grows a scrollbar.
+
+---
+
 ## [3.1.0] — 2026-09-15
 
 Point daakia at a repository and it reads the routes out of the source.

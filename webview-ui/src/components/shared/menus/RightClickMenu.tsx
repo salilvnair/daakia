@@ -15,6 +15,7 @@ import { candidatesFrom, pickComparable, type Comparable } from '../../../servic
 import { openCompareWithClipboard } from '../../../services/compare/open-compare';
 import { getFilterMenu, type FilterMenu } from './filter-provider';
 import { podLogLinkForOs } from '../../k8s/pod-link';
+import { getMonacoEditorInstance } from '../../../services/editor/monaco-instance';
 import { jsonPathLevels, xPathLevels } from '@salilvnair/dui';
 import { readClipboard } from '../../../services/compare/read-clipboard';
 
@@ -217,23 +218,6 @@ function isTextInput(el: HTMLElement | null): boolean {
   }
   if (el.getAttribute('contenteditable') === 'true') return true;
   return false;
-}
-
-function getMonacoEditorInstance(el: HTMLElement): any | null {
-  const editorContainer = el.closest('.monaco-editor');
-  if (!editorContainer) return null;
-  const monacoGlobal = (window as any).monaco?.editor;
-  if (!monacoGlobal) return null;
-  const editors = monacoGlobal.getEditors?.() || [];
-  for (const editor of editors) {
-    try {
-      const domNode = editor.getDomNode();
-      if (domNode && (domNode === editorContainer || domNode.contains(editorContainer) || editorContainer.contains(domNode))) {
-        return editor;
-      }
-    } catch { /* skip */ }
-  }
-  return null;
 }
 
 // --- Monaco Context Menu (custom layout with compact clipboard row + submenu) ---
