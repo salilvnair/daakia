@@ -187,6 +187,37 @@ describe('namespace grouping', () => {
     expect(groups[1].pods).toHaveLength(2);
   });
 
+  it('keeps a cluster together instead of interleaving them by namespace', () => {
+    /*
+      Two namespaces watched across two clusters. Ordered by namespace first
+      this came out orders/lab, orders/prod, reporting/lab, reporting/prod —
+      the clusters interleaved, with only a word in grey at the end of each
+      heading to say which was which.
+    */
+    const pods = [
+      pod({ name: 'a', namespace: 'reporting', context: 'kind-dk8s-prod' }),
+      pod({ name: 'b', namespace: 'orders', context: 'kind-dk8s-lab' }),
+      pod({ name: 'c', namespace: 'reporting', context: 'kind-dk8s-lab' }),
+      pod({ name: 'd', namespace: 'orders', context: 'kind-dk8s-prod' }),
+    ];
+    expect(groupPods(pods, NOW).map(g => `${g.context}/${g.namespace}`)).toEqual([
+      'kind-dk8s-lab/orders',
+      'kind-dk8s-lab/reporting',
+      'kind-dk8s-prod/orders',
+      'kind-dk8s-prod/reporting',
+    ]);
+  });
+
+  it('falls through to namespace order within one cluster', () => {
+    // The usual case: every key equal, so nothing about the old order changes.
+    const pods = [
+      pod({ name: 'a', namespace: 'zulu', context: 'c1' }),
+      pod({ name: 'b', namespace: 'alpha', context: 'c1' }),
+      pod({ name: 'c', namespace: 'mike', context: 'c1' }),
+    ];
+    expect(groupPods(pods, NOW).map(g => g.namespace)).toEqual(['alpha', 'mike', 'zulu']);
+  });
+
   it('separates identically-named namespaces in different clusters', () => {
     // Two clusters can both have a `payments`. Merging them would show pods
     // from one cluster under the other's heading.

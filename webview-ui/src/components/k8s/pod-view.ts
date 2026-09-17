@@ -214,16 +214,33 @@ export function groupPods(pods: PodSummary[], now = Date.now()): PodGroup[] {
     }
     g.pods.push(pod);
   }
-  // Namespace first, then cluster. Ordering by severity moved a group every
-  // time a pod changed state, so the thing you were reading slid out from
-  // under you; a stable alphabetical order is worth more than putting the
-  // broken group on top, and the header already says how many need attention.
-  // Pods inside each group are still severity-ordered.
+  /*
+    Cluster first, then namespace.
+
+    Namespace-first read as one flat list that happened to mention a cluster in
+    each heading: watching `orders` and `reporting` across a lab and a prod
+    gave orders/lab, orders/prod, reporting/lab, reporting/prod — the two
+    clusters interleaved all the way down, and the only thing separating a prod
+    pod from a lab one of the same name was a word in grey at the end of the
+    heading. Which cluster you are looking at is the distinction that matters
+    most, and it was the one the layout ignored.
+
+    Grouped this way each cluster is a run of adjacent headings, so scrolling
+    past prod is one movement rather than a thing you do four times.
+
+    With a single cluster watched — the usual case — every key is equal and
+    this falls straight through to the namespace order it always had.
+
+    Alphabetical rather than by severity either way: ordering by severity moved
+    a group every time a pod changed state, so the thing you were reading slid
+    out from under you. The header already says how many need attention. Pods
+    inside each group are still severity-ordered.
+  */
   const ordered = [...byKey.values()]
     .map(g => ({ ...g, pods: sortPods(g.pods, now) }))
     .sort((a, b) => {
-      const d = a.namespace.localeCompare(b.namespace);
-      return d !== 0 ? d : (a.context ?? '').localeCompare(b.context ?? '');
+      const d = (a.context ?? '').localeCompare(b.context ?? '');
+      return d !== 0 ? d : a.namespace.localeCompare(b.namespace);
     });
 
   return ordered.map((g, i) => ({ ...g, tint: namespaceTint(i, ordered.length) }));
