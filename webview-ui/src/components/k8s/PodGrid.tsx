@@ -29,6 +29,7 @@ import { PodFilterPopup } from './PodFilterPopup';
 import {
   matchesPodFilter, filterChips, withoutChip, isEmptyFilter, NO_POD_FILTER,
 } from './pod-filter';
+import { looksLikePodLink, parsePodLink, type LogTarget } from './pod-link';
 import { useSplitStore, MAX_PANES } from '../../store/dk8s-split-store';
 import { SPLIT_MODES } from './SplitLogs';
 import { logLineSettings } from './log-settings';
@@ -1175,6 +1176,8 @@ export function PodGrid() {
 
   const chips = useMemo(() => filterChips(podFilter), [podFilter]);
   const filterOn = !isEmptyFilter(podFilter);
+  /* A link to a pod this session is not watching — see the notice below. */
+  const [linkMiss, setLinkMiss] = useState<LogTarget | undefined>();
 
   const groups = useMemo(() => groupPods(visible, now), [visible, now]);
 
@@ -1277,7 +1280,29 @@ export function PodGrid() {
         <div ref={searchRef} className="flex-1" style={{ minWidth: 200, paddingRight: 8 }}>
           <SearchInputView
             value={filter}
-            onChange={setFilter}
+            onChange={v => {
+              /*
+                A pasted link is not a search.
+
+                Somebody sends you `vscode://…/dk8s/logs?…`; the only place in
+                dk8s shaped like "put a thing here" is this box, so this is
+                where it gets pasted. Treating it as a substring would search
+                for a URL and find no pods, which looks exactly like the link
+                being wrong.
+
+                Only when the whole value is one — typing a word that happens
+                to start `daakia` still searches.
+              */
+              if (looksLikePodLink(v)) {
+                const target = parsePodLink(v);
+                if (target) {
+                  const how = useK8sStore.getState().openPodLink(target);
+                  setLinkMiss(how === 'no-pod' ? target : undefined);
+                  if (how !== 'no-pod') { setFilter(''); return; }
+                }
+              }
+              setFilter(v);
+            }}
             placeholder="Search pods  ( / )"
             size="sm"
             width="100%"
@@ -1344,6 +1369,35 @@ export function PodGrid() {
           />
         )}
       </div>
+
+      {/*
+        A link to a pod nobody here is watching.
+
+        Said rather than ignored: the difference between "that link is broken"
+        and "you are not watching that namespace" is the whole of what the
+        reader needs, and only one of them is their problem to fix.
+      */}
+      {linkMiss && (
+        <div className="flex items-center gap-2 mx-4 mt-2 px-3 py-2 rounded-md flex-shrink-0 text-[11px]"
+             style={{
+               background: 'color-mix(in srgb, var(--color-warning) 10%, transparent)',
+               border: '1px solid color-mix(in srgb, var(--color-warning) 35%, transparent)',
+               color: 'var(--color-text-secondary)',
+             }}>
+          <span className="flex-1">
+            That link points at{' '}
+            <code style={{ fontFamily: 'var(--font-mono, monospace)' }}>{linkMiss.pod}</code>
+            {' '}in{' '}
+            <code style={{ fontFamily: 'var(--font-mono, monospace)' }}>{linkMiss.namespace}</code>
+            {linkMiss.context && <> on <code style={{ fontFamily: 'var(--font-mono, monospace)' }}>{linkMiss.context}</code></>}
+            , which is not being watched here. Add it above and paste the link again.
+          </span>
+          <button type="button" onClick={() => setLinkMiss(undefined)}
+                  className="dk-close-btn p-0.5 rounded cursor-pointer border-none bg-transparent flex">
+            <CloseIcon size={IconSize.inline} color="currentColor" />
+          </button>
+        </div>
+      )}
 
       {/*
         What the filter is doing, where the pods it removed used to be.

@@ -12,6 +12,7 @@ import { logUiEvent } from './ui-audit-store';
 import { useUiStateStore } from './ui-state-store';
 import type { MarkTarget } from '../components/k8s/mark-runtime';
 import { NO_POD_FILTER, type PodFilter } from '../components/k8s/pod-filter';
+import { findLinkedLine, type LogTarget } from '../components/k8s/pod-link';
 
 /** What somebody said a pod's runtime is. Mirrors services/k8s/runtime-marks. */
 export interface RuntimeMark {
@@ -782,6 +783,20 @@ interface K8sState {
   setView: (v: 'cards' | 'table') => void;
   selectPod: (name?: string) => void;
   openDetail: (pod: PodSummary) => void;
+  /**
+   * Open a pod somebody sent you a link to, and find the line they meant.
+   *
+   * Returns what it could do, because the honest outcomes are three and the
+   * caller has to say which: the pod is here and so is the line; the pod is
+   * here but the line has rotated out of the window; the pod is not here at
+   * all. Silently opening the nearest thing would be the worst of them.
+   */
+  openPodLink: (t: LogTarget) => 'opened' | 'no-line' | 'no-pod';
+  /** The line a link asked for, once it has been found in the log. */
+  linkedLine?: { seq: number; text: string };
+  /** What a link is still waiting to find, once its log arrives. */
+  pendingLink?: LogTarget;
+  clearLinkedLine: () => void;
   closeDetail: () => void;
   setDetailTab: (tab: DetailTab) => void;
   setExplorerPath: (path?: string) => void;
@@ -1049,6 +1064,8 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       logFilter: '', logLevels: [], logFieldFilters: [], logFollow: true, logLive: false,
       logDirection: 'last', logSince: 'all', logExportOpen: false,
       logPrevious: false, logContainer: undefined, logSelection: undefined,
+      /* A mark belongs to the pod it was found in. */
+      linkedLine: undefined, pendingLink: undefined,
       describeText: undefined, yamlText: undefined, describeBusy: true,
       capabilities: undefined, runtime: undefined, actions: [], probeBusy: true,
       memory: undefined, safety: undefined,
@@ -1375,6 +1392,29 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     tab is set after it rather than before — the same ordering the context
     menu's other destinations use.
   */
+  openPodLink: (t) => {
+    const pod = get().pods.find(
+      p => p.name === t.pod && p.namespace === t.namespace
+        && (!t.context || (p.context ?? '') === t.context),
+    );
+    /*
+      Only a pod actually being watched. Opening one from the link's own words
+      would put a name and a namespace on screen with no cluster behind them —
+      a detail view that can never load, over a pod that may not exist.
+    */
+    if (!pod) return 'no-pod';
+
+    get().openDetail(pod);
+    set({ detailTab: 'logs', linkedLine: undefined, pendingLink: undefined });
+    if (t.ts === undefined && !t.text) return 'opened';
+
+    /* The log is being fetched. `apply` looks for the line when it lands. */
+    set({ pendingLink: t });
+    return 'opened';
+  },
+
+  clearLinkedLine: () => set({ linkedLine: undefined, pendingLink: undefined }),
+
   openShellFor: (pod) => {
     set({ shellNotice: undefined });
     get().openDetail(pod);
@@ -1741,6 +1781,20 @@ export const useK8sStore = create<K8sState>((set, get) => ({
             ? { logs: merged.slice(overflow), logDropped: s.logDropped + overflow }
             : { logs: merged };
         });
+        /*
+          A link is waiting for its line.
+
+          Looked for as the log arrives rather than once at the end, because a
+          following stream has no end — and dropped the moment it is found, so
+          a line that scrolls past later does not re-highlight itself.
+        */
+        {
+          const want = get().pendingLink;
+          if (want) {
+            const hit = findLinkedLine(get().logs, want);
+            if (hit) set({ linkedLine: { seq: hit.seq, text: hit.text }, pendingLink: undefined });
+          }
+        }
         break;
       }
 

@@ -18,13 +18,15 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   FilterInputView, SelectInputView, SegmentedControlView, CheckboxView, ButtonView,
-  BadgeChipView, IconSize, SplitPanelView, DateTimeInputView } from '@salilvnair/dui';
+  BadgeChipView, IconSize, SplitPanelView, DateTimeInputView,
+  ContextMenuView, type ContextMenuItem } from '@salilvnair/dui';
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
   WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon, CloseIcon,
-  ChevronLeftIcon, SidebarLeftIcon,
+  ChevronLeftIcon, SidebarLeftIcon, LinkIcon, CopyIcon,
 } from '../../icons';
-import { type LogLevel } from '../../store/k8s-store';
+import { podLogLinkForOs } from './pod-link';
+import { useK8sStore, type LogLevel } from '../../store/k8s-store';
 import { useLogSource } from './log-source';
 import {
   useLogFoldDefault, useLogWrapDefault, rememberLogMode,
@@ -562,7 +564,7 @@ export function LogViewer() {
     logs, logStatus, logDetail, logDropped, logFilter, logLevels, logRequestedAt,
     logFieldFilters, addFieldFilter, removeFieldFilter,
     logFollow, logLive, logTail, logDirection, logSince, logWrap, logPrevious,
-    logFrom, logTo, setLogWindow,
+    logFrom, logTo, setLogWindow, logContainer,
     detail, runtime,
     setLogFilter, setLogFollow, setLogLive, setLogTail, setLogDirection,
     setLogSince, setLogWrap, setLogPrevious, setLogSelection,
@@ -803,6 +805,29 @@ export function LogViewer() {
      again. */
   const foldDefault = useLogFoldDefault();
   const [foldTraces, setFoldTraces] = useState(foldDefault);
+  /*
+    One line's own menu.
+
+    Held here rather than per row: thirty rows are on screen at any moment and
+    a menu each would be thirty portals mounted to show at most one. The row
+    that was right-clicked is the only thing that varies.
+  */
+  const [lineMenu, setLineMenu] = useState<{
+    line: { ts?: number; text: string }; at: { x: number; y: number };
+  }>();
+
+  /*
+    The line a link asked for.
+
+    Only on the pod's own view: a pane and a search result are not where a
+    link lands, and a highlight on the wrong screen would be a mark nobody put
+    there.
+  */
+  const linkedLine = useK8sStore(s => s.linkedLine);
+  const clearLinkedLine = useK8sStore(s => s.clearLinkedLine);
+  const linkedSeq = isSnapshot ? undefined : linkedLine?.seq;
+
+
   const chooseFold = useCallback((on: boolean) => {
     setFoldTraces(on);
     rememberLogMode(LOG_FOLD_PREF, on);
@@ -950,6 +975,24 @@ export function LogViewer() {
   const first = Math.max(0, rowAt(scrollTop) - OVERSCAN);
   const last = Math.min(total, rowAt(scrollTop + viewportH) + 1 + OVERSCAN);
   const slice = rows.slice(first, last);
+
+  /*
+    Put the linked line on screen, once.
+
+    The highlight stays until the reader does something else with the view —
+    it is the answer to "which line did they mean", and clearing it after a
+    second would take it away while they were still reading around it.
+    Scrolling happens once: dragging away from it and being dragged back would
+    be the view arguing.
+  */
+  const scrolledToLink = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (linkedSeq === undefined || scrolledToLink.current === linkedSeq) return;
+    const el = document.querySelector(`[data-seq="${linkedSeq}"][data-linked="1"]`);
+    if (!el) return;
+    scrolledToLink.current = linkedSeq;
+    el.scrollIntoView({ block: 'center' });
+  }, [linkedSeq, slice]);
 
   /**
    * Record what a row actually measured.
@@ -1742,17 +1785,31 @@ export function LogViewer() {
                         key={`${line.seq}-${i}`}
                         ref={el => measureRow(first + i, el)}
                         data-seq={line.seq}
+                        /* A line is the unit somebody wants to send to
+                           somebody else, so the verb lives on the line. */
+                        data-linked={line.seq === linkedSeq ? '1' : undefined}
+                        onContextMenu={e => {
+                          e.preventDefault();
+                          setLineMenu({ line, at: { x: e.clientX, y: e.clientY } });
+                        }}
                         className="flex gap-2.5 items-start"
                         style={{
                           minHeight: ROW_HEIGHT,
                           whiteSpace: logWrap ? 'pre-wrap' : 'pre',
-                          background: line.level === 'error'
-                            ? 'color-mix(in srgb, var(--color-error) 7%, transparent)'
-                            : line.level === 'warn'
-                              ? 'color-mix(in srgb, var(--color-warning) 5%, transparent)'
-                              : 'transparent',
+                          /* The linked line takes the accent outright — a
+                             level tint over it would leave the one line
+                             somebody was sent looking like every other
+                             warning on screen. */
+                          background: line.seq === linkedSeq
+                            ? `color-mix(in srgb, ${ACCENT} 22%, transparent)`
+                            : line.level === 'error'
+                              ? 'color-mix(in srgb, var(--color-error) 7%, transparent)'
+                              : line.level === 'warn'
+                                ? 'color-mix(in srgb, var(--color-warning) 5%, transparent)'
+                                : 'transparent',
                           borderLeft: `2px solid ${
-                            line.level === 'error' ? 'var(--color-error)'
+                            line.seq === linkedSeq ? ACCENT
+                            : line.level === 'error' ? 'var(--color-error)'
                             : line.level === 'warn' ? 'var(--color-warning)' : 'transparent'
                           }`,
                           paddingLeft: row.isFrame ? 22 : 6,
@@ -2010,8 +2067,81 @@ export function LogViewer() {
             ↓ jump to newest
           </button>
         )}
+        {/* Says the link landed, and offers the way out of it — a highlight
+            somebody else put there should be removable by the person reading. */}
+        {linkedSeq !== undefined && (
+          <button
+            type="button"
+            onClick={clearLinkedLine}
+            title="Clear the highlight this link left"
+            className="cursor-pointer bg-transparent border-none px-0 text-[10.5px]"
+            style={{ color: ACCENT }}
+          >
+            linked line · clear
+          </button>
+        )}
         <span>select any text to ask AI about it</span>
       </div>
+
+      {/*
+        The line's menu.
+
+        Built here rather than from the panel's surface menu because the log
+        view is used on three screens — the pod detail, a split pane, and a
+        search result — and only one of them sits under that handler. A verb
+        about a line should work wherever the line is drawn.
+      */}
+      <ContextMenuView
+        open={!!lineMenu}
+        anchorEl={null}
+        position={lineMenu?.at}
+        onClose={() => setLineMenu(undefined)}
+        width={250}
+        items={lineMenu ? ([
+          {
+            /*
+              The `vscode://` spelling, because that is the one that survives
+              leaving daakia: pasted into a chat it opens the editor here, and
+              pasted back into dk8s's own search it is understood there too.
+
+              The line is found again by its timestamp and its text, never by
+              its position — see `pod-link`. A line number would keep opening
+              something long after it stopped being this line.
+            */
+            id: 'copy-line-link',
+            label: 'Copy link to this line',
+            description: detail
+              ? 'Opens this pod and finds this line again.'
+              : 'Needs a pod to link to.',
+            icon: <LinkIcon size={IconSize.item} />,
+            iconColor: detail ? 'var(--color-ctx-duplicate)' : undefined,
+            disabled: !detail,
+            onClick: () => {
+              if (detail) {
+                void navigator.clipboard?.writeText(podLogLinkForOs({
+                  context: detail.context ?? '',
+                  namespace: detail.namespace,
+                  pod: detail.name,
+                  container: logContainer,
+                  ts: lineMenu.line.ts,
+                  text: lineMenu.line.text,
+                }));
+              }
+              setLineMenu(undefined);
+            },
+          },
+          {
+            id: 'copy-line-text',
+            label: 'Copy the line',
+            icon: <CopyIcon size={IconSize.item} />,
+            iconColor: 'var(--color-ctx-duplicate)',
+            onClick: () => {
+              void navigator.clipboard?.writeText(lineMenu.line.text);
+              setLineMenu(undefined);
+            },
+          },
+        ] as ContextMenuItem[]) : []}
+      />
     </div>
   );
 }

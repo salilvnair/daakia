@@ -19,12 +19,13 @@
 import { useMemo } from 'react';
 import { ContextMenuView, type ContextMenuItem, IconSize } from '@salilvnair/dui';
 import {
-  StarIcon, CopyIcon, TerminalIcon, FileTextIcon, StethoscopeIcon, FolderOpenIcon,
+  StarIcon, CopyIcon, LinkIcon, TerminalIcon, FileTextIcon, StethoscopeIcon, FolderOpenIcon,
   CheckCircleIcon, XCircleIcon, CpuIcon, MemoryIcon, NetworkIcon, TimelineIcon,
   ColumnsIcon,
 } from '../../icons';
 import { isScheduled } from '@daakia/k8s-workload';
 import { filterMenuRow } from './pod-filter-menu';
+import { podLogLinkForOs } from './pod-link';
 import { useSplitStore, MAX_PANES } from '../../store/dk8s-split-store';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { logLineSettings } from './log-settings';
@@ -332,6 +333,24 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onTestPv
             onClick: copy(pod.namespace),
           },
           { id: 'copy-sep', label: '', separator: true },
+          {
+            /*
+              A link somebody else can open on this pod.
+
+              The `vscode://` spelling rather than the app's own, because that
+              is the one that survives leaving daakia: pasted into a chat it
+              opens the editor on this pod, and pasted back into dk8s's own
+              search box it is understood there too. One entry that works in
+              both places beats two that each work in one.
+            */
+            id: 'copy-link', label: 'Link to this pod',
+            description: 'Opens dk8s here, for anyone with daakia.',
+            icon: <LinkIcon size={IconSize.item} />, iconColor: MENU.copy,
+            onClick: copy(podLogLinkForOs({
+              context: pod.context ?? '', namespace: pod.namespace, pod: pod.name,
+            })),
+          },
+          { id: 'copy-sep-2', label: '', separator: true },
           {
             id: 'copy-describe', label: 'Describe',
             description: 'Fetches it first, then copies.',
