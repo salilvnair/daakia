@@ -197,10 +197,13 @@ function Pane({ pane, focused }: { pane: SplitPane; focused: boolean }) {
           {pane.namespace}
         </span>
         <span className="flex-1" />
+        {/* The one destructive control in the strip, and it says so on the way
+            in rather than after the fact — see `.dk-close-btn`. `currentColor`
+            so the icon travels with it. */}
         <button type="button" onClick={() => closePane(pane.id)}
                 title={`Close ${pane.pod}`}
-                className="p-0.5 rounded cursor-pointer border-none bg-transparent">
-          <CloseIcon size={IconSize.inline} color="var(--color-text-muted)" />
+                className="dk-close-btn p-0.5 rounded cursor-pointer border-none bg-transparent flex">
+          <CloseIcon size={IconSize.inline} color="currentColor" />
         </button>
       </div>
 
@@ -345,11 +348,21 @@ export function SplitLogs() {
                 className="p-1 rounded cursor-pointer border-none bg-transparent">
           <ChevronLeftIcon size={IconSize.nav} color="var(--color-text-secondary)" />
         </button>
-        <span className="text-[12.5px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-          {/* The arrangement is changeable from the buttons on the right, so
-              the title says which one is on rather than the one it opened in. */}
-          {panes.length} pod{panes.length === 1 ? '' : 's'},{' '}
-          {(SPLIT_MODES.find(m => m.id === mode)?.label ?? '').toLowerCase()}
+        <span className="text-[12.5px] font-mono truncate"
+              style={{ color: 'var(--color-text-primary)', fontWeight: 600, minWidth: 0 }}>
+          {/*
+            The pods, by name.
+
+            It said "2 pods, side by side", which is two facts the reader can
+            already see — the panes are there, and the arrangement is lit up in
+            the buttons to the right. The one thing the strip could say that
+            nothing else does is WHICH two, and that is what it says now.
+
+            Every name, not the first and a count: the whole reason to open a
+            split is that the pods are nearly identical, so `orders-api-…frlf6
+            and 1 more` would hide the exact character that tells them apart.
+          */}
+          {panes.map(p => p.pod).join(',  ')}
         </span>
 
         <span className="flex-1" />

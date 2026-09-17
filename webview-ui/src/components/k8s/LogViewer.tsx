@@ -26,6 +26,10 @@ import {
 } from '../../icons';
 import { type LogLevel } from '../../store/k8s-store';
 import { useLogSource } from './log-source';
+import {
+  useLogFoldDefault, useLogWrapDefault, rememberLogMode,
+  LOG_FOLD_PREF, LOG_WRAP_PREF,
+} from './log-view-prefs';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { buildFacets, filterTermFor } from './log-facets';
@@ -793,7 +797,34 @@ export function LogViewer() {
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportH, setViewportH] = useState(400);
   const [viewportW, setViewportW] = useState(0);
-  const [foldTraces, setFoldTraces] = useState(true);
+  /* Both modes open on whatever was chosen last — see `log-view-prefs`.
+     Held as plain state they were re-decided on every mount: turn folding
+     off to read a trace in full, open the next pod, and it is folded
+     again. */
+  const foldDefault = useLogFoldDefault();
+  const [foldTraces, setFoldTraces] = useState(foldDefault);
+  const chooseFold = useCallback((on: boolean) => {
+    setFoldTraces(on);
+    rememberLogMode(LOG_FOLD_PREF, on);
+  }, []);
+  const chooseWrap = useCallback((on: boolean) => {
+    setLogWrap(on);
+    rememberLogMode(LOG_WRAP_PREF, on);
+  }, [setLogWrap]);
+
+  /*
+    Wrapping lives in the store the view is reading from — the pod store for
+    the detail, the pane's own for a split — so the remembered choice is
+    applied to it once, on the way in. Once only: after that the view is the
+    reader's to point wherever they like, and two panes are allowed to differ.
+  */
+  const wrapDefault = useLogWrapDefault();
+  const seededWrap = useRef(false);
+  useEffect(() => {
+    if (seededWrap.current) return;
+    seededWrap.current = true;
+    if (logWrap !== wrapDefault) setLogWrap(wrapDefault);
+  }, [wrapDefault, logWrap, setLogWrap]);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
   /** The most recent non-empty selection — see the note in captureSelection. */
   const lastSelRef = useRef<{ text: string; raw: string; first: number; last: number; count: number } | null>(null);
@@ -1358,10 +1389,10 @@ export function LogViewer() {
         <div className="flex items-center gap-2 flex-wrap justify-end">
         {/* Modes, not actions, so they are icon toggles rather than labelled
             buttons — and they sit apart from the controls that fetch. */}
-        <IconButton on={logWrap} onClick={() => setLogWrap(!logWrap)}
+        <IconButton on={logWrap} onClick={() => chooseWrap(!logWrap)}
                     title={logWrap ? 'Wrapping long lines' : 'Long lines run off the right'}
                     icon={<WrapLinesIcon size={IconSize.item} />} />
-        <IconButton on={foldTraces} onClick={() => setFoldTraces(!foldTraces)}
+        <IconButton on={foldTraces} onClick={() => chooseFold(!foldTraces)}
                     title={foldTraces ? 'Stack traces are folded' : 'Stack traces shown in full'}
                     icon={<LayersIcon size={IconSize.item} />} />
 

@@ -395,6 +395,23 @@ export function FilterIcon(props: IconProps) {
   );
 }
 
+/**
+ * The funnel with a cross through it — take the narrowing off.
+ *
+ * A plain X would read as "close this menu" beside rows that choose things,
+ * and a plain funnel as "filter" beside four rows that already say it. The
+ * two together say which funnel and what happens to it.
+ */
+export function FilterOffIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+      <line x1="3" y1="21" x2="10" y2="14" />
+      <line x1="3" y1="14" x2="10" y2="21" />
+    </svg>
+  );
+}
+
 export function ChevronDownIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>

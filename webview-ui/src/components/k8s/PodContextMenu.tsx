@@ -24,6 +24,7 @@ import {
   ColumnsIcon,
 } from '../../icons';
 import { isScheduled } from '@daakia/k8s-workload';
+import { filterMenuRow } from './pod-filter-menu';
 import { useSplitStore, MAX_PANES } from '../../store/dk8s-split-store';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { logLineSettings } from './log-settings';
@@ -123,6 +124,13 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onTestPv
   const collect = useDk8sDoctorStore(s => s.collect);
   const running = useDk8sDoctorStore(s => s.running);
   const favorites = useFavoriteKeys();
+  /* The grid's filter, built once and shared with the background menu. */
+  const podFilter = useK8sStore(s => s.podFilter);
+  const setPodFilter = useK8sStore(s => s.setPodFilter);
+  const filterRow = useMemo(
+    () => filterMenuRow(allPods, podFilter, setPodFilter, MENU.read) as ContextMenuItem | undefined,
+    [allPods, podFilter, setPodFilter],
+  );
 
   const items = useMemo<ContextMenuItem[]>(() => {
     if (!pod) return [];
@@ -379,6 +387,16 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onTestPv
         onClick: () => { onOpen(pod, 'explorer'); onClose(); },
       },
       { id: 'sep-3', label: '', separator: true },
+      /*
+        The grid's filter, reachable from a pod as well as from the gap
+        between them.
+
+        It lived only on the background, so narrowing the list was a thing you
+        did by right-clicking empty space — the harder target, and the one
+        nobody thinks to try. The rows come from `pod-filter-menu`, shared with
+        that background menu, so a facet added to one is in both.
+      */
+      ...(filterRow ? [filterRow, { id: 'sep-filter', label: '', separator: true }] : []),
       {
         /*
           Last, and asked about before it undoes anything.
@@ -403,7 +421,7 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onTestPv
         },
       },
     ];
-  }, [pod, favorites, selected, selectedPods, openSplit, splitTail, menuProbe, guardHeapDump, access, running, detail, runtimeMark, contextName, onTestPv,
+  }, [pod, favorites, selected, selectedPods, openSplit, splitTail, menuProbe, guardHeapDump, access, running, detail, runtimeMark, contextName, onTestPv, filterRow,
     beginSelection, togglePodSelected, copyPodText, openShellFor, collect,
     onClose, onConfirmUnfavorite, onOpen]);
 

@@ -130,7 +130,10 @@ export const useSplitStore = create<SplitState>((set, get) => ({
       direction: 'last',
       follow: true,
       live: false,
-      wrap: false,
+      /* The view seeds this from the remembered choice on mount — see
+         `log-view-prefs`. The value here is only what it opens with before
+         that lands, so it matches the detail view's own default. */
+      wrap: true,
       previous: false,
       requestedAt: Date.now(),
     }));

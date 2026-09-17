@@ -11,6 +11,7 @@ import type { FieldFilter } from '../components/k8s/log-view';
 import { logUiEvent } from './ui-audit-store';
 import { useUiStateStore } from './ui-state-store';
 import type { MarkTarget } from '../components/k8s/mark-runtime';
+import { NO_POD_FILTER, type PodFilter } from '../components/k8s/pod-filter';
 
 /** What somebody said a pod's runtime is. Mirrors services/k8s/runtime-marks. */
 export interface RuntimeMark {
@@ -602,12 +603,16 @@ interface K8sState {
    * in one place — so the grid says what it can offer rather than rendering a
    * menu of its own beside the others.
    */
-  gridFilter?: {
-    kind: 'all' | 'pods' | 'runs';
-    setKind: (k: 'all' | 'pods' | 'runs') => void;
-    counts: { all: number; pods: number; runs: number };
-  };
-  setGridFilter: (f: K8sState['gridFilter']) => void;
+  /**
+   * What the grid is narrowed to — cluster, namespace, app, and kind.
+   *
+   * In the store rather than in the grid because three surfaces offer it: the
+   * grid's own filter button, the panel's background menu, and a pod's
+   * right-click. Held in the component it would have to be handed to two menus
+   * built elsewhere, and they would drift.
+   */
+  podFilter: PodFilter;
+  setPodFilter: (f: PodFilter) => void;
   setPodScope: (v: 'fav' | 'all') => void;
   selectMode: boolean;
   /** Pod uids ticked for export. */
@@ -877,7 +882,8 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   filter: '',
   view: 'cards',
   podScope: 'fav',
-  setGridFilter: (gridFilter) => set({ gridFilter }),
+  podFilter: NO_POD_FILTER,
+  setPodFilter: (podFilter) => set({ podFilter }),
   setPodScope: (podScope) => set({ podScope }),
   selectMode: false,
   selected: [],

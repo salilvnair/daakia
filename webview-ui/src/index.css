@@ -556,6 +556,60 @@ body {
 }
 
 /*
+  An icon button that answers the press.
+
+  No background at rest — on a toolbar of plain icons a filled box reads as a
+  thing already switched on, which is exactly the state this control uses to
+  say a filter IS on. So the resting state is bare, hover is the faintest
+  wash, and the press is a scale-down: felt rather than seen, and gone before
+  it can be mistaken for a mode.
+*/
+.dk-icon-btn {
+  position: relative;
+  transition: background 120ms, color 120ms, transform 80ms;
+}
+.dk-icon-btn:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+.dk-icon-btn:active {
+  transform: scale(0.9);
+  transition: transform 60ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dk-icon-btn, .dk-icon-btn:active { transition: none; transform: none; }
+}
+
+/*
+  A close button that says what it does before you press it.
+
+  The same shape DUI gives a dialog's close: muted until you reach for it,
+  then the error tint — because closing a pane is the one destructive thing
+  in its title strip, and a plain grey X next to a plain grey pod name gives
+  no sign of that until it has happened.
+
+  The press is a small scale-down rather than a colour jump. On a control that
+  removes what you are reading, a moment of "that registered" is worth four
+  frames.
+*/
+.dk-close-btn {
+  color: var(--color-text-muted);
+  transition: background 120ms, transform 80ms, color 120ms;
+}
+.dk-close-btn:hover {
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
+  color: var(--color-error);
+}
+.dk-close-btn:active {
+  background: color-mix(in srgb, var(--color-error) 22%, transparent);
+  transform: scale(0.88);
+  transition: background 60ms, transform 60ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dk-close-btn, .dk-close-btn:active { transition: none; transform: none; }
+}
+
+/*
   The refresh button's own icon, turning while its list is out.
 
   The button is disabled for as long as that takes, and a disabled control

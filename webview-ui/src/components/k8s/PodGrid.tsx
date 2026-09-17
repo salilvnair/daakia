@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   SparklineView, SearchInputView, SegmentedControlView, CheckSquareIcon, EmptySquareIcon,
-  ModalView, ButtonView, FilterInputView, IconSize, EmptyStateView,
+  ModalView, ButtonView, IconSize, EmptyStateView,
   LoadingStateView } from '@salilvnair/dui';
 import { useLongPress } from './use-long-press';
 import { PodContextMenu } from './PodContextMenu';
@@ -25,6 +25,10 @@ import {
   starredKeyOf,
 } from '../../store/dk8s-favorites-store';
 import { isScheduled } from '@daakia/k8s-workload';
+import { PodFilterPopup } from './PodFilterPopup';
+import {
+  matchesPodFilter, filterChips, withoutChip, isEmptyFilter, NO_POD_FILTER,
+} from './pod-filter';
 import { useSplitStore, MAX_PANES } from '../../store/dk8s-split-store';
 import { SPLIT_MODES } from './SplitLogs';
 import { logLineSettings } from './log-settings';
@@ -37,6 +41,7 @@ import { LogSearchModal } from './LogSearchModal';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import {
   FolderExportIcon, CloseIcon, SearchIcon, LayersIcon, ChevronDownIcon, ChevronRightIcon,
+  FilterIcon, CloseCircleIcon,
   StarIcon, Dk8sIcon, ColumnsIcon, RowsIcon, LayoutGridIcon, CpuIcon, RefreshIcon,
 } from '../../icons';
 import {
@@ -1108,7 +1113,16 @@ export function PodGrid() {
      per session — but it stays a control here, because "did last night's job
      work" is a question they will have eventually. */
   const hideRuns = useUiStateStore(s2 => s2.prefs[HIDE_CRONJOBS_PREF]) === 'on';
-  const [kind, setKind] = useState<'all' | 'pods' | 'runs'>(hideRuns ? 'pods' : 'all');
+  /* In the store, because the panel's background menu and a pod's right-click
+     offer the same filter — see `podFilter`. */
+  const podFilter = useK8sStore(s2 => s2.podFilter);
+  const setPodFilter = useK8sStore(s2 => s2.setPodFilter);
+  const kind = podFilter.kind;
+  const setKind = useCallback(
+    (k: 'all' | 'pods' | 'runs') => setPodFilter({ ...useK8sStore.getState().podFilter, kind: k }),
+    [setPodFilter],
+  );
+  const [filterOpen, setFilterOpen] = useState(false);
   /* Follows the setting when it changes, unless this view has been pointed
      somewhere else in the meantime. */
   const lastDefault = useRef(hideRuns);
@@ -1116,9 +1130,14 @@ export function PodGrid() {
     if (lastDefault.current === hideRuns) return;
     lastDefault.current = hideRuns;
     setKind(hideRuns ? 'pods' : 'all');
-  }, [hideRuns]);
-  const runCount = useMemo(() => pods.filter(p => isScheduled(p.workload)).length, [pods]);
-  const setGridFilter = useK8sStore(s2 => s2.setGridFilter);
+  }, [hideRuns, setKind]);
+  /* The setting also decides what an untouched filter starts on. */
+  const seededKind = useRef(false);
+  useEffect(() => {
+    if (seededKind.current) return;
+    seededKind.current = true;
+    if (hideRuns) setKind('pods');
+  }, [hideRuns, setKind]);
   /* "Where would a search look for this pod?" — opened from the pod's menu. */
   const [pvCheck, setPvCheck] = useState<PodSummary | undefined>();
   /* Which arrangement, asked once when the panes are opened. */
@@ -1128,29 +1147,31 @@ export function PodGrid() {
      the detail view start on the same number of lines. */
   const splitPrefs = useUiStateStore(s2 => s2.prefs);
   const lineSettings = useMemo(() => logLineSettings(splitPrefs), [splitPrefs]);
-  /*
-    Published for the panel's surface menu rather than rendered here — the
-    right-click lands on a div this component owns, but the menu is built where
-    every other dk8s menu is built.
-  */
-  useEffect(() => {
-    setGridFilter({
-      kind,
-      setKind,
-      counts: { all: pods.length, pods: pods.length - runCount, runs: runCount },
-    });
-  }, [kind, pods.length, runCount, setGridFilter]);
-
   const visible = useMemo(() => {
     const matched = pods.filter(p => matchesFilter(p, filter));
     const scoped = scope === 'fav'
       ? matched.filter(p => favKeys.includes(favoriteKey(p)))
       : matched;
-    const byKind = kind === 'all'
-      ? scoped
-      : scoped.filter(p => isScheduled(p.workload) === (kind === 'runs'));
-    return favoritesFirst(sortPods(byKind, now), favKeys);
-  }, [pods, filter, now, scope, favKeys, kind]);
+    const narrowed = scoped.filter(p => matchesPodFilter(p, podFilter));
+    return favoritesFirst(sortPods(narrowed, now), favKeys);
+  }, [pods, filter, now, scope, favKeys, podFilter]);
+
+  /*
+    What the facets get to choose from.
+
+    The text box has already been applied, so the counts describe the list in
+    front of the reader rather than the whole fleet — but this filter has NOT,
+    or each facet would only ever offer the value already chosen.
+  */
+  const filterable = useMemo(() => {
+    const matched = pods.filter(p => matchesFilter(p, filter));
+    return scope === 'fav'
+      ? matched.filter(p => favKeys.includes(favoriteKey(p)))
+      : matched;
+  }, [pods, filter, scope, favKeys]);
+
+  const chips = useMemo(() => filterChips(podFilter), [podFilter]);
+  const filterOn = !isEmptyFilter(podFilter);
 
   const groups = useMemo(() => groupPods(visible, now), [visible, now]);
 
@@ -1207,12 +1228,72 @@ export function PodGrid() {
             : <EmptySquareIcon size={IconSize.control} color="var(--color-text-muted)" />}
         </button>
 
+        {/*
+          Filter and search, side by side because they are two halves of one
+          question and were previously one control pretending to be both.
+
+          The box narrows by NAME, which is why its icon is a magnifier now: it
+          was wearing a funnel and answering "which pod is called something like
+          this", and the funnel is what made `prod` look like a way to see
+          production rather than a substring that also matches `prod-checkout`
+          in the lab.
+
+          The funnel moved to its own button, where it opens the facets that
+          actually do filter — cluster, namespace, app, type.
+        */}
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setFilterOpen(v => !v)}
+            title={filterOn
+              ? `Filtered — ${chips.length} narrowing${chips.length === 1 ? '' : 's'}`
+              : 'Filter by cluster, namespace, app or type'}
+            aria-expanded={filterOpen}
+            className="dk-icon-btn flex items-center justify-center rounded-md border-none bg-transparent cursor-pointer"
+            style={{ width: 26, height: 26, color: filterOn ? ACCENT : 'var(--color-text-muted)' }}
+          >
+            <FilterIcon size={IconSize.control} color="currentColor" />
+            {/* A dot rather than a count: the chips below say what, and two
+                numbers for one filter is one too many. */}
+            {filterOn && (
+              <span style={{
+                position: 'absolute', top: 3, right: 3, width: 5, height: 5,
+                borderRadius: 5, background: ACCENT,
+              }} />
+            )}
+          </button>
+          {filterOpen && (
+            <PodFilterPopup pods={filterable} onClose={() => setFilterOpen(false)} />
+          )}
+        </div>
+
         {/* Takes the row rather than capping at 560px — on a wide window the
             cap left a long dead gap between the filter and the buttons. */}
         <div ref={searchRef} className="flex-1" style={{ minWidth: 200, paddingRight: 8 }}>
-          <FilterInputView value={filter} onChange={setFilter}
-                           placeholder="Filter pods  ( / )" size="sm"
-                           accentColor={ACCENT} />
+          <SearchInputView
+            value={filter}
+            onChange={setFilter}
+            placeholder="Search pods  ( / )"
+            size="sm"
+            width="100%"
+            prefix={<SearchIcon size={12}
+                                color={filter ? ACCENT : 'var(--color-text-muted)'} />}
+            suffix={filter ? (
+              <button
+                type="button"
+                onClick={() => setFilter('')}
+                title="Clear the search"
+                aria-label="Clear the search"
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  border: 'none', background: 'transparent', padding: 2,
+                  cursor: 'pointer', color: 'var(--color-text-muted)',
+                }}
+              >
+                <CloseCircleIcon size={12} />
+              </button>
+            ) : undefined}
+          />
         </div>
 
 
@@ -1258,6 +1339,53 @@ export function PodGrid() {
           />
         )}
       </div>
+
+      {/*
+        What the filter is doing, where the pods it removed used to be.
+
+        A filter with nothing on screen to show for it was the failure this is
+        for: the grid says 3 pods where it said twelve, and the only record of
+        why is a menu you have to reopen to read. Each chip names its own facet
+        — `prod` and `orders` mean nothing on their own — and removes only
+        itself, so a filter can be widened one step at a time instead of
+        cleared and rebuilt.
+      */}
+      {chips.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap mx-4 mt-2 flex-shrink-0">
+          <span className="text-[9.5px] uppercase tracking-wider shrink-0"
+                style={{ color: 'var(--color-text-muted)' }}>
+            filtered
+          </span>
+          {chips.map(c => (
+            <button
+              key={`${c.facet}:${c.value}`}
+              type="button"
+              onClick={() => setPodFilter(withoutChip(podFilter, c))}
+              title={`Remove — ${c.label}`}
+              className="flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[10.5px] cursor-pointer"
+              style={{
+                background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
+                border: `1px solid color-mix(in srgb, ${ACCENT} 38%, transparent)`,
+                color: ACCENT,
+              }}
+            >
+              <span className="font-mono">{c.label}</span>
+              <CloseIcon size={9} color="currentColor" />
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setPodFilter(NO_POD_FILTER)}
+            className="text-[10.5px] cursor-pointer border-none bg-transparent px-1"
+            style={{ color: 'var(--color-text-muted)', textDecoration: 'underline' }}
+          >
+            clear
+          </button>
+          <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
+            {visible.length} of {filterable.length}
+          </span>
+        </div>
+      )}
 
       {selectMode && (
         <div className="flex items-center gap-3 mx-4 mt-3 px-4 py-3 rounded-lg flex-shrink-0"

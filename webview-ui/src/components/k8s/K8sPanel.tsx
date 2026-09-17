@@ -11,7 +11,8 @@
  */
 import { useCallback, useEffect, useRef } from 'react';
 import { IconSize, LoadingStateView } from '@salilvnair/dui';
-import { Dk8sIcon, EyeIcon, StethoscopeIcon, TerminalIcon, CheckIcon, FilterIcon } from '../../icons';
+import { Dk8sIcon, EyeIcon, StethoscopeIcon, TerminalIcon } from '../../icons';
+import { filterMenuRow } from './pod-filter-menu';
 import { useSurfaceMenu, MENU } from '../shared/menu/SurfaceMenu';
 import { useK8sStore, type Dk8sView } from '../../store/k8s-store';
 import { KubectlSetupGuide } from './KubectlSetupGuide';
@@ -351,35 +352,19 @@ export function K8sPanel() {
     other patch of dk8s falls through to `dk8s` and gets nothing, which
     suppresses the browser menu without inventing verbs nobody asked for.
   */
-  const gridFilter = useK8sStore(s2 => s2.gridFilter);
+  const allPods = useK8sStore(s2 => s2.pods);
+  const podFilter = useK8sStore(s2 => s2.podFilter);
+  const setPodFilter = useK8sStore(s2 => s2.setPodFilter);
   const surfaceMenu = useSurfaceMenu(useCallback((surface) => {
-    if (surface.kind !== 'pod-grid' || !gridFilter) return undefined;
-    const { kind, setKind, counts } = gridFilter;
-    const rows: { id: 'all' | 'pods' | 'runs'; label: string; n: number }[] = [
-      { id: 'all', label: 'All pods', n: counts.all },
-      { id: 'pods', label: 'Pods', n: counts.pods },
-      { id: 'runs', label: 'CronJob runs', n: counts.runs },
-    ];
+    if (surface.kind !== 'pod-grid') return undefined;
     /* Under `Filter`, not at the top level. The background of a pod list has
        more than one thing to say about itself and this is the first of them —
-       a flat list of three would have to be taken apart to add a second. */
-    return [{
-      id: 'filter',
-      label: 'Filter',
-      icon: <FilterIcon size={13} />,
-      iconColor: MENU.read,
-      children: rows.map(r => ({
-        id: r.id,
-        label: r.label,
-        icon: kind === r.id ? <CheckIcon size={13} /> : undefined,
-        iconColor: MENU.read,
-        /* The count on the right, where a shortcut would go — a quantity, so
-           it reads as one rather than as part of the name. */
-        shortcut: String(r.n),
-        onClick: () => setKind(r.id),
-      })),
-    }];
-  }, [gridFilter]));
+       a flat list would have to be taken apart to add a second. The rows come
+       from `pod-filter-menu`, shared with the pod's own right-click, because
+       two copies of this drifted apart the moment a facet was added. */
+    const row = filterMenuRow(allPods, podFilter, setPodFilter, MENU.read);
+    return row ? [row] : undefined;
+  }, [allPods, podFilter, setPodFilter]));
 
   return (
     // `relative` so the detail overlay can pin to this panel rather than the
