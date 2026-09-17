@@ -616,11 +616,90 @@ interface LiveWatch {
   usage: unknown;
   usageAvailable: boolean;
   metricsTimer?: NodeJS.Timeout;
+  /** Start and stop this watch's metrics poll — see `metricsWanted`. */
+  startMetrics?: () => void;
+  stopMetrics?: () => void;
+}
+
+/**
+ * Whether the CPU and memory columns should keep themselves up to date.
+ *
+ * ── Off, because a terminal does not do this ──
+ *
+ * `kubectl get pods` then `kubectl logs <pod>` is fast, and the reason it is
+ * fast is that it asks once and stops. dk8s polled `top pods` every fifteen
+ * seconds per namespace forever: 324 of the 494 calls in one measured session
+ * — two thirds of everything the tool did — for one column, none of it waited
+ * on by anybody, most of it fired while the reader was on another tab.
+ *
+ * So nothing polls unless somebody turns it on. The numbers are fetched once
+ * when asked for, which is the terminal's bargain and the honest one: a
+ * measurement you requested is current, and a column that quietly refreshes
+ * itself is a background cost you did not agree to.
+ *
+ * When it IS on, it is still gated on the panel being in front and still backs
+ * off while the numbers stand still — polling somebody asked for should still
+ * not poll for a screen nobody is looking at.
+ */
+let metricsWanted = false;
+
+/**
+ * The panel says whether it is on screen.
+ *
+ * Pausing stops the timers; resuming polls once immediately, so coming back to
+ * the tab shows current numbers rather than whatever was true when it was
+ * last in front.
+ */
+export function handleDk8sMetricsActive(msg: Record<string, unknown>): void {
+  const active = msg.active !== false;
+  if (active === metricsWanted) return;
+  metricsWanted = active;
+  for (const live of watches.values()) {
+    if (active) live.startMetrics?.(); else live.stopMetrics?.();
+  }
 }
 
 const watches = new Map<string, LiveWatch>();
 
-const METRICS_INTERVAL_MS = 15_000;
+/**
+ * How often `top pods` runs, and how far it is allowed to back off.
+ *
+ * ── Why this needed changing ──
+ *
+ * Metrics have no watch API, so the CPU and memory columns are polled. Over
+ * one session on this machine that was 324 of the 494 calls dk8s made — two
+ * thirds of everything, for one column, none of it waited on by anybody. At
+ * 90ms nobody notices. At the 800ms a cluster behind a VPN costs it is four
+ * minutes of cluster time.
+ *
+ * Two things were wrong with it. It ran whether or not the pod grid was on
+ * screen — most of those 324 fired while the reader was on the Settings tab.
+ * And it ran at a fixed fifteen seconds whether the numbers were moving or
+ * standing still.
+ */
+/*
+  Thirty seconds, not fifteen, and the reason is on the other end.
+
+  `kubectl top` reads metrics-server, which does not measure on demand — it
+  scrapes kubelets on its own schedule, 15s at best and commonly 60s, and
+  serves whatever it last collected. Asking more often than it publishes
+  returns the same numbers again at full cost.
+
+  k9s is the comparison worth making, and it does exactly this: its UI
+  refreshes every two seconds while the CPU and memory values it shows only
+  change about once a minute. It looks instant because it is drawing cached
+  numbers, not because it is asking sixty times harder.
+*/
+const METRICS_INTERVAL_MS = 30_000;
+/**
+ * The ceiling once nothing is changing.
+ *
+ * A pod sitting at the same few megabytes is not about to surprise anybody,
+ * and metrics-server would not have new numbers for it anyway. The moment one
+ * moves, the poll goes back to the base rate — so the slow rate only ever
+ * applies to a pod that is doing nothing.
+ */
+const METRICS_MAX_INTERVAL_MS = 120_000;
 /** Above this, the tool costs the cluster more than it gives the user. */
 export const MAX_WATCH_TARGETS = 12;
 
@@ -628,7 +707,10 @@ function stopWatch(key: string): void {
   const w = watches.get(key);
   if (!w) return;
   w.handle.stop();
-  if (w.metricsTimer) clearInterval(w.metricsTimer);
+  /* A timeout now, not an interval — the poll reschedules itself so it can
+     change its own delay. `clearInterval` on a timeout is a silent no-op on
+     some runtimes, which would leave the poll running for a stopped watch. */
+  if (w.metricsTimer) clearTimeout(w.metricsTimer);
   watches.delete(key);
 }
 
@@ -662,20 +744,53 @@ function startWatch(target: WatchTarget, postMessage: PostMessage): void {
   // Metrics are polled rather than watched — there is no watch API for them.
   // Absent metrics-server is normal, so a null result hides the column instead
   // of reporting a failure the user cannot act on.
+  /*
+    The poll, and how long until the next one.
+
+    A timeout that reschedules itself rather than an interval: the delay is
+    part of what the poll decides, and an interval cannot change its own
+    period. It also means a slow `top pods` cannot overlap the next one, which
+    a fifteen-second interval against a two-second call eventually would.
+  */
+  let interval = METRICS_INTERVAL_MS;
+  let lastUsage = '';
+
   const poll = async () => {
     const usage = await topPods(context, namespace);
     if (!watches.has(key)) return;    // target dropped while we were waiting
     live.usage = usage;
     live.usageAvailable = usage !== null;
     postMessage({ type: 'dk8s:podUsage', context, namespace, usage, available: usage !== null });
+
+    /*
+      Back off while the numbers stand still, and snap back the moment one
+      moves. A pod holding the same few megabytes is not about to surprise
+      anybody; a pod whose memory just jumped is the one being watched.
+    */
+    const now = JSON.stringify(usage);
+    interval = now === lastUsage
+      ? Math.min(Math.round(interval * 1.5), METRICS_MAX_INTERVAL_MS)
+      : METRICS_INTERVAL_MS;
+    lastUsage = now;
   };
+
+  const tick = () => void poll().finally(() => {
+    /* Only if the target is still watched AND somebody is still looking. */
+    if (!watches.has(key) || !metricsWanted) return;
+    live.metricsTimer = setTimeout(tick, interval);
+  });
 
   let metricsStarted = false;
   const startMetrics = () => {
-    if (metricsStarted) return;
+    if (metricsStarted || !metricsWanted) return;
     metricsStarted = true;
-    void poll();
-    live.metricsTimer = setInterval(poll, METRICS_INTERVAL_MS);
+    tick();
+  };
+  live.startMetrics = startMetrics;
+  live.stopMetrics = () => {
+    metricsStarted = false;
+    if (live.metricsTimer) clearTimeout(live.metricsTimer);
+    live.metricsTimer = undefined;
   };
 
   live.handle = watchPods(context, namespace, {
@@ -2375,4 +2490,52 @@ export async function handleDk8sOpenLogFile(msg: Record<string, unknown>): Promi
       `Could not open ${file}: ${e instanceof Error ? e.message : String(e)}`,
     );
   }
+}
+
+/**
+ * Fetch usage once, for one namespace, because somebody asked.
+ *
+ * The whole of the metrics story when auto-refresh is off — one call, one
+ * answer, no timer left behind. It is what pressing a button in a terminal
+ * would do.
+ */
+export async function handleDk8sPodUsageOnce(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const context = String(msg.context ?? state().context ?? '');
+  const namespace = String(msg.namespace ?? '');
+  if (!context || !namespace) return;
+
+  const usage = await topPods(context, namespace);
+  const live = watches.get(targetKey({ context, namespace }));
+  if (live) {
+    live.usage = usage;
+    live.usageAvailable = usage !== null;
+  }
+  postMessage({
+    type: 'dk8s:podUsage', context, namespace, usage, available: usage !== null,
+  });
+}
+
+/**
+ * Read the pod list again, for every namespace on screen.
+ *
+ * What Refresh does — the `kubectl get pods` somebody would run in a terminal
+ * to check the list is current. The streams are left alone: they may be
+ * perfectly healthy, and tearing one down to answer "is this list current"
+ * would blank the grid for a second to prove it was not necessary.
+ */
+export function handleDk8sRefreshPods(postMessage: PostMessage): void {
+  const live = [...watches.values()];
+  /*
+    Nothing watched means nothing to re-read, and the webview is sitting there
+    saying "refreshing" until something comes back. It has to hear that
+    something already happened: the answer is no answer.
+  */
+  if (!live.length) {
+    postMessage({ type: 'dk8s:refreshDone', refreshed: 0 });
+    return;
+  }
+  for (const w of live) w.handle.refresh();
 }

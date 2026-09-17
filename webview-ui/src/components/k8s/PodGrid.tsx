@@ -28,6 +28,8 @@ import { isScheduled } from '@daakia/k8s-workload';
 import { useSplitStore, MAX_PANES } from '../../store/dk8s-split-store';
 import { SPLIT_MODES } from './SplitLogs';
 import { logLineSettings } from './log-settings';
+import { useMetricsAuto, METRICS_AUTO_KEY } from '../settings/metrics-refresh';
+import { postMsg } from '../../vscode';
 import { HIDE_CRONJOBS_PREF } from '../settings/cronjob-visibility';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { ExportLogsModal } from './ExportLogsModal';
@@ -35,7 +37,7 @@ import { LogSearchModal } from './LogSearchModal';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import {
   FolderExportIcon, CloseIcon, SearchIcon, LayersIcon, ChevronDownIcon, ChevronRightIcon,
-  StarIcon, Dk8sIcon, ColumnsIcon, RowsIcon, LayoutGridIcon,
+  StarIcon, Dk8sIcon, ColumnsIcon, RowsIcon, LayoutGridIcon, CpuIcon, RefreshIcon,
 } from '../../icons';
 import {
   sortPods, severityOf, severityColor, matchesFilter, shortAge,
@@ -79,7 +81,12 @@ function Stat({ n, label, color }: { n: number; label: string; color?: string })
  * failure a live view can have — so the state is always on screen.
  */
 function WatchIndicator() {
-  const { watchStatus, watchDetail, lastEventAt } = useK8sStore();
+  const {
+    watchStatus, watchDetail, lastEventAt, lastListedAt: listedAt, refreshing,
+  } = useK8sStore();
+  /* With live on the screen is keeping itself current, so it says that
+     instead of naming a moment that has already moved on. */
+  const liveOn = useMetricsAuto();
   const map: Record<string, { label: string; color: string }> = {
     idle: { label: 'starting', color: 'var(--color-text-muted)' },
     // Health, not a REST verb. This took the GET colour because it was
@@ -135,21 +142,177 @@ function WatchIndicator() {
     `.breathing-connected` is the app's existing pulse, so this reads as the
     same idea as everywhere else it appears.
   */
-  const live = watchStatus === 'connected';
+  /*
+    The dot no longer breathes here.
+
+    Motion means "this is arriving as you watch", and the text beside it is now
+    a timestamp — a fact about a moment that has passed. Breathing next to it
+    said the opposite of what the words said. The only thing on this row that
+    IS live is the metrics toggle, and its dot breathes when it is on.
+
+    The colour stays: reconnecting and stopped still need to be visible, and
+    that is what the colour was always for.
+  */
+
+  /*
+    When this was read, rather than the word "watching".
+
+    "watching" is a claim about the machinery; "on 09/16/2026 21:55:03" is a
+    fact about the rows underneath it. They are not the same thing — a watch
+    can be connected and the list beneath it half an hour old, which is exactly
+    the failure that made the grid silently stale — and only one of the two
+    tells a reader whether to trust what is on screen.
+
+    The dot stays. It is the one signal a stale render cannot fake: it breathes
+    while the stream is live, so a frozen pane stops it, and its colour still
+    says reconnecting or stopped.
+  */
+  const stamp = listedAt ? readable(listedAt) : 'not read yet';
 
   return (
     <span className="flex items-center gap-1.5 flex-shrink-0" title={title}>
-      <span
-        className={live ? 'breathing-connected' : undefined}
-        style={{ width: 6, height: 6, borderRadius: 3, background: s.color, color: s.color }}
-      />
-      <span className="text-[10.5px]" style={{ color: s.color }}>{s.label}</span>
+      {/*
+        Nothing here unless there is something to say.
+
+        A healthy watch needs no word for itself — "watching" describes the
+        machinery, and the reader can see the pods. What is worth a line is
+        when the rows were read, and only while nothing is refreshing them:
+        with `live` on that question is already answered by the lit toggle
+        beside it.
+
+        A watch that is NOT connected is the exception, and the only time a
+        dot earns its place — then it says so, in the colour of what is wrong.
+      */}
+      {watchStatus !== 'connected' && (
+        <>
+          <span style={{ width: 6, height: 6, borderRadius: 3, background: s.color }} />
+          <span className="text-[10.5px]" style={{ color: s.color }}>{s.label}</span>
+        </>
+      )}
+      {watchStatus === 'connected' && (refreshing || !liveOn) && (
+        <span
+          className={`text-[10.5px] tabular-nums${refreshing ? ' refreshing-text' : ''}`}
+          style={refreshing ? undefined : { color: 'var(--color-text-muted)' }}
+        >
+          {refreshing ? 'refreshing…' : `on ${stamp}`}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** `MM/DD/YYYY HH:MM:SS` — the reader's own clock, to the second. */
+function readable(ms: number): string {
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getMonth() + 1)}/${p(d.getDate())}/${d.getFullYear()}`
+    + ` ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/**
+ * Whether CPU and memory are being kept up to date.
+ *
+ * One control, not two. A "read it once" button beside it was a second way to
+ * say the same thing and read as a label — turning this on takes a reading
+ * immediately, so the one-shot was a click somebody could already make.
+ *
+ * Off means the columns are not there at all, which is honest: without a
+ * reading there is nothing to put in them, and an empty column is worse than
+ * no column.
+ */
+function UsageControl() {
+  const live = useMetricsAuto();
+  const setPref = useUiStateStore(s => s.setPref);
+  /*
+    While a refresh is out, both of these are off.
+
+    Refresh is asking what the rows are; `live` changes what the rows carry.
+    Answering the second question while the first is still open means the
+    snapshot lands into a grid that has grown or lost two columns underneath
+    it, and a second refresh on top of the first is two lists racing to
+    replace each other. Neither is worth the moment of being unable to press.
+  */
+  const busy = useK8sStore(s => s.refreshing === true);
+
+  return (
+    <span className="flex items-center gap-1 shrink-0">
+      {/*
+        Read the pod list again, now — and only when nothing else is.
+
+        The `kubectl get pods` somebody would run in a terminal to check what
+        is on screen is current. It matters because a watch can be alive and
+        deaf while the grid looks perfectly normal.
+
+        With `live` on, something already is: the timer is re-reading on its
+        own, and a button offering to do the thing that is being done anyway
+        is a control with no question behind it. So it goes away rather than
+        greying out — greyed out would say "not now", and the truth is
+        "nothing to ask for".
+      */}
+      {!live && (
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => useK8sStore.getState().refreshPods()}
+        title={busy
+          ? 'Reading the pod list…'
+          : 'Read the pod list again — the kubectl get pods you would run yourself'}
+        className="flex items-center gap-1.5 text-[10.5px] px-2 py-1 rounded-md"
+        style={{
+          background: 'transparent',
+          border: '1px solid var(--color-surface-border)',
+          color: 'var(--color-text-secondary)',
+          cursor: busy ? 'default' : 'pointer',
+          opacity: busy ? 0.55 : 1,
+        }}
+      >
+        <span className={busy ? 'spinning' : undefined} style={{ display: 'flex' }}>
+          <RefreshIcon size={IconSize.inline} />
+        </span>
+        refresh
+      </button>
+      )}
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => setPref(METRICS_AUTO_KEY, live ? 'off' : 'on')}
+        title={busy
+          ? 'Reading the pod list…'
+          : live
+            ? 'Stop refreshing CPU and memory'
+            : 'Keep CPU and memory up to date — one kubectl top pods per namespace, on a timer'}
+        className="flex items-center gap-1.5 text-[10.5px] px-2 py-1 rounded-md"
+        style={{
+          background: live
+            ? 'color-mix(in srgb, var(--color-success) 14%, transparent)'
+            : 'transparent',
+          border: `1px solid ${live
+            ? 'color-mix(in srgb, var(--color-success) 42%, transparent)'
+            : 'var(--color-surface-border)'}`,
+          color: live ? 'var(--color-success)' : 'var(--color-text-secondary)',
+          fontWeight: live ? 600 : 400,
+          cursor: busy ? 'default' : 'pointer',
+          opacity: busy ? 0.55 : 1,
+        }}
+      >
+        <span
+          className={live ? 'breathing-connected' : undefined}
+          style={{
+            width: 6, height: 6, borderRadius: 6,
+            background: live ? 'var(--color-success)' : 'var(--color-text-muted)',
+            color: 'var(--color-success)',
+          }}
+        />
+        live
+      </button>
     </span>
   );
 }
 
 function Pulse({ pods }: { pods: PodSummary[] }) {
   const counts = useMemo(() => pulse(pods), [pods]);
+  /* Nothing on this row acts while the list it describes is being re-read. */
+  const busy = useK8sStore(s => s.refreshing === true);
   return (
     <div className="flex items-center gap-5 flex-wrap px-4 py-2.5 flex-shrink-0"
          style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
@@ -164,7 +327,6 @@ function Pulse({ pods }: { pods: PodSummary[] }) {
         What the row does need at its head is whether the numbers to its right
         are still true, and that is what the watch state says.
       */}
-      <WatchIndicator />
       <Stat n={counts.total} label="pods" />
       <Stat n={counts.ready} label="ready" color={OK} />
       {counts.degraded > 0 && <Stat n={counts.degraded} label="degraded" color="var(--color-warning)" />}
@@ -173,7 +335,26 @@ function Pulse({ pods }: { pods: PodSummary[] }) {
         <Stat n={counts.restartsLastHour} label="restarted in the last hour" color="var(--color-warning)" />
       )}
 
+      {/*
+        CPU and memory: asked for, or kept live.
+
+        Shaped like the log view's Following, because it is the same bargain in
+        the same words — off, you have a reading from when you asked; on,
+        something is running on a timer to keep it true. Beside the counts it
+        describes rather than in Settings, for the same reason Following is on
+        the log and not in a menu: it is a thing you turn on for the next two
+        minutes and off again.
+
+        The default is off. `kubectl top pods` every fifteen seconds per
+        namespace was two thirds of every call dk8s made, for a column, whether
+        or not anybody had the tab in front of them.
+      */}
       <div className="flex-1" />
+
+      {/* When it was read, beside the controls that read it — the right-hand
+          end of the row, where the things you act on live. */}
+      <WatchIndicator />
+      <UsageControl />
       {/*
         Searching across pods, where the pods are.
 
@@ -185,11 +366,16 @@ function Pulse({ pods }: { pods: PodSummary[] }) {
       */}
       <button
         type="button"
+        disabled={busy}
         onClick={() => useDk8sSearchStore.getState().openSearch()}
-        title="Quick Search — files and logs across every watched pod"
-        className="text-[11px] px-3 py-1 rounded-md cursor-pointer transition-colors
+        title={busy
+          ? 'Reading the pod list…'
+          : 'Quick Search — files and logs across every watched pod'}
+        className="text-[11px] px-3 py-1 rounded-md transition-colors
                    flex items-center gap-1.5 shrink-0 font-medium"
         style={{
+          cursor: busy ? 'default' : 'pointer',
+          opacity: busy ? 0.55 : 1,
           /*
             The same tinted, bordered shape as "Search N logs" below it — the
             two do the same job from different starting points, and one of them
@@ -670,7 +856,22 @@ function GroupHeader({ group, collapsed, onToggle }: {
   collapsed?: boolean;
   onToggle?: () => void;
 }) {
-  const failing = group.pods.filter(p => severityOf(p) !== 'quiet').length;
+  /*
+    Attention means critical or warning, and nothing else.
+
+    It counted everything that was not `quiet`, which swept up `ok` — and a
+    finished CronJob run is `ok`: not healthy, because healthy means Running
+    and ready, but not a problem either. A namespace whose schedule had fired
+    three times therefore announced "3 need attention" in red above three pods
+    that had done exactly what they were asked to do.
+
+    The row colouring a few hundred lines down already had this right; only the
+    heading was counting a different thing from the rows under it.
+  */
+  const failing = group.pods.filter(p => {
+    const sev = severityOf(p);
+    return sev === 'critical' || sev === 'warning';
+  }).length;
   return (
     <div
       className={`flex items-center gap-2 flex-wrap${onToggle ? ' cursor-pointer select-none' : ''}`}
@@ -780,6 +981,7 @@ export function PodGrid() {
   const [unstar, setUnstar] = useState<PodSummary>();
   const probePodForMenu = useK8sStore(s => s.probePodForMenu);
   const closePodMenu = useK8sStore(s => s.closePodMenu);
+  const refreshing = useK8sStore(s => s.refreshing);
   const openMenu = useCallback((pod: PodSummary, at: { x: number; y: number }) => {
     setMenu({ pod, at });
     // Asked for on open rather than on hover: it is a round trip to the
@@ -960,6 +1162,17 @@ export function PodGrid() {
     add three would be lying about what it is going to do.
   */
   const selectedPods = pods.filter(p => selected.includes(p.uid));
+  /*
+    While the list is being read again, the bar stops taking work.
+
+    Everything on it acts on a set of pods — split these, search these,
+    export these, star these — and a refresh is the moment when "these" is
+    about to change. A search started here and answered against the list
+    that arrives a second later is a search of pods the reader never
+    picked. Refresh is quick; the bar comes back with it.
+  */
+  const relisting = refreshing === true;
+  const canAct = selected.length > 0 && !relisting;
   const newlyStarred = new Set(
     selectedPods.map(p => favoriteKey(p)).filter(k => !favKeys.includes(k)),
   ).size;
@@ -1083,21 +1296,23 @@ export function PodGrid() {
             <button
               type="button"
               onClick={() => setSplitMenu(v => !v)}
-              disabled={selected.length < 2}
-              title={selected.length < 2
-                ? 'Pick two or more pods to open them side by side'
-                : `Open ${selected.length} pods as panes`}
+              disabled={selected.length < 2 || relisting}
+              title={relisting
+                ? 'Reading the pod list…'
+                : selected.length < 2
+                  ? 'Pick two or more pods to open them side by side'
+                  : `Open ${selected.length} pods as panes`}
               className="text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors flex items-center gap-1.5"
               style={{
-                background: selected.length > 1
+                background: selected.length > 1 && !relisting
                   ? `color-mix(in srgb, ${ACCENT} 16%, transparent)`
                   : 'transparent',
-                color: selected.length > 1 ? ACCENT : 'var(--color-text-muted)',
-                border: `1px solid ${selected.length > 1
+                color: selected.length > 1 && !relisting ? ACCENT : 'var(--color-text-muted)',
+                border: `1px solid ${selected.length > 1 && !relisting
                   ? `color-mix(in srgb, ${ACCENT} 45%, transparent)`
                   : 'var(--color-surface-border)'}`,
                 fontWeight: 600,
-                cursor: selected.length > 1 ? 'pointer' : 'not-allowed',
+                cursor: selected.length > 1 && !relisting ? 'pointer' : 'not-allowed',
               }}
             >
               <ColumnsIcon size={IconSize.action} strokeWidth={2} />
@@ -1153,18 +1368,19 @@ export function PodGrid() {
           <button
             type="button"
             onClick={openSearch}
-            disabled={!selected.length}
-            className="text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors flex items-center gap-1.5"
+            disabled={!canAct}
+            title={relisting ? 'Reading the pod list…' : undefined}
+            className="text-[11px] px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5"
             style={{
-              background: selected.length
+              background: canAct
                 ? 'color-mix(in srgb, var(--color-dk8s) 16%, transparent)'
                 : 'transparent',
-              color: selected.length ? 'var(--color-dk8s)' : 'var(--color-text-muted)',
-              border: `1px solid ${selected.length
+              color: canAct ? 'var(--color-dk8s)' : 'var(--color-text-muted)',
+              border: `1px solid ${canAct
                 ? 'color-mix(in srgb, var(--color-dk8s) 45%, transparent)'
                 : 'var(--color-surface-border)'}`,
               fontWeight: 600,
-              cursor: selected.length ? 'pointer' : 'not-allowed',
+              cursor: canAct ? 'pointer' : 'not-allowed',
             }}
           >
             <SearchIcon size={IconSize.action} strokeWidth={2} />
@@ -1174,16 +1390,17 @@ export function PodGrid() {
           <button
             type="button"
             onClick={openExport}
-            disabled={!selected.length}
-            className="text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors flex items-center gap-1.5"
+            disabled={!canAct}
+            title={relisting ? 'Reading the pod list…' : undefined}
+            className="text-[11px] px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5"
             style={{
               // Amber, matching the export mark on the toolbar toggle. This is
               // the button that actually writes files, so it should read as
               // the export action rather than as generic dk8s chrome.
-              background: selected.length ? 'var(--color-warning)' : 'var(--color-surface-hover)',
-              color: selected.length ? 'var(--color-panel)' : 'var(--color-text-muted)',
+              background: canAct ? 'var(--color-warning)' : 'var(--color-surface-hover)',
+              color: canAct ? 'var(--color-panel)' : 'var(--color-text-muted)',
               border: 'none', fontWeight: 600,
-              cursor: selected.length ? 'pointer' : 'not-allowed',
+              cursor: canAct ? 'pointer' : 'not-allowed',
             }}
           >
             <FolderExportIcon size={IconSize.action} strokeWidth={2} />
@@ -1203,21 +1420,23 @@ export function PodGrid() {
           <button
             type="button"
             onClick={starSelected}
-            disabled={!newlyStarred}
-            title={newlyStarred
-              ? `Star ${newlyStarred} workload${newlyStarred === 1 ? '' : 's'}`
-              : 'Every selected pod is already starred'}
-            className="text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors flex items-center gap-1.5"
+            disabled={!newlyStarred || relisting}
+            title={relisting
+              ? 'Reading the pod list…'
+              : newlyStarred
+                ? `Star ${newlyStarred} workload${newlyStarred === 1 ? '' : 's'}`
+                : 'Every selected pod is already starred'}
+            className="text-[11px] px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5"
             style={{
-              background: newlyStarred
+              background: newlyStarred && !relisting
                 ? `color-mix(in srgb, ${FAV_COLOR} 16%, transparent)`
                 : 'var(--color-surface-hover)',
-              color: newlyStarred ? FAV_COLOR : 'var(--color-text-muted)',
-              border: `1px solid ${newlyStarred
+              color: newlyStarred && !relisting ? FAV_COLOR : 'var(--color-text-muted)',
+              border: `1px solid ${newlyStarred && !relisting
                 ? `color-mix(in srgb, ${FAV_COLOR} 45%, transparent)`
                 : 'transparent'}`,
               fontWeight: 600,
-              cursor: newlyStarred ? 'pointer' : 'not-allowed',
+              cursor: newlyStarred && !relisting ? 'pointer' : 'not-allowed',
             }}
           >
             <StarIcon size={IconSize.action} filled={!newlyStarred} />
@@ -1305,7 +1524,7 @@ export function PodGrid() {
                 sitting under it: the same rule as the pickers, and the reason
                 is the same — when the answer is the same failure, nothing on
                 screen changes and the button looks dead. */}
-            {busy ? (
+            {relisting ? (
               <>
               <LoadingStateView
                 icon={<Dk8sIcon size={IconSize.hero} />}

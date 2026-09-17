@@ -520,6 +520,76 @@ body {
   }
 }
 
+/*
+  A word that is waiting on something.
+
+  A light travels along the text, left to right, the way a progress sweep does
+  — so "refreshing" reads as an activity in flight rather than a label that
+  happens to be there. It is the whole of the feedback for a refresh: the rows
+  underneath stay put, because they are still correct until the new ones land,
+  and taking them away to prove something was happening was the flicker this
+  replaced.
+
+  Drawn by moving a gradient through the text itself rather than by animating
+  opacity — a fade makes the word hard to read at the bottom of its cycle, and
+  a word nobody can read is a poor way to say what is going on.
+*/
+@keyframes refreshing-sweep {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+.refreshing-text {
+  background: linear-gradient(
+    90deg,
+    var(--color-text-muted) 0%,
+    var(--color-text-muted) 35%,
+    var(--color-dk8s) 50%,
+    var(--color-text-muted) 65%,
+    var(--color-text-muted) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: refreshing-sweep 1.4s linear infinite;
+}
+
+/*
+  The refresh button's own icon, turning while its list is out.
+
+  The button is disabled for as long as that takes, and a disabled control
+  with no other sign of life reads as broken rather than as busy. The turn is
+  what says the press landed.
+*/
+@keyframes dk8s-spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinning {
+  animation: dk8s-spin 900ms linear infinite;
+  transform-origin: 50% 50%;
+}
+
+/*
+  Reduced motion keeps the word and drops the travel. It still has to say
+  "this is happening", so it takes the accent outright rather than going back
+  to looking like every other label on the row.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .spinning {
+    animation: none;
+  }
+
+  .refreshing-text {
+    animation: none;
+    background: none;
+    -webkit-background-clip: border-box;
+    background-clip: border-box;
+    color: var(--color-dk8s);
+  }
+}
+
 /* Mock server running — smooth, subtle scale-pulse (not the jarring glow) */
 @keyframes mockServerPulse {
   0%, 100% { transform: scale(1); opacity: 0.85; }

@@ -101,7 +101,7 @@ import {
   handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat,
   handleDk8sListArtifacts, handleDk8sImportArtifact, handleDk8sDeleteArtifact,
   handleDk8sOpenArtifact, handleDk8sSetKubectlPath,
-  handleDk8sWatchPods, handleDk8sStopWatch, disposeDk8s,
+  handleDk8sWatchPods, handleDk8sMetricsActive, handleDk8sPodUsageOnce, handleDk8sRefreshPods, handleDk8sStopWatch, disposeDk8s,
   handleDk8sPinNamespace, handleDk8sUnpinNamespace,
   handleDk8sUseContexts, handleDk8sSetTargets, handleDk8sExportLogs,
   handleDk8sExportSearch,
@@ -683,6 +683,15 @@ export class MainPanel {
         break;
       case 'dk8s:watchPods':
         handleDk8sWatchPods(msg, this._post);
+        break;
+      case 'dk8s:refreshPods':
+        handleDk8sRefreshPods(this._post);
+        break;
+      case 'dk8s:podUsageOnce':
+        void handleDk8sPodUsageOnce(msg, this._post);
+        break;
+      case 'dk8s:metricsActive':
+        handleDk8sMetricsActive(msg);
         break;
       case 'dk8s:stopWatch':
         handleDk8sStopWatch();

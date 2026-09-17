@@ -20,6 +20,9 @@ import { ClusterPicker, NamespaceMultiPicker } from './MultiPicker';
 import { PodGrid } from './PodGrid';
 import { PodDetail } from './PodDetail';
 import { SplitLogs } from './SplitLogs';
+import { useMetricsVisibility } from './useMetricsVisibility';
+import { useTabsStore } from '../../store/tabs-store';
+import { useMetricsAuto } from '../settings/metrics-refresh';
 import { useDk8sAiStore, applyDk8sAiError } from '../../store/dk8s-ai-store';
 import { useDk8sDoctorStore } from '../../store/dk8s-doctor-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
@@ -264,6 +267,21 @@ function ViewSwitch({ view, onChange }: {
 }
 
 export function K8sPanel() {
+  /*
+    Metrics only run while somebody is looking.
+
+    The panel is kept mounted behind other tabs so its state survives a switch,
+    which means being rendered says nothing about being read — the tab has to
+    be the active one. See `useMetricsVisibility` for what that was costing.
+  */
+  const dk8sTabActive = useTabsStore(
+    s => s.tabs.find(t => t.id === s.activeTabId)?.type === 'dk8s',
+  );
+  /* And only when somebody asked for live numbers at all — see the `live`
+     toggle beside the counts. Off is the default and means nothing polls. */
+  const metricsAuto = useMetricsAuto();
+  useMetricsVisibility(dk8sTabActive && metricsAuto);
+
   const stage = useK8sStore(s => s.stage);
   const apply = useK8sStore(s => s.apply);
   const probe = useK8sStore(s => s.probe);

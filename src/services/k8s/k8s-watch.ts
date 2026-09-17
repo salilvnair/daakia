@@ -146,6 +146,15 @@ export function toPodSummary(raw: RawPod): PodSummary {
 
 export interface WatchHandle {
   stop: () => void;
+  /**
+   * Read the namespace again, now, without disturbing the stream.
+   *
+   * What pressing Refresh does — the same `kubectl get pods` somebody would
+   * run in a terminal. It exists because a watch can be alive and deaf (see
+   * `RECONCILE_MS`), and because "is this list current?" is a question people
+   * want answered on their own schedule rather than on a timer's.
+   */
+  refresh: () => void;
 }
 
 export interface WatchCallbacks {
@@ -217,8 +226,15 @@ export function watchPods(
   let reconcile: NodeJS.Timeout | undefined;
   let retryTimer: NodeJS.Timeout | undefined;
 
-  const start = async () => {
-    if (stopped) return;
+  /**
+   * List the namespace and hand the result to the grid.
+   *
+   * Shared by the watch's own start and by Refresh, so a manual re-read is
+   * the same read — one code path means the two cannot come to different
+   * answers about the same namespace.
+   */
+  const relist = async (paintFast = true): Promise<boolean> => {
+    if (stopped) return false;
 
     /*
       Two lists, sent together, and the cheap one paints first.
@@ -244,22 +260,33 @@ export function watchPods(
        its badges and images a moment after drawing them. */
     let full = false;
 
-    const fast = podsTable(context, namespace).then((table) => {
-      if (stopped || full || !table.pods.length) return;
-      cb.onSnapshot(table.pods);
-    }).catch(() => { /* the JSON below is the real answer; this was a head start */ });
+    /*
+      The table is for the FIRST paint, and only for that.
+
+      On a refresh the grid already holds full rows, and a partial snapshot
+      landing in front of the JSON replaces them with rows that have no
+      workload badge and no image — which come back a moment later. That is
+      not a head start, it is a flicker: the reader watches the screen get
+      worse and then recover, for no gain, because there was never an empty
+      grid to fill.
+    */
+    const fast = paintFast
+      ? podsTable(context, namespace).then((table) => {
+        if (stopped || full || !table.pods.length) return;
+        cb.onSnapshot(table.pods);
+      }).catch(() => { /* the JSON below is the real answer; this was a head start */ })
+      : Promise.resolve();
 
     const listed = await run(
       ['--context', context, '-n', namespace, 'get', 'pods', '-o', 'json'],
       { timeoutMs: clusterTimeoutMs() },
     );
     void fast;
-    if (stopped) return;
+    if (stopped) return false;
 
     if (!listed.ok) {
       cb.onStatus('reconnecting', firstLine(listed.stderr) || listed.failure);
-      schedule();
-      return;
+      return false;
     }
 
     try {
@@ -272,9 +299,15 @@ export function watchPods(
       cb.onSnapshot(summaries);
     } catch (err) {
       cb.onStatus('reconnecting', `could not parse pod list: ${(err as Error).message}`);
-      schedule();
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const start = async () => {
+    if (stopped) return;
+    if (!(await relist())) { schedule(); return; }
+    if (stopped) return;
 
     /*
       `--watch-only`, because the list above already happened.
@@ -377,6 +410,15 @@ export function watchPods(
   void start();
 
   return {
+    /*
+      A re-read on demand, leaving the stream where it is.
+
+      Not a restart: the watch may be perfectly healthy and somebody may simply
+      want to know the list is current — and tearing down a working stream to
+      answer that would drop every pod on screen for a second. The reconcile
+      below is what deals with a stream that has actually gone deaf.
+    */
+    refresh: () => { void relist(false); },
     stop: () => {
       stopped = true;
       if (retryTimer) clearTimeout(retryTimer);

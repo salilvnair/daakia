@@ -21,7 +21,7 @@
  * the single-pod store has one of each.
  */
 import { useEffect, useMemo } from 'react';
-import { IconSize } from '@salilvnair/dui';
+import { IconSize, SplitPanelView, type SplitDirection } from '@salilvnair/dui';
 import {
   CloseIcon, ChevronLeftIcon, ColumnsIcon, RowsIcon, LayoutGridIcon,
 } from '../../icons';
@@ -198,22 +198,92 @@ function Pane({ pane, focused }: { pane: SplitPane; focused: boolean }) {
   );
 }
 
-/** How the panes are laid out, from the mode and how many there are. */
-export function gridStyle(mode: SplitMode, count: number): React.CSSProperties {
-  if (mode === 'grid') {
-    /* Two across, and only as many rows as there are panes to fill — three
-       panes in a 2×2 leaves a quarter of the screen empty for nothing. */
-    return {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-      gridTemplateRows: `repeat(${Math.ceil(count / 2)}, minmax(0, 1fr))`,
-    };
-  }
-  return {
-    display: 'grid',
-    gridTemplateColumns: mode === 'vertical' ? `repeat(${count}, minmax(0, 1fr))` : '1fr',
-    gridTemplateRows: mode === 'horizontal' ? `repeat(${count}, minmax(0, 1fr))` : '1fr',
-  };
+/*
+  Which way DUI splits, for one of our modes.
+
+  The two vocabularies are opposites and it is worth saying so once here rather
+  than being confused by it at every call site: our `vertical` means the divider
+  stands vertically and the panes sit side by side, and DUI's `horizontal` means
+  the box lays its children out in a row — which is the same arrangement.
+*/
+const DUI_DIRECTION: Record<'vertical' | 'horizontal', SplitDirection> = {
+  vertical: 'horizontal',
+  horizontal: 'vertical',
+};
+
+/** Nothing smaller than this, as a share of the axis. */
+const MIN_PANE_PCT = 12;
+
+/**
+ * Lay panes along one axis with a draggable divider between each pair.
+ *
+ * `SplitPanelView` takes two sides, so three panes are a split whose second
+ * side is another split. The first pane gets `100 / n` of the axis and the
+ * nested remainder divides what is left the same way, which comes out even —
+ * three panes at 33/50 are a third and two halves of two thirds.
+ *
+ * Every divider is independent once it exists: dragging the outer one moves
+ * the boundary between the first pane and the other two together, and the
+ * inner one moves the boundary inside that pair. That is the behaviour you
+ * want when one log is the one you are reading and the others are context.
+ */
+function chain(nodes: React.ReactNode[], direction: SplitDirection): React.ReactNode {
+  if (nodes.length <= 1) return nodes[0] ?? null;
+  return (
+    <SplitPanelView
+      direction={direction}
+      defaultSplit={100 / nodes.length}
+      minFirstPct={MIN_PANE_PCT}
+      minSecondPct={MIN_PANE_PCT}
+      accentColor={ACCENT}
+      first={nodes[0]}
+      second={chain(nodes.slice(1), direction)}
+      style={{ height: '100%', width: '100%' }}
+    />
+  );
+}
+
+/**
+ * The grid: rows of panes, and a divider on both axes.
+ *
+ * Two panes are a row, and a second divider across a single row would have
+ * nothing to move. Past that the panes split into a top half and a bottom
+ * half — so a four-way grid has one divider between the rows and one inside
+ * each, and every edge on screen can be dragged.
+ *
+ * An odd count puts the extra pane on top, where the eye starts.
+ */
+function gridSplit(nodes: React.ReactNode[]): React.ReactNode {
+  if (nodes.length <= 2) return chain(nodes, 'horizontal');
+  const half = Math.ceil(nodes.length / 2);
+  return (
+    <SplitPanelView
+      direction="vertical"
+      defaultSplit={50}
+      minFirstPct={MIN_PANE_PCT}
+      minSecondPct={MIN_PANE_PCT}
+      accentColor={ACCENT}
+      first={chain(nodes.slice(0, half), 'horizontal')}
+      second={chain(nodes.slice(half), 'horizontal')}
+      style={{ height: '100%', width: '100%' }}
+    />
+  );
+}
+
+/**
+ * The whole arrangement, sized by the reader rather than by the count.
+ *
+ * Equal shares is the right place to start and the wrong place to stay: one of
+ * these logs is usually the one being read and the rest are there to be
+ * glanced at, and which is which changes minute to minute. So they open
+ * centered — no pane is guessed to be the important one — and every boundary
+ * between them can be dragged from there.
+ */
+function Arrangement({ mode, nodes }: { mode: SplitMode; nodes: React.ReactNode[] }) {
+  if (nodes.length <= 1) return <>{nodes}</>;
+  return (
+    <>{mode === 'grid' ? gridSplit(nodes) : chain(nodes, DUI_DIRECTION[mode])}</>
+  );
 }
 
 export function SplitLogs() {
@@ -277,11 +347,13 @@ export function SplitLogs() {
         ))}
       </div>
 
-      <div className="flex-1 min-h-0 gap-2 p-2"
-           style={gridStyle(mode, panes.length)}>
-        {panes.map(pane => (
-          <Pane key={pane.id} pane={pane} focused={pane.id === focused} />
-        ))}
+      <div className="flex-1 min-h-0 p-2">
+        <Arrangement
+          mode={mode}
+          nodes={panes.map(pane => (
+            <Pane key={pane.id} pane={pane} focused={pane.id === focused} />
+          ))}
+        />
       </div>
     </div>
   );

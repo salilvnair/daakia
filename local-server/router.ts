@@ -72,7 +72,7 @@ import {
   handleDk8sGetFormats, handleDk8sSaveFormat, handleDk8sDeleteFormat,
   handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat,
   handleDk8sListArtifacts, handleDk8sImportArtifact, handleDk8sDeleteArtifact,
-  handleDk8sOpenArtifact, handleDk8sSetKubectlPath, handleDk8sWatchPods, handleDk8sStopWatch,
+  handleDk8sOpenArtifact, handleDk8sSetKubectlPath, handleDk8sWatchPods, handleDk8sMetricsActive, handleDk8sPodUsageOnce, handleDk8sRefreshPods, handleDk8sStopWatch,
   handleDk8sPinNamespace, handleDk8sUnpinNamespace,
   handleDk8sUseContexts, handleDk8sSetTargets, handleDk8sExportLogs,
   handleDk8sExportSearch,
@@ -480,6 +480,15 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dk8s:watchPods':
       handleDk8sWatchPods(msg, post);
+      break;
+    case 'dk8s:refreshPods':
+      handleDk8sRefreshPods(post);
+      break;
+    case 'dk8s:podUsageOnce':
+      await handleDk8sPodUsageOnce(msg, post);
+      break;
+    case 'dk8s:metricsActive':
+      handleDk8sMetricsActive(msg);
       break;
     case 'dk8s:stopWatch':
       handleDk8sStopWatch();

@@ -247,3 +247,35 @@ describe('cluster pulse', () => {
     expect(p.restartsLastHour).toBe(1);
   });
 });
+
+describe('what counts as needing attention', () => {
+  /*
+    A finished CronJob run is `ok`: not healthy — healthy means Running and
+    ready — and not a problem either. The group heading counted everything that
+    was not `quiet`, which swept those up, so a namespace whose schedule had
+    fired three times announced "3 need attention" in red above three pods that
+    had done exactly what they were asked to.
+  */
+  const finishedRun = pod({
+    phase: 'Succeeded',
+    reason: 'Completed',
+    healthy: false,
+    ready: { current: 0, total: 1 },
+  });
+
+  it('does not call a finished run a problem', () => {
+    expect(severityOf(finishedRun, NOW)).toBe('ok');
+  });
+
+  it('still calls a crashloop a problem', () => {
+    expect(severityOf(pod({
+      reason: 'CrashLoopBackOff', healthy: false, ready: { current: 0, total: 1 },
+    }), NOW)).toBe('critical');
+  });
+
+  it('still calls a pod that is not ready a problem', () => {
+    expect(severityOf(pod({
+      phase: 'Running', healthy: false, ready: { current: 0, total: 1 },
+    }), NOW)).toBe('warning');
+  });
+});

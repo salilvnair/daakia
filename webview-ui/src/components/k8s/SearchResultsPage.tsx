@@ -32,11 +32,15 @@ import { postMsg } from '../../vscode';
 import { logUiEvent } from '../../store/ui-audit-store';
 import {
   ChevronLeftIcon, FileTextIcon, LayersIcon, SparkleIcon, SearchIcon,
-  ServerIcon, ClockIcon, NetworkIcon,
+  ServerIcon, ClockIcon, NetworkIcon, ColumnsIcon,
 } from '../../icons';
+import { logLineSettings } from './log-settings';
+import { useUiStateStore } from '../../store/ui-state-store';
 import { LogViewer } from './LogViewer';
 import { LogSourceProvider, type LogSource } from './log-source';
-import { useResultTabStore } from '../../store/dk8s-result-tab-store';
+import { useResultTabStore, type SearchedPod } from '../../store/dk8s-result-tab-store';
+import { useSplitStore, MAX_PANES, type SplitMode } from '../../store/dk8s-split-store';
+import { SPLIT_MODES } from './SplitLogs';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import { useTabsStore } from '../../store/tabs-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
@@ -420,6 +424,125 @@ function DownloadModal({ lines, name, onClose }: {
 
 /* ── The page ── */
 
+
+/**
+ * Open the searched pods as live panes.
+ *
+ * ── Why it belongs on this page ──
+ *
+ * A search is how you find out which pods are involved; following them is what
+ * you do next. Without this the route there is: read the result, remember three
+ * pod names, go back to the grid, find them among thirty, select them, split
+ * open. The page already knows exactly which pods it searched, so it can do
+ * that in one press.
+ *
+ * ── What it opens ──
+ *
+ * Live tails, not the result. The result is a snapshot of lines that already
+ * happened and is on the tab behind this button; a pane is `kubectl logs` from
+ * now on. They answer different questions and both are worth having, which is
+ * why this opens beside the result rather than replacing it.
+ *
+ * Four at most, and the grid is the only mode that holds four — the submenu
+ * says how many each arrangement will take, before it is chosen, because a
+ * search over six pods and a mode that holds three is a decision about which
+ * three, and it should not be a surprise.
+ */
+function SplitOpenResults({ searched }: { searched: SearchedPod[] }) {
+  const [menu, setMenu] = useState(false);
+  const openSplit = useSplitStore(s => s.open);
+  /* The panes live on the dk8s surface, which is where this goes: a split is
+     the pod view, and the result stays on its own tab to come back to. */
+  const openDk8sTab = useTabsStore(s => s.openDk8sTab);
+  const livePods = useK8sStore(s => s.pods);
+  /* The same tail Settings gives the detail view, so a pane opened from a
+     result starts on the number of lines everything else does. */
+  const prefs = useUiStateStore(s => s.prefs);
+  const tailDefault = useMemo(() => logLineSettings(prefs).tailDefault, [prefs]);
+
+  /*
+    The grid's own pod when it still has one, because it carries the health
+    dot, the workload badge and the real container list. A pod the grid has
+    never seen — a different namespace, a watch since stopped — is opened from
+    what the search recorded about it, which is enough to tail.
+  */
+  const podsToOpen = useMemo(() => searched.map(t => livePods.find(
+    p => p.name === t.pod && p.namespace === t.namespace && (p.context ?? '') === t.context,
+  ) ?? ({
+    name: t.pod,
+    namespace: t.namespace,
+    context: t.context,
+    uid: `${t.context}/${t.namespace}/${t.pod}`,
+    phase: 'Unknown',
+    ready: { current: 0, total: 0 },
+    restarts: 0,
+    containers: t.containers.map(name => ({ name, ready: false, restarts: 0, image: '' })),
+    healthy: false,
+    deleting: false,
+  } as PodSummary)), [searched, livePods]);
+
+  if (podsToOpen.length < 2) return null;
+
+  const openAs = (mode: SplitMode) => {
+    setMenu(false);
+    logUiEvent('dk8s.results_split_open', { mode, pods: podsToOpen.length });
+    openSplit(podsToOpen, mode, tailDefault);
+    openDk8sTab();
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setMenu(v => !v)}
+        title={`Follow these ${podsToOpen.length} pods side by side`}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] cursor-pointer"
+        style={{
+          background: `color-mix(in srgb, ${ACCENT} 16%, transparent)`,
+          border: `1px solid color-mix(in srgb, ${ACCENT} 45%, transparent)`,
+          color: ACCENT,
+          fontWeight: 600,
+        }}
+      >
+        <ColumnsIcon size={IconSize.action} strokeWidth={2} />
+        Split open
+      </button>
+
+      {menu && (
+        <div
+          className="absolute right-0 top-full mt-1.5 rounded-lg overflow-hidden z-40"
+          style={{
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-surface-border)',
+            boxShadow: '0 8px 24px rgba(0,0,0,.34)',
+            minWidth: 214,
+          }}
+        >
+          {SPLIT_MODES.map(({ id, label, Icon }) => {
+            const room = Math.min(podsToOpen.length, MAX_PANES[id]);
+            return (
+              <button
+                key={id} type="button"
+                onClick={() => openAs(id)}
+                className="flex items-center gap-2 w-full px-3 py-2 text-[11.5px] cursor-pointer border-none bg-transparent text-left"
+                style={{ color: 'var(--color-text-primary)' }}
+                onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 12%, transparent)`; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                <Icon size={IconSize.item} color={ACCENT} />
+                <span className="flex-1">{label}</span>
+                <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
+                  {room < podsToOpen.length ? `first ${room}` : `${room} panes`}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SearchResultsPage() {
   const {
     query, groups, at, scanned, searched,
@@ -603,7 +726,10 @@ export function SearchResultsPage() {
         <div className="flex-1" />
 
         {/* No Shell: a shell goes into one pod, and this is a result from
-            several. The AI toggle is the pod detail's own. */}
+            several. Following them all at once, though, is exactly what a
+            result over several pods leads to — so that is offered here. */}
+        <SplitOpenResults searched={searched} />
+
         <button
           type="button"
           onClick={() => (aiOpen ? closeAi() : openAi())}

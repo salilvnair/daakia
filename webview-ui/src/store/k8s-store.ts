@@ -573,6 +573,26 @@ interface K8sState {
    * being told what is happening".
    */
   lastEventAt?: number;
+  /**
+   * When the pod list was last actually read from the cluster.
+   *
+   * Not the same as `lastEventAt`, which is when something last CHANGED. A
+   * namespace where nothing has happened for an hour has an hour-old event
+   * time and a list that may have been re-read a minute ago — and "how old is
+   * what I am looking at" is the question, so it needs its own answer.
+   */
+  lastListedAt?: number;
+  /**
+   * True between pressing Refresh and the list coming back.
+   *
+   * Only the indicator's own text changes. A loader over the grid would blank
+   * rows that are already correct for the second it takes — the reader asked
+   * whether the list is current, not to have it taken away while that is
+   * established.
+   */
+  refreshing?: boolean;
+  /** Ask for the pod list again, and stop saying so whatever comes back. */
+  refreshPods: () => void;
   podScope: 'fav' | 'all';
   /**
    * What the pod grid is filtered to, published so the panel's context menu
@@ -819,6 +839,14 @@ interface K8sState {
   exportLines: (name: string, namespace: string, lines: string[]) => void;
   apply: (msg: Record<string, unknown>) => void;
 }
+
+/*
+  The deadline behind `refreshing`, held out here so a second refresh replaces
+  the first one's timer rather than racing it. Two overlapping waits would mean
+  the older one clearing a flag the newer one had just set, and the word
+  vanishing while the list was still on its way.
+*/
+let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 
 export const useK8sStore = create<K8sState>((set, get) => ({
   stage: 'probing',
@@ -1128,6 +1156,28 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   }),
   setLogSince: (logSince) => set({ logSince }),
   setLogWindow: (logFrom, logTo) => set({ logFrom, logTo }),
+
+  /*
+    Refresh, with an end to it.
+
+    The flag was cleared by the snapshot it was waiting for, which is right
+    until no snapshot comes — a list that errors, a watch that is not running,
+    a cluster that never answers. Then the word sat on screen forever claiming
+    something was in flight that had already failed.
+
+    So the wait has a deadline of its own. Whatever happens, the label stops
+    lying; a real failure still says so through the watch status beside it.
+  */
+  refreshPods: () => {
+    if (get().refreshing) return;
+    set({ refreshing: true });
+    postMsg({ type: 'dk8s:refreshPods' });
+    if (refreshTimer !== undefined) clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(() => {
+      refreshTimer = undefined;
+      if (useK8sStore.getState().refreshing) useK8sStore.setState({ refreshing: false });
+    }, Math.max(5, get().clusterTimeoutSeconds) * 1000);
+  },
 
   fetchLogs: () => get().reloadLogs(),
 
@@ -1485,6 +1535,15 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         set({ namespace: msg.namespace as string, stage: 'ready' });
         break;
 
+      /* The host had nothing to re-read, so the wait ends here. */
+      case 'dk8s:refreshDone':
+        if (refreshTimer !== undefined) {
+          clearTimeout(refreshTimer);
+          refreshTimer = undefined;
+        }
+        set({ refreshing: false });
+        break;
+
       case 'dk8s:podSnapshot': {
         // A snapshot replaces only ITS target's pods. With several namespaces
         // watched at once, replacing everything would make each snapshot wipe
@@ -1494,7 +1553,13 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         const incoming = ((msg.pods as PodSummary[]) ?? []).map(p => ({ ...p, context: ctx }));
         set(s => ({
           pods: [...s.pods.filter(p => !(p.context === ctx && p.namespace === ns)), ...incoming],
+          lastListedAt: Date.now(),
+          refreshing: false,
         }));
+        if (refreshTimer !== undefined) {
+          clearTimeout(refreshTimer);
+          refreshTimer = undefined;
+        }
         break;
       }
 
@@ -1522,9 +1587,11 @@ export const useK8sStore = create<K8sState>((set, get) => ({
           const rank: Record<string, number> = { reconnecting: 0, idle: 1, stopped: 2, connected: 3 };
           const incoming = msg.status as WatchStatus;
           const worse = rank[incoming] < rank[s.watchStatus];
+          // A watch that drops mid-refresh has answered: nothing is coming.
+          const stalled = s.refreshing && incoming !== 'connected' ? { refreshing: false } : {};
           return worse || incoming === 'connected'
-            ? { watchStatus: incoming, watchDetail: msg.detail as string | undefined }
-            : {};
+            ? { watchStatus: incoming, watchDetail: msg.detail as string | undefined, ...stalled }
+            : stalled;
         });
         break;
 
