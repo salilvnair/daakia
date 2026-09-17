@@ -1123,6 +1123,9 @@ export function PodGrid() {
     [setPodFilter],
   );
   const [filterOpen, setFilterOpen] = useState(false);
+  /* The popup hangs off this and positions against its rect — it is
+     portalled to the body, so it has no parent to measure from. */
+  const filterBtn = useRef<HTMLButtonElement>(null);
   /* Follows the setting when it changes, unless this view has been pointed
      somewhere else in the meantime. */
   const lastDefault = useRef(hideRuns);
@@ -1241,8 +1244,9 @@ export function PodGrid() {
           The funnel moved to its own button, where it opens the facets that
           actually do filter — cluster, namespace, app, type.
         */}
-        <div className="relative shrink-0">
+        <div className="shrink-0">
           <button
+            ref={filterBtn}
             type="button"
             onClick={() => setFilterOpen(v => !v)}
             title={filterOn
@@ -1263,7 +1267,8 @@ export function PodGrid() {
             )}
           </button>
           {filterOpen && (
-            <PodFilterPopup pods={filterable} onClose={() => setFilterOpen(false)} />
+            <PodFilterPopup pods={filterable} anchorRef={filterBtn}
+                            onClose={() => setFilterOpen(false)} />
           )}
         </div>
 
