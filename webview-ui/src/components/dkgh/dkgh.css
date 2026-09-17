@@ -1011,9 +1011,14 @@
 .dkgh .chartc svg { width: 100%; height: auto; display: block; }
 .dkgh .barrow { display: flex; align-items: center; gap: 9.6px; margin-bottom: 6px; font-size: 12px; }
 .dkgh .barrow .bl { width: 96px; flex-shrink: 0; color: var(--dk-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dkgh .barrow .bt { flex: 1; height: 10.8px; border-radius: 3.6px; background: var(--dk-raised); overflow: hidden; display: flex; }
+/* `min-width: 0` so a long row shrinks the track rather than the row growing
+   past the card: a flex item will not go below its content width without it,
+   and the count on the end is what gets pushed out. */
+.dkgh .barrow .bt { flex: 1; min-width: 0; height: 10.8px; border-radius: 3.6px; background: var(--dk-raised); overflow: hidden; display: flex; }
+/* The filled part, as a share of the track it sits in rather than of the row. */
+.dkgh .barrow .bf { height: 100%; display: flex; }
 .dkgh .barrow .bt i { height: 100%; display: block; }
-.dkgh .barrow .bv { width: 31.2px; text-align: right; font-family: var(--mono); font-size: 11.4px; color: var(--dk-muted); font-variant-numeric: tabular-nums; }
+.dkgh .barrow .bv { width: 31.2px; flex-shrink: 0; text-align: right; font-family: var(--mono); font-size: 11.4px; color: var(--dk-muted); font-variant-numeric: tabular-nums; }
 /* Document tables */
 .dkgh table.doc { border-collapse: collapse; width: 100%; font-size: 16.2px; margin: 21.6px 0; }
 .dkgh table.doc th {

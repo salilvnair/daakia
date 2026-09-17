@@ -347,14 +347,29 @@ function Bars({ rows, colour, onPick }: {
           onClick={() => onPick(r.label)}
         >
           <span className="bl">{r.label}</span>
-          <span className="bt" style={{ width: `${(r.total / top) * 100}%`, flex: 'none' }}>
-            {r.parts.map(p => (
-              <i
-                key={p.key || 'none'}
-                title={`${p.key || 'unset'}: ${p.count}`}
-                style={{ width: `${(p.count / r.total) * 100}%`, background: colour(p.key) }}
-              />
-            ))}
+          {/*
+            The track keeps its share of the row; the bar fills part of the
+            track.
+
+            It used to be the other way round — the track itself was given
+            `width: N%` with `flex: none`, so the longest row asked for a
+            hundred percent. A percentage on a flex item is measured against
+            the whole row, not against what is left of it, so that row came
+            out as wide as the card on its own and the label, the gaps and the
+            count were pushed off the right-hand edge. It only showed on the
+            biggest row of each card, which is why it read as a stray number
+            outside the border rather than as a layout that did not fit.
+          */}
+          <span className="bt">
+            <span className="bf" style={{ width: `${(r.total / top) * 100}%` }}>
+              {r.parts.map(p => (
+                <i
+                  key={p.key || 'none'}
+                  title={`${p.key || 'unset'}: ${p.count}`}
+                  style={{ width: `${(p.count / r.total) * 100}%`, background: colour(p.key) }}
+                />
+              ))}
+            </span>
           </span>
           <span className="bv">{r.total}</span>
         </button>
