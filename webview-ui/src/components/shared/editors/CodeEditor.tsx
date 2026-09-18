@@ -1,4 +1,5 @@
 import { EditorView } from '@salilvnair/dui';
+import { registerVarCompletions } from '../../../services/template/monaco-var-completions';
 
 export type CodeLanguage = 'javascript' | 'json' | 'xml' | 'python' | 'text' | 'html' | 'typescript' | 'java' | 'graphql' | 'plaintext' | 'yaml';
 
@@ -80,7 +81,13 @@ export function CodeEditor({
       pausedLine={pausedLine}
       onToggleBreakpoint={onToggleBreakpoint}
       onGlyphContextMenu={onGlyphContextMenu}
-      onEditorMount={onEditorMount}
+      onEditorMount={(editor, monaco) => {
+        /* Every body and script editor in the app comes through here, so
+           `{{` completes in all of them without each call site remembering
+           to ask for it. The caller's own mount handler still runs. */
+        registerVarCompletions(monaco);
+        onEditorMount?.(editor, monaco);
+      }}
       editorOptions={{
         // CodeEditor always highlighted the current line and used an 8px
         // scrollbar regardless of whether breakpoints were wired up —

@@ -11,6 +11,7 @@ import {
 import * as path from 'path';
 import * as fs from 'fs';
 import { getSqliteStatus, getDbPath, getHistory, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt, getAiPromptTemplates, setAiPromptTemplates, saveAiConversation, loadAiConversation, clearAiConversation, type AiConversationMessage, getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries, insertUiAudit, getUiAuditEntries, clearUiAuditEntries, getDbTables, getDbTableRows, deleteDbRow } from '../../storage/db';
+import { handleGetDynamicVariables } from './handlers/dynamic-vars-handler';
 import { archiveHistoryEntry, archiveHistoryBatch } from '../../services/bin';
 import { getProviderKeyStatus } from '../../services/llm/llm-provider-service';
 import { storeApiKey, deleteApiKey, getAllKeyStatus } from '../../services/secret-store';
@@ -257,6 +258,7 @@ export class MainPanel {
     // AI init state — keys come from OS keychain (async)
     this._refreshKeyStatus();
     this._post({ type: 'aiFeatures:data', features: getAiFeatures() });
+    handleGetDynamicVariables(this._post);
     this._sendAiProviders();
     this._restartAutoSyncTimer();
   }

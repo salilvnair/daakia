@@ -13,6 +13,7 @@ import { SplitPanelView, ButtonView } from '@salilvnair/dui';
 import { TabBar } from './components/tabs/TabBar';
 import { UrlBar } from './components/rest/request/UrlBar';
 import { SaveRequestModal, RightClickMenu } from './components/shared';
+import { VarSuggestPopup } from './components/shared/VarSuggestPopup';
 import { RequestPanel } from './components/rest/request/RequestPanel';
 import { ResponsePanel } from './components/rest/response/ResponsePanel';
 import { SqliteBanner, ToastContainer } from './components/shared';
@@ -1085,6 +1086,10 @@ export default function App() {
       */}
       <ScanModal />
       <RightClickMenu />
+      {/* `{{` in any value field. Mounted here because it finds its field
+          from the event rather than being wired into each one — see
+          services/template/editable-target.ts. */}
+      <VarSuggestPopup />
       {/* Opened by "Compare with clipboard" in the right-click menu, from
           wherever the data happened to be. */}
       {compareOpen && (

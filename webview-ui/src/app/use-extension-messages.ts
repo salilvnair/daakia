@@ -13,6 +13,7 @@ import { showAiFailure, showSilentFailure } from './ai-failure-toast';
 import { useTabsStore } from '../store/tabs-store';
 import { useToastStore } from '../store/toast-store';
 import { useEnvStore } from '../store/env-store';
+import { useDynamicVarsStore } from '../store/dynamic-vars-store';
 import { useCollectionsStore } from '../store/collections-store';
 import { useUrlSuggestionsStore } from '../store/url-suggestions-store';
 import { useUiStateStore } from '../store/ui-state-store';
@@ -461,6 +462,12 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
               useTabsStore.getState().updateTab(fpTabId, { bodyFormData: updatedFormData });
             }
           }
+          break;
+        }
+        case 'dynamicVariables:data': {
+          // Sent once on ready — see dynamic-vars-store for why they arrive
+          // by message rather than by import.
+          useDynamicVarsStore.getState().setVariables(msg.variables ?? []);
           break;
         }
         case 'environmentsData': {

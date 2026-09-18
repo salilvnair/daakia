@@ -90,4 +90,15 @@ export const SHARED_ALIASES = {
     agreed only for as long as somebody remembers both.
   */
   '@daakia/command-kinds': resolve(__dirname, '..', 'src', 'services', 'k8s', 'command-kinds.ts'),
+
+  /*
+    What `{{` can complete to.
+
+    The host runs the template engine and the webview offers the suggestions,
+    and the two have to be describing the same vocabulary — a completion for a
+    helper the engine does not have is worse than no completion at all. The
+    catalogue is import-free data and a host test executes every example in
+    it, so what the popup offers is what the engine will actually do.
+  */
+  '@daakia/template-catalog': resolve(__dirname, '..', 'src', 'services', 'template', 'catalog.ts'),
 };

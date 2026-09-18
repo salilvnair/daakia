@@ -91,6 +91,7 @@ import { handleMqttConnect, handleMqttDisconnect, handleMqttSubscribe, handleMqt
 import {
   handleGetEnvironments, handleSaveEnvironments,
 } from '../src/panel/main/handlers/environment-handler';
+import { handleGetDynamicVariables } from '../src/panel/main/handlers/dynamic-vars-handler';
 import {
   handleGetWorkspaces, handleSwitchWorkspace, handleCreateWorkspace,
   handleRenameWorkspace, handleDeleteWorkspace, handleSaveWorkspaceDocs,
@@ -171,6 +172,7 @@ export function sendInitialState(post: PostMessage) {
   handleGetEnvironments(post);
   handleGetUiState(post);
   handleGetWorkspaceSnapshot(post);
+  handleGetDynamicVariables(post);
 }
 
 export async function routeMessage(msg: { type: string; [key: string]: unknown }, post: PostMessage) {

@@ -143,6 +143,15 @@ function processInlineExpressions(
   vars: Record<string, unknown>,
   opts: RenderOptions,
 ): string {
+  /*
+    `[^}]+` — so an expression stops at the first closing brace.
+
+    Which means a quoted argument cannot contain one: `{{formatJson '{"a":1}'}}`
+    is cut at the `}` inside the JSON and silently does nothing useful. Worth
+    knowing before spending an afternoon on it. Pass the value in rather than
+    writing it inline — `{{formatJson request.body}}` — which is what anybody
+    wanted anyway.
+  */
   return template.replace(/\{\{([^}]+)\}\}/g, (match, expr) => {
     try {
       const value = evaluateExpression(expr.trim(), ctx, vars, opts);
