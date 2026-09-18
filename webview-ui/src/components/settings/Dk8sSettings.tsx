@@ -13,6 +13,8 @@
  */
 import { useEffect } from 'react';
 import { Dk8sIcon, MemoryIcon, WarningTriangleIcon, StethoscopeIcon } from '../../icons';
+import { ClusterCacheSetting } from './ClusterCacheSetting';
+import { ClusterTimeoutSetting } from './ClusterTimeoutSetting';
 import { useK8sStore } from '../../store/k8s-store';
 
 const ACCENT = 'var(--color-dk8s)';
@@ -99,6 +101,27 @@ export function Dk8sClusterSettings() {
             style={{ color: 'var(--color-text-muted)', maxWidth: '110ch' }}>
         How Dk8s — Daakia K8s — behaves against a live cluster.
       </span>
+
+      {/*
+        How much it asks for, and how often.
+
+        Here rather than on General because both are about talking to a
+        cluster — the same reason the timeout is a cluster setting. On a local
+        cluster neither matters; through a VPN they are most of what dk8s
+        feels like.
+      */}
+      <div className="flex items-center gap-1.5 mt-1">
+        <MemoryIcon size={12} color="var(--color-text-muted)" />
+        <span className="text-[9.5px] uppercase tracking-wider"
+              style={{ color: 'var(--color-text-muted)' }}>
+          what it asks the cluster for
+        </span>
+        <div className="flex-1 h-px" style={{ background: 'var(--color-surface-border)' }} />
+      </div>
+      {/* How long to wait for one, which is a property of your network rather
+          than of dk8s — and the ceiling every call below derives from. */}
+      <ClusterTimeoutSetting />
+      <ClusterCacheSetting />
 
       {/* Sub-heading, so the page can grow other groups (log formats, artifact
           retention) without the diagnostics switches losing their context. */}

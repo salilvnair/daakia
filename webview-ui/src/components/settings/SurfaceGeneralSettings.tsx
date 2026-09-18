@@ -13,8 +13,6 @@ import { Dk8sIcon, IssueOpenedIcon, KeyboardIcon, ExternalLinkIcon } from '../..
 import { useTabsStore } from '../../store/tabs-store';
 import { useShowOnToolbar, type ToolbarSurface } from '../../store/toolbar-visibility';
 import { KubectlBinarySetting } from './KubectlBinarySetting';
-import { ClusterTimeoutSetting } from './ClusterTimeoutSetting';
-import { ClusterCacheSetting } from './ClusterCacheSetting';
 import { CommandAuditLimitSetting } from './CommandAuditLimit';
 import { CronJobVisibilitySetting } from './cronjob-visibility';
 
@@ -153,12 +151,6 @@ export function Dk8sGeneralSettings() {
       {/* Which binary it drives is a fact about dk8s itself, not about how it
           behaves against a cluster — so it is here rather than on Cluster. */}
       <KubectlBinarySetting />
-      {/* And how long to wait for one, which is a property of your network
-          rather than of dk8s. */}
-      <ClusterTimeoutSetting />
-      {/* And whether it remembers the answers, which is the difference between
-          fifty kubectl calls per pod and three. */}
-      <ClusterCacheSetting />
       {/* What the pod list opens on, which is about your namespaces rather
           than about dk8s or the network. */}
       <CronJobVisibilitySetting />
