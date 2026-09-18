@@ -16,10 +16,10 @@ import { loadProtoFile } from '../../../grpc/proto-loader';
 import { loadEnvVars, resolveEnvString } from './env-resolver';
 import { insertHistory, trimHistory } from '../../../storage/db';
 import { runPhase, debugFor } from './script-phase';
+import { afterScript } from '../../../services/template/after-script';
 import {
   loadScriptEnvVars, loadCollectionVars, loadGlobalVars, persistScriptVars,
 } from './script-vars';
-import { resolveVars, resolveRows } from '../../../services/resolve-vars';
 import type { ScriptContext } from '../../../services/script-runtime';
 
 type PostMessage = (msg: unknown) => void;
@@ -108,10 +108,13 @@ export async function handleGrpcInvoke(
   }
 
   /* What the script set, filled into what the webview could not resolve. */
-  endpoint = resolveVars(endpoint, pre.layers);
-  method = resolveVars(method, pre.layers);
-  message = resolveVars(message, pre.layers);
-  metadata = resolveRows(metadata, pre.layers) ?? metadata;
+  const finish = afterScript(pre.layers, {
+    method: 'POST', url: endpoint, headers: metadata, body: message,
+  });
+  endpoint = finish.str(endpoint);
+  method = finish.str(method);
+  message = finish.str(message);
+  metadata = finish.rows(metadata) ?? metadata;
 
   persistScriptVars(
     envId, collectionId,

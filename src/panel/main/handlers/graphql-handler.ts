@@ -50,8 +50,8 @@ import { loadEnvVars, resolveEnvString } from './env-resolver';
 import { insertHistory, trimHistory, getSetting, getAllEnvironments, upsertEnvironment, getCollectionData, updateCollectionData, setSetting } from '../../../storage/db';
 import { type ScriptContext } from '../../../services/script-runtime';
 import { runPhase, debugFor } from './script-phase';
+import { afterScript } from '../../../services/template/after-script';
 import { decryptIfNeeded, decryptEnvVariables, encryptEnvVariables } from '../../../services/vault';
-import { resolveVars, resolveRows } from '../../../services/resolve-vars';
 import {
   loadScriptEnvVars, loadCollectionVars, loadGlobalVars, persistScriptVars,
 } from './script-vars';
@@ -319,9 +319,12 @@ export async function handleExecuteGraphQL(
       literal `{{name}}`, so it is here to fill in; anything already resolved
       is a value and cannot be touched. Same fix as the REST path.
     */
-    endpoint = resolveVars(endpoint, pre.layers);
-    headers = resolveRows(headers, pre.layers) ?? headers;
-    if (variablesRaw) variablesRaw = resolveVars(variablesRaw, pre.layers);
+    const finish = afterScript(pre.layers, {
+      method: 'POST', url: endpoint, headers, body: variablesRaw || query,
+    });
+    endpoint = finish.str(endpoint);
+    headers = finish.rows(headers) ?? headers;
+    if (variablesRaw) variablesRaw = finish.str(variablesRaw);
 
     postMessage({ type: 'requestProgress', tabId, stage: 'pre-request-script', status: 'done' });
   }

@@ -21,7 +21,7 @@ import type {
 } from './mock-types';
 import { resolveAll } from '../services/variables';
 import { routeMatchesRequest, sortRoutesByPriority, extractPathParams, parseCookies } from './mock-matcher';
-import { renderTemplate, type TemplateRequestContext } from './mock-template-engine';
+import { renderTemplate, type TemplateRequestContext } from '../services/template/render';
 import type { StateMachineRuntime } from './mock-state-machine';
 import { getStateMachineRuntime, disposeStateMachineRuntime, effectiveWorkflowId } from './mock-runtime';
 import { RateLimiter, SequenceTracker } from './mock-rate-limiter';

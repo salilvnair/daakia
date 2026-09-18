@@ -6,8 +6,8 @@
 import type {
   ResponseSequenceItem, SequenceMode, FaultConfig, RateLimitConfig, ProtocolWebhookConfig,
 } from './mock-types';
-import { renderTemplate } from './mock-template-engine';
-import type { TemplateRequestContext } from './mock-template-engine';
+import { renderTemplate } from '../services/template/render';
+import type { TemplateRequestContext } from '../services/template/render';
 import { dispatchWebhook } from './mock-webhook-dispatcher';
 
 // ─── Sequence counters (per-operation, in-memory) ────────────────────────────

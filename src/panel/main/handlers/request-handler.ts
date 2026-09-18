@@ -18,11 +18,11 @@ import { decryptIfNeeded, encryptEnvVariables } from '../../../services/vault';
 import { resolveExecutionSettings, type ExecutionSettings } from '../../../services/execution-settings';
 import { collectionSettings } from '../../../services/collection-settings';
 import { globalSettings, settingsForRequest } from '../../../services/resolve-request-settings';
-import { resolveVars, resolveRows, resolveFields } from '../../../services/resolve-vars';
 import {
   loadScriptEnvVars, loadCollectionVars, loadGlobalVars, persistScriptVars,
 } from './script-vars';
 import { runPhase, debugFor } from './script-phase';
+import { afterScript } from '../../../services/template/after-script';
 
 type PostMessage = (msg: unknown) => void;
 type RefreshFn = () => void;
@@ -181,25 +181,24 @@ export async function handleExecuteRequest(
         Every place a variable is allowed: the URL, the headers, the body, the
         query, and the auth data the Auth tab builds.
       */
-      const afterScript = {
+      const finish = afterScript({
         collection: scriptCtx.collectionVariables,
         env: scriptCtx.environmentVariables,
         secret: scriptCtx.secretVariables,
         global: scriptCtx.globalVariables,
-      };
-      msg.url = resolveVars(String(msg.url ?? ''), afterScript);
-      msg.headers = resolveRows(msg.headers as { key: string; value: string }[], afterScript);
-      msg.params = resolveRows(msg.params as { key: string; value: string }[], afterScript);
-      msg.bodyRaw = resolveVars(String(msg.bodyRaw ?? ''), afterScript);
-      msg.bodyUrlEncoded = resolveRows(
-        msg.bodyUrlEncoded as { key: string; value: string }[], afterScript,
-      );
-      msg.bodyFormData = resolveRows(
-        msg.bodyFormData as { key: string; value: string }[], afterScript,
-      );
-      msg.authData = resolveFields(
-        msg.authData as Record<string, unknown> | undefined, afterScript,
-      );
+      }, {
+        method: String(msg.method ?? 'GET'),
+        url: String(msg.url ?? ''),
+        headers: msg.headers as { key: string; value: string }[],
+        body: String(msg.bodyRaw ?? ''),
+      });
+      msg.url = finish.str(String(msg.url ?? ''));
+      msg.headers = finish.rows(msg.headers as { key: string; value: string }[]);
+      msg.params = finish.rows(msg.params as { key: string; value: string }[]);
+      msg.bodyRaw = finish.str(String(msg.bodyRaw ?? ''));
+      msg.bodyUrlEncoded = finish.rows(msg.bodyUrlEncoded as { key: string; value: string }[]);
+      msg.bodyFormData = finish.rows(msg.bodyFormData as { key: string; value: string }[]);
+      msg.authData = finish.fields(msg.authData as Record<string, unknown> | undefined);
 
       // Sync url/method/body mutations (scripts can reassign dk.request.url etc.)
       if (scriptCtx.request.url !== (msg.url as string)) {

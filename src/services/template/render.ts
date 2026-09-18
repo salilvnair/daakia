@@ -1,6 +1,22 @@
 /**
- * mock-template-engine.ts — Handlebars-compatible response templating engine.
- * Implements 6A.7 (template variables) and 6A.8 (built-in helpers).
+ * The Handlebars-compatible template engine, WireMock's helper vocabulary.
+ *
+ * ── Why this is not in src/mock/ any more ──
+ *
+ * It was written for mock responses and lived in `src/mock/`, which made it
+ * look like a mock-server feature. It never was one: it takes a string and a
+ * request context and returns a string, and imports nothing from `src/mock/`.
+ *
+ * Meanwhile a request you SEND had no dynamic values at all — `{{$randomUUID}}`
+ * in a header went onto the wire as those fifteen literal characters, because
+ * nothing on the request path had ever been asked to look at it. Every helper
+ * needed to fix that was already here, pointed at the side of Daakia that
+ * answers requests rather than the side that makes them.
+ *
+ * So it moved rather than being reimplemented. One engine, three callers: the
+ * mock servers, the request pipeline (`script-phase`), and `dk.interpolate`
+ * inside a script — which is what stops a value meaning one thing in a header
+ * and another thing in the script on the next line.
  *
  * Supported syntax:
  *   {{request.url}}, {{request.headers.Authorization}}, {{request.body.email}}
@@ -12,6 +28,7 @@
  *   {{assign name value}}, {{val name}}
  */
 import * as crypto from 'crypto';
+import { getResolver } from '../variables';
 
 export interface TemplateRequestContext {
   url: string;
@@ -29,17 +46,41 @@ export interface TemplateRequestContext {
   stateVars?: Record<string, unknown>;
 }
 
+export interface RenderOptions {
+  /**
+   * Leave an expression the renderer does not understand exactly as it found it.
+   *
+   * A mock response wants the opposite — an unmatched `{{thing}}` becomes ''
+   * so the body it serves is still valid JSON. A request you are about to SEND
+   * wants it kept: an Authorization header reading `{{bearer-token}}` fails in
+   * a way you can read, and an empty one fails in a way nobody can. That is
+   * already the rule everywhere else a variable is resolved, and this option
+   * is what lets one engine serve both sides.
+   */
+  keepUnknown?: boolean;
+}
+
+/** An expression this engine has no meaning for — distinct from one that meant ''. */
+const UNKNOWN = Symbol('unknown-expression');
+
+/** Is there anything in here this engine would act on? */
+export function hasTemplate(input: string | undefined): boolean {
+  return !!input && input.includes('{{');
+}
+
 /**
  * Render a Handlebars-style template given a request context.
  */
-export function renderTemplate(template: string, ctx: TemplateRequestContext): string {
+export function renderTemplate(
+  template: string, ctx: TemplateRequestContext, opts: RenderOptions = {},
+): string {
   const vars: Record<string, unknown> = {}; // {{assign}} variables
 
   // Process block helpers first (if/each)
-  let result = processBlockHelpers(template, ctx, vars);
+  let result = processBlockHelpers(template, ctx, vars, opts);
 
   // Then process inline expressions
-  result = processInlineExpressions(result, ctx, vars);
+  result = processInlineExpressions(result, ctx, vars, opts);
 
   return result;
 }
@@ -50,6 +91,7 @@ function processBlockHelpers(
   template: string,
   ctx: TemplateRequestContext,
   vars: Record<string, unknown>,
+  opts: RenderOptions,
 ): string {
   // {{#if expr}}...{{else}}...{{/if}}
   template = template.replace(
@@ -57,7 +99,7 @@ function processBlockHelpers(
     (_, expr, ifBody, elseBody = '') => {
       const val = resolveValue(expr.trim(), ctx, vars);
       const truthy = val && val !== 'false' && val !== '0' && val !== '';
-      return truthy ? processBlockHelpers(ifBody, ctx, vars) : processBlockHelpers(elseBody, ctx, vars);
+      return truthy ? processBlockHelpers(ifBody, ctx, vars, opts) : processBlockHelpers(elseBody, ctx, vars, opts);
     },
   );
 
@@ -74,8 +116,8 @@ function processBlockHelpers(
           if (!field) return String(item ?? '');
           return String((item as Record<string, unknown>)?.[field] ?? '');
         });
-        itemBody = processBlockHelpers(itemBody, itemCtx, itemVars);
-        return processInlineExpressions(itemBody, itemCtx, itemVars);
+        itemBody = processBlockHelpers(itemBody, itemCtx, itemVars, opts);
+        return processInlineExpressions(itemBody, itemCtx, itemVars, opts);
       }).join('');
     },
   );
@@ -99,10 +141,13 @@ function processInlineExpressions(
   template: string,
   ctx: TemplateRequestContext,
   vars: Record<string, unknown>,
+  opts: RenderOptions,
 ): string {
   return template.replace(/\{\{([^}]+)\}\}/g, (match, expr) => {
     try {
-      return String(evaluateExpression(expr.trim(), ctx, vars) ?? '');
+      const value = evaluateExpression(expr.trim(), ctx, vars, opts);
+      if (value === UNKNOWN) return match;
+      return String(value ?? '');
     } catch {
       return match; // leave unresolved expressions as-is
     }
@@ -115,6 +160,7 @@ function evaluateExpression(
   expr: string,
   ctx: TemplateRequestContext,
   vars: Record<string, unknown>,
+  opts: RenderOptions = {},
 ): unknown {
   // Handle quoted strings
   if ((expr.startsWith("'") && expr.endsWith("'")) || (expr.startsWith('"') && expr.endsWith('"'))) {
@@ -129,7 +175,22 @@ function evaluateExpression(
 
   // ─── Request context variables ─────────────────────────────────────────────
   if (helperName.startsWith('request.') || helperName.startsWith('state.')) {
-    return resolveValue(helperName, ctx, vars);
+    return resolveValue(helperName, ctx, vars) ?? '';
+  }
+
+  /*
+    The `$`-prefixed dynamic variables — {{$randomUUID}}, {{$timestamp}}, and
+    the sixty others in services/variables.
+
+    The same idea as the helpers below, written by a different hand into a
+    different registry. Rather than reimplement them here — a third copy — or
+    drop them and break every mock and script that uses one, the registry is
+    consulted as the zero-argument end of the same vocabulary.
+  */
+  if (helperName.startsWith('$')) {
+    const resolver = getResolver(helperName.slice(1));
+    if (resolver) return resolver.resolve();
+    return opts.keepUnknown ? UNKNOWN : '';
   }
 
   // ─── Assign / val ──────────────────────────────────────────────────────────
@@ -159,6 +220,17 @@ function evaluateExpression(
     const min = parseFloat(String(args[0] ?? '0'));
     const max = parseFloat(String(args[1] ?? '1'));
     return (Math.random() * (max - min) + min).toFixed(2);
+  }
+  if (helperName === 'randomDate') {
+    /* {{randomDate '-30d' 'now'}} — a moment somewhere inside a window. */
+    const dateOpts = parseNamedArgs(rawArgs);
+    const now = Date.now();
+    const from = parseWhen(String(rawArgs[0] ?? '').replace(/['"]/g, ''), now, now - 30 * DAY);
+    const to = parseWhen(String(rawArgs[1] ?? '').replace(/['"]/g, ''), now, now);
+    const lo = Math.min(from, to);
+    const hi = Math.max(from, to);
+    const at = new Date(lo + Math.floor(Math.random() * (hi - lo + 1)));
+    return formatDate(at, dateOpts.format?.replace(/['"]/g, '') || 'ISO');
   }
   if (helperName === 'pickRandom') {
     if (args.length === 0) return '';
@@ -266,12 +338,22 @@ function evaluateExpression(
     } catch { return ''; }
   }
 
-  // Fallback: try as a simple value path
-  return resolveValue(helperName, ctx, vars);
+  // Fallback: a simple value path — and if it is not one of those either, give
+  // up in whichever way the caller asked for. See RenderOptions.keepUnknown.
+  const value = resolveValue(helperName, ctx, vars);
+  if (value === undefined) return opts.keepUnknown ? UNKNOWN : '';
+  return value;
 }
 
 // ─── Value resolver ───────────────────────────────────────────────────────────
 
+/**
+ * A value path, or `undefined` when this engine has no meaning for it at all.
+ *
+ * The difference matters on the request path: `request.headers.X-Nope` is a
+ * lookup that legitimately found nothing and is '', while `bearer-token` is
+ * not an expression this engine understands and has to be left alone.
+ */
 function resolveValue(path: string, ctx: TemplateRequestContext, vars: Record<string, unknown>): unknown {
   if (vars[path] !== undefined) return vars[path];
 
@@ -301,11 +383,13 @@ function resolveValue(path: string, ctx: TemplateRequestContext, vars: Record<st
     if (key === 'pathParams')  return parts[2] ? ctx.pathParams[parts[2]] ?? '' : JSON.stringify(ctx.pathParams);
   }
 
-  if (parts[0] === 'state' && ctx.stateVars) {
-    return parts[1] ? ctx.stateVars[parts[1]] : '';
+  if (parts[0] === 'request') return '';
+
+  if (parts[0] === 'state') {
+    return ctx.stateVars && parts[1] ? ctx.stateVars[parts[1]] : '';
   }
 
-  return '';
+  return undefined;
 }
 
 function resolveArg(arg: string, ctx: TemplateRequestContext, vars: Record<string, unknown>): unknown {
@@ -315,7 +399,7 @@ function resolveArg(arg: string, ctx: TemplateRequestContext, vars: Record<strin
   if (arg.includes('=')) return arg; // named arg, handled separately
   const num = Number(arg);
   if (!isNaN(num) && arg !== '') return num;
-  return resolveValue(arg, ctx, vars);
+  return resolveValue(arg, ctx, vars) ?? '';
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -367,19 +451,57 @@ function evaluateSimpleJsonPath(path: string, obj: unknown): unknown {
   return current ?? '';
 }
 
+const DAY = 86400000;
+
+/**
+ * Read one end of a date range: `now`, an offset like `-30d`, or a real date.
+ *
+ * The offset spellings are WireMock's, because somebody writing `-3d` here has
+ * almost certainly written it there first.
+ */
+function parseWhen(input: string, now: number, fallback: number): number {
+  const s = input.trim();
+  if (!s) return fallback;
+  if (s === 'now') return now;
+
+  const rel = /^([+-]?\d+)\s*(ms|s|m|h|d|w|y)$/i.exec(s);
+  if (rel) {
+    const n = parseInt(rel[1], 10);
+    const unit = rel[2].toLowerCase();
+    const ms = unit === 'ms' ? 1
+      : unit === 's' ? 1000
+        : unit === 'm' ? 60000
+          : unit === 'h' ? 3600000
+            : unit === 'd' ? DAY
+              : unit === 'w' ? 7 * DAY
+                : 365 * DAY;
+    return now + n * ms;
+  }
+
+  const parsed = Date.parse(s);
+  return isNaN(parsed) ? fallback : parsed;
+}
+
 function formatDate(d: Date, fmt: string): string {
-  if (fmt === 'ISO') return d.toISOString();
-  if (fmt === 'UTC') return d.toUTCString();
-  if (fmt === 'epoch') return String(Math.floor(d.getTime() / 1000));
-  if (fmt === 'ms') return String(d.getTime());
-  // Simple format: YYYY-MM-DD HH:mm:ss
+  const named = fmt.toUpperCase();
+  if (named === 'ISO') return d.toISOString();
+  if (named === 'UTC') return d.toUTCString();
+  if (named === 'EPOCH') return String(Math.floor(d.getTime() / 1000));
+  if (named === 'MS') return String(d.getTime());
+  /*
+    Both spellings of the pattern tokens. Java writes `yyyy-MM-dd`, which is
+    what WireMock's own documentation shows and therefore what somebody
+    arriving from WireMock types; this engine was written with `YYYY-MM-DD`.
+    Accepting one and emitting the literal letters for the other reads as the
+    feature being broken.
+  */
   return fmt
-    .replace('YYYY', d.getFullYear().toString())
-    .replace('MM', String(d.getMonth() + 1).padStart(2, '0'))
-    .replace('DD', String(d.getDate()).padStart(2, '0'))
-    .replace('HH', String(d.getHours()).padStart(2, '0'))
-    .replace('mm', String(d.getMinutes()).padStart(2, '0'))
-    .replace('ss', String(d.getSeconds()).padStart(2, '0'));
+    .replace(/YYYY|yyyy/, d.getFullYear().toString())
+    .replace(/MM/, String(d.getMonth() + 1).padStart(2, '0'))
+    .replace(/DD|dd/, String(d.getDate()).padStart(2, '0'))
+    .replace(/HH/, String(d.getHours()).padStart(2, '0'))
+    .replace(/mm/, String(d.getMinutes()).padStart(2, '0'))
+    .replace(/ss/, String(d.getSeconds()).padStart(2, '0'));
 }
 
 // ─── Random value generator ───────────────────────────────────────────────────

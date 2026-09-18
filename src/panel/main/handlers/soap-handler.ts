@@ -14,7 +14,7 @@ import { resolveProxyFor } from '../../../services/proxy-resolve';
 import { settingsForRequest } from '../../../services/resolve-request-settings';
 import { resolveTlsPolicy } from '../../../services/tls-policy';
 import { runPhase, debugFor } from './script-phase';
-import { resolveVars, resolveRows } from '../../../services/resolve-vars';
+import { afterScript } from '../../../services/template/after-script';
 import type { ScriptContext } from '../../../services/script-runtime';
 import {
   loadScriptEnvVars, loadCollectionVars, loadGlobalVars, persistScriptVars,
@@ -140,10 +140,13 @@ export async function handleSoapInvoke(
   }
 
   /* What the script set, filled into what the webview could not resolve. */
-  endpoint = resolveVars(endpoint, pre.layers);
-  soapAction = resolveVars(soapAction, pre.layers);
-  envelope = resolveVars(envelope, pre.layers);
-  headers = resolveRows(headers, pre.layers) ?? headers;
+  const finish = afterScript(pre.layers, {
+    method: 'POST', url: endpoint, headers, body: envelope,
+  });
+  endpoint = finish.str(endpoint);
+  soapAction = finish.str(soapAction);
+  envelope = finish.str(envelope);
+  headers = finish.rows(headers) ?? headers;
 
   persistScriptVars(
     envId, collectionId,

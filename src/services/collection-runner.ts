@@ -17,6 +17,7 @@ import {
 } from '../storage/db';
 import { decryptIfNeeded } from './vault';
 import { mergeRuns, passCount } from './run-merge';
+import { afterScript } from './template/after-script';
 
 // ────────── Types ──────────
 
@@ -174,15 +175,18 @@ function loadCollectionVars(collectionId: string): Record<string, string> {
   } catch { return {}; }
 }
 
-/** Resolve {{var}} placeholders */
-function resolveVariables(str: string, env: Record<string, string>, col: Record<string, string>, globals: Record<string, string>): string {
-  return str.replace(/\{\{([a-zA-Z0-9_.]+)\}\}/g, (_, key: string) => {
-    if (key in env) return env[key];
-    if (key in col) return col[key];
-    if (key in globals) return globals[key];
-    return `{{${key}}}`;
-  });
-}
+/*
+  The runner used to carry its own `{{var}}` resolver here.
+
+  It matched `[a-zA-Z0-9_.]`, with no hyphen — so `{{bearer-token}}`, and
+  every other name somebody wrote with a dash, silently stayed a literal in a
+  collection run while resolving perfectly on the same request run by hand. It
+  also knew nothing about secrets, the `${var}` spelling, the escape syntax,
+  or any dynamic value.
+
+  It now uses the same `afterScript` the four protocol handlers use, so a
+  request means one thing however it is run.
+*/
 
 /** Extract setNextRequest calls from script logs (uses a special marker). */
 function extractSetNextRequest(logs: string[]): string | null | undefined {
@@ -404,7 +408,16 @@ async function runIteration(
     // ── Execute HTTP request ──
     let execResult: ExecuteResult;
     // Use scriptCtx.request.url/method in case pre-scripts mutated them via dk.request.url = …
-    const resolvedUrl = resolveVariables(scriptCtx.request.url, envVars, colVars, globalVars);
+    const finish = afterScript(
+      { env: envVars, collection: colVars, global: globalVars },
+      {
+        method: scriptCtx.request.method || 'GET',
+        url: scriptCtx.request.url,
+        headers: headersObj,
+        body: (reqData.bodyRaw as string) || '',
+      },
+    );
+    const resolvedUrl = finish.str(scriptCtx.request.url);
     try {
       const params: ExecuteRequestParams = {
         tabId: `runner-${request.id}`,
@@ -414,13 +427,13 @@ async function runIteration(
         // any .set()/.delete()/.add() calls from pre-scripts are reflected in the actual request.
         headers: Object.entries(headersObj).map(([key, value]) => ({
           key,
-          value: resolveVariables(value, envVars, colVars, globalVars),
+          value: finish.str(value),
         })),
         params: ((reqData.params as { key: string; value: string; enabled?: boolean }[]) || [])
           .filter((p: { key: string; enabled?: boolean }) => p.key && p.enabled !== false)
-          .map((p: { key: string; value: string }) => ({ key: p.key, value: resolveVariables(p.value, envVars, colVars, globalVars) })),
+          .map((p: { key: string; value: string }) => ({ key: p.key, value: finish.str(p.value) })),
         bodyMode: (reqData.bodyMode as string) || 'none',
-        bodyRaw: resolveVariables((reqData.bodyRaw as string) || '', envVars, colVars, globalVars),
+        bodyRaw: finish.str((reqData.bodyRaw as string) || ''),
         bodyFormData: ((reqData.bodyFormData as { key: string; value: string; enabled?: boolean }[]) || []).filter((f: { key: string; enabled?: boolean }) => f.key && f.enabled !== false),
         bodyUrlEncoded: ((reqData.bodyUrlEncoded as { key: string; value: string; enabled?: boolean }[]) || []).filter((u: { key: string; enabled?: boolean }) => u.key && u.enabled !== false),
         authType: (reqData.authType as string) || 'none',

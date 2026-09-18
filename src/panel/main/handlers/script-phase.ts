@@ -29,8 +29,8 @@
 import {
   runScript, type ScriptContext, type ScriptResult, type TestResult,
 } from '../../../services/script-runtime';
+import type { VarLayers } from '../../../services/resolve-vars';
 import { DebugSession } from '../../../services/debugger';
-import { resolveVars, resolveRows, type VarLayers } from '../../../services/resolve-vars';
 
 export interface ScriptOutcome {
   /** False when the script threw — the caller must not send the request. */
@@ -219,24 +219,5 @@ export async function runPhase(
     subRequests: result.subRequests.map(r => ({ ...r, phase })),
     testResults: result.testResults,
     layers: layersOf(ctx),
-  };
-}
-
-/**
- * Fill in any `{{var}}` the script has just made resolvable.
- *
- * The same second pass REST and GraphQL do, and for the same reason: the
- * webview renders the request before it posts it, so a variable the script
- * creates arrives too late for everything that would have used it. An
- * unresolved variable survives as its literal `{{name}}`, so it is still here
- * to complete.
- */
-export function resolveAfterScript<T extends { key: string; value: string }>(
-  fields: { strings?: (string | undefined)[]; rows?: (T[] | undefined)[] },
-  layers: VarLayers,
-): { strings: string[]; rows: (T[] | undefined)[] } {
-  return {
-    strings: (fields.strings ?? []).map(s => resolveVars(s ?? '', layers)),
-    rows: (fields.rows ?? []).map(r => resolveRows(r, layers)),
   };
 }
