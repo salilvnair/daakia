@@ -13,13 +13,12 @@ import { type ProxyConfig, type ResolvedProxy } from '../../../services/proxy-co
 import { resolveProxyFor } from '../../../services/proxy-resolve';
 import { settingsForRequest } from '../../../services/resolve-request-settings';
 import { resolveTlsPolicy } from '../../../services/tls-policy';
-import { runPhase } from './script-phase';
-import { persistScriptVars } from './graphql-handler';
+import { runPhase, debugFor } from './script-phase';
 import { resolveVars, resolveRows } from '../../../services/resolve-vars';
 import type { ScriptContext } from '../../../services/script-runtime';
 import {
-  gqlLoadEnvVars, gqlLoadColVars, gqlLoadGlobalVars,
-} from './graphql-handler';
+  loadScriptEnvVars, loadCollectionVars, loadGlobalVars, persistScriptVars,
+} from './script-vars';
 
 /** The endpoint may not parse yet; the executor reports that properly. */
 function safeHostname(endpoint: string): string {
@@ -80,9 +79,9 @@ export async function handleSoapInvoke(
     unconditionally, which is how it looked like it had run.
   */
   const collectionId = msg.collectionId as string | undefined;
-  const envVarsForScript = gqlLoadEnvVars(envId);
-  const colVarsForScript = gqlLoadColVars(collectionId);
-  const globalVarsForScript = gqlLoadGlobalVars();
+  const envVarsForScript = loadScriptEnvVars(envId);
+  const colVarsForScript = loadCollectionVars(collectionId);
+  const globalVarsForScript = loadGlobalVars();
 
   const scriptCtx: ScriptContext = {
     request: {
@@ -104,10 +103,20 @@ export async function handleSoapInvoke(
   if (preScript?.trim()) {
     postMessage({ type: 'requestProgress', tabId, stage: 'pre-request-script', status: 'running' });
   }
-  const pre = await runPhase(preScript, scriptCtx, 'pre-request');
+  const pre = await runPhase(
+    preScript, scriptCtx, 'pre-request',
+    debugFor(msg, 'pre-request', postMessage, tabId),
+  );
   scriptLogs.push(...pre.logs);
   scriptErrors.push(...pre.errors);
   consoleLogs.push(...pre.consoleLogs);
+
+  if (pre.stopped) {
+    /* The reader stopped their own debug session. Nothing failed, so no
+       error is drawn — the tab just stops waiting. */
+    postMessage({ type: 'requestAborted', tabId });
+    return;
+  }
 
   if (!pre.ok) {
     /* A script that threw has not decided what to send, so nothing is sent —

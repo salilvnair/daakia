@@ -48,9 +48,13 @@ function graphqlAgent(url: string, resolved?: ResolvedSettings): https.Agent | u
 import WebSocket from 'ws';
 import { loadEnvVars, resolveEnvString } from './env-resolver';
 import { insertHistory, trimHistory, getSetting, getAllEnvironments, upsertEnvironment, getCollectionData, updateCollectionData, setSetting } from '../../../storage/db';
-import { runScript, type ScriptContext } from '../../../services/script-runtime';
+import { type ScriptContext } from '../../../services/script-runtime';
+import { runPhase, debugFor } from './script-phase';
 import { decryptIfNeeded, decryptEnvVariables, encryptEnvVariables } from '../../../services/vault';
 import { resolveVars, resolveRows } from '../../../services/resolve-vars';
+import {
+  loadScriptEnvVars, loadCollectionVars, loadGlobalVars, persistScriptVars,
+} from './script-vars';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -247,9 +251,9 @@ export async function handleExecuteGraphQL(
   const scriptErrors: string[] = [];
   const consoleLogs: { level: string; args: unknown[]; timestamp: number; scriptPhase?: string }[] = [];
 
-  const envVarsForScript = gqlLoadEnvVars(envId);
-  const colVarsForScript = gqlLoadColVars(collectionId);
-  const globalVarsForScript = gqlLoadGlobalVars();
+  const envVarsForScript = loadScriptEnvVars(envId);
+  const colVarsForScript = loadCollectionVars(collectionId);
+  const globalVarsForScript = loadGlobalVars();
 
   // Build mutable header map for script to modify
   const mutableHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -271,12 +275,18 @@ export async function handleExecuteGraphQL(
 
   if (preRequestScript.trim()) {
     postMessage({ type: 'requestProgress', tabId, stage: 'pre-request-script', status: 'running' });
-    const result = await runScript(preRequestScript, scriptCtx);
-    scriptLogs.push(...result.logs);
-    scriptErrors.push(...result.errors);
-    consoleLogs.push(...result.structuredLogs.map(l => ({ ...l, scriptPhase: 'pre-request' })));
+    const pre = await runPhase(preRequestScript, scriptCtx, 'pre-request', debugFor(msg, 'pre-request', postMessage, tabId));
+    scriptLogs.push(...pre.logs);
+    scriptErrors.push(...pre.errors);
+    consoleLogs.push(...pre.consoleLogs);
 
-    if (!result.success) {
+    if (pre.stopped) {
+      // The reader pressed stop. Nothing failed, so nothing is reported.
+      postMessage({ type: 'requestAborted', tabId });
+      return;
+    }
+
+    if (!pre.ok) {
       postMessage({
         type: 'responseData',
         tabId,
@@ -284,7 +294,7 @@ export async function handleExecuteGraphQL(
           status: 0,
           statusText: 'Script Error',
           headers: {},
-          body: JSON.stringify({ errors: [{ message: `Pre-request script failed: ${result.errors.join('; ')}` }] }),
+          body: JSON.stringify({ errors: [{ message: `Pre-request script failed: ${pre.errors.join('; ')}` }] }),
           size: 0,
           time: 0,
           contentType: 'application/json',
@@ -297,12 +307,8 @@ export async function handleExecuteGraphQL(
       return;
     }
 
-    scriptCtx.environmentVariables = result.updatedEnvironmentVars;
-    scriptCtx.collectionVariables = result.updatedCollectionVars;
-    scriptCtx.globalVariables = result.updatedGlobalVars;
-
     // Persist env/col var changes from pre-request
-    persistScriptVars(envId, collectionId, result.updatedEnvironmentVars, result.updatedCollectionVars, result.updatedGlobalVars, envVarsForScript, colVarsForScript, globalVarsForScript, postMessage);
+    persistScriptVars(envId, collectionId, scriptCtx.environmentVariables, scriptCtx.collectionVariables, scriptCtx.globalVariables, envVarsForScript, colVarsForScript, globalVarsForScript, postMessage);
 
     /*
       Resolve again with what the script just set.
@@ -313,15 +319,9 @@ export async function handleExecuteGraphQL(
       literal `{{name}}`, so it is here to fill in; anything already resolved
       is a value and cannot be touched. Same fix as the REST path.
     */
-    const afterScript = {
-      collection: scriptCtx.collectionVariables,
-      env: scriptCtx.environmentVariables,
-      secret: scriptCtx.secretVariables,
-      global: scriptCtx.globalVariables,
-    };
-    endpoint = resolveVars(endpoint, afterScript);
-    headers = resolveRows(headers, afterScript) ?? headers;
-    if (variablesRaw) variablesRaw = resolveVars(variablesRaw, afterScript);
+    endpoint = resolveVars(endpoint, pre.layers);
+    headers = resolveRows(headers, pre.layers) ?? headers;
+    if (variablesRaw) variablesRaw = resolveVars(variablesRaw, pre.layers);
 
     postMessage({ type: 'requestProgress', tabId, stage: 'pre-request-script', status: 'done' });
   }
@@ -388,16 +388,13 @@ export async function handleExecuteGraphQL(
         size: Buffer.byteLength(body, 'utf-8'),
       };
 
-      const postResult = await runScript(postResponseScript, scriptCtx);
-      scriptLogs.push(...postResult.logs);
-      scriptErrors.push(...postResult.errors);
-      consoleLogs.push(...postResult.structuredLogs.map(l => ({ ...l, scriptPhase: 'post-response' })));
-      scriptCtx.environmentVariables = postResult.updatedEnvironmentVars;
-      scriptCtx.collectionVariables = postResult.updatedCollectionVars;
-      scriptCtx.globalVariables = postResult.updatedGlobalVars;
+      const post = await runPhase(postResponseScript, scriptCtx, 'post-response', debugFor(msg, 'post-response', postMessage, tabId));
+      scriptLogs.push(...post.logs);
+      scriptErrors.push(...post.errors);
+      consoleLogs.push(...post.consoleLogs);
 
       // Persist env/col var changes from post-response
-      persistScriptVars(envId, collectionId, postResult.updatedEnvironmentVars, postResult.updatedCollectionVars, postResult.updatedGlobalVars, envVarsForScript, colVarsForScript, globalVarsForScript, postMessage);
+      persistScriptVars(envId, collectionId, scriptCtx.environmentVariables, scriptCtx.collectionVariables, scriptCtx.globalVariables, envVarsForScript, colVarsForScript, globalVarsForScript, postMessage);
     }
 
     postMessage({
@@ -511,113 +508,6 @@ export async function handleExecuteGraphQL(
 
 // ─── Script helpers (mirrors request-handler.ts) ──────────────────────────────
 
-export function gqlLoadEnvVars(envId: string | undefined): Record<string, string> {
-  const rows = getAllEnvironments();
-  const vars: Record<string, string> = {};
-  const globalRow = rows.find(r => r.name === 'Global' || r.id === 'global');
-  if (globalRow) {
-    const gVars = JSON.parse(globalRow.variables || '[]') as { key: string; currentValue?: string; initialValue?: string }[];
-    for (const v of gVars) if (v.key) vars[v.key] = decryptIfNeeded(v.currentValue ?? v.initialValue ?? '');
-  }
-  const activeRow = envId ? rows.find(r => r.id === envId) : rows.find(r => r.is_active === 1);
-  if (activeRow && activeRow !== globalRow) {
-    const aVars = JSON.parse(activeRow.variables || '[]') as { key: string; currentValue?: string; initialValue?: string }[];
-    for (const v of aVars) if (v.key) vars[v.key] = decryptIfNeeded(v.currentValue ?? v.initialValue ?? '');
-  }
-  return vars;
-}
-
-export function gqlLoadColVars(collectionId: string | undefined): Record<string, string> {
-  if (!collectionId) return {};
-  const data = getCollectionData(collectionId);
-  const props = JSON.parse(data) as { variables?: { key: string; value: string; enabled: boolean }[] };
-  const vars: Record<string, string> = {};
-  if (props.variables) for (const v of props.variables) if (v.enabled && v.key) vars[v.key] = v.value;
-  return vars;
-}
-
-export function gqlLoadGlobalVars(): Record<string, string> {
-  return getSetting<Record<string, string>>('dk_globals') ?? {};
-}
-
-/**
- * Write a script's variable changes back to where they came from.
- *
- * Exported because SOAP and gRPC need exactly this and there are already two
- * copies of it — REST has its own, with an extra refresh callback. A third and
- * fourth would guarantee four behaviours for one feature.
- *
- * It belongs in a module of its own rather than in the GraphQL handler; it is
- * here because moving it means moving the half-dozen database helpers it
- * reaches for, and that is a change to a path that currently works. Worth
- * doing, not worth bundling into a bug fix.
- */
-export function persistScriptVars(
-  envId: string | undefined,
-  collectionId: string | undefined,
-  updatedEnv: Record<string, string>,
-  updatedCol: Record<string, string>,
-  updatedGlobal: Record<string, string>,
-  originalEnv: Record<string, string>,
-  originalCol: Record<string, string>,
-  originalGlobal: Record<string, string>,
-  postMessage: (msg: unknown) => void,
-): void {
-  if (JSON.stringify(updatedEnv) !== JSON.stringify(originalEnv)) {
-    const rows = getAllEnvironments();
-    const activeRow = envId ? rows.find(r => r.id === envId) : rows.find(r => r.is_active === 1);
-    if (activeRow) {
-      const existing = JSON.parse(activeRow.variables || '[]') as { id: string; key: string; initialValue: string; currentValue: string; isSecret: boolean }[];
-      for (const [key, value] of Object.entries(updatedEnv)) {
-        const found = existing.find(v => v.key === key);
-        if (found) found.currentValue = value;
-        else existing.push({ id: crypto.randomUUID(), key, initialValue: '', currentValue: value, isSecret: false });
-      }
-      upsertEnvironment({ id: activeRow.id, name: activeRow.name, variables: JSON.stringify(encryptEnvVariables(existing)), is_active: activeRow.is_active });
-      postMessage({ type: 'environmentsData', environments: getDecryptedEnvironments() });
-    }
-  }
-  if (JSON.stringify(updatedCol) !== JSON.stringify(originalCol) && collectionId) {
-    const data = getCollectionData(collectionId);
-    const props = JSON.parse(data) as { variables?: { key: string; value: string; enabled: boolean }[]; [k: string]: unknown };
-    const existingVars = props.variables || [];
-    for (const [key, value] of Object.entries(updatedCol)) {
-      const found = existingVars.find(v => v.key === key);
-      if (found) found.value = value;
-      else existingVars.push({ key, value, enabled: true });
-    }
-    props.variables = existingVars;
-    updateCollectionData(collectionId, JSON.stringify(props));
-    postMessage({ type: 'collectionPropertiesData', id: collectionId, properties: props });
-  }
-  if (JSON.stringify(updatedGlobal) !== JSON.stringify(originalGlobal)) {
-    setSetting('dk_globals', updatedGlobal);
-    const rows = getAllEnvironments();
-    const globalRow = rows.find(r => r.name === 'Global' || r.id === 'global');
-    if (globalRow) {
-      const existing = JSON.parse(globalRow.variables || '[]') as { id: string; key: string; initialValue: string; currentValue: string; isSecret: boolean }[];
-      for (const [key, value] of Object.entries(updatedGlobal)) {
-        const found = existing.find(v => v.key === key);
-        if (found) found.currentValue = value;
-        else existing.push({ id: crypto.randomUUID(), key, initialValue: '', currentValue: value, isSecret: false });
-      }
-      upsertEnvironment({ id: globalRow.id, name: globalRow.name, variables: JSON.stringify(encryptEnvVariables(existing)), is_active: globalRow.is_active });
-      postMessage({ type: 'environmentsData', environments: getDecryptedEnvironments() });
-    }
-  }
-}
-
-/** Same shape `handleGetEnvironments` sends the webview — decrypts every `isSecret` variable
- * before the array leaves the extension host. Used by the raw `environmentsData` re-broadcasts
- * in `gqlPersistVarUpdates`, which write straight to the DB and can't just call
- * `handleGetEnvironments` (different module, would create a circular import). */
-function getDecryptedEnvironments() {
-  return getAllEnvironments().map(r => ({
-    id: r.id,
-    name: r.name,
-    variables: decryptEnvVariables(JSON.parse(r.variables || '[]') as { initialValue?: string; currentValue?: string }[]),
-  }));
-}
 
 // ─── GraphQL Subscriptions (graphql-ws protocol) ───────────────────────────────
 

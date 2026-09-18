@@ -5,8 +5,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { executeRequest } from '../../../http/request-executor';
-import { runScript, type ScriptContext } from '../../../services/script-runtime';
-import { DebugSession } from '../../../services/debugger';
+import { type ScriptContext } from '../../../services/script-runtime';
 import { getOAuth2Token, type OAuth2Config } from '../../../services/oauth2';
 import {
   insertHistory, trimHistory,
@@ -20,6 +19,10 @@ import { resolveExecutionSettings, type ExecutionSettings } from '../../../servi
 import { collectionSettings } from '../../../services/collection-settings';
 import { globalSettings, settingsForRequest } from '../../../services/resolve-request-settings';
 import { resolveVars, resolveRows, resolveFields } from '../../../services/resolve-vars';
+import {
+  loadScriptEnvVars, loadCollectionVars, loadGlobalVars, persistScriptVars,
+} from './script-vars';
+import { runPhase, debugFor } from './script-phase';
 
 type PostMessage = (msg: unknown) => void;
 type RefreshFn = () => void;
@@ -82,14 +85,11 @@ export async function handleExecuteRequest(
     // Send progress: pre-request script stage
     postMessage({ type: 'requestProgress', tabId: msg.tabId, stage: 'pre-request-script', status: preScripts.length > 0 ? 'running' : 'skipped' });
 
-    // Debug breakpoints from webview
-    const debugBreakpoints = msg.debugBreakpoints as { preRequest?: number[]; postResponse?: number[]; preRequestConditions?: Record<number, string>; postResponseConditions?: Record<number, string> } | undefined;
-    const hasPreBps = debugBreakpoints?.preRequest && debugBreakpoints.preRequest.length > 0;
 
     // Load environment variables for script context
-    const envVarsForScript = loadEnvironmentVarsForScript(msg.envId as string | undefined);
-    const colVarsForScript = loadCollectionVarsForScript(msg.collectionId as string | undefined);
-    const globalVarsForScript = loadGlobalVarsForScript();
+    const envVarsForScript = loadScriptEnvVars(msg.envId as string | undefined);
+    const colVarsForScript = loadCollectionVars(msg.collectionId as string | undefined);
+    const globalVarsForScript = loadGlobalVars();
     const schemasForScript = loadCollectionSchemas(msg.collectionId as string | undefined);
 
     if (preScripts.length > 0) {
@@ -112,74 +112,41 @@ export async function handleExecuteRequest(
       };
 
       for (let i = 0; i < preScripts.length; i++) {
-        const script = preScripts[i];
+        /*
+          Only the LAST script is debuggable.
+
+          Collection-level scripts run first and the reader's breakpoints were
+          set in the request's own editor, so pausing inside a collection
+          script would stop on line numbers that belong to a different file.
+        */
         const isLastScript = i === preScripts.length - 1;
-        const useDebugger = isLastScript && hasPreBps;
+        const dbg = isLastScript
+          ? debugFor(msg, 'pre-request', postMessage, msg.tabId as string)
+          : undefined;
 
-        if (useDebugger) {
-          // Run through DebugSession (async, pauses at breakpoints)
-          postMessage({ type: 'scriptDebug:started', tabId: msg.tabId, phase: 'pre-request' });
+        const pre = await runPhase(preScripts[i], scriptCtx, 'pre-request', dbg);
+        scriptLogs.push(...pre.logs);
+        scriptErrors.push(...pre.errors);
+        consoleLogs.push(...pre.consoleLogs);
+        scriptSubRequests.push(...pre.subRequests as typeof scriptSubRequests);
 
-          const result = await new Promise<import('../../../services/script-runtime').ScriptResult>((resolve) => {
-            const session = new DebugSession({
-              onPaused: (state) => { postMessage({ type: 'scriptDebug:paused', tabId: msg.tabId, ...state }); },
-              onResumed: () => { postMessage({ type: 'scriptDebug:resumed', tabId: msg.tabId }); },
-              onCompleted: (r) => { resolve(r); },
-              onError: (message) => {
-                postMessage({ type: 'scriptDebug:error', tabId: msg.tabId, message });
-                resolve({ success: false, logs: [], errors: [message], structuredLogs: [], updatedEnvironmentVars: scriptCtx.environmentVariables, updatedCollectionVars: scriptCtx.collectionVariables, updatedGlobalVars: scriptCtx.globalVariables, updatedSecretVars: scriptCtx.secretVariables || {}, testResults: [], subRequests: [], duration: 0 });
-              },
-              onLog: (entry) => { postMessage({ type: 'scriptDebug:log', tabId: msg.tabId, entry }); },
-              onSubRequest: (entry) => { postMessage({ type: 'scriptDebug:subRequest', tabId: msg.tabId, entry, phase: 'pre-request' }); },
-            }, 'pre-request');
-            session.setBreakpoints(debugBreakpoints!.preRequest!);
-            if (debugBreakpoints!.preRequestConditions) session.setConditions(debugBreakpoints!.preRequestConditions);
-
-            // Store session for control messages
-            (globalThis as any).__daakiaDebugSession = session;
-            session.run(script, scriptCtx).then(resolve);
+        if (!pre.ok) {
+          // A reader who pressed stop has not hit an error — say nothing.
+          if (pre.stopped) {
+            postMessage({ type: 'requestAborted', tabId: msg.tabId });
+            return;
+          }
+          postMessage({
+            type: 'requestError', tabId: msg.tabId,
+            error: `Pre-request script failed: ${pre.errors.join('; ')}`,
+            scriptLogs, scriptErrors, consoleLogs,
           });
-
-          (globalThis as any).__daakiaDebugSession = null;
-          postMessage({ type: 'scriptDebug:completed', tabId: msg.tabId });
-
-          scriptLogs.push(...result.logs);
-          scriptErrors.push(...result.errors);
-          consoleLogs.push(...result.structuredLogs.map(l => ({ ...l, scriptPhase: 'pre-request' })));
-          scriptSubRequests.push(...result.subRequests.map(r => ({ ...r, phase: 'pre-request' })));
-          if (!result.success) {
-            // Debug stopped by user — abort gracefully without error
-            if (result.errors.includes('__DEBUG_STOPPED__')) {
-              postMessage({ type: 'requestAborted', tabId: msg.tabId });
-              return;
-            }
-            postMessage({ type: 'requestError', tabId: msg.tabId, error: `Pre-request script failed: ${result.errors.join('; ')}`, scriptLogs, scriptErrors, consoleLogs });
-            return;
-          }
-          scriptCtx.environmentVariables = result.updatedEnvironmentVars;
-          scriptCtx.collectionVariables = result.updatedCollectionVars;
-          scriptCtx.globalVariables = result.updatedGlobalVars;
-          scriptCtx.secretVariables = result.updatedSecretVars;
-        } else {
-          // Normal async execution
-          const result = await runScript(script, scriptCtx);
-          scriptLogs.push(...result.logs);
-          scriptErrors.push(...result.errors);
-          consoleLogs.push(...result.structuredLogs.map(l => ({ ...l, scriptPhase: 'pre-request' })));
-          scriptSubRequests.push(...result.subRequests.map(r => ({ ...r, phase: 'pre-request' })));
-          if (!result.success) {
-            postMessage({ type: 'requestError', tabId: msg.tabId, error: `Pre-request script failed: ${result.errors.join('; ')}`, scriptLogs, scriptErrors, consoleLogs });
-            return;
-          }
-          scriptCtx.environmentVariables = result.updatedEnvironmentVars;
-          scriptCtx.collectionVariables = result.updatedCollectionVars;
-          scriptCtx.globalVariables = result.updatedGlobalVars;
-          scriptCtx.secretVariables = result.updatedSecretVars;
+          return;
         }
       }
 
       // Persist variable changes from pre-request scripts
-      persistScriptVarUpdates(
+      persistScriptVars(
         msg.envId as string | undefined,
         msg.collectionId as string | undefined,
         scriptCtx.environmentVariables,
@@ -282,7 +249,6 @@ export async function handleExecuteRequest(
     // ── Post-response scripts (collection-level then request-level) ──
     const postResponseScripts = (msg.postResponseScripts as string[]) || [];
     let allTestResults: { name: string; passed: boolean; error?: string }[] = [];
-    const hasPostBps = debugBreakpoints?.postResponse && debugBreakpoints.postResponse.length > 0;
 
     if (postResponseScripts.length > 0) {
       const headersObj: Record<string, string> = {};
@@ -312,64 +278,31 @@ export async function handleExecuteRequest(
       };
 
       for (let i = 0; i < postResponseScripts.length; i++) {
-        const script = postResponseScripts[i];
         const isLastScript = i === postResponseScripts.length - 1;
-        const useDebugger = isLastScript && hasPostBps;
+        const dbg = isLastScript
+          ? debugFor(msg, 'post-response', postMessage, msg.tabId as string)
+          : undefined;
 
-        if (useDebugger) {
-          postMessage({ type: 'scriptDebug:started', tabId: msg.tabId, phase: 'post-response' });
+        const post = await runPhase(postResponseScripts[i], scriptCtx, 'post-response', dbg);
 
-          const debugResult = await new Promise<import('../../../services/script-runtime').ScriptResult>((resolve) => {
-            const session = new DebugSession({
-              onPaused: (state) => { postMessage({ type: 'scriptDebug:paused', tabId: msg.tabId, ...state }); },
-              onResumed: () => { postMessage({ type: 'scriptDebug:resumed', tabId: msg.tabId }); },
-              onCompleted: (r) => { resolve(r); },
-              onError: (message) => {
-                postMessage({ type: 'scriptDebug:error', tabId: msg.tabId, message });
-                resolve({ success: false, logs: [], errors: [message], structuredLogs: [], updatedEnvironmentVars: scriptCtx.environmentVariables, updatedCollectionVars: scriptCtx.collectionVariables, updatedGlobalVars: scriptCtx.globalVariables, updatedSecretVars: scriptCtx.secretVariables || {}, testResults: [], subRequests: [], duration: 0 });
-              },
-              onLog: (entry) => { postMessage({ type: 'scriptDebug:log', tabId: msg.tabId, entry }); },
-              onSubRequest: (entry) => { postMessage({ type: 'scriptDebug:subRequest', tabId: msg.tabId, entry, phase: 'post-response' }); },
-            }, 'post-response');
-            session.setBreakpoints(debugBreakpoints!.postResponse!);
-            if (debugBreakpoints!.postResponseConditions) session.setConditions(debugBreakpoints!.postResponseConditions);
-            (globalThis as any).__daakiaDebugSession = session;
-            session.run(script, scriptCtx).then(resolve);
-          });
+        /*
+          Stopping here keeps the response.
 
-          (globalThis as any).__daakiaDebugSession = null;
-          postMessage({ type: 'scriptDebug:completed', tabId: msg.tabId });
+          Unlike the pre-request phase, the request has already been sent and
+          answered by now — throwing that away because the reader stepped out
+          of a test script would lose the thing they were testing.
+        */
+        if (post.stopped) break;
 
-          // Debug stopped by user — abort post-response gracefully
-          if (!debugResult.success && debugResult.errors.includes('__DEBUG_STOPPED__')) {
-            break; // Exit post-response script loop, continue to send whatever response we have
-          }
-
-          scriptLogs.push(...debugResult.logs);
-          scriptErrors.push(...debugResult.errors);
-          consoleLogs.push(...debugResult.structuredLogs.map(l => ({ ...l, scriptPhase: 'post-response' })));
-          scriptSubRequests.push(...debugResult.subRequests.map(r => ({ ...r, phase: 'post-response' })));
-          allTestResults.push(...debugResult.testResults);
-          scriptCtx.environmentVariables = debugResult.updatedEnvironmentVars;
-          scriptCtx.collectionVariables = debugResult.updatedCollectionVars;
-          scriptCtx.globalVariables = debugResult.updatedGlobalVars;
-          scriptCtx.secretVariables = debugResult.updatedSecretVars;
-        } else {
-          const testResult = await runScript(script, scriptCtx);
-          scriptLogs.push(...testResult.logs);
-          scriptErrors.push(...testResult.errors);
-          consoleLogs.push(...testResult.structuredLogs.map(l => ({ ...l, scriptPhase: 'post-response' })));
-          scriptSubRequests.push(...testResult.subRequests.map(r => ({ ...r, phase: 'post-response' })));
-          allTestResults.push(...testResult.testResults);
-          scriptCtx.environmentVariables = testResult.updatedEnvironmentVars;
-          scriptCtx.collectionVariables = testResult.updatedCollectionVars;
-          scriptCtx.globalVariables = testResult.updatedGlobalVars;
-          scriptCtx.secretVariables = testResult.updatedSecretVars;
-        }
+        scriptLogs.push(...post.logs);
+        scriptErrors.push(...post.errors);
+        consoleLogs.push(...post.consoleLogs);
+        scriptSubRequests.push(...post.subRequests as typeof scriptSubRequests);
+        allTestResults.push(...post.testResults);
       }
 
       // Persist variable changes from post-response scripts
-      persistScriptVarUpdates(
+      persistScriptVars(
         msg.envId as string | undefined,
         msg.collectionId as string | undefined,
         scriptCtx.environmentVariables,
@@ -589,53 +522,6 @@ export async function handleGetOAuth2Token(msg: Record<string, unknown>, postMes
 
 // ────────────────── Script Variable Helpers ──────────────────
 
-function loadEnvironmentVarsForScript(envId: string | undefined): Record<string, string> {
-  const rows = getAllEnvironments();
-  const vars: Record<string, string> = {};
-
-  // Global environment first (lowest priority)
-  const globalRow = rows.find(r => r.name === 'Global' || r.id === 'global');
-  if (globalRow) {
-    const globalVars = JSON.parse(globalRow.variables || '[]') as { key: string; currentValue?: string; initialValue?: string; isSecret?: boolean }[];
-    for (const v of globalVars) {
-      if (v.key) vars[v.key] = decryptIfNeeded(v.currentValue ?? v.initialValue ?? '');
-    }
-  }
-
-  // Active environment (overrides global)
-  const activeRow = envId
-    ? rows.find(r => r.id === envId)
-    : rows.find(r => r.is_active === 1);
-
-  if (activeRow && activeRow !== globalRow) {
-    const activeVars = JSON.parse(activeRow.variables || '[]') as { key: string; currentValue?: string; initialValue?: string; isSecret?: boolean }[];
-    for (const v of activeVars) {
-      if (v.key) vars[v.key] = decryptIfNeeded(v.currentValue ?? v.initialValue ?? '');
-    }
-  }
-
-  return vars;
-}
-
-function loadCollectionVarsForScript(collectionId: string | undefined): Record<string, string> {
-  if (!collectionId) return {};
-  const data = getCollectionData(collectionId);
-  const props = JSON.parse(data) as { variables?: { key: string; value: string; enabled: boolean }[] };
-  const vars: Record<string, string> = {};
-  if (props.variables) {
-    for (const v of props.variables) {
-      if (v.enabled && v.key) vars[v.key] = v.value;
-    }
-  }
-  return vars;
-}
-
-/**
- * Schemas kept when an OpenAPI document was imported into this collection.
- *
- * What makes `toMatchSchema('#/components/schemas/User')` mean the spec
- * rather than a blob someone pasted into the script.
- */
 function loadCollectionSchemas(collectionId: string | undefined): Record<string, unknown> | undefined {
   if (!collectionId) return undefined;
   try {
@@ -646,86 +532,6 @@ function loadCollectionSchemas(collectionId: string | undefined): Record<string,
   }
 }
 
-function loadGlobalVarsForScript(): Record<string, string> {
-  return getSetting<Record<string, string>>('dk_globals') ?? {};
-}
-
-function persistScriptVarUpdates(
-  envId: string | undefined,
-  collectionId: string | undefined,
-  updatedEnvVars: Record<string, string>,
-  updatedColVars: Record<string, string>,
-  updatedGlobalVars: Record<string, string>,
-  originalEnvVars: Record<string, string>,
-  originalColVars: Record<string, string>,
-  originalGlobalVars: Record<string, string>,
-  postMessage: PostMessage,
-  refreshEnvironments: RefreshFn,
-) {
-  const envChanged = JSON.stringify(updatedEnvVars) !== JSON.stringify(originalEnvVars);
-  if (envChanged) {
-    const rows = getAllEnvironments();
-    const activeRow = envId
-      ? rows.find(r => r.id === envId)
-      : rows.find(r => r.is_active === 1);
-
-    if (activeRow) {
-      const existingVars = JSON.parse(activeRow.variables || '[]') as { id: string; key: string; initialValue: string; currentValue: string; isSecret: boolean }[];
-      for (const [key, value] of Object.entries(updatedEnvVars)) {
-        const existing = existingVars.find(v => v.key === key);
-        if (existing) {
-          existing.currentValue = value;
-        } else {
-          existingVars.push({ id: crypto.randomUUID(), key, initialValue: '', currentValue: value, isSecret: false });
-        }
-      }
-      upsertEnvironment({ id: activeRow.id, name: activeRow.name, variables: JSON.stringify(encryptEnvVariables(existingVars)), is_active: activeRow.is_active });
-      refreshEnvironments();
-    }
-  }
-
-  const colChanged = JSON.stringify(updatedColVars) !== JSON.stringify(originalColVars);
-  if (colChanged && collectionId) {
-    const data = getCollectionData(collectionId);
-    const props = JSON.parse(data) as { variables?: { key: string; value: string; enabled: boolean }[]; [k: string]: unknown };
-    const existingVars = props.variables || [];
-
-    for (const [key, value] of Object.entries(updatedColVars)) {
-      const existing = existingVars.find(v => v.key === key);
-      if (existing) {
-        existing.value = value;
-      } else {
-        existingVars.push({ key, value, enabled: true });
-      }
-    }
-    props.variables = existingVars;
-    updateCollectionData(collectionId, JSON.stringify(props));
-    postMessage({ type: 'collectionPropertiesData', id: collectionId, properties: props });
-  }
-
-  // Persist global variables & sync to Global environment so webview resolvers pick them up
-  const globalsChanged = JSON.stringify(updatedGlobalVars) !== JSON.stringify(originalGlobalVars);
-  if (globalsChanged) {
-    setSetting('dk_globals', updatedGlobalVars);
-
-    // Merge into Global environment row so {{var}} resolves in webview
-    const rows = getAllEnvironments();
-    const globalRow = rows.find(r => r.name === 'Global' || r.id === 'global');
-    if (globalRow) {
-      const existingVars = JSON.parse(globalRow.variables || '[]') as { id: string; key: string; initialValue: string; currentValue: string; isSecret: boolean }[];
-      for (const [key, value] of Object.entries(updatedGlobalVars)) {
-        const existing = existingVars.find(v => v.key === key);
-        if (existing) {
-          existing.currentValue = value;
-        } else {
-          existingVars.push({ id: crypto.randomUUID(), key, initialValue: '', currentValue: value, isSecret: false });
-        }
-      }
-      upsertEnvironment({ id: globalRow.id, name: globalRow.name, variables: JSON.stringify(encryptEnvVariables(existingVars)), is_active: globalRow.is_active });
-      refreshEnvironments();
-    }
-  }
-}
 
 // ────────────────── Response Helpers ──────────────────
 

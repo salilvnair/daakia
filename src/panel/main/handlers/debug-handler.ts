@@ -32,9 +32,9 @@ let lastStartMsg: { type: string;[key: string]: unknown } | null = null;
 let lastPostMessage: PostMessage | null = null;
 let isRestarting = false;
 
-/** Get the active debug session (from request-handler's global or standalone) */
+/** The session a control message is about — the request pipeline's, or a standalone one. */
 function getSession(): DebugSession | null {
-  return (globalThis as any).__daakiaDebugSession || activeSession;
+  return globalThis.__daakiaDebugSession || activeSession;
 }
 
 export function handleDebugMessage(
@@ -133,7 +133,7 @@ function handleRestartFrame(
   // Stop the current session
   getSession()?.resume('stop');
   activeSession = null;
-  (globalThis as any).__daakiaDebugSession = null;
+  globalThis.__daakiaDebugSession = null;
 
   // Clear the flag and re-start with the same params
   isRestarting = false;

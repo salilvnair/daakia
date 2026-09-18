@@ -15,10 +15,10 @@ import { discoverServices } from '../../../grpc/grpc-reflection';
 import { loadProtoFile } from '../../../grpc/proto-loader';
 import { loadEnvVars, resolveEnvString } from './env-resolver';
 import { insertHistory, trimHistory } from '../../../storage/db';
-import { runPhase } from './script-phase';
+import { runPhase, debugFor } from './script-phase';
 import {
-  persistScriptVars, gqlLoadEnvVars, gqlLoadColVars, gqlLoadGlobalVars,
-} from './graphql-handler';
+  loadScriptEnvVars, loadCollectionVars, loadGlobalVars, persistScriptVars,
+} from './script-vars';
 import { resolveVars, resolveRows } from '../../../services/resolve-vars';
 import type { ScriptContext } from '../../../services/script-runtime';
 
@@ -64,9 +64,9 @@ export async function handleGrpcInvoke(
     one, watch the tab mark itself as having content, and get silence.
   */
   const collectionId = msg.collectionId as string | undefined;
-  const envVarsForScript = gqlLoadEnvVars(envId);
-  const colVarsForScript = gqlLoadColVars(collectionId);
-  const globalVarsForScript = gqlLoadGlobalVars();
+  const envVarsForScript = loadScriptEnvVars(envId);
+  const colVarsForScript = loadCollectionVars(collectionId);
+  const globalVarsForScript = loadGlobalVars();
 
   const scriptCtx: ScriptContext = {
     request: {
@@ -84,7 +84,17 @@ export async function handleGrpcInvoke(
   if (preScript?.trim()) {
     postMessage({ type: 'requestProgress', tabId, stage: 'pre-request-script', status: 'running' });
   }
-  const pre = await runPhase(preScript, scriptCtx, 'pre-request');
+  const pre = await runPhase(
+    preScript, scriptCtx, 'pre-request',
+    debugFor(msg, 'pre-request', postMessage, tabId),
+  );
+
+  if (pre.stopped) {
+    /* The reader stopped their own debug session. Nothing failed, so no
+       error is drawn — the tab just stops waiting. */
+    postMessage({ type: 'requestAborted', tabId });
+    return;
+  }
 
   if (!pre.ok) {
     /* A script that threw has not decided what to send, so nothing is sent. */
