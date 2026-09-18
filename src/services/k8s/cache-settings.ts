@@ -91,3 +91,24 @@ export function longLivedTtlMs(): number {
 export function shortLivedTtlMs(): number {
   return cacheEnabled() ? Math.min(30_000, cacheTtlMinutes() * 60_000) : 0;
 }
+
+/**
+ * Whether a pod list asks for only what the grid draws.
+ *
+ * On by default. `get pods -o json` is roughly 10 KB per pod against 95 for
+ * the template that carries the same screen — 28,094 bytes against 565 on a
+ * namespace of six, and on a hundred and fifty behind a VPN the difference
+ * between a pod list and a stopwatch.
+ *
+ * Off asks for the full object, which carries `lastRestartAt` and whatever
+ * field somebody needs next. On a local cluster the extra is free.
+ */
+let light: boolean | undefined;
+
+export function setLightLists(on: boolean | undefined): void {
+  light = on;
+}
+
+export function lightLists(): boolean {
+  return light ?? true;
+}

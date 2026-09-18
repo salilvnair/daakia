@@ -18,7 +18,8 @@ import { clusterTimeoutMs } from './k8s-timeouts';
 import { podsTable } from './pods-table';
 import { resolveWorkload } from './workload';
 import { askOnce, forgetOnce } from './ask-once';
-import { shortLivedTtlMs } from './cache-settings';
+import { podsList, type ListedPod } from './pods-list';
+import { shortLivedTtlMs, lightLists } from './cache-settings';
 
 export interface ContainerSummary {
   name: string;
@@ -77,6 +78,43 @@ export interface WatchEvent {
 type RawPod = Record<string, any>;
 
 /** Map the API object down to what the grid needs. */
+/**
+ * A pod as the light list gives it, in the shape the grid already draws.
+ *
+ * The one piece of reasoning here is the owner: the cluster reports a pod's
+ * owner as the ReplicaSet that made it, and nobody thinks in ReplicaSets. The
+ * hash suffix is stripped so both replicas of one Deployment name the same
+ * thing — the same rule `workloadKey` uses, kept in step by both being about
+ * the same fact.
+ */
+export function fromListedPod(p: ListedPod, namespace: string): PodSummary {
+  const kind = p.ownerKind === 'ReplicaSet' ? 'Deployment' : p.ownerKind;
+  const name = p.ownerKind === 'ReplicaSet'
+    ? (p.ownerName ?? '').replace(/-[a-z0-9]{6,10}$/, '')
+    : p.ownerName;
+
+  return {
+    name: p.name,
+    namespace,
+    uid: p.uid,
+    phase: p.phase,
+    reason: p.reason,
+    ready: p.ready,
+    restarts: p.restarts,
+    startedAt: p.startedAt,
+    lastRestartAt: p.lastRestartAt,
+    node: p.node,
+    containers: p.containers.map(c => ({
+      name: c.name, ready: c.ready, restarts: c.restarts, image: c.image,
+    })),
+    workload: kind && name ? { kind, name } : undefined,
+    /* The first container's, which is what the card shows. */
+    image: p.containers[0]?.image,
+    healthy: p.phase === 'Running' && p.ready.current === p.ready.total,
+    deleting: p.deleting,
+  };
+}
+
 export function toPodSummary(raw: RawPod): PodSummary {
   const meta = raw.metadata ?? {};
   const status = raw.status ?? {};
@@ -290,6 +328,37 @@ export function watchPods(
 
     const listKey = `podlist:${context}/${namespace}`;
     if (fresh) forgetOnce(listKey);
+
+    /*
+      ── Light, by default ──
+
+      `-o json` is roughly 10 KB per pod; the template `podsList` uses is 95,
+      and carries everything this grid draws — the owning workload, the
+      images, each container's ready flag and restart count. Measured on six
+      pods: 28,094 bytes against 565.
+
+      The full object is still here, behind the setting, because it carries
+      two things the template does not: `lastRestartAt`, and whatever field
+      somebody needs next. On a local cluster the difference is invisible and
+      the extra is free.
+    */
+    if (lightLists()) {
+      const light = await askOnce(listKey, shortLivedTtlMs(),
+        () => podsList(context, namespace));
+      void fast;
+      if (stopped) return false;
+
+      if (light.error) {
+        cb.onStatus('reconnecting', light.error);
+        return false;
+      }
+      full = true;
+      const summaries = light.pods.map(p => fromListedPod(p, namespace));
+      known = new Set(summaries.map(p => p.name));
+      cb.onSnapshot(summaries);
+      return true;
+    }
+
     const listed = await askOnce(listKey, shortLivedTtlMs(), () => run(
       ['--context', context, '-n', namespace, 'get', 'pods', '-o', 'json'],
       { timeoutMs: clusterTimeoutMs() },

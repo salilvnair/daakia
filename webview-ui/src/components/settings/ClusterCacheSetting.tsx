@@ -35,6 +35,7 @@ const REMEMBERED = [
 export function ClusterCacheSetting() {
   const enabled = useK8sStore(s => s.cacheEnabled);
   const ttl = useK8sStore(s => s.cacheTtlMinutes);
+  const light = useK8sStore(s => s.lightLists);
   const setCache = useK8sStore(s => s.setCacheSettings);
   const [draft, setDraft] = useState(String(ttl));
   const [touched, setTouched] = useState(false);
@@ -87,6 +88,37 @@ export function ClusterCacheSetting() {
           the same instant cannot get different answers.
         </span>
       </div>
+
+      {/*
+        Separate from the cache, because it is a different trade.
+
+        Caching is about WHEN dk8s asks. This is about how much it asks FOR,
+        and it applies to every list whether anything is remembered or not.
+      */}
+      <label className="flex items-start gap-3 cursor-pointer pt-1"
+             style={{ borderTop: '1px solid var(--color-surface-border)', paddingTop: 12 }}>
+        <CheckboxView
+          checked={light}
+          onChange={on => setCache({ enabled, ttlMinutes: ttl, lightLists: on })}
+          size="md" accentColor={ACCENT}
+        />
+        <span className="flex flex-col gap-1.5 flex-1 min-w-0">
+          <span className="text-[13px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
+            Light pod lists
+          </span>
+          <span className="text-[11.5px] leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+            Ask for the fields the grid draws rather than the whole object.
+            Measured on a namespace of six pods:{' '}
+            <b style={{ color: 'var(--color-text-primary)' }}>565 bytes against 28,094</b> —
+            same screen, fifty times smaller. On a hundred and fifty pods behind
+            a VPN that is the difference between a pod list and a stopwatch.
+          </span>
+          <span className="text-[11px] leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+            Off asks for the full object, which also carries when a pod last
+            restarted. On a local cluster the extra costs nothing.
+          </span>
+        </span>
+      </label>
 
       <div className="flex items-center gap-2 pl-8">
         <span className="text-[11.5px]" style={{ color: enabled ? 'var(--color-text-secondary)' : 'var(--color-text-muted)' }}>

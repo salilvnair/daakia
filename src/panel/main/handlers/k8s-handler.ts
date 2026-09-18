@@ -74,6 +74,7 @@ import {
 import type { PodRuntime } from '../../../services/k8s/pod-classify';
 import {
   setCacheEnabled, setCacheTtlMinutes, clampTtlMinutes, cacheEnabled, cacheTtlMinutes,
+  setLightLists, lightLists,
 } from '../../../services/k8s/cache-settings';
 import { __resetAskOnce } from '../../../services/k8s/ask-once';
 import { podSpec } from '../../../services/k8s/pod-spec';
@@ -100,6 +101,8 @@ export interface Dk8sState {
    */
   cacheEnabled?: boolean;
   cacheTtlMinutes?: number;
+  /** Whether a pod list asks for only what the grid draws. */
+  lightLists?: boolean;
   /**
    * How long to wait for a cluster call, in seconds.
    *
@@ -240,6 +243,7 @@ export async function handleDk8sProbe(postMessage: PostMessage): Promise<void> {
      is asked for, or the first probe of a session runs uncached. */
   setCacheEnabled(saved.cacheEnabled);
   setCacheTtlMinutes(saved.cacheTtlMinutes);
+  setLightLists(saved.lightLists);
 
   /*
     See the note above: a refresh that returns the cached answer is not one.
@@ -257,6 +261,7 @@ export async function handleDk8sProbe(postMessage: PostMessage): Promise<void> {
       type: 'dk8s:env', env, contexts: [], platform: process.platform,
       clusterTimeoutSeconds: clusterTimeoutSeconds(),
       cacheEnabled: cacheEnabled(), cacheTtlMinutes: cacheTtlMinutes(),
+      lightLists: lightLists(),
     });
     return;
   }
@@ -1723,12 +1728,14 @@ export async function handleDk8sSetCache(
 ): Promise<void> {
   const enabled = msg.enabled !== false;
   const ttlMinutes = clampTtlMinutes(msg.ttlMinutes);
+  const light = msg.lightLists !== false;
   setCacheEnabled(enabled);
   setCacheTtlMinutes(ttlMinutes);
-  saveState({ cacheEnabled: enabled, cacheTtlMinutes: ttlMinutes });
+  setLightLists(light);
+  saveState({ cacheEnabled: enabled, cacheTtlMinutes: ttlMinutes, lightLists: light });
   /* Turning it off means off NOW, not once the last answer expires. */
   if (!enabled) __resetAskOnce();
-  postMessage({ type: 'dk8s:cacheSettings', enabled, ttlMinutes });
+  postMessage({ type: 'dk8s:cacheSettings', enabled, ttlMinutes, lightLists: light });
 }
 
 /** Explicit kubectl path, for when it is installed somewhere unusual. */

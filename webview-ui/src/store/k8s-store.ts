@@ -549,7 +549,9 @@ interface K8sState {
   /** Whether the host may remember what the cluster answered — Settings. */
   cacheEnabled: boolean;
   cacheTtlMinutes: number;
-  setCacheSettings: (v: { enabled: boolean; ttlMinutes: number }) => void;
+  /** Whether a pod list asks for only what the grid draws. */
+  lightLists: boolean;
+  setCacheSettings: (v: { enabled: boolean; ttlMinutes: number; lightLists?: boolean }) => void;
 
   pods: PodSummary[];
   usage: Record<string, PodUsage>;
@@ -951,10 +953,12 @@ export const useK8sStore = create<K8sState>((set, get) => ({
      screen reads right before the first reply arrives. */
   cacheEnabled: true,
   cacheTtlMinutes: 60,
-  setCacheSettings: ({ enabled, ttlMinutes }) => {
+  lightLists: true,
+  setCacheSettings: ({ enabled, ttlMinutes, lightLists }) => {
     const clamped = Math.min(24 * 60, Math.max(1, Math.round(ttlMinutes) || 60));
-    set({ cacheEnabled: enabled, cacheTtlMinutes: clamped });
-    postMsg({ type: 'dk8s:setCache', enabled, ttlMinutes: clamped });
+    const light = lightLists ?? get().lightLists;
+    set({ cacheEnabled: enabled, cacheTtlMinutes: clamped, lightLists: light });
+    postMsg({ type: 'dk8s:setCache', enabled, ttlMinutes: clamped, lightLists: light });
   },
 
   probe: () => {
@@ -1549,6 +1553,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
           set({
             cacheEnabled: msg.cacheEnabled !== false,
             cacheTtlMinutes: Number(msg.cacheTtlMinutes) || 60,
+            lightLists: msg.lightLists !== false,
           });
         }
         const env = msg.env as KubectlEnv;
@@ -1959,6 +1964,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         set({
           cacheEnabled: msg.enabled !== false,
           cacheTtlMinutes: Number(msg.ttlMinutes) || 60,
+          lightLists: msg.lightLists !== false,
         });
         break;
 
