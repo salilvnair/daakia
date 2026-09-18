@@ -50,6 +50,7 @@ import { loadEnvVars, resolveEnvString } from './env-resolver';
 import { insertHistory, trimHistory, getSetting, getAllEnvironments, upsertEnvironment, getCollectionData, updateCollectionData, setSetting } from '../../../storage/db';
 import { runScript, type ScriptContext } from '../../../services/script-runtime';
 import { decryptIfNeeded, decryptEnvVariables, encryptEnvVariables } from '../../../services/vault';
+import { resolveVars, resolveRows } from '../../../services/resolve-vars';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -231,14 +232,15 @@ export async function handleExecuteGraphQL(
   const envId = msg.envId as string | undefined;
   const collectionId = msg.collectionId as string | undefined;
   const query = msg.query as string;
-  const headers = (msg.headers as { key: string; value: string }[] | undefined) || [];
-  const variablesRaw = msg.variables as string | undefined;
+  let headers = (msg.headers as { key: string; value: string }[] | undefined) || [];
+  let variablesRaw = msg.variables as string | undefined;
   const preRequestScript = (msg.preRequestScript as string) || '';
   const postResponseScript = (msg.postResponseScript as string) || '';
 
   // Resolve environment variables
   const vars = loadEnvVars(envId);
-  const endpoint = resolveEnvString(msg.endpoint as string, vars);
+  /* Reassigned after the pre-request script — see the note there. */
+  let endpoint = resolveEnvString(msg.endpoint as string, vars);
 
   // ── Pre-request script ──
   const scriptLogs: string[] = [];
@@ -301,6 +303,26 @@ export async function handleExecuteGraphQL(
 
     // Persist env/col var changes from pre-request
     gqlPersistVarUpdates(envId, collectionId, result.updatedEnvironmentVars, result.updatedCollectionVars, result.updatedGlobalVars, envVarsForScript, colVarsForScript, globalVarsForScript, postMessage);
+
+    /*
+      Resolve again with what the script just set.
+
+      The endpoint, the headers and the variables JSON were all rendered
+      before this ran, so a token the script creates — `{{bearer-token}}` in a
+      header — was still a template. An unresolved variable survives as its
+      literal `{{name}}`, so it is here to fill in; anything already resolved
+      is a value and cannot be touched. Same fix as the REST path.
+    */
+    const afterScript = {
+      collection: scriptCtx.collectionVariables,
+      env: scriptCtx.environmentVariables,
+      secret: scriptCtx.secretVariables,
+      global: scriptCtx.globalVariables,
+    };
+    endpoint = resolveVars(endpoint, afterScript);
+    headers = resolveRows(headers, afterScript) ?? headers;
+    if (variablesRaw) variablesRaw = resolveVars(variablesRaw, afterScript);
+
     postMessage({ type: 'requestProgress', tabId, stage: 'pre-request-script', status: 'done' });
   }
 

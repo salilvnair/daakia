@@ -19,6 +19,7 @@ import { decryptIfNeeded, encryptEnvVariables } from '../../../services/vault';
 import { resolveExecutionSettings, type ExecutionSettings } from '../../../services/execution-settings';
 import { collectionSettings } from '../../../services/collection-settings';
 import { globalSettings, settingsForRequest } from '../../../services/resolve-request-settings';
+import { resolveVars, resolveRows, resolveFields } from '../../../services/resolve-vars';
 
 type PostMessage = (msg: unknown) => void;
 type RefreshFn = () => void;
@@ -195,6 +196,43 @@ export async function handleExecuteRequest(
       // executeRequest() picks them up. headersObj is the same reference that
       // dk.request.headers proxy mutates, so it reflects all .set()/.delete() calls.
       msg.headers = Object.entries(headersObj).map(([key, value]) => ({ key, value }));
+
+      /*
+        ── And now resolve what the script just set ──
+
+        The webview renders the request before it posts it, so a variable the
+        script creates is created after everything that could have used it was
+        already substituted. `{{bearer-token}}` in the Auth tab never worked on
+        the first run and worked on the second, which is the worst shape a bug
+        can have.
+
+        An unresolved variable survives that first pass as its literal
+        `{{name}}`, so it is still here to fill in. Anything the webview could
+        already resolve is a value by now and cannot be touched — this only
+        ever completes what was genuinely missing.
+
+        Every place a variable is allowed: the URL, the headers, the body, the
+        query, and the auth data the Auth tab builds.
+      */
+      const afterScript = {
+        collection: scriptCtx.collectionVariables,
+        env: scriptCtx.environmentVariables,
+        secret: scriptCtx.secretVariables,
+        global: scriptCtx.globalVariables,
+      };
+      msg.url = resolveVars(String(msg.url ?? ''), afterScript);
+      msg.headers = resolveRows(msg.headers as { key: string; value: string }[], afterScript);
+      msg.params = resolveRows(msg.params as { key: string; value: string }[], afterScript);
+      msg.bodyRaw = resolveVars(String(msg.bodyRaw ?? ''), afterScript);
+      msg.bodyUrlEncoded = resolveRows(
+        msg.bodyUrlEncoded as { key: string; value: string }[], afterScript,
+      );
+      msg.bodyFormData = resolveRows(
+        msg.bodyFormData as { key: string; value: string }[], afterScript,
+      );
+      msg.authData = resolveFields(
+        msg.authData as Record<string, unknown> | undefined, afterScript,
+      );
 
       // Sync url/method/body mutations (scripts can reassign dk.request.url etc.)
       if (scriptCtx.request.url !== (msg.url as string)) {
