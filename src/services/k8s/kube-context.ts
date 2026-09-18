@@ -9,6 +9,8 @@
  */
 import { run } from './kubectl';
 import { clusterTimeoutMs, reachRequestTimeoutSeconds } from './k8s-timeouts';
+import { askOnce } from './ask-once';
+import { longLivedTtlMs } from './cache-settings';
 
 export interface KubeContext {
   name: string;
@@ -39,6 +41,15 @@ export interface ContextList {
  * rather than silently missing from the picker.
  */
 export async function listContexts(): Promise<ContextList> {
+  /*
+    Three kubectl calls to read a file on disk that changes when somebody
+    edits their kubeconfig — not while they work. It was re-read on every
+    probe, which is every panel open and every cluster switch.
+  */
+  return askOnce('contexts', longLivedTtlMs(), listContextsUncached);
+}
+
+async function listContextsUncached(): Promise<ContextList> {
   const current = (await run(['config', 'current-context'])).stdout.trim() || undefined;
 
   const named = await run(['config', 'get-contexts', '-o', 'name']);
@@ -134,6 +145,12 @@ export interface NamespaceList {
  * seeded with `fallback`.
  */
 export async function listNamespaces(context: string): Promise<NamespaceList> {
+  /* A namespace is created rarely and by somebody else. Same trade. */
+  return askOnce(`namespaces:${context}`, longLivedTtlMs(),
+    () => listNamespacesUncached(context));
+}
+
+async function listNamespacesUncached(context: string): Promise<NamespaceList> {
   const res = await run(['--context', context, 'get', 'namespaces', '-o', 'name'], { timeoutMs: clusterTimeoutMs() });
   if (res.ok) {
     const namespaces = res.stdout

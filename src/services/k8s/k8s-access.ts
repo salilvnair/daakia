@@ -22,6 +22,8 @@
  */
 
 import { run } from './kubectl';
+import { askOnce } from './ask-once';
+import { longLivedTtlMs } from './cache-settings';
 import {
   ACCESS_CHECKS, canIArgs, type AccessCheck, type AccessKey,
 } from './access-checks';
@@ -63,11 +65,20 @@ const ALL_ALLOWED = (probed: boolean, detail?: string): Access => ({
 });
 
 /**
- * Permissions change rarely and this runs per pod open, so it is cached for
- * the session. Long enough that opening ten pods costs one probe; short enough
- * that a role granted while you are working is picked up without a restart.
+ * Permissions change rarely and this runs per pod open, so it is remembered.
+ *
+ * ── Why an hour, and not five minutes ──
+ *
+ * This is a fact about your token and a namespace. It does not change because
+ * you opened a different pod, and in practice it does not change while you
+ * work — a role is granted by somebody else, on a timescale of days. Five
+ * minutes meant seven `auth can-i` every five minutes forever, for an answer
+ * that had not moved since login.
+ *
+ * `clearAccessCache` exists for the case that actually invalidates it: the
+ * cluster or the namespace changing under you.
  */
-const CACHE_TTL_MS = 5 * 60_000;
+const CACHE_TTL_MS = 60 * 60_000;
 const cache = new Map<string, { at: number; access: Access }>();
 
 export function clearAccessCache(): void {
@@ -131,7 +142,25 @@ export async function probeAccess(
 
   const key = `${context}/${namespace}`;
   const hit = cache.get(key);
-  if (hit && now - hit.at < CACHE_TTL_MS) return hit.access;
+  /* Off in Settings means 0 here, so nothing is ever served from memory —
+     exactly the behaviour that was here before any of this. */
+  if (hit && now - hit.at < longLivedTtlMs()) return hit.access;
+
+  /*
+    And the part a TTL cannot do.
+
+    Opening a pod fires several probes in the same instant. They all miss the
+    cache — none of them has finished yet — so all of them run the same seven
+    `auth can-i`, and all of them then write the same answer. The cache was
+    working as written and saved nothing. A second caller now waits on the
+    first one's promise instead.
+  */
+  return askOnce(`access:${key}`, 0, () => probeAccessUncached(context, namespace, key));
+}
+
+async function probeAccessUncached(
+  context: string, namespace: string, key: string,
+): Promise<Access> {
 
   const keys = ACCESS_CHECKS.map(c => c.key);
   let results: { answer: boolean | undefined; said?: string }[];
@@ -184,7 +213,9 @@ export async function probeAccess(
     return ALL_ALLOWED(false, firstLine(results.find(r => r.said)?.said));
   }
 
-  cache.set(key, { at: now, access });
+  /* Stamped when the answer arrived, not when it was asked for — the probe
+     itself can take seconds on a cluster behind a credential helper. */
+  cache.set(key, { at: Date.now(), access });
   return access;
 }
 

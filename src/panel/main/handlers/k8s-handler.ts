@@ -72,6 +72,11 @@ import {
   markFor, setMark, targetFromSpec, type MarkTarget,
 } from '../../../services/k8s/runtime-marks';
 import type { PodRuntime } from '../../../services/k8s/pod-classify';
+import {
+  setCacheEnabled, setCacheTtlMinutes, clampTtlMinutes, cacheEnabled, cacheTtlMinutes,
+} from '../../../services/k8s/cache-settings';
+import { __resetAskOnce } from '../../../services/k8s/ask-once';
+import { podSpec } from '../../../services/k8s/pod-spec';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -87,6 +92,14 @@ export interface Dk8sState {
   /** context name -> sensitivity, set by the user and never inferred silently. */
   sensitivity?: Record<string, 'normal' | 'production'>;
   kubectlPath?: string;
+  /**
+   * Whether the host may remember what the cluster answered, and for how long.
+   *
+   * Saved rather than defaulted every session: somebody who turned it off to
+   * watch an RBAC change take effect should not find it back on tomorrow.
+   */
+  cacheEnabled?: boolean;
+  cacheTtlMinutes?: number;
   /**
    * How long to wait for a cluster call, in seconds.
    *
@@ -223,15 +236,27 @@ export async function handleDk8sProbe(postMessage: PostMessage): Promise<void> {
   /* Applied before anything is asked of a cluster: every bound below derives
      from it, and so does the screen's own backstop. */
   setClusterTimeoutSeconds(saved.clusterTimeoutSeconds);
+  /* And whether the answers may be remembered at all — before the first one
+     is asked for, or the first probe of a session runs uncached. */
+  setCacheEnabled(saved.cacheEnabled);
+  setCacheTtlMinutes(saved.cacheTtlMinutes);
 
-  /* See the note above: a refresh that returns the cached answer is not one. */
+  /*
+    See the note above: a refresh that returns the cached answer is not one.
+
+    A probe is the user saying "look again", so everything remembered about
+    the last cluster goes with it — not just access. The kubeconfig may be the
+    very thing they changed.
+  */
   clearAccessCache();
+  __resetAskOnce();
 
   const env = await probeEnvironment();
   if (!env.present) {
     postMessage({
       type: 'dk8s:env', env, contexts: [], platform: process.platform,
       clusterTimeoutSeconds: clusterTimeoutSeconds(),
+      cacheEnabled: cacheEnabled(), cacheTtlMinutes: cacheTtlMinutes(),
     });
     return;
   }
@@ -1162,13 +1187,12 @@ async function resolveFormatFor(
     single line could appear.
   */
   let ctx: PodContext = { namespace, pod };
-  const spec = await run(
-    ['--context', context, '-n', namespace, 'get', 'pod', pod, '-o', 'json'],
-    { timeoutMs: 15_000 },
-  );
-  if (spec.ok) {
+  /* Shared with the capability probe and the memory profile, which are firing
+     at this same instant for this same pod. See `pod-spec`. */
+  const spec = await podSpec(context, namespace, pod);
+  if (spec.ok && spec.spec) {
     try {
-      const parsed = JSON.parse(spec.stdout);
+      const parsed = spec.spec as any;
       ctx = {
         namespace, pod,
         image: parsed.spec?.containers?.[0]?.image,
@@ -1587,14 +1611,17 @@ export async function handleDk8sProbePod(
   const container = msg.container as string | undefined;
   if (!context || !namespace || !pod) return;
 
-  const spec = await run(['--context', context, '-n', namespace, 'get', 'pod', pod, '-o', 'json'], { timeoutMs: 20_000 });
+  /* The same document the format matcher and the memory profile want. */
+  const spec = await podSpec(context, namespace, pod);
   let runtime: ReturnType<typeof classifyFromSpec> = { runtime: 'unknown', confidence: 0, detectedFrom: 'image' };
   let markTarget: MarkTarget | undefined;
-  try {
-    const parsed = JSON.parse(spec.stdout);
-    runtime = classifyFromSpec(parsed);
-    markTarget = targetFromSpec(context, namespace, parsed);
-  } catch { /* fall through with unknown */ }
+  if (spec.ok && spec.spec) {
+    try {
+      const parsed = spec.spec as any;
+      runtime = classifyFromSpec(parsed);
+      markTarget = targetFromSpec(context, namespace, parsed);
+    } catch { /* fall through with unknown */ }
+  }
 
   /*
     What somebody said beats what dk8s worked out.
@@ -1653,6 +1680,26 @@ export async function handleDk8sSetClusterTimeout(
   setClusterTimeoutSeconds(seconds);
   saveState({ clusterTimeoutSeconds: seconds });
   postMessage({ type: 'dk8s:clusterTimeout', seconds });
+}
+
+/**
+ * Whether the host may remember what the cluster answered, and for how long.
+ *
+ * Saved with the rest of the dk8s state, so a reader who turned it off to
+ * debug an RBAC change does not find it back on tomorrow.
+ */
+export async function handleDk8sSetCache(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const enabled = msg.enabled !== false;
+  const ttlMinutes = clampTtlMinutes(msg.ttlMinutes);
+  setCacheEnabled(enabled);
+  setCacheTtlMinutes(ttlMinutes);
+  saveState({ cacheEnabled: enabled, cacheTtlMinutes: ttlMinutes });
+  /* Turning it off means off NOW, not once the last answer expires. */
+  if (!enabled) __resetAskOnce();
+  postMessage({ type: 'dk8s:cacheSettings', enabled, ttlMinutes });
 }
 
 /** Explicit kubectl path, for when it is installed somewhere unusual. */

@@ -546,6 +546,10 @@ interface K8sState {
    */
   clusterTimeoutSeconds: number;
   setClusterTimeout: (seconds: number) => void;
+  /** Whether the host may remember what the cluster answered — Settings. */
+  cacheEnabled: boolean;
+  cacheTtlMinutes: number;
+  setCacheSettings: (v: { enabled: boolean; ttlMinutes: number }) => void;
 
   pods: PodSummary[];
   usage: Record<string, PodUsage>;
@@ -941,6 +945,16 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     const clamped = Math.min(300, Math.max(5, Math.round(seconds) || 30));
     set({ clusterTimeoutSeconds: clamped });
     postMsg({ type: 'dk8s:setClusterTimeout', seconds: clamped });
+  },
+
+  /* The defaults the host uses when nothing has been saved, mirrored so the
+     screen reads right before the first reply arrives. */
+  cacheEnabled: true,
+  cacheTtlMinutes: 60,
+  setCacheSettings: ({ enabled, ttlMinutes }) => {
+    const clamped = Math.min(24 * 60, Math.max(1, Math.round(ttlMinutes) || 60));
+    set({ cacheEnabled: enabled, cacheTtlMinutes: clamped });
+    postMsg({ type: 'dk8s:setCache', enabled, ttlMinutes: clamped });
   },
 
   probe: () => {
@@ -1507,6 +1521,14 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   apply: (msg) => {
     switch (msg.type) {
       case 'dk8s:env': {
+        /* The host's saved caching answer rides along with the probe, so the
+           Settings screen reads right the moment it is opened. */
+        if (msg.cacheEnabled !== undefined) {
+          set({
+            cacheEnabled: msg.cacheEnabled !== false,
+            cacheTtlMinutes: Number(msg.cacheTtlMinutes) || 60,
+          });
+        }
         const env = msg.env as KubectlEnv;
         const contexts = (msg.contexts as KubeContext[]) ?? [];
         const context = msg.context as string | undefined;
@@ -1894,6 +1916,13 @@ export const useK8sStore = create<K8sState>((set, get) => ({
           */
           commands: mergeCommand(s.commands, msg.event as KubectlCommand),
         }));
+        break;
+
+      case 'dk8s:cacheSettings':
+        set({
+          cacheEnabled: msg.enabled !== false,
+          cacheTtlMinutes: Number(msg.ttlMinutes) || 60,
+        });
         break;
 
       case 'dk8s:clusterTimeout':

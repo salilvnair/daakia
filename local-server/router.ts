@@ -72,7 +72,7 @@ import {
   handleDk8sGetFormats, handleDk8sSaveFormat, handleDk8sDeleteFormat,
   handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat,
   handleDk8sListArtifacts, handleDk8sImportArtifact, handleDk8sDeleteArtifact,
-  handleDk8sOpenArtifact, handleDk8sSetKubectlPath, handleDk8sWatchPods, handleDk8sMetricsActive, handleDk8sPodUsageOnce, handleDk8sRefreshPods, handleDk8sStopWatch,
+  handleDk8sOpenArtifact, handleDk8sSetKubectlPath, handleDk8sSetCache, handleDk8sWatchPods, handleDk8sMetricsActive, handleDk8sPodUsageOnce, handleDk8sRefreshPods, handleDk8sStopWatch,
   handleDk8sPinNamespace, handleDk8sUnpinNamespace,
   handleDk8sUseContexts, handleDk8sSetTargets, handleDk8sExportLogs,
   handleDk8sExportSearch,
@@ -465,6 +465,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dk8s:setKubectlPath':
       await handleDk8sSetKubectlPath(msg, post);
+      break;
+    case 'dk8s:setCache':
+      await handleDk8sSetCache(msg, post);
       break;
     case 'dk8s:setClusterTimeout':
       await handleDk8sSetClusterTimeout(msg, post);

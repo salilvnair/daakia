@@ -17,6 +17,8 @@ import { run, spawnKubectl, createJsonObjectSplitter } from './kubectl';
 import { clusterTimeoutMs } from './k8s-timeouts';
 import { podsTable } from './pods-table';
 import { resolveWorkload } from './workload';
+import { askOnce, forgetOnce } from './ask-once';
+import { shortLivedTtlMs } from './cache-settings';
 
 export interface ContainerSummary {
   name: string;
@@ -233,7 +235,16 @@ export function watchPods(
    * the same read — one code path means the two cannot come to different
    * answers about the same namespace.
    */
-  const relist = async (paintFast = true): Promise<boolean> => {
+  /*
+    `fresh` means go to the cluster, whatever is remembered.
+
+    The first list of a namespace may be served from memory — the watch that
+    follows it streams every change, so a list a few seconds old is not stale,
+    it is the same list. A REFRESH is different: it is somebody saying "I do
+    not believe you", and answering that from a cache is the one thing it must
+    never do.
+  */
+  const relist = async (paintFast = true, fresh = false): Promise<boolean> => {
     if (stopped) return false;
 
     /*
@@ -277,10 +288,12 @@ export function watchPods(
       }).catch(() => { /* the JSON below is the real answer; this was a head start */ })
       : Promise.resolve();
 
-    const listed = await run(
+    const listKey = `podlist:${context}/${namespace}`;
+    if (fresh) forgetOnce(listKey);
+    const listed = await askOnce(listKey, shortLivedTtlMs(), () => run(
       ['--context', context, '-n', namespace, 'get', 'pods', '-o', 'json'],
       { timeoutMs: clusterTimeoutMs() },
-    );
+    ));
     void fast;
     if (stopped) return false;
 
@@ -418,7 +431,8 @@ export function watchPods(
       answer that would drop every pod on screen for a second. The reconcile
       below is what deals with a stream that has actually gone deaf.
     */
-    refresh: () => { void relist(false); },
+    /* Straight to the cluster — see `fresh`. */
+    refresh: () => { void relist(false, true); },
     stop: () => {
       stopped = true;
       if (retryTimer) clearTimeout(retryTimer);

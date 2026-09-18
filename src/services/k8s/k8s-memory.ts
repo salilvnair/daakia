@@ -26,6 +26,7 @@
  * input is to say so, not to guess and wave the dump through.
  */
 import { run } from './kubectl';
+import { podSpec } from './pod-spec';
 
 export interface MemoryProfile {
   /** resources.limits.memory, in bytes. Absent means the pod is unbounded. */
@@ -208,10 +209,12 @@ export async function readMemoryProfile(
   const dumpDir = opts.dumpDir ?? '/tmp';
 
   // ── Limits, from the pod spec ──
-  const spec = await run(['--context', ctx, '-n', ns, 'get', 'pod', pod, '-o', 'json'], { timeoutMs: 20_000 });
-  if (spec.ok) {
+  /* Shared — the capability probe above and the format matcher have almost
+     certainly just fetched this same document. See `pod-spec`. */
+  const spec = await podSpec(ctx, ns, pod);
+  if (spec.ok && spec.spec) {
     try {
-      const parsed = JSON.parse(spec.stdout);
+      const parsed = spec.spec as any;
       const containers = parsed.spec?.containers ?? [];
       const c = opts.container
         ? containers.find((x: { name: string }) => x.name === opts.container)

@@ -100,7 +100,7 @@ import {
   handleDk8sGetFormats, handleDk8sSaveFormat, handleDk8sDeleteFormat,
   handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat,
   handleDk8sListArtifacts, handleDk8sImportArtifact, handleDk8sDeleteArtifact,
-  handleDk8sOpenArtifact, handleDk8sSetKubectlPath,
+  handleDk8sOpenArtifact, handleDk8sSetKubectlPath, handleDk8sSetCache,
   handleDk8sWatchPods, handleDk8sMetricsActive, handleDk8sPodUsageOnce, handleDk8sRefreshPods, handleDk8sStopWatch, disposeDk8s,
   handleDk8sPinNamespace, handleDk8sUnpinNamespace,
   handleDk8sUseContexts, handleDk8sSetTargets, handleDk8sExportLogs,
@@ -668,6 +668,9 @@ export class MainPanel {
         break;
       case 'dk8s:setKubectlPath':
         handleDk8sSetKubectlPath(msg, this._post);
+        break;
+      case 'dk8s:setCache':
+        void handleDk8sSetCache(msg, this._post);
         break;
       case 'dk8s:setClusterTimeout':
         handleDk8sSetClusterTimeout(msg, this._post);
