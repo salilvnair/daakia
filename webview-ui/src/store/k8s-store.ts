@@ -1126,6 +1126,28 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         .setScopedPref(DETAIL_TAB_PREF, `${pod.namespace}/${pod.name}`, detailTab);
     }
     set({ detailTab });
+
+    /*
+      The screens that need to look inside the container ask when they open.
+
+      Doctor needs to know whether there is a JVM and a jcmd; the Terminal
+      needs a shell; the Explorer needs one to list a directory. Finding that
+      out is ten `kubectl exec`, and it used to run on every pod open — for a
+      reader who, overwhelmingly, came to look at a log and never opened any
+      of the three.
+
+      Asked again on each visit rather than tracked here: the host remembers
+      it for as long as it stays true, so a second visit costs nothing, and
+      the answer genuinely can change when a pod restarts into a new image.
+    */
+    if (pod && (detailTab === 'doctor' || detailTab === 'terminal' || detailTab === 'explorer')) {
+      set({ probeBusy: true });
+      postMsg({
+        type: 'dk8s:probePod',
+        context: pod.context, namespace: pod.namespace, pod: pod.name,
+        deep: true,
+      });
+    }
   },
   setLogFilter: (logFilter) => set({ logFilter }),
 
@@ -1854,6 +1876,21 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       }
 
       case 'dk8s:podProbed': {
+        /*
+          A shallow probe carries what the pod's own spec knows and nothing
+          from inside the container. It must not overwrite capabilities with
+          "none" — that reads as "this pod can do nothing", where the truth is
+          "nobody has asked yet".
+        */
+        if (msg.deep === false && msg.pod === get().detail?.name) {
+          set({
+            runtime: msg.runtime as K8sState['runtime'],
+            runtimeMark: msg.mark as RuntimeMark | undefined,
+            markTarget: msg.markTarget as MarkTarget | undefined,
+            probeBusy: false,
+          });
+          break;
+        }
         // A menu's probe and the open pod's probe come back on one message
         // type, so each is routed by the pod it names rather than by which
         // was asked for last.

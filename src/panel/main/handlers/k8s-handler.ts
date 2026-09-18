@@ -1609,6 +1609,14 @@ export async function handleDk8sProbePod(
   const namespace = String(msg.namespace ?? '');
   const pod = String(msg.pod ?? '');
   const container = msg.container as string | undefined;
+  /*
+    Whether to go inside the container.
+
+    Off by default, because opening a pod usually means reading its log and
+    that needs nothing from in there. The screens that DO need it — Doctor,
+    the Terminal, the Explorer — ask for it when they open.
+  */
+  const deep = msg.deep === true;
   if (!context || !namespace || !pod) return;
 
   /* The same document the format matcher and the memory profile want. */
@@ -1633,6 +1641,26 @@ export async function handleDk8sProbePod(
   */
   const mark = markTarget ? markFor(markTarget) : undefined;
   if (mark) runtime = { runtime: mark.runtime, confidence: 1, detectedFrom: 'user' };
+
+  /*
+    ── The cheap half, and the expensive half ──
+
+    Everything above this line came out of the pod's own spec, which is one
+    read and already shared. Everything below runs INSIDE the container: ten
+    `kubectl exec` to find a shell, a JVM, cgroup limits and free space in
+    /tmp. That was ten of the fifty calls one pod-open cost, and it ran on
+    every open — including the overwhelmingly common one, where somebody
+    wanted to read a log.
+  */
+  if (!deep) {
+    postMessage({
+      type: 'dk8s:podProbed', pod, runtime, mark, markTarget,
+      /* Said, rather than sent as an empty list: "no actions" and "not asked
+         yet" look identical on screen and mean opposite things. */
+      deep: false,
+    });
+    return;
+  }
 
   const caps = await probeCapabilities(context, namespace, pod, container);
   /* The terminal asks nobody when this already found out — see shellCache. */
@@ -1662,6 +1690,7 @@ export async function handleDk8sProbePod(
     memory, safety,
     /* So the screen can say what it is marked as, and offer to change it. */
     mark, markTarget,
+    deep: true,
   });
 }
 

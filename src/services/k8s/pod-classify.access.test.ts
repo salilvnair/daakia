@@ -13,6 +13,7 @@
  * area was rewritten for.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { __resetAskOnce } from './ask-once';
 
 const calls: string[][] = [];
 /** What `auth can-i create pods/exec` should answer in the case under test. */
@@ -41,6 +42,10 @@ const execCalls = () => calls.filter(a => a.includes('exec') && !a.includes('can
 beforeEach(() => {
   calls.length = 0;
   clearAccessCache();
+  /* The capability probe is remembered per pod now, and every case here uses
+     the same pod on purpose — without this, the second case reads the first
+     one's answer and the probe it is asserting about never runs. */
+  __resetAskOnce();
 });
 
 describe('when the account definitely cannot exec', () => {

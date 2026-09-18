@@ -13,6 +13,8 @@
  */
 import { run } from './kubectl';
 import { probeAccess } from './k8s-access';
+import { askOnce } from './ask-once';
+import { shortLivedTtlMs } from './cache-settings';
 
 export type PodRuntime = 'java' | 'python' | 'node' | 'go' | 'dotnet' | 'unknown';
 
@@ -190,7 +192,36 @@ export function execFailureKind(stderr: string): 'missing-binary' | 'not-running
     : 'not-running';
 }
 
-export async function probeCapabilities(
+/**
+ * What the container can do, remembered per pod.
+ *
+ * ── Why this is worth remembering at all ──
+ *
+ * Almost everything it finds is a property of the IMAGE: whether there is a
+ * bash, a tar, a python3, a jcmd. Those cannot change while a pod runs — the
+ * filesystem it was built from is the filesystem it has. The running JVM's pid
+ * can change across a restart, which is why this is keyed by pod rather than
+ * by image: a pod that restarts into the same image keeps its key only until
+ * the window closes, and the window is short enough that a restart mid-session
+ * is re-probed.
+ *
+ * Ten `kubectl exec` were running on every pod open, and then again on the
+ * next open of the same pod a minute later.
+ */
+export function probeCapabilities(
+  ctx: string,
+  namespace: string,
+  pod: string,
+  container?: string,
+): Promise<PodCapabilities> {
+  return askOnce(
+    `caps:${ctx}/${namespace}/${pod}/${container ?? ''}`,
+    shortLivedTtlMs(),
+    () => probeCapabilitiesUncached(ctx, namespace, pod, container),
+  );
+}
+
+async function probeCapabilitiesUncached(
   ctx: string,
   namespace: string,
   pod: string,
