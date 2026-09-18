@@ -10,6 +10,7 @@ import { SoapView } from './soap/SoapView';
 import { MockServerView } from './mock-server/MockServerView';
 import { WorkspacesView } from './platform/WorkspacesView';
 import { CollectionsEnvView } from './platform/CollectionsEnvView';
+import { DynamicValuesView } from './platform/DynamicValuesView';
 import { AiAssistantView } from './platform/AiAssistantView';
 import { SettingsView } from './platform/SettingsView';
 import { useTabsStore } from '../../../store/tabs-store';
@@ -27,12 +28,12 @@ import { CompassIcon, LayoutGridIcon,
   DocumentIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge,
   ProtocolGrpcBadge, ProtocolSoapBadge, ServerIcon, CollectionsFolderIcon,
   GeneralAssistantIcon, SettingsIcon, Dk8sIcon, SearchIcon, StethoscopeIcon,
-  FolderOpenIcon, TerminalIcon, LayersIcon, IssueOpenedIcon, PencilIcon,
+  FolderOpenIcon, TerminalIcon, LayersIcon, IssueOpenedIcon, PencilIcon, BracesIcon,
 } from '../../../icons';
 
 // ─── Wiki tabs ──────────────────────────────────────────────────────────────
 
-export type TabId = 'daakia-tour' | 'quick-start' | 'workspaces' | 'rest' | 'gql' | 'websocket' | 'grpc' | 'soap' | 'mock-server' | 'collections-env' | 'ai-assistant' | 'settings' | 'dk8s' | 'dk8s-pod' | 'dk8s-terminal' | 'dk8s-search' | 'dk8s-doctor' | 'dk8s-archive' | 'dk8s-commands' | 'dk8s-views' | 'dkgh' | 'dkgh-compose';
+export type TabId = 'daakia-tour' | 'quick-start' | 'workspaces' | 'rest' | 'gql' | 'websocket' | 'grpc' | 'soap' | 'mock-server' | 'collections-env' | 'dynamic-values' | 'ai-assistant' | 'settings' | 'dk8s' | 'dk8s-pod' | 'dk8s-terminal' | 'dk8s-search' | 'dk8s-doctor' | 'dk8s-archive' | 'dk8s-commands' | 'dk8s-views' | 'dkgh' | 'dkgh-compose';
 
 interface Tab {
   id: TabId;
@@ -52,6 +53,7 @@ const TABS: Tab[] = [
   { id: 'mock-server',       label: 'Mock Server',       color: 'var(--color-mock-server)',        icon: <ServerIcon size={15} /> },
   { id: 'workspaces',        label: 'Workspaces',        color: 'var(--color-workspace)',          icon: <LayoutGridIcon size={15} /> },
   { id: 'collections-env',   label: 'Collections & Env', color: 'var(--color-accent)',             icon: <CollectionsFolderIcon size={15} /> },
+  { id: 'dynamic-values',    label: 'Dynamic Values',    color: 'var(--color-accent)',             icon: <BracesIcon size={15} /> },
   { id: 'ai-assistant',      label: 'AI Assistant',      color: 'var(--color-protocol-ai)',        icon: <GeneralAssistantIcon size={15} /> },
   { id: 'settings',          label: 'Settings',          color: 'var(--color-accent)',             icon: <SettingsIcon size={15} /> },
   { id: 'dk8s',              label: 'Overview',          color: 'var(--color-dk8s)',               icon: <Dk8sIcon size={15} /> },
@@ -94,6 +96,9 @@ const NAV_ITEMS: SideNavItem[] = [
     // First: a workspace is the box the rest of the platform lives in.
     { id: 'workspaces', label: TAB_BY_ID['workspaces'].label, icon: TAB_BY_ID['workspaces'].icon },
     { id: 'collections-env', label: TAB_BY_ID['collections-env'].label, icon: TAB_BY_ID['collections-env'].icon },
+    // Straight after the page about variables: this is the rest of what can
+    // go between the braces, and reads as a continuation of it.
+    { id: 'dynamic-values', label: TAB_BY_ID['dynamic-values'].label, icon: TAB_BY_ID['dynamic-values'].icon },
     { id: 'ai-assistant', label: TAB_BY_ID['ai-assistant'].label, icon: TAB_BY_ID['ai-assistant'].icon },
     { id: 'settings', label: TAB_BY_ID['settings'].label, icon: TAB_BY_ID['settings'].icon },
   ] },
@@ -185,6 +190,7 @@ export function DaakiaViewPage({ hideNav, activeId: activeIdProp, onSelect: onSe
         {activeId === 'mock-server'    && <MockServerView />}
         {activeId === 'workspaces' && <WorkspacesView />}
         {activeId === 'collections-env' && <CollectionsEnvView />}
+        {activeId === 'dynamic-values' && <DynamicValuesView />}
         {activeId === 'ai-assistant'   && <AiAssistantView />}
         {activeId === 'settings'       && <SettingsView />}
         {activeId === 'dk8s'           && <Dk8sOverviewView />}

@@ -1,6 +1,8 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, SearchIcon } from '../../../icons';
 import { TextInputView } from '@salilvnair/dui';
+import { TEMPLATE_HELPERS, HELPER_CATEGORY_LABELS } from '@daakia/template-catalog';
+import { useDynamicVarsStore } from '../../../store/dynamic-vars-store';
 
 // ────────── Types ──────────
 
@@ -12,11 +14,12 @@ interface Snippet {
   category: SnippetCategory;
 }
 
-type SnippetCategory = 'tests' | 'variables' | 'workflows' | 'response' | 'request';
+type SnippetCategory = 'tests' | 'variables' | 'dynamic' | 'workflows' | 'response' | 'request';
 
 const CATEGORY_LABELS: Record<SnippetCategory, string> = {
   tests: 'Tests',
   variables: 'Variables',
+  dynamic: 'Dynamic values',
   workflows: 'Workflows',
   response: 'Response',
   request: 'Request',
@@ -25,6 +28,7 @@ const CATEGORY_LABELS: Record<SnippetCategory, string> = {
 const CATEGORY_COLORS: Record<SnippetCategory, string> = {
   tests: 'var(--color-protocol-rest)',
   variables: 'var(--color-protocol-graphql)',
+  dynamic: 'var(--color-accent)',
   workflows: 'var(--color-protocol-websocket)',
   response: 'var(--color-settings)',
   request: 'var(--color-mock-server)',
@@ -282,6 +286,63 @@ const SNIPPETS: Snippet[] = [
   },
 ];
 
+// ────────── Dynamic values ──────────
+
+/**
+ * The patterns, rather than the values.
+ *
+ * `dk.interpolate` runs the same engine a header field does, so anything you
+ * can write in a value you can compute in a script — and these three are the
+ * shapes people actually want: a value reused across fields, a signature over
+ * something the request already holds, and a window of time.
+ */
+export const DYNAMIC_EXAMPLES: Snippet[] = [
+  {
+    id: 'dyn-reuse',
+    label: 'One random value, used twice',
+    description: 'Generate once in a script so the header and the body agree',
+    code: 'const id = dk.interpolate("{{$randomUUID}}");\ndk.env.set("request-id", id);\n// Now {{request-id}} is the same value everywhere in this request.',
+    category: 'dynamic',
+  },
+  {
+    id: 'dyn-sign-body',
+    label: 'Sign the request body',
+    description: 'Hash what is about to be sent and put it in a header',
+    code: 'const signature = dk.interpolate("{{sha256 request.body}}");\ndk.request.headers.set("X-Signature", signature);',
+    category: 'dynamic',
+  },
+  {
+    id: 'dyn-window',
+    label: 'A date inside a window',
+    description: 'Somewhere in the last 30 days, formatted how you need it',
+    code: 'const placedAt = dk.interpolate("{{randomDate \'-30d\' \'now\' format=\'yyyy-MM-dd\'}}");\nconsole.log("placedAt", placedAt);',
+    category: 'dynamic',
+  },
+];
+
+interface DynamicVarInfo { name: string; description: string; category: string }
+
+/** One snippet per helper and per `$` variable, built from the shared lists. */
+export function generatedDynamicSnippets(dynamicVars: DynamicVarInfo[]): Snippet[] {
+  const helpers = TEMPLATE_HELPERS.map(h => ({
+    id: `dyn-helper-${h.name}`,
+    label: h.example,
+    description: `${HELPER_CATEGORY_LABELS[h.category]} — ${h.summary}`,
+    code: `dk.interpolate("${h.example.replace(/"/g, '\\"')}")`,
+    category: 'dynamic' as const,
+  }));
+
+  const dynamic = dynamicVars.map(v => ({
+    id: `dyn-var-${v.name}`,
+    label: `{{$${v.name}}}`,
+    description: v.description,
+    code: `dk.interpolate("{{$${v.name}}}")`,
+    category: 'dynamic' as const,
+  }));
+
+  return [...helpers, ...dynamic];
+}
+
 // ────────── Component ──────────
 
 interface SnippetsPanelProps {
@@ -318,8 +379,24 @@ export function SnippetsPanel({ onInsert, accentColor }: SnippetsPanelProps) {
     el.scrollBy({ left: dir === 'left' ? -60 : 60, behavior: 'smooth' });
   };
 
+  const dynamicVars = useDynamicVarsStore(s => s.variables);
+
+  /*
+    The dynamic-value snippets are generated, not written out.
+
+    There are about a hundred of them between the helper catalogue and the
+    registry, and a hand-copied list would describe whichever set existed on
+    the day somebody last updated it — the exact drift the shared catalogue
+    was created to stop. The three worked examples below are written by hand
+    because they show a pattern rather than a single value.
+  */
+  const allSnippets = useMemo(
+    () => [...SNIPPETS, ...DYNAMIC_EXAMPLES, ...generatedDynamicSnippets(dynamicVars)],
+    [dynamicVars],
+  );
+
   const filtered = useMemo(() => {
-    let items = SNIPPETS;
+    let items = allSnippets;
     if (activeCategory !== 'all') {
       items = items.filter(s => s.category === activeCategory);
     }
@@ -332,9 +409,9 @@ export function SnippetsPanel({ onInsert, accentColor }: SnippetsPanelProps) {
       );
     }
     return items;
-  }, [search, activeCategory]);
+  }, [search, activeCategory, allSnippets]);
 
-  const categories: (SnippetCategory | 'all')[] = ['all', 'tests', 'variables', 'workflows', 'response', 'request'];
+  const categories: (SnippetCategory | 'all')[] = ['all', 'tests', 'variables', 'dynamic', 'workflows', 'response', 'request'];
 
   return (
     <div className="flex flex-col h-full min-h-0">
