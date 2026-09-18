@@ -35,6 +35,37 @@ describe('the Dynamic values snippets', () => {
     }
   });
 
+  it('colours each entry by what it produces, not by the one category they share', () => {
+    /*
+      A hundred entries under one accent dot is a wall of grey — nothing to
+      steer by while scanning. The colour comes from the helper's own category
+      (dates green, JSON yellow), using the same map the wiki page reads, so
+      the two surfaces agree about what `{{now}}` looks like.
+    */
+    const byLabel = (label: string) => generated.find(s => s.label === label)!;
+    const date = byLabel("{{now format='yyyy-MM-dd HH:mm:ss'}}").tint;
+    const json = byLabel("{{toJson 'a'}}").tint;
+    expect(date).toBeTruthy();
+    expect(json).toBeTruthy();
+    expect(date).not.toBe(json);
+  });
+
+  it('marks the generated ones as tokens, and the worked examples as prose', () => {
+    // A template is one thing to read, not a sentence — it is drawn as the
+    // token it inserts. "Sign the request body" is a sentence.
+    expect(generated.every(s => s.token)).toBe(true);
+    expect(DYNAMIC_EXAMPLES.every(s => !s.token)).toBe(true);
+  });
+
+  it('gives a dynamic value a colour even for a category this build has never seen', () => {
+    // The registry list arrives from the host at runtime; a provider added
+    // there should not render colourless until the webview is edited to match.
+    const [only] = generatedDynamicSnippets([
+      { name: 'somethingNew', description: 'x', category: 'not-a-known-category' },
+    ]);
+    expect(only.tint).toBeTruthy();
+  });
+
   it('files everything under one category', () => {
     for (const s of [...generated, ...DYNAMIC_EXAMPLES]) {
       expect(s.category).toBe('dynamic');

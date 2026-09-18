@@ -3,6 +3,7 @@ import { ChevronLeftIcon, ChevronRightIcon, SearchIcon } from '../../../icons';
 import { TextInputView } from '@salilvnair/dui';
 import { TEMPLATE_HELPERS, HELPER_CATEGORY_LABELS } from '@daakia/template-catalog';
 import { useDynamicVarsStore } from '../../../store/dynamic-vars-store';
+import { HELPER_COLORS, dynamicColor } from '../../../services/template/category-colors';
 
 // ────────── Types ──────────
 
@@ -12,6 +13,18 @@ interface Snippet {
   description: string;
   code: string;
   category: SnippetCategory;
+  /**
+   * A colour of this entry's own, overriding its category's.
+   *
+   * The Dynamic values category is a hundred-odd entries — every helper and
+   * every `$` value — and one dot colour across all of them gives the eye
+   * nothing to steer by. These carry the colour of what they produce (dates
+   * green, JSON yellow, and so on), the same map the wiki page uses, so the
+   * list groups visually even while it is being filtered.
+   */
+  tint?: string;
+  /** Render the label as a `{{token}}` rather than a sentence. */
+  token?: boolean;
 }
 
 type SnippetCategory = 'tests' | 'variables' | 'dynamic' | 'workflows' | 'response' | 'request';
@@ -330,6 +343,8 @@ export function generatedDynamicSnippets(dynamicVars: DynamicVarInfo[]): Snippet
     description: `${HELPER_CATEGORY_LABELS[h.category]} — ${h.summary}`,
     code: `dk.interpolate("${h.example.replace(/"/g, '\\"')}")`,
     category: 'dynamic' as const,
+    tint: HELPER_COLORS[h.category],
+    token: true,
   }));
 
   const dynamic = dynamicVars.map(v => ({
@@ -338,6 +353,8 @@ export function generatedDynamicSnippets(dynamicVars: DynamicVarInfo[]): Snippet
     description: v.description,
     code: `dk.interpolate("{{$${v.name}}}")`,
     category: 'dynamic' as const,
+    tint: dynamicColor(v.category),
+    token: true,
   }));
 
   return [...helpers, ...dynamic];
@@ -492,11 +509,28 @@ export function SnippetsPanel({ onInsert, accentColor }: SnippetsPanelProps) {
                 <div className="flex items-center gap-2">
                   <span
                     className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: CATEGORY_COLORS[snippet.category] }}
+                    style={{ backgroundColor: snippet.tint ?? CATEGORY_COLORS[snippet.category] }}
                   />
-                  <span className="text-[11px] font-medium text-[var(--color-text-primary)] transition-colors" style={{ ['--snippet-hover' as any]: accentColor || 'var(--color-primary)' }}>
-                    {snippet.label}
-                  </span>
+                  {snippet.token ? (
+                    /* A template reads as one thing, not a sentence — so it is
+                       drawn as the token it will insert, in the colour of what
+                       it produces. */
+                    <span
+                      className="text-[11px] font-semibold rounded px-1 py-px"
+                      style={{
+                        fontFamily: 'var(--vscode-editor-font-family, monospace)',
+                        color: snippet.tint ?? CATEGORY_COLORS[snippet.category],
+                        background: `color-mix(in srgb, ${snippet.tint ?? CATEGORY_COLORS[snippet.category]} 13%, transparent)`,
+                        border: `1px solid color-mix(in srgb, ${snippet.tint ?? CATEGORY_COLORS[snippet.category]} 28%, transparent)`,
+                      }}
+                    >
+                      {snippet.label}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-medium text-[var(--color-text-primary)] transition-colors" style={{ ['--snippet-hover' as any]: accentColor || 'var(--color-primary)' }}>
+                      {snippet.label}
+                    </span>
+                  )}
                 </div>
                 <span className="text-[10px] text-[var(--color-text-muted)] pl-3.5 leading-tight">
                   {snippet.description}
