@@ -15,6 +15,12 @@ import { discoverServices } from '../../../grpc/grpc-reflection';
 import { loadProtoFile } from '../../../grpc/proto-loader';
 import { loadEnvVars, resolveEnvString } from './env-resolver';
 import { insertHistory, trimHistory } from '../../../storage/db';
+import { runPhase } from './script-phase';
+import {
+  persistScriptVars, gqlLoadEnvVars, gqlLoadColVars, gqlLoadGlobalVars,
+} from './graphql-handler';
+import { resolveVars, resolveRows } from '../../../services/resolve-vars';
+import type { ScriptContext } from '../../../services/script-runtime';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -39,15 +45,70 @@ export async function handleGrpcInvoke(
 
   // Resolve environment variables
   const vars = loadEnvVars(envId);
-  const endpoint = resolveEnvString(msg.endpoint as string || '', vars);
-  const method = resolveEnvString(msg.method as string || '', vars);
-  const message = resolveEnvString(msg.message as string || '{}', vars);
+  /* Reassigned once the pre-request script has run — see below. */
+  let endpoint = resolveEnvString(msg.endpoint as string || '', vars);
+  let method = resolveEnvString(msg.method as string || '', vars);
+  let message = resolveEnvString(msg.message as string || '{}', vars);
   const rawMetadata = msg.metadata as { key: string; value: string; enabled?: boolean }[] || [];
-  const metadata = rawMetadata
+  let metadata = rawMetadata
     .filter(m => m.key && (m.enabled !== false))
     .map(m => ({ key: resolveEnvString(m.key, vars), value: resolveEnvString(m.value, vars) }));
   const tls = msg.tls as boolean ?? false;
   const protoFile = msg.protoFile as string | undefined;
+
+  /*
+    ── The scripts, which this handler did not run ──
+
+    Same as SOAP: gRPC offers a Scripts tab, read `msg.preRequestScript`, wrote
+    it into the history row, and never called `runScript`. A reader could write
+    one, watch the tab mark itself as having content, and get silence.
+  */
+  const collectionId = msg.collectionId as string | undefined;
+  const envVarsForScript = gqlLoadEnvVars(envId);
+  const colVarsForScript = gqlLoadColVars(collectionId);
+  const globalVarsForScript = gqlLoadGlobalVars();
+
+  const scriptCtx: ScriptContext = {
+    request: {
+      method,
+      url: endpoint,
+      headers: Object.fromEntries(metadata.map(m => [m.key, m.value])),
+      body: message,
+    },
+    environmentVariables: { ...envVarsForScript },
+    collectionVariables: { ...colVarsForScript },
+    globalVariables: { ...globalVarsForScript },
+  };
+
+  const preScript = msg.preRequestScript as string | undefined;
+  if (preScript?.trim()) {
+    postMessage({ type: 'requestProgress', tabId, stage: 'pre-request-script', status: 'running' });
+  }
+  const pre = await runPhase(preScript, scriptCtx, 'pre-request');
+
+  if (!pre.ok) {
+    /* A script that threw has not decided what to send, so nothing is sent. */
+    postMessage({
+      type: 'grpc:error', tabId,
+      error: `Pre-request script failed: ${pre.errors.join('; ')}`,
+      scriptLogs: pre.logs, scriptErrors: pre.errors,
+      consoleLogs: pre.consoleLogs.length > 0 ? pre.consoleLogs : undefined,
+    });
+    return;
+  }
+
+  /* What the script set, filled into what the webview could not resolve. */
+  endpoint = resolveVars(endpoint, pre.layers);
+  method = resolveVars(method, pre.layers);
+  message = resolveVars(message, pre.layers);
+  metadata = resolveRows(metadata, pre.layers) ?? metadata;
+
+  persistScriptVars(
+    envId, collectionId,
+    scriptCtx.environmentVariables, scriptCtx.collectionVariables, scriptCtx.globalVariables,
+    envVarsForScript, colVarsForScript, globalVarsForScript,
+    postMessage,
+  );
 
   const params: GrpcInvokeParams = {
     tabId,

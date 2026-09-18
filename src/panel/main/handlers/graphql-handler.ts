@@ -302,7 +302,7 @@ export async function handleExecuteGraphQL(
     scriptCtx.globalVariables = result.updatedGlobalVars;
 
     // Persist env/col var changes from pre-request
-    gqlPersistVarUpdates(envId, collectionId, result.updatedEnvironmentVars, result.updatedCollectionVars, result.updatedGlobalVars, envVarsForScript, colVarsForScript, globalVarsForScript, postMessage);
+    persistScriptVars(envId, collectionId, result.updatedEnvironmentVars, result.updatedCollectionVars, result.updatedGlobalVars, envVarsForScript, colVarsForScript, globalVarsForScript, postMessage);
 
     /*
       Resolve again with what the script just set.
@@ -397,7 +397,7 @@ export async function handleExecuteGraphQL(
       scriptCtx.globalVariables = postResult.updatedGlobalVars;
 
       // Persist env/col var changes from post-response
-      gqlPersistVarUpdates(envId, collectionId, postResult.updatedEnvironmentVars, postResult.updatedCollectionVars, postResult.updatedGlobalVars, envVarsForScript, colVarsForScript, globalVarsForScript, postMessage);
+      persistScriptVars(envId, collectionId, postResult.updatedEnvironmentVars, postResult.updatedCollectionVars, postResult.updatedGlobalVars, envVarsForScript, colVarsForScript, globalVarsForScript, postMessage);
     }
 
     postMessage({
@@ -511,7 +511,7 @@ export async function handleExecuteGraphQL(
 
 // ─── Script helpers (mirrors request-handler.ts) ──────────────────────────────
 
-function gqlLoadEnvVars(envId: string | undefined): Record<string, string> {
+export function gqlLoadEnvVars(envId: string | undefined): Record<string, string> {
   const rows = getAllEnvironments();
   const vars: Record<string, string> = {};
   const globalRow = rows.find(r => r.name === 'Global' || r.id === 'global');
@@ -527,7 +527,7 @@ function gqlLoadEnvVars(envId: string | undefined): Record<string, string> {
   return vars;
 }
 
-function gqlLoadColVars(collectionId: string | undefined): Record<string, string> {
+export function gqlLoadColVars(collectionId: string | undefined): Record<string, string> {
   if (!collectionId) return {};
   const data = getCollectionData(collectionId);
   const props = JSON.parse(data) as { variables?: { key: string; value: string; enabled: boolean }[] };
@@ -536,11 +536,23 @@ function gqlLoadColVars(collectionId: string | undefined): Record<string, string
   return vars;
 }
 
-function gqlLoadGlobalVars(): Record<string, string> {
+export function gqlLoadGlobalVars(): Record<string, string> {
   return getSetting<Record<string, string>>('dk_globals') ?? {};
 }
 
-function gqlPersistVarUpdates(
+/**
+ * Write a script's variable changes back to where they came from.
+ *
+ * Exported because SOAP and gRPC need exactly this and there are already two
+ * copies of it — REST has its own, with an extra refresh callback. A third and
+ * fourth would guarantee four behaviours for one feature.
+ *
+ * It belongs in a module of its own rather than in the GraphQL handler; it is
+ * here because moving it means moving the half-dozen database helpers it
+ * reaches for, and that is a change to a path that currently works. Worth
+ * doing, not worth bundling into a bug fix.
+ */
+export function persistScriptVars(
   envId: string | undefined,
   collectionId: string | undefined,
   updatedEnv: Record<string, string>,

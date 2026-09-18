@@ -13,6 +13,13 @@ import { type ProxyConfig, type ResolvedProxy } from '../../../services/proxy-co
 import { resolveProxyFor } from '../../../services/proxy-resolve';
 import { settingsForRequest } from '../../../services/resolve-request-settings';
 import { resolveTlsPolicy } from '../../../services/tls-policy';
+import { runPhase } from './script-phase';
+import { persistScriptVars } from './graphql-handler';
+import { resolveVars, resolveRows } from '../../../services/resolve-vars';
+import type { ScriptContext } from '../../../services/script-runtime';
+import {
+  gqlLoadEnvVars, gqlLoadColVars, gqlLoadGlobalVars,
+} from './graphql-handler';
 
 /** The endpoint may not parse yet; the executor reports that properly. */
 function safeHostname(endpoint: string): string {
@@ -34,12 +41,13 @@ export async function handleSoapInvoke(
 
   // Resolve environment variables
   const vars = loadEnvVars(envId);
-  const endpoint = resolveEnvString(msg.endpoint as string || '', vars);
+  /* Reassigned once the pre-request script has run — see below. */
+  let endpoint = resolveEnvString(msg.endpoint as string || '', vars);
   const soapVersion = (msg.soapVersion as '1.1' | '1.2') || '1.1';
-  const soapAction = resolveEnvString(msg.soapAction as string || '', vars);
-  const envelope = resolveEnvString(msg.envelope as string || '', vars);
+  let soapAction = resolveEnvString(msg.soapAction as string || '', vars);
+  let envelope = resolveEnvString(msg.envelope as string || '', vars);
   const rawHeaders = msg.headers as { key: string; value: string; enabled?: boolean }[] || [];
-  const headers = rawHeaders
+  let headers = rawHeaders
     .filter(h => h.key && (h.enabled !== false))
     .map(h => ({ key: resolveEnvString(h.key, vars), value: resolveEnvString(h.value, vars) }));
 
@@ -59,6 +67,81 @@ export async function handleSoapInvoke(
     });
     return;
   }
+
+  /*
+    ── The scripts, which this handler did not run ──
+
+    SOAP offers a Scripts tab and marks it when it has content. Nothing here
+    ever called `runScript`: the text was read, written into the history row,
+    and ignored. A reader could write a pre-request script, see the tab say it
+    was there, and get no error and no effect.
+
+    The progress message below used to report `pre-request-script: done`
+    unconditionally, which is how it looked like it had run.
+  */
+  const collectionId = msg.collectionId as string | undefined;
+  const envVarsForScript = gqlLoadEnvVars(envId);
+  const colVarsForScript = gqlLoadColVars(collectionId);
+  const globalVarsForScript = gqlLoadGlobalVars();
+
+  const scriptCtx: ScriptContext = {
+    request: {
+      method: 'POST',
+      url: endpoint,
+      headers: Object.fromEntries(headers.map(h => [h.key, h.value])),
+      body: envelope,
+    },
+    environmentVariables: { ...envVarsForScript },
+    collectionVariables: { ...colVarsForScript },
+    globalVariables: { ...globalVarsForScript },
+  };
+
+  const scriptLogs: string[] = [];
+  const scriptErrors: string[] = [];
+  const consoleLogs: { level: string; args: unknown[]; timestamp: number; scriptPhase?: string }[] = [];
+
+  const preScript = msg.preRequestScript as string | undefined;
+  if (preScript?.trim()) {
+    postMessage({ type: 'requestProgress', tabId, stage: 'pre-request-script', status: 'running' });
+  }
+  const pre = await runPhase(preScript, scriptCtx, 'pre-request');
+  scriptLogs.push(...pre.logs);
+  scriptErrors.push(...pre.errors);
+  consoleLogs.push(...pre.consoleLogs);
+
+  if (!pre.ok) {
+    /* A script that threw has not decided what to send, so nothing is sent —
+       the same rule REST and GraphQL follow. */
+    postMessage({
+      type: 'soap:response',
+      tabId,
+      response: {
+        status: 0,
+        statusText: 'Script Error',
+        body: `Pre-request script failed: ${pre.errors.join('; ')}`,
+        headers: [],
+        time: 0,
+        size: 0,
+        hasFault: true,
+      },
+      scriptLogs, scriptErrors,
+      consoleLogs: consoleLogs.length > 0 ? consoleLogs : undefined,
+    });
+    return;
+  }
+
+  /* What the script set, filled into what the webview could not resolve. */
+  endpoint = resolveVars(endpoint, pre.layers);
+  soapAction = resolveVars(soapAction, pre.layers);
+  envelope = resolveVars(envelope, pre.layers);
+  headers = resolveRows(headers, pre.layers) ?? headers;
+
+  persistScriptVars(
+    envId, collectionId,
+    scriptCtx.environmentVariables, scriptCtx.collectionVariables, scriptCtx.globalVariables,
+    envVarsForScript, colVarsForScript, globalVarsForScript,
+    postMessage,
+  );
 
   // The same global → collection → request chain REST uses, so a timeout or
   // proxy set on a SOAP request reaches it.
@@ -92,7 +175,10 @@ export async function handleSoapInvoke(
 
   try {
     // Send progress updates
-    postMessage({ type: 'requestProgress', tabId, stage: 'pre-request-script', status: 'done' });
+    postMessage({
+      type: 'requestProgress', tabId, stage: 'pre-request-script',
+      status: preScript?.trim() ? 'done' : 'skipped',
+    });
     postMessage({ type: 'requestProgress', tabId, stage: 'rendering-request', status: 'done' });
     postMessage({ type: 'requestProgress', tabId, stage: 'sending-request', status: 'running' });
 
