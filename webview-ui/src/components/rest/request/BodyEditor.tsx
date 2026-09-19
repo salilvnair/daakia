@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { formatJsonWithTemplates } from '../../../services/template/format-json';
 import { useTabsStore } from '../../../store/tabs-store';
 import { useToastStore } from '../../../store/toast-store';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
@@ -69,12 +70,21 @@ export function BodyEditor({ tab, showFuzzer, onCloseFuzzer }: BodyEditorProps) 
   };
 
   const handlePrettify = () => {
-    if (tab.bodyMode === 'json') {
-      try {
-        const formatted = JSON.stringify(JSON.parse(tab.bodyRaw), null, 2);
-        updateTab(tab.id, { bodyRaw: formatted });
-      } catch { /* ignore invalid JSON */ }
-    }
+    /*
+      Gated on the same thing the button is.
+
+      The button renders when the EDITOR LANGUAGE is json, and this used to
+      run only when the body MODE was json — and a body with content type
+      application/json sits in mode `raw`. So the common case was a visible
+      Prettify button that did nothing at all, silently, which is how it was
+      reported.
+    */
+    if (editorLanguage !== 'json') return;
+    const formatted = formatJsonWithTemplates(tab.bodyRaw);
+    /* Null means it is not JSON even once the templates are accounted for.
+       Leave the text alone rather than mangle a body somebody is mid-way
+       through writing. */
+    if (formatted !== null) updateTab(tab.id, { bodyRaw: formatted });
   };
 
   const toBulkText = () =>
