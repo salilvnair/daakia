@@ -219,8 +219,30 @@ async function runDirective(d: CaptureDirective): Promise<void> {
       const timeoutMs = 3000;
       let target: HTMLElement | null = null;
       while (Date.now() - start < timeoutMs) {
-        const candidates = Array.from(document.querySelectorAll<HTMLElement>('body *'))
-          .filter(el => el.children.length === 0 && el.textContent?.trim() === d.text);
+        const leaves = Array.from(document.querySelectorAll<HTMLElement>('body *'))
+          .filter(el => el.children.length === 0);
+        /*
+          Exact first, then the same text with a trailing star taken off.
+
+          The AI tools in Power Features carry a `✦` after their names, which
+          says "this one uses a model" and is decoration rather than part of
+          the name. It was added long after these captures were written, and
+          the eight of them have been unfindable ever since — `Schema Diff`
+          is not `Schema Diff ✦`, and the failure reads as the tool being
+          missing rather than as a label having grown a mark.
+
+          Exact stays the rule, so nothing that matches today can start
+          matching something else. This only runs when nothing matched at
+          all, and only accepts a leaf whose text is the target once the
+          decoration is gone — which is why the pattern is those marks and
+          not "trailing punctuation": stripping a `?` would let a capture
+          aiming at `Delete` land on `Delete?`.
+        */
+        const undecorated = (el: HTMLElement) =>
+          (el.textContent ?? '').replace(/[\u2726\u2727\u2728\u2605\u2606\u22C6]\s*$/u, '').trim();
+        const candidates = leaves.filter(el => el.textContent?.trim() === d.text).length > 0
+          ? leaves.filter(el => el.textContent?.trim() === d.text)
+          : leaves.filter(el => undecorated(el) === d.text);
         if (candidates.length > (nth < 0 ? 0 : nth)) {
           const raw = nth < 0 ? candidates[candidates.length + nth] : candidates[nth];
           let walk: HTMLElement | null = raw;
