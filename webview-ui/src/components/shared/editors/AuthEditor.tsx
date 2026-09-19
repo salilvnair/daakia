@@ -1,4 +1,4 @@
-import { SelectInputView, TextInputView, CheckboxView, ButtonView } from '@salilvnair/dui';
+import { SelectInputView, TextInputView, CheckboxView, ButtonView, HighlightedInputView } from '@salilvnair/dui';
 import { RefreshIcon } from '../../../icons';
 
 export interface AuthData {
@@ -70,14 +70,14 @@ export function AuthEditor({ authType, authData, onAuthTypeChange, onAuthDataCha
       {authType === 'bearer' && (
         <div className={ROW}>
           <span className={LABEL}>Token</span>
-          <TextInputView
+          <HighlightedInputView
             value={authData.token || ''}
-            onChange={(e) => onAuthDataChange({ ...authData, token: e.target.value })}
+            onChange={(val) => onAuthDataChange({ ...authData, token: val })}
             placeholder="Your Bearer Token (e.g. sk_live_abc123xyz789)"
             size="md"
-            masked
             accentColor={accentColor}
             style={W}
+            masked
           />
         </div>
       )}
@@ -87,9 +87,9 @@ export function AuthEditor({ authType, authData, onAuthTypeChange, onAuthDataCha
         <div className="flex flex-col gap-2">
           <div className={ROW}>
             <span className={LABEL}>Username</span>
-            <TextInputView
+            <HighlightedInputView
               value={authData.username || ''}
-              onChange={(e) => onAuthDataChange({ ...authData, username: e.target.value })}
+              onChange={(val) => onAuthDataChange({ ...authData, username: val })}
               placeholder="john_doe"
               size="md"
               accentColor={accentColor}
@@ -98,14 +98,14 @@ export function AuthEditor({ authType, authData, onAuthTypeChange, onAuthDataCha
           </div>
           <div className={ROW}>
             <span className={LABEL}>Password</span>
-            <TextInputView
+            <HighlightedInputView
               value={authData.password || ''}
-              onChange={(e) => onAuthDataChange({ ...authData, password: e.target.value })}
+              onChange={(val) => onAuthDataChange({ ...authData, password: val })}
               placeholder="Enter password"
               size="md"
-              masked
               accentColor={accentColor}
               style={W}
+              masked
             />
           </div>
         </div>
@@ -116,9 +116,9 @@ export function AuthEditor({ authType, authData, onAuthTypeChange, onAuthDataCha
         <div className="flex flex-col gap-2">
           <div className={ROW}>
             <span className={LABEL}>Key</span>
-            <TextInputView
+            <HighlightedInputView
               value={authData.apiKeyName || ''}
-              onChange={(e) => onAuthDataChange({ ...authData, apiKeyName: e.target.value })}
+              onChange={(val) => onAuthDataChange({ ...authData, apiKeyName: val })}
               placeholder="X-API-Key"
               size="md"
               accentColor={accentColor}
@@ -127,14 +127,14 @@ export function AuthEditor({ authType, authData, onAuthTypeChange, onAuthDataCha
           </div>
           <div className={ROW}>
             <span className={LABEL}>Value</span>
-            <TextInputView
+            <HighlightedInputView
               value={authData.apiKeyValue || ''}
-              onChange={(e) => onAuthDataChange({ ...authData, apiKeyValue: e.target.value })}
+              onChange={(val) => onAuthDataChange({ ...authData, apiKeyValue: val })}
               placeholder="Enter API key value"
               size="md"
-              masked
               accentColor={accentColor}
               style={W}
+              masked
             />
           </div>
           <div className={ROW}>
@@ -206,9 +206,9 @@ function OAuth2Section({ authData, onAuthDataChange, onGetToken, loading, accent
       {grantType === 'authorization_code' && (
         <div className={ROW}>
           <span className={LABEL}>Auth URL</span>
-          <TextInputView
+          <HighlightedInputView
             value={authData.oauth2AuthUrl || ''}
-            onChange={(e) => onAuthDataChange({ ...authData, oauth2AuthUrl: e.target.value })}
+            onChange={(val) => onAuthDataChange({ ...authData, oauth2AuthUrl: val })}
             placeholder="https://provider.com/authorize"
             size="md"
             accentColor={accentColor}
@@ -220,9 +220,9 @@ function OAuth2Section({ authData, onAuthDataChange, onGetToken, loading, accent
       {/* Token URL */}
       <div className={ROW}>
         <span className={LABEL}>Token URL</span>
-        <TextInputView
+        <HighlightedInputView
           value={authData.oauth2TokenUrl || ''}
-          onChange={(e) => onAuthDataChange({ ...authData, oauth2TokenUrl: e.target.value })}
+          onChange={(val) => onAuthDataChange({ ...authData, oauth2TokenUrl: val })}
           placeholder="https://provider.com/token"
           size="md"
           accentColor={accentColor}
@@ -233,9 +233,9 @@ function OAuth2Section({ authData, onAuthDataChange, onGetToken, loading, accent
       {/* Client ID */}
       <div className={ROW}>
         <span className={LABEL}>Client ID</span>
-        <TextInputView
+        <HighlightedInputView
           value={authData.oauth2ClientId || ''}
-          onChange={(e) => onAuthDataChange({ ...authData, oauth2ClientId: e.target.value })}
+          onChange={(val) => onAuthDataChange({ ...authData, oauth2ClientId: val })}
           placeholder="your-client-id"
           size="md"
           accentColor={accentColor}
@@ -246,23 +246,23 @@ function OAuth2Section({ authData, onAuthDataChange, onGetToken, loading, accent
       {/* Client Secret */}
       <div className={ROW}>
         <span className={LABEL}>Client Secret</span>
-        <TextInputView
+        <HighlightedInputView
           value={authData.oauth2ClientSecret || ''}
-          onChange={(e) => onAuthDataChange({ ...authData, oauth2ClientSecret: e.target.value })}
+          onChange={(val) => onAuthDataChange({ ...authData, oauth2ClientSecret: val })}
           placeholder="your-client-secret"
           size="md"
-          masked
           accentColor={accentColor}
           style={W}
+          masked
         />
       </div>
 
       {/* Scope */}
       <div className={ROW}>
         <span className={LABEL}>Scope</span>
-        <TextInputView
+        <HighlightedInputView
           value={authData.oauth2Scope || ''}
-          onChange={(e) => onAuthDataChange({ ...authData, oauth2Scope: e.target.value })}
+          onChange={(val) => onAuthDataChange({ ...authData, oauth2Scope: val })}
           placeholder="read write (space-separated)"
           size="md"
           accentColor={accentColor}
@@ -275,9 +275,9 @@ function OAuth2Section({ authData, onAuthDataChange, onGetToken, loading, accent
         <>
           <div className={ROW}>
             <span className={LABEL}>Redirect URI</span>
-            <TextInputView
+            <HighlightedInputView
               value={authData.oauth2RedirectUri || ''}
-              onChange={(e) => onAuthDataChange({ ...authData, oauth2RedirectUri: e.target.value })}
+              onChange={(val) => onAuthDataChange({ ...authData, oauth2RedirectUri: val })}
               placeholder="http://localhost:43789/callback"
               size="md"
               accentColor={accentColor}
@@ -302,9 +302,9 @@ function OAuth2Section({ authData, onAuthDataChange, onGetToken, loading, accent
         <>
           <div className={ROW}>
             <span className={LABEL}>Username</span>
-            <TextInputView
+            <HighlightedInputView
               value={authData.oauth2Username || ''}
-              onChange={(e) => onAuthDataChange({ ...authData, oauth2Username: e.target.value })}
+              onChange={(val) => onAuthDataChange({ ...authData, oauth2Username: val })}
               placeholder="username"
               size="md"
               accentColor={accentColor}
@@ -313,14 +313,14 @@ function OAuth2Section({ authData, onAuthDataChange, onGetToken, loading, accent
           </div>
           <div className={ROW}>
             <span className={LABEL}>Password</span>
-            <TextInputView
+            <HighlightedInputView
               value={authData.oauth2Password || ''}
-              onChange={(e) => onAuthDataChange({ ...authData, oauth2Password: e.target.value })}
+              onChange={(val) => onAuthDataChange({ ...authData, oauth2Password: val })}
               placeholder="password"
               size="md"
-              masked
               accentColor={accentColor}
               style={W}
+              masked
             />
           </div>
         </>
@@ -332,14 +332,14 @@ function OAuth2Section({ authData, onAuthDataChange, onGetToken, loading, accent
       {/* Access Token (result) */}
       <div className={ROW}>
         <span className={LABEL}>Access Token</span>
-        <TextInputView
+        <HighlightedInputView
           value={authData.accessToken || ''}
-          onChange={(e) => onAuthDataChange({ ...authData, accessToken: e.target.value })}
+          onChange={(val) => onAuthDataChange({ ...authData, accessToken: val })}
           placeholder="Token will appear here after fetching"
           size="md"
-          masked
           accentColor={accentColor}
           style={W}
+          masked
         />
       </div>
 

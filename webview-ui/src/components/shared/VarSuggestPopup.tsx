@@ -23,7 +23,19 @@ import { installVarCompletions } from '../../services/template/monaco-var-comple
  */
 
 const ROW_H = 30;
-const MAX_ROWS = 9;
+/* A group heading is a row of its own as far as height is concerned, and
+   leaving it out of the sum is what cut the last row in half. */
+const GROUP_H = 22;
+const PAD = 8;
+/*
+  Tall enough to read as a list even when two things match.
+
+  A panel the height of one and a half rows looks like something went wrong
+  rather than like a short answer, and the half-row at the bottom reads as
+  content you cannot reach.
+*/
+const MIN_H = 120;
+const MAX_H = 380;
 
 const KIND_COLOR: Record<VarSuggestion['kind'], string> = {
   variable: 'var(--color-var-pill-text, #c084fc)',
@@ -112,8 +124,7 @@ export function VarSuggestPopup() {
 
       const rect = el.getBoundingClientRect();
       const room = window.innerHeight - rect.bottom;
-      const wanted = Math.min(MAX_ROWS, 6) * ROW_H + 12;
-      const above = room < wanted && rect.top > room;
+      const above = room < MIN_H + 12 && rect.top > room;
       setPos({
         top: above ? rect.top : rect.bottom + 4,
         left: rect.left,
@@ -186,7 +197,13 @@ export function VarSuggestPopup() {
 
   if (!target || items.length === 0) return null;
 
-  const height = Math.min(items.length, MAX_ROWS) * ROW_H + 8;
+  /*
+    The real height of what is in there — rows plus the headings between them
+    — so the list ends on a row boundary instead of through one.
+  */
+  const groups = new Set(items.map(s => s.group)).size;
+  const content = items.length * ROW_H + groups * GROUP_H + PAD;
+  const height = Math.max(MIN_H, Math.min(content, MAX_H));
 
   return createPortal(
     <div
@@ -199,7 +216,9 @@ export function VarSuggestPopup() {
         bottom: pos.above ? window.innerHeight - pos.top + 4 : undefined,
         left: pos.left,
         width: pos.width,
-        maxHeight: height,
+        height,
+        /* A short list gets the floor; a long one scrolls at the cap. */
+        minHeight: Math.min(content, MIN_H),
         overflowY: 'auto',
         background: 'var(--color-surface)',
         border: '1px solid var(--color-surface-border)',

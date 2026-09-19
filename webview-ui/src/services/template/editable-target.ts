@@ -59,7 +59,22 @@ export function readEditable(el: Editable): { value: string; caret: number } | n
   const before = range.cloneRange();
   before.selectNodeContents(el);
   before.setEnd(range.endContainer, range.endOffset);
-  return { value: el.innerText.replace(/\r/g, ''), caret: before.toString().length };
+  return { value: editableText(el), caret: before.toString().length };
+}
+
+/**
+ * The text in a contenteditable, which is not always the text on screen.
+ *
+ * `innerText` is layout-aware, and `-webkit-text-security` — how a masked
+ * field hides a token — is a layout effect: it hands back a row of bullets.
+ * A suggestion accepted against that would write the bullets back as the
+ * value. `textContent` is DOM-only, so it is what a masked field is read
+ * with.
+ */
+function editableText(el: HTMLElement): string {
+  const security = getComputedStyle(el).getPropertyValue('-webkit-text-security');
+  const masked = !!security && security !== 'none';
+  return (masked ? (el.textContent ?? '') : el.innerText).replace(/\r/g, '');
 }
 
 /**

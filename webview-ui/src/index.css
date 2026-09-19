@@ -484,6 +484,19 @@ body {
   overflow: hidden;
 }
 
+/* ─── {{variable}} inside a Monaco editor ───────────────────────────────────
+   Same colours as .dui-var-token, which is what every other field in the app
+   draws a variable with. Deliberately without the chip's border and padding:
+   Monaco positions text by measuring the font, and an inline decoration that
+   adds width puts the caret and the selection out of step with what is drawn.
+   Colour and a wash carry the same meaning and cost no width. */
+.dk-monaco-var {
+  color: var(--color-var-pill-text, #c084fc) !important;
+  background: var(--color-var-pill-bg, rgba(139, 92, 246, 0.18));
+  border-radius: 3px;
+  font-weight: 600;
+}
+
 /* ─── Animations ─── */
 @keyframes fadeSlideIn {
   from {

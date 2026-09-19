@@ -16,6 +16,7 @@ import { useCollectionsStore } from '../../store/collections-store';
 import { useTabsStore } from '../../store/tabs-store';
 import { useDynamicVarsStore } from '../../store/dynamic-vars-store';
 import { openBraces, suggestionsFor, type VarSources } from './var-suggest';
+import { installVarDecorations } from './monaco-var-decorations';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -100,6 +101,9 @@ export function installVarCompletions(timeoutMs = 20000): void {
     const monaco = (window as any).monaco;
     if (monaco?.languages?.registerCompletionItemProvider) {
       registerVarCompletions(monaco);
+      /* The other half of the same job: offering `{{` and then drawing what
+         it produced the way every other field draws it. */
+      installVarDecorations(monaco);
       return;
     }
     if (Date.now() - started < timeoutMs) setTimeout(tick, 250);
