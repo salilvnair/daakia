@@ -2,9 +2,23 @@ import { createRoot } from 'react-dom/client';
 import { lazy, Suspense } from 'react';
 import { DuiProvider } from '@salilvnair/dui';
 import './index.css';
+import { useAppThemeStore, resolveMode, type ThemeMode } from './store/app-theme-store';
 import 'highlight.js/styles/github-dark.css';
 import '@salilvnair/dui/style.css';
 import '@salilvnair/dui/monaco-setup';
+
+/*
+  The palette goes on before the first render, not after it.
+
+  A theme applied from an effect paints the app in the default colours for a
+  frame and then repaints — which on a dark palette over a light default is a
+  white flash on every reload. This is a style element and a string; doing it
+  here costs nothing.
+*/
+{
+  const choice = (localStorage.getItem('daakia-theme') as ThemeMode) || 'dark';
+  useAppThemeStore.getState().repaint(resolveMode(choice));
+}
 
 const isDuiShowcase = import.meta.env.DEV && window.location.hash === '#dui';
 

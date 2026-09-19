@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { PaletteSettings } from '../settings/PaletteSettings';
+import { useAppThemeStore } from '../../store/app-theme-store';
 import { ButtonView, TextInputView, ToggleSwitchView, TabView, SideNavView, SplitPanelView, CopyButtonView, RadioGroupView, type SideNavItem } from '@salilvnair/dui';
 import { useDbStatusStore } from '../../store/db-status-store';
 import { useAppSettingsStore } from '../../store/app-settings-store';
@@ -930,10 +932,18 @@ function resolveSystemTheme(): 'dark' | 'light' {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-/** Apply a resolved dark/light to the DOM (does NOT touch localStorage choice) */
+/**
+ * Apply a resolved dark/light to the DOM (does NOT touch localStorage choice).
+ *
+ * The palette is repainted alongside it: dark/light and which palette are two
+ * separate questions, and a theme only carries the half you are in. Leaving
+ * the paint alone here is how you end up wearing a palette's dark seeds on a
+ * light `data-theme`.
+ */
 function applyThemeToDOM(resolved: 'dark' | 'light') {
   document.documentElement.setAttribute('data-theme', resolved);
   document.body.setAttribute('data-theme', resolved);
+  useAppThemeStore.getState().repaint(resolved);
 }
 
 function ThemeSettings() {
@@ -1029,9 +1039,9 @@ function ThemeSettings() {
         ))}
       </div>
 
-      <p className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
-        Note: VS Code applies its own theme to the extension host. This toggle controls the Daakia webview UI independently.
-      </p>
+      <div className="h-px" style={{ background: 'var(--color-surface-border)' }} />
+
+      <PaletteSettings mode={choice === 'system' ? resolveSystemTheme() : choice} />
     </div>
   );
 }

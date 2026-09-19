@@ -103,6 +103,26 @@ export function flipForOtherGround(hex: string, toLight: boolean): string {
   return toHex(fromHsl(h, targetS, targetL));
 }
 
+/**
+ * The same hue at a different lightness, with the saturation dialled back.
+ *
+ * What a background needs and `flipForOtherGround` cannot give it. That one
+ * makes a colour readable AGAINST the other ground, which for a foreground is
+ * the whole job and for a background is the opposite of it: run a dark
+ * editor background through it and you get a mid-grey, not a light editor.
+ *
+ * The saturation scale is what keeps a derived light theme from looking like
+ * a colour cast. A dark theme's surface carries its hue at full strength
+ * because there is almost no light in it; the same hue at 97% lightness is a
+ * tint, and a tint at full saturation is a stain.
+ */
+export function shiftLightness(hex: string, targetL: number, satScale = 1): string {
+  const c = parseHex(hex);
+  if (!c) return hex;
+  const { h, s } = toHsl(c);
+  return toHex(fromHsl(h, Math.min(1, s * satScale), Math.min(1, Math.max(0, targetL))));
+}
+
 function toHsl({ r, g, b }: Rgb): { h: number; s: number; l: number } {
   const rr = r / 255, gg = g / 255, bb = b / 255;
   const max = Math.max(rr, gg, bb);

@@ -20,7 +20,7 @@
  * benefit. The file format still carries both kinds, so one export is still
  * one attachment; see palette-file.ts.
  */
-import { mix, alpha, flipForOtherGround, isDarkColour } from './colour';
+import { mix, alpha, flipForOtherGround, shiftLightness, isDarkColour } from './colour';
 
 /** The thirteen. Everything a reader looks at comes out of these. */
 export interface AppSeeds {
@@ -372,21 +372,45 @@ export function paletteCss(palette: AppPalette, mode: 'dark' | 'light'): string 
   return `:root {\n${body}\n}`;
 }
 
-/** A light half for a theme that only authored a dark one. */
+/**
+ * A light half for a theme that only authored a dark one.
+ *
+ * Backgrounds and foregrounds are derived in opposite directions, which is
+ * the whole trick. A foreground has to become readable AGAINST the other
+ * ground, so it darkens. A background has to BECOME the other ground, so it
+ * inverts — and running a dark editor background through the foreground rule
+ * gives a mid-grey, which is neither theme.
+ *
+ * The result is legible rather than designed, and whatever carries it says
+ * so: see `lightDerived`.
+ */
 export function deriveLightSeeds(dark: AppSeeds): AppSeeds {
-  const out = {} as AppSeeds;
-  for (const key of SEED_KEYS) {
-    out[key] = flipForOtherGround(dark[key], true);
-  }
-  /*
-    The two grounds are inverted rather than flipped hue-wise: a light theme's
-    panel has to be *darker* than its surface, which is the opposite of the
-    dark case, and running each through the generic flip independently loses
-    that relationship about half the time.
-  */
-  out.surface = flipForOtherGround(dark.surface, true);
-  out.ground = mix(out.surface, dark.text, 0.94);
-  out.inputBg = out.surface;
-  out.inputText = out.text;
-  return out;
+  /* A tint, not a stain. A dark surface carries its hue at full strength
+     because there is almost no light in it; the same hue at 97% lightness
+     needs a fraction of that saturation to read as the same theme. */
+  const paper = (hex: string, l: number) => shiftLightness(hex, l, 0.22);
+  const ink = (hex: string) => flipForOtherGround(hex, true);
+
+  const surface = paper(dark.surface, 0.985);
+  /* The panel sits DARKER than the surface in a light theme, which is the
+     reverse of the dark case — deriving each seed independently gets this
+     backwards about half the time. */
+  const ground = paper(dark.surface, 0.94);
+  const text = ink(dark.text);
+
+  return {
+    ground,
+    surface,
+    border: paper(dark.border, 0.82),
+    text,
+    muted: mix(text, surface, 0.52),
+    inputBg: paper(dark.inputBg, 0.995),
+    inputBorder: paper(dark.inputBorder, 0.84),
+    inputText: text,
+    accent: ink(dark.accent),
+    success: ink(dark.success),
+    warning: ink(dark.warning),
+    error: ink(dark.error),
+    info: ink(dark.info),
+  };
 }
