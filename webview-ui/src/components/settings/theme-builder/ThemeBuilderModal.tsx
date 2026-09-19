@@ -1,12 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ModalView, ButtonView, TextInputView, ColorPickerView, BadgeChipView } from '@salilvnair/dui';
 import { deriveLightAnsi, type TerminalAnsi } from '@salilvnair/dui';
-import { PaletteIcon, TerminalIcon, RefreshIcon } from '../../../icons';
+import { PaletteIcon, TerminalIcon, RefreshIcon, FolderImportIcon } from '../../../icons';
 import {
   fieldsFor, idFromLabel, draftToApp, draftToTerminal,
   type DraftPalette, type ThemeKind,
 } from './fields';
 import { deriveLightSeeds, type AppSeeds } from '../../../services/theme/palette';
+import { parseAppThemes } from '../../../services/theme/palette-file';
+import { parseTerminalThemes } from '@salilvnair/dui';
 import { contrast } from '../../../services/theme/colour';
 import { MISSING_COLOUR } from '../../../services/theme/preview-ground';
 import { AppThemePreview, TerminalThemePreview } from './previews';
@@ -44,7 +46,56 @@ export function ThemeBuilderModal({ kind, initial, taken, onSave, onClose }: {
     light: { ...initial.light },
   }));
   const [half, setHalf] = useState<'dark' | 'light'>('dark');
+  const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const fields = fieldsFor(kind);
+
+  /**
+   * Start from a file instead of from a built-in.
+   *
+   * The other way in — New from this — starts from a theme you already have,
+   * which is no help when the one you want is a file somebody sent you and
+   * you want to change two colours in it before keeping it. It loads into
+   * the draft rather than into the library: nothing is stored until Save, so
+   * opening a file to look at it is not the same as collecting it.
+   *
+   * The name comes with it, and so does the id — so importing a theme you
+   * already have and saving it updates that one rather than leaving two
+   * entries that differ invisibly.
+   */
+  const importInto = async (file: File) => {
+    setError(null);
+    const text = await file.text();
+
+    if (kind === 'app') {
+      const parsed = parseAppThemes(text);
+      if (!parsed.ok) { setError(parsed.error); return; }
+      const [first] = parsed.palettes;
+      setDraft({
+        id: first.id, label: first.label, swatch: first.swatch,
+        dark: { ...first.dark }, light: { ...first.light },
+        lightDerived: first.lightDerived,
+      });
+      if (parsed.palettes.length > 1) {
+        setError(`That file has ${parsed.palettes.length} themes — opened the first. `
+          + 'Import from the Theme page to take them all.');
+      }
+      return;
+    }
+
+    const parsed = parseTerminalThemes(text);
+    if (!parsed.ok) { setError(parsed.error); return; }
+    const [first] = parsed.themes;
+    setDraft({
+      id: first.id, label: first.label, swatch: first.swatch,
+      dark: { ...first.dark }, light: { ...first.light },
+      lightDerived: first.lightDerived,
+    });
+    if (parsed.themes.length > 1) {
+      setError(`That file has ${parsed.themes.length} themes — opened the first. `
+        + 'Import from the Terminal page to take them all.');
+    }
+  };
 
   const groups = useMemo(() => {
     const out = new Map<string, typeof fields>();
@@ -137,8 +188,23 @@ export function ThemeBuilderModal({ kind, initial, taken, onSave, onClose }: {
           <ButtonView size="sm" variant="secondary" iconLeft={<RefreshIcon size={12} />} onClick={deriveLight}>
             Derive light from dark
           </ButtonView>
+          <ButtonView size="sm" variant="secondary" iconLeft={<FolderImportIcon size={12} />}
+            onClick={() => fileRef.current?.click()}>
+            Start from a file
+          </ButtonView>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) void importInto(f); e.target.value = ''; }}
+          />
           {kind === 'app' && <Legibility colours={colours} />}
         </div>
+
+        {error && (
+          <p className="text-[11px]" style={{ color: 'var(--color-warning)' }}>{error}</p>
+        )}
 
         {/* ── Live preview ── */}
         {kind === 'app'

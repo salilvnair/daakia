@@ -484,6 +484,16 @@ body {
   overflow: hidden;
 }
 
+/* ─── A palette card, as a sortable row ─────────────────────────────────────
+   SortableView's wrapper is a block by default, which inside the cards'
+   wrapping flex container would stretch to the full row. Sized to the card it
+   holds instead, so the grid still wraps five across while the wrapper keeps a
+   real box for the drag handle and the drop indicator to be placed against. */
+.dk-palette-row {
+  flex: 0 0 auto;
+  position: relative;
+}
+
 /* ─── {{variable}} inside a Monaco editor ───────────────────────────────────
    Same colours as .dui-var-token, which is what every other field in the app
    draws a variable with. Deliberately without the chip's border and padding:

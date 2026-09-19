@@ -1,7 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
-import { ButtonView, BadgeChipView } from '@salilvnair/dui';
+import { ButtonView, BadgeChipView, SortableView, type SortableRow } from '@salilvnair/dui';
 import {
   PaletteIcon, FolderImportIcon, FolderExportIcon, TrashIcon, EyeIcon, EyeOffIcon, PencilIcon,
+  CopyIcon, CheckIcon,
 } from '../../icons';
 import { useAppThemeStore } from '../../store/app-theme-store';
 import {
@@ -40,7 +41,9 @@ export function PaletteSettings({ mode }: { mode: Half }) {
   const [half, setHalf] = useState<Half>(mode);
   const [preview, setPreview] = useState<AppPalette | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  /* Which row's copy button has just been pressed, so the tick lands on that
+     row rather than on all of them. */
+  const [copied, setCopied] = useState<string | null>(null);
   /* The palette the builder is open on, or null. A copy is edited — see the
      modal — so holding the original here is safe. */
   const [building, setBuilding] = useState<DraftPalette | null>(null);
@@ -67,15 +70,15 @@ export function PaletteSettings({ mode }: { mode: Half }) {
     setError(result.added === 0 ? 'Those are already here.' : null);
   };
 
-  const exportAll = async () => {
-    const custom = store.custom;
-    const text = serializeThemes(custom.length > 0 ? custom : [current]);
+  const copy = async (palettes: AppPalette[], what: string) => {
     try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
+      await navigator.clipboard.writeText(serializeThemes(palettes));
+      setCopied(what);
+      setTimeout(() => setCopied(c => (c === what ? null : c)), 1600);
     } catch { setError('Could not reach the clipboard.'); }
   };
+
+  const exportAll = () => copy(store.custom.length > 0 ? store.custom : [current], 'all');
 
   const matchEditor = () => {
     const seeds = seedsFromHost();
@@ -98,6 +101,25 @@ export function PaletteSettings({ mode }: { mode: Half }) {
     store.repaint(half);
     setPreview(null);
   };
+
+  const cardRows: SortableRow[] = palettes.map(p => ({
+    id: p.id,
+    node: (
+      <PaletteCard
+        palette={p}
+        half={half}
+        active={p.id === current.id}
+        copied={copied === p.id}
+        onHover={() => setPreview(p)}
+        onLeave={() => setPreview(null)}
+        onClick={() => choose(p)}
+        onEdit={() => setBuilding(appToDraft(p))}
+        onCopy={() => void copy([p], p.id)}
+        onHide={p.id === BUILT_IN_PALETTES[0].id ? undefined : () => store.setHidden(p.id, true)}
+        onRemove={p.builtIn ? undefined : () => store.remove(p.id)}
+      />
+    ),
+  }));
 
   return (
     <div className="flex flex-col gap-5">
@@ -124,25 +146,34 @@ export function PaletteSettings({ mode }: { mode: Half }) {
       </div>
 
       <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-        Thirteen colours decide everything else. Hover a palette to try it here; click to wear it.
+        Thirteen colours decide everything else. Hover a palette to try it here, click to wear it,
+        drag to reorder.
       </p>
 
-      {/* ── The cards ── */}
+      {/*
+        Drag to reorder, the way the terminal's theme list does.
+
+        SortableView renders a fragment of row wrappers and leaves the
+        container to the caller, so the cards keep wrapping across the page
+        instead of becoming a single tall column.
+      */}
       <div className="flex gap-3 flex-wrap">
-        {palettes.map(p => (
-          <PaletteCard
-            key={p.id}
-            palette={p}
-            half={half}
-            active={p.id === current.id}
-            onHover={() => setPreview(p)}
-            onLeave={() => setPreview(null)}
-            onClick={() => choose(p)}
-            onEdit={() => setBuilding(appToDraft(p))}
-            onHide={p.id === BUILT_IN_PALETTES[0].id ? undefined : () => store.setHidden(p.id, true)}
-            onRemove={p.builtIn ? undefined : () => store.remove(p.id)}
-          />
-        ))}
+        <SortableView
+          rows={cardRows}
+          accentColor="var(--color-accent)"
+          onReorder={(from, to) => store.reorder(from, to)}
+          /*
+            The row wrapper stays a real box rather than `display: contents`.
+
+            Contents made the cards lay out beautifully and gave the drag
+            handle and the drop indicator nothing to be positioned against —
+            a wrapper with no box cannot anchor an absolutely-positioned
+            child. As a plain block it becomes a flex item of the wrapping
+            container, sized by the card inside it, which is the same layout
+            and a handle that lands where it is aimed.
+          */
+          rowClassName="dk-palette-row"
+        />
       </div>
 
       {store.hidden.length > 0 && (
@@ -170,7 +201,7 @@ export function PaletteSettings({ mode }: { mode: Half }) {
           Import
         </ButtonView>
         <ButtonView size="sm" variant="secondary" iconLeft={<FolderExportIcon size={13} />} onClick={exportAll}>
-          {copied ? 'Copied' : 'Export'}
+          {copied === 'all' ? 'Copied' : 'Export all'}
         </ButtonView>
         {hostAvailable && (
           <ButtonView size="sm" variant="secondary" onClick={matchEditor}>
@@ -207,9 +238,20 @@ export function PaletteSettings({ mode }: { mode: Half }) {
         />
       )}
 
+      {/*
+        Rewritten because somebody had to ask what it meant.
+
+        The old version described the implementation — localStorage, no file
+        written, nothing crossing to the extension host — which is true and
+        answers a question nobody was asking. What a reader needs is the
+        consequence: these do not travel, so keep a copy, and here is exactly
+        how far the colours reach.
+      */}
       <p className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
-        A theme lives in this browser&rsquo;s storage and nowhere else &mdash; no file is written and
-        nothing crosses to the extension. VS Code paints its own chrome; this is the Daakia panel.
+        Themes are saved in this panel only &mdash; not to a file, and not synced to your other
+        machines. Use <strong>Export all</strong> or a card&rsquo;s copy button to keep or share one.
+        The colours reach Daakia&rsquo;s panel; VS Code&rsquo;s own title bar, activity bar and
+        status bar keep their own theme.
       </p>
     </div>
   );
@@ -217,14 +259,18 @@ export function PaletteSettings({ mode }: { mode: Half }) {
 
 // ── One card ────────────────────────────────────────────────────────────────
 
-function PaletteCard({ palette, half, active, onHover, onLeave, onClick, onEdit, onHide, onRemove }: {
+function PaletteCard({
+  palette, half, active, copied, onHover, onLeave, onClick, onEdit, onCopy, onHide, onRemove,
+}: {
   palette: AppPalette;
   half: Half;
   active: boolean;
+  copied: boolean;
   onHover: () => void;
   onLeave: () => void;
   onClick: () => void;
   onEdit: () => void;
+  onCopy: () => void;
   onHide?: () => void;
   onRemove?: () => void;
 }) {
@@ -272,7 +318,13 @@ function PaletteCard({ palette, half, active, onHover, onLeave, onClick, onEdit,
             derived
           </span>
         )}
-        <span className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* Hidden until the card is hovered, except while the copy tick is
+            showing — a confirmation that fades with the pointer is one
+            nobody sees. */}
+        <span
+          className={`ml-auto flex items-center gap-1 transition-opacity${
+            copied ? '' : ' opacity-0 group-hover:opacity-100'}`}
+        >
           <button
             type="button"
             title={palette.builtIn ? 'Start a new theme from this one' : 'Edit'}
@@ -280,6 +332,16 @@ function PaletteCard({ palette, half, active, onHover, onLeave, onClick, onEdit,
             style={{ color: 'var(--color-text-muted)' }}
           >
             <PencilIcon size={12} />
+          </button>
+          {/* This one theme, as a file — so sharing a palette is not "export
+              everything and delete the ones they did not ask for". */}
+          <button
+            type="button"
+            title="Copy this theme"
+            onClick={e => { e.stopPropagation(); onCopy(); }}
+            style={{ color: copied ? 'var(--color-success)' : 'var(--color-text-muted)' }}
+          >
+            {copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
           </button>
           {onHide && (
             <button type="button" title="Hide" onClick={e => { e.stopPropagation(); onHide(); }}

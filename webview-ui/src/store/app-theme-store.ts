@@ -39,12 +39,21 @@ interface Stored {
   selected: string;
   /** Ids the reader has hidden, built-ins included. */
   hidden: string[];
+  /**
+   * The order the cards are shown in, by id.
+   *
+   * Stored as ids rather than indices so it survives a theme being deleted,
+   * a built-in being added in a later version, and an import landing in the
+   * middle — all of which shift every index after them.
+   */
+  order: string[];
 }
 
 interface AppThemeState {
   custom: AppPalette[];
   selected: string;
   hidden: string[];
+  order: string[];
   /** Built-ins then imported, minus anything hidden. */
   palettes: () => AppPalette[];
   /** The one being worn, or the first built-in if it has gone. */
@@ -53,12 +62,14 @@ interface AppThemeState {
   add: (palettes: AppPalette[]) => { added: number; error?: string };
   remove: (id: string) => void;
   setHidden: (id: string, hidden: boolean) => void;
+  /** Move a card, by position in the list as it is currently shown. */
+  reorder: (from: number, to: number) => void;
   /** Repaint in the given mode — called when dark/light changes too. */
   repaint: (mode: 'dark' | 'light') => void;
 }
 
 function read(): Stored {
-  const empty: Stored = { custom: [], selected: BUILT_IN_PALETTES[0].id, hidden: [] };
+  const empty: Stored = { custom: [], selected: BUILT_IN_PALETTES[0].id, hidden: [], order: [] };
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return empty;
@@ -68,6 +79,7 @@ function read(): Stored {
       custom: themes.ok ? themes.palettes : [],
       selected: typeof parsed.selected === 'string' ? parsed.selected : empty.selected,
       hidden: Array.isArray(parsed.hidden) ? parsed.hidden.filter(h => typeof h === 'string') : [],
+      order: Array.isArray(parsed.order) ? parsed.order.filter(o => typeof o === 'string') : [],
     };
   } catch {
     /* A store that cannot be read is a store that gets replaced, not one that
@@ -94,11 +106,19 @@ export const useAppThemeStore = create<AppThemeState>((set, get) => ({
   custom: initial.custom,
   selected: initial.selected,
   hidden: initial.hidden,
+  order: initial.order,
 
   palettes: () => {
-    const { custom, hidden } = get();
-    const all = [...BUILT_IN_PALETTES, ...custom];
-    return all.filter(p => !hidden.includes(p.id));
+    const { custom, hidden, order } = get();
+    const all = [...BUILT_IN_PALETTES, ...custom].filter(p => !hidden.includes(p.id));
+    /*
+      Anything the stored order does not mention keeps its natural place at
+      the end — a palette added by a later version, or one just imported,
+      should appear rather than vanish because nobody has dragged it yet.
+    */
+    const ranked = new Map(order.map((id, i) => [id, i]));
+    return [...all].sort((a, b) =>
+      (ranked.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (ranked.get(b.id) ?? Number.MAX_SAFE_INTEGER));
   },
 
   current: () => {
@@ -110,7 +130,7 @@ export const useAppThemeStore = create<AppThemeState>((set, get) => ({
   select: (id) => {
     set({ selected: id });
     const { custom, hidden } = get();
-    write({ custom, selected: id, hidden });
+    write({ custom, selected: id, hidden, order: get().order });
   },
 
   add: (palettes) => {
@@ -132,7 +152,7 @@ export const useAppThemeStore = create<AppThemeState>((set, get) => ({
       return { added: 0, error: `That would take you past ${MAX_THEMES_STORED} stored themes.` };
     }
     set({ custom: next });
-    write({ custom: next, selected, hidden });
+    write({ custom: next, selected, hidden, order: get().order });
     return { added };
   },
 
@@ -141,7 +161,20 @@ export const useAppThemeStore = create<AppThemeState>((set, get) => ({
     const next = custom.filter(p => p.id !== id);
     const selected = get().selected === id ? BUILT_IN_PALETTES[0].id : get().selected;
     set({ custom: next, selected });
-    write({ custom: next, selected, hidden });
+    write({ custom: next, selected, hidden, order: get().order });
+  },
+
+  reorder: (from, to) => {
+    const shown = get().palettes().map(p => p.id);
+    if (from === to || from < 0 || to < 0 || from >= shown.length || to >= shown.length) return;
+    const next = [...shown];
+    next.splice(to, 0, ...next.splice(from, 1));
+    /* Hidden ids keep whatever place they had — unhiding one should not send
+       it to the end of a list somebody has already arranged. */
+    const order = [...next, ...get().order.filter(id => !next.includes(id))];
+    const { custom, selected, hidden } = get();
+    set({ order });
+    write({ custom, selected, hidden, order });
   },
 
   setHidden: (id, isHidden) => {
@@ -150,7 +183,7 @@ export const useAppThemeStore = create<AppThemeState>((set, get) => ({
       ? [...new Set([...get().hidden, id])]
       : get().hidden.filter(h => h !== id);
     set({ hidden });
-    write({ custom, selected, hidden });
+    write({ custom, selected, hidden, order: get().order });
   },
 
   repaint: (mode) => {
