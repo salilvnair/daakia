@@ -163,6 +163,7 @@ export function CollectionPropertiesModal({ open, collectionId, collectionName, 
         {activeTab === 'headers' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, minHeight: 0, overflowY: 'auto' }}>
             <KeyValueTableView
+              highlightVars
               rows={headers}
               onChange={setHeaders}
               placeholder={{ key: 'Header', value: 'Value' }}
@@ -196,6 +197,7 @@ export function CollectionPropertiesModal({ open, collectionId, collectionName, 
         {activeTab === 'variables' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, minHeight: 0, overflowY: 'auto' }}>
             <KeyValueTableView
+              highlightVars
               rows={variables}
               onChange={setVariables}
               placeholder={{ key: 'Variable', value: 'Value' }}

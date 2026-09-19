@@ -279,6 +279,7 @@ export function GraphQLEditor() {
                data-menu="kv" data-table="headers" data-label="the headers">
             {/* Headers — ditto same as REST HeadersTab: KVT with toolbarExtra sparkle + headless AiHeaderSuggest */}
             <KeyValueTableView
+              highlightVars
               rows={activeTab.headers}
               onChange={(rows) => updateTab(activeTab.id, { headers: rows })}
               placeholder={{ key: 'Header', value: 'Value' }}

@@ -213,6 +213,7 @@ export function SoapRequestConfig() {
           <div className="h-full flex flex-col overflow-hidden"
                data-menu="kv" data-table="headers" data-label="the headers">
             <KeyValueTableView
+              highlightVars
               rows={activeTab.headers || []}
               onChange={handleHeadersChange}
               placeholder={{ key: 'header-name', value: 'header-value' }}

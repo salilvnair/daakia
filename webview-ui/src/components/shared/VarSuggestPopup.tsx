@@ -93,6 +93,15 @@ export function VarSuggestPopup() {
   useEffect(() => {
     const reconsider = (e: Event) => {
       if (applying.current) return;
+      /*
+        A click inside the list is not a click somewhere else.
+
+        This listener runs in the capture phase, so a click on a row reached
+        it before React's own handler did — the list closed, the row unmounted,
+        and `onClick` never fired. Mouse selection simply did nothing and the
+        keyboard was the only way to take a suggestion.
+      */
+      if ((e.target as HTMLElement | null)?.closest?.('[data-no-var-suggest]')) return;
       const el = editableFrom(e.target);
       if (!el) { close(); return; }
       const read = readEditable(el);

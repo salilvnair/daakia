@@ -302,6 +302,7 @@ export function RouteCard({ route, isEditing, serverBaseUrl, server, onEdit, onU
               {headersExpanded && (
                 <div className="mt-1.5">
                   <KeyValueTableView
+                    highlightVars
                     rows={headerRows}
                     onChange={handleHeadersChange}
                     placeholder={{ key: 'Header name', value: 'Value' }}

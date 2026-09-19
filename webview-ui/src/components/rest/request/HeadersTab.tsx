@@ -37,6 +37,7 @@ export function HeadersTab({ tab, cookieJarRows }: HeadersTabProps) {
   return (
     <>
       <KeyValueTableView
+        highlightVars
         rows={tab.headers as KeyValueTableRow[]}
         onChange={(rows) => updateTab(tab.id, { headers: rows as typeof tab.headers })}
         placeholder={{ key: 'Header', value: 'Value' }}

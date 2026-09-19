@@ -352,6 +352,7 @@ export function RequestPanel() {
 
         {activeSection === 'variables' && (
           <KeyValueTableView
+            highlightVars
             rows={tab.variables as KeyValueTableRow[]}
             onChange={(rows) => updateTab(tab.id, { variables: rows as typeof tab.variables })}
             placeholder={{ key: 'Variable', value: 'Value' }}

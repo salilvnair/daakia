@@ -54,6 +54,7 @@ export function McpEnvTab() {
         These env vars are injected into the STDIO process environment. Use them for API keys, tokens, and secrets.
       </p>
       <KeyValueTableView
+        highlightVars
         rows={rows}
         onChange={handleChange}
         label="Variable"
