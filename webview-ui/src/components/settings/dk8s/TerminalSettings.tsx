@@ -44,6 +44,9 @@ import { softPrimary } from '../../k8s/button-style';
 import { ConfirmDialog } from '../../shared/modals/ConfirmDialog';
 import { ThemePreview } from './ThemePreview';
 import { ThemeImportModal } from './ThemeImportModal';
+import { ThemeBuilderModal } from '../theme-builder/ThemeBuilderModal';
+import { PREVIEW_GROUND, type PreviewGround } from '../../../services/theme/preview-ground';
+import { terminalToDraft, draftToTerminal, type DraftPalette } from '../theme-builder/fields';
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
 
@@ -56,8 +59,11 @@ const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
   so both halves of a theme can be looked at without changing the app's theme
   to check.
 */
-const GROUND = { dark: '#16161c', light: '#f7f7f5' } as const;
-type Ground = keyof typeof GROUND;
+/* The same two the theme builder previews against — see preview-ground.ts.
+   Two copies of a stand-in ground go unnoticed until one is adjusted and the
+   two previews of one palette stop agreeing. */
+const GROUND = PREVIEW_GROUND;
+type Ground = PreviewGround;
 
 /** Stacks that exist on an ordinary machine, each falling back to the next. */
 const FONTS = [
@@ -139,6 +145,9 @@ function Row({ label, description, control }: {
 export function TerminalSettings() {
   const s = useDk8sTerminalStore();
   const [importing, setImporting] = useState(false);
+  /* The palette the builder is open on. A copy is edited inside the modal, so
+     handing it the stored one is safe. */
+  const [building, setBuilding] = useState<DraftPalette | null>(null);
   const [refused, setRefused] = useState<string>();
   const [copied, setCopied] = useState<string>();
   /*
@@ -301,6 +310,14 @@ export function TerminalSettings() {
                 dialog, and the dialog already says "paste it, drop a file, or
                 describe one". The colours are the ones collections use for the
                 same two verbs, so import means the same thing in both places. */}
+            {/* A theme can now be made here as well as brought in. Same
+                builder the app palette uses — the two kinds are different
+                lists of colours and the same work around them. */}
+            <ButtonView label="New from this" size="sm" variant="secondary"
+                        accentColor={ACCENT} color={ACCENT}
+                        style={softPrimary(ACCENT, true)}
+                        iconLeft={<PaletteIcon size={IconSize.action} />}
+                        onClick={() => setBuilding(terminalToDraft(s.theme()))} />
             <ButtonView label="Import" size="sm" variant="secondary"
                         accentColor={IMPORT} color={IMPORT}
                         style={softPrimary(IMPORT, true)}
@@ -502,6 +519,22 @@ export function TerminalSettings() {
       </div>
 
       {importing && <ThemeImportModal onClose={() => setImporting(false)} />}
+
+      {building && (
+        <ThemeBuilderModal
+          kind="terminal"
+          initial={building}
+          taken={s.themes().filter(t => !s.isBuiltIn(t.id)).map(t => t.id)}
+          onClose={() => setBuilding(null)}
+          onSave={draft => {
+            /* Through the same importer a file goes through, so a theme made
+               here is validated exactly as one that arrived from elsewhere. */
+            const result = s.importThemes([draftToTerminal(draft)]);
+            if (result.ok) s.setActive(draft.id);
+            setBuilding(null);
+          }}
+        />
+      )}
 
       {deleting && (
         <ConfirmDialog

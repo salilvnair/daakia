@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
 import { ButtonView, BadgeChipView } from '@salilvnair/dui';
-import { PaletteIcon, FolderImportIcon, FolderExportIcon, TrashIcon, EyeIcon, EyeOffIcon } from '../../icons';
+import {
+  PaletteIcon, FolderImportIcon, FolderExportIcon, TrashIcon, EyeIcon, EyeOffIcon, PencilIcon,
+} from '../../icons';
 import { useAppThemeStore } from '../../store/app-theme-store';
 import {
   BUILT_IN_PALETTES, cssVariables, SEED_META, SEED_KEYS,
@@ -8,6 +10,8 @@ import {
 } from '../../services/theme/palette';
 import { parseAppThemes, serializeThemes } from '../../services/theme/palette-file';
 import { seedsFromHost, hostThemeAvailable } from '../../services/theme/vscode-seed';
+import { ThemeBuilderModal } from './theme-builder/ThemeBuilderModal';
+import { appToDraft, draftToApp, type DraftPalette } from './theme-builder/fields';
 import { contrast } from '../../services/theme/colour';
 
 /**
@@ -37,6 +41,9 @@ export function PaletteSettings({ mode }: { mode: Half }) {
   const [preview, setPreview] = useState<AppPalette | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  /* The palette the builder is open on, or null. A copy is edited — see the
+     modal — so holding the original here is safe. */
+  const [building, setBuilding] = useState<DraftPalette | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const palettes = store.palettes();
@@ -131,6 +138,7 @@ export function PaletteSettings({ mode }: { mode: Half }) {
             onHover={() => setPreview(p)}
             onLeave={() => setPreview(null)}
             onClick={() => choose(p)}
+            onEdit={() => setBuilding(appToDraft(p))}
             onHide={p.id === BUILT_IN_PALETTES[0].id ? undefined : () => store.setHidden(p.id, true)}
             onRemove={p.builtIn ? undefined : () => store.remove(p.id)}
           />
@@ -153,6 +161,10 @@ export function PaletteSettings({ mode }: { mode: Half }) {
 
       {/* ── Import, export, match ── */}
       <div className="flex items-center gap-2 flex-wrap">
+        <ButtonView size="sm" variant="primary" iconLeft={<PaletteIcon size={13} />}
+          onClick={() => setBuilding(appToDraft(current))}>
+          New from this
+        </ButtonView>
         <ButtonView size="sm" variant="secondary" iconLeft={<FolderImportIcon size={13} />}
           onClick={() => fileRef.current?.click()}>
           Import
@@ -178,6 +190,23 @@ export function PaletteSettings({ mode }: { mode: Half }) {
         <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>
       )}
 
+      {building && (
+        <ThemeBuilderModal
+          kind="app"
+          initial={building}
+          taken={store.custom.map(p => p.id)}
+          onClose={() => setBuilding(null)}
+          onSave={draft => {
+            const palette = draftToApp(draft);
+            store.add([palette]);
+            store.select(palette.id);
+            store.repaint(half);
+            setBuilding(null);
+            setPreview(null);
+          }}
+        />
+      )}
+
       <p className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
         A theme lives in this browser&rsquo;s storage and nowhere else &mdash; no file is written and
         nothing crosses to the extension. VS Code paints its own chrome; this is the Daakia panel.
@@ -188,13 +217,14 @@ export function PaletteSettings({ mode }: { mode: Half }) {
 
 // ── One card ────────────────────────────────────────────────────────────────
 
-function PaletteCard({ palette, half, active, onHover, onLeave, onClick, onHide, onRemove }: {
+function PaletteCard({ palette, half, active, onHover, onLeave, onClick, onEdit, onHide, onRemove }: {
   palette: AppPalette;
   half: Half;
   active: boolean;
   onHover: () => void;
   onLeave: () => void;
   onClick: () => void;
+  onEdit: () => void;
   onHide?: () => void;
   onRemove?: () => void;
 }) {
@@ -243,6 +273,14 @@ function PaletteCard({ palette, half, active, onHover, onLeave, onClick, onHide,
           </span>
         )}
         <span className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            type="button"
+            title={palette.builtIn ? 'Start a new theme from this one' : 'Edit'}
+            onClick={e => { e.stopPropagation(); onEdit(); }}
+            style={{ color: 'var(--color-text-muted)' }}
+          >
+            <PencilIcon size={12} />
+          </button>
           {onHide && (
             <button type="button" title="Hide" onClick={e => { e.stopPropagation(); onHide(); }}
               style={{ color: 'var(--color-text-muted)' }}>
