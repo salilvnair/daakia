@@ -48,7 +48,16 @@ const GRANT_TYPE_OPTIONS = [
 
 const LABEL = 'text-[12px] text-[var(--color-text-muted)] w-[120px] flex-shrink-0';
 const ROW = 'flex items-center px-1';
-const W = { width: '30%' } as const;
+/*
+  `flex: 'none'` alongside the width, and it is load bearing.
+
+  These rows are flex containers, and DUI's highlighted editor carries
+  `flex: 1` on its root — so it grew to fill the row and ignored the 30%,
+  which left the Token field three times the width of the Authorization Type
+  select above it. A plain input has no such rule, which is why this only
+  appeared when the auth fields started drawing `{{variable}}` tokens.
+*/
+const W = { width: '30%', flex: 'none' } as const;
 
 export function AuthEditor({ authType, authData, onAuthTypeChange, onAuthDataChange, onGetOAuth2Token, oauth2Loading, accentColor }: AuthEditorProps) {
   return (
