@@ -331,6 +331,11 @@
           "type": "boolean",
           "default": true,
           "description": "Include the prompt library, AI feature flags, and AI provider config (not API keys — those stay in your OS keychain) in git sync."
+        },
+        "daakia.gitSync.syncThemes": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include the themes you have made or imported — both the app palettes and the pod terminal ones — in git sync. The five Daakia ships are not synced; they are the same in every install."
         }
       }
     },

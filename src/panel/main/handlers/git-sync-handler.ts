@@ -23,6 +23,7 @@ export function handleGitSyncGetSettings(post: PostMessage): void {
       syncMockServers: scope.mockServers,
       syncEnvironments: scope.environments,
       syncAiConfig: scope.aiConfig,
+      syncThemes: scope.themes,
     },
   });
 }
@@ -31,7 +32,7 @@ export async function handleGitSyncSaveSettings(msg: {
   settings: {
     autoSyncSeconds?: number; remoteUrl?: string; branch?: string;
     syncHistory?: boolean; syncCollections?: boolean; syncMockServers?: boolean;
-    syncEnvironments?: boolean; syncAiConfig?: boolean;
+    syncEnvironments?: boolean; syncAiConfig?: boolean; syncThemes?: boolean;
   };
 }, post: PostMessage): Promise<void> {
   await saveGitSyncSettings(msg.settings);

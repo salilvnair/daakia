@@ -1,20 +1,33 @@
 /**
  * Which palette the app is wearing, and the ones you have collected.
  *
- * ── Where this lives ──
+ * ── Where this lives, and why that changed ──
  *
- * In the webview's own `localStorage`, which in a VS Code webview is scoped
- * to the panel and survives reloads. That is the whole storage surface: no
- * file is written, no path crosses to the extension, and an imported theme
- * never becomes something on disk. The terminal palettes made the same call
- * for the same reason — a preference about colours does not deserve a
- * filesystem API, and every one avoided is one that cannot be pointed
- * somewhere it should not go.
+ * The palettes are rows in the database — `daakia_themes` — so Git Sync
+ * carries them. They began in this webview's `localStorage`, which was right
+ * while a theme was a preference about one panel. It stopped being right the
+ * moment Sync existed: a palette somebody spent an evening on is work, and
+ * work that lives in one browser profile disappears with it and cannot be
+ * handed to anybody.
+ *
+ * `localStorage` is still here, as a cache and nothing more. The host answers
+ * with the real list a moment after the panel opens, and painting the app in
+ * default colours until then is a white flash on every reload. So the cache
+ * is what the first frame is drawn from, and it is overwritten by the
+ * database's answer the instant it arrives.
+ *
+ * ── What stays local for good ──
+ *
+ * Which theme is worn, the order of the cards, and which are hidden. Those
+ * are about this screen rather than about the themes, and a machine adopting
+ * whatever palette another machine happened to be wearing would be a
+ * surprise rather than a sync.
  *
  * ── Everything read back is re-validated ──
  *
- * `localStorage` is not a trusted store. What comes out of it goes through
- * the same parser an imported file does; see palette-file.ts.
+ * Neither `localStorage` nor a synced file is a trusted store. What comes out
+ * of either goes through the same parser an imported file does; see
+ * palette-file.ts.
  *
  * ── One theme for the app, not one per workspace ──
  *
@@ -26,6 +39,7 @@ import { create } from 'zustand';
 import { BUILT_IN_PALETTES, type AppPalette } from '../services/theme/palette';
 import { parseAppThemes, MAX_THEMES_STORED } from '../services/theme/palette-file';
 import { applyPalette } from '../services/theme/apply';
+import { postMsg } from '../vscode';
 
 const KEY = 'daakia.theme.v1';
 
@@ -62,6 +76,14 @@ interface AppThemeState {
   add: (palettes: AppPalette[]) => { added: number; error?: string };
   remove: (id: string) => void;
   setHidden: (id: string, hidden: boolean) => void;
+  /**
+   * Replace the collected palettes with what the database holds.
+   *
+   * Called when the host answers, including after a sync has pulled somebody
+   * else's themes in. It does not touch selection or order: those are this
+   * screen's, and a sync should not move the cards around under you.
+   */
+  hydrate: (palettes: unknown[], mode: 'dark' | 'light') => void;
   /** Move a card, by position in the list as it is currently shown. */
   reorder: (from: number, to: number) => void;
   /** Repaint in the given mode — called when dark/light changes too. */
@@ -133,6 +155,16 @@ export const useAppThemeStore = create<AppThemeState>((set, get) => ({
     write({ custom, selected: id, hidden, order: get().order });
   },
 
+  hydrate: (incoming, mode) => {
+    const parsed = parseAppThemes(incoming);
+    if (!parsed.ok) return;
+    const { selected, hidden, order } = get();
+    set({ custom: parsed.palettes });
+    write({ custom: parsed.palettes, selected, hidden, order });
+    /* The palette worn may have arrived or changed in that list. */
+    get().repaint(mode);
+  },
+
   add: (palettes) => {
     const { custom, hidden, selected } = get();
     /*
@@ -153,6 +185,14 @@ export const useAppThemeStore = create<AppThemeState>((set, get) => ({
     }
     set({ custom: next });
     write({ custom: next, selected, hidden, order: get().order });
+    /* The database is the record; localStorage above is the cache that got
+       there first. One message per theme rather than one for the list, so a
+       failed save costs that theme rather than all of them. */
+    for (const p of palettes) {
+      if (!BUILT_IN_PALETTES.some(bi => bi.id === p.id)) {
+        postMsg({ type: 'themes:save', kind: 'app', theme: p });
+      }
+    }
     return { added };
   },
 
@@ -162,6 +202,7 @@ export const useAppThemeStore = create<AppThemeState>((set, get) => ({
     const selected = get().selected === id ? BUILT_IN_PALETTES[0].id : get().selected;
     set({ custom: next, selected });
     write({ custom: next, selected, hidden, order: get().order });
+    postMsg({ type: 'themes:delete', kind: 'app', id });
   },
 
   reorder: (from, to) => {

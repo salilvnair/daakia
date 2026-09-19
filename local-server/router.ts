@@ -92,6 +92,7 @@ import {
   handleGetEnvironments, handleSaveEnvironments,
 } from '../src/panel/main/handlers/environment-handler';
 import { handleGetDynamicVariables } from '../src/panel/main/handlers/dynamic-vars-handler';
+import { handleGetThemes, handleSaveTheme, handleDeleteTheme } from '../src/panel/main/handlers/theme-handler';
 import {
   handleGetWorkspaces, handleSwitchWorkspace, handleCreateWorkspace,
   handleRenameWorkspace, handleDeleteWorkspace, handleSaveWorkspaceDocs,
@@ -173,6 +174,7 @@ export function sendInitialState(post: PostMessage) {
   handleGetUiState(post);
   handleGetWorkspaceSnapshot(post);
   handleGetDynamicVariables(post);
+  handleGetThemes(post);
 }
 
 export async function routeMessage(msg: { type: string; [key: string]: unknown }, post: PostMessage) {
@@ -184,6 +186,16 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
     // ── dkgh — GitHub. Same reason as dk8s below: the first-run screens are
     //    the part most likely to be wrong on somebody else's machine, and
     //    driving them in a browser is how they get looked at. ──
+    case 'themes:get':
+      handleGetThemes(post);
+      break;
+    case 'themes:save':
+      handleSaveTheme(msg, post);
+      break;
+    case 'themes:delete':
+      handleDeleteTheme(msg, post);
+      break;
+
     case 'dkgh:probe':
       await handleDkghProbe(post);
       break;

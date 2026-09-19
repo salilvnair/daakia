@@ -14,6 +14,8 @@ import { useTabsStore } from '../store/tabs-store';
 import { useToastStore } from '../store/toast-store';
 import { useEnvStore } from '../store/env-store';
 import { useDynamicVarsStore } from '../store/dynamic-vars-store';
+import { useAppThemeStore, resolveMode, type ThemeMode } from '../store/app-theme-store';
+import { useDk8sTerminalStore } from '../store/dk8s-terminal-store';
 import { useCollectionsStore } from '../store/collections-store';
 import { useUrlSuggestionsStore } from '../store/url-suggestions-store';
 import { useUiStateStore } from '../store/ui-state-store';
@@ -462,6 +464,18 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
               useTabsStore.getState().updateTab(fpTabId, { bodyFormData: updatedFormData });
             }
           }
+          break;
+        }
+        case 'themes:data': {
+          /*
+            The database's answer replaces the cache both stores painted the
+            first frame from. It arrives on every save and delete as well as
+            on open, so two panels — or a sync that just pulled — cannot leave
+            one of them showing a list the other has moved on from.
+          */
+          const choice = (localStorage.getItem('daakia-theme') as ThemeMode) || 'dark';
+          useAppThemeStore.getState().hydrate(msg.app ?? [], resolveMode(choice));
+          useDk8sTerminalStore.getState().hydrateThemes(msg.terminal ?? []);
           break;
         }
         case 'dynamicVariables:data': {

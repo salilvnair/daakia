@@ -12,6 +12,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { getSqliteStatus, getDbPath, getHistory, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt, getAiPromptTemplates, setAiPromptTemplates, saveAiConversation, loadAiConversation, clearAiConversation, type AiConversationMessage, getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries, insertUiAudit, getUiAuditEntries, clearUiAuditEntries, getDbTables, getDbTableRows, deleteDbRow } from '../../storage/db';
 import { handleGetDynamicVariables } from './handlers/dynamic-vars-handler';
+import { handleGetThemes, handleSaveTheme, handleDeleteTheme } from './handlers/theme-handler';
 import { archiveHistoryEntry, archiveHistoryBatch } from '../../services/bin';
 import { getProviderKeyStatus } from '../../services/llm/llm-provider-service';
 import { storeApiKey, deleteApiKey, getAllKeyStatus } from '../../services/secret-store';
@@ -259,6 +260,7 @@ export class MainPanel {
     this._refreshKeyStatus();
     this._post({ type: 'aiFeatures:data', features: getAiFeatures() });
     handleGetDynamicVariables(this._post);
+    handleGetThemes(this._post);
     this._sendAiProviders();
     this._restartAutoSyncTimer();
   }
@@ -351,6 +353,17 @@ export class MainPanel {
       // its Settings tab. Resolved on the host so there is one implementation.
       // dkgh. One probe answers all three first-run screens; they are three
       // states of the same question and must not be asked separately.
+      // Themes somebody made — kept in the database so Git Sync carries them.
+      case 'themes:get':
+        handleGetThemes(this._post);
+        break;
+      case 'themes:save':
+        handleSaveTheme(msg, this._post);
+        break;
+      case 'themes:delete':
+        handleDeleteTheme(msg, this._post);
+        break;
+
       case 'dkgh:probe':
         handleDkghProbe(this._post);
         break;

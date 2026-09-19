@@ -15,6 +15,8 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getThemes, upsertTheme } from '../storage/db';
+import type { ThemePayload } from '../panel/main/handlers/theme-handler';
 import * as os from 'os';
 import { execFile as execFileCb } from 'child_process';
 import { promisify } from 'util';
@@ -81,6 +83,7 @@ export interface GitSyncScope {
   mockServers: boolean;
   environments: boolean;
   aiConfig: boolean;
+  themes: boolean;
 }
 
 /** Which data categories are included in export/import — all default on. */
@@ -92,13 +95,14 @@ export function getSyncScope(): GitSyncScope {
     mockServers: c.get<boolean>('gitSync.syncMockServers', true),
     environments: c.get<boolean>('gitSync.syncEnvironments', true),
     aiConfig: c.get<boolean>('gitSync.syncAiConfig', true),
+    themes: c.get<boolean>('gitSync.syncThemes', true),
   };
 }
 
 export async function saveGitSyncSettings(patch: {
   autoSyncSeconds?: number; remoteUrl?: string; branch?: string;
   syncHistory?: boolean; syncCollections?: boolean; syncMockServers?: boolean;
-  syncEnvironments?: boolean; syncAiConfig?: boolean;
+  syncEnvironments?: boolean; syncAiConfig?: boolean; syncThemes?: boolean;
 }): Promise<void> {
   const c = config();
   const target = vscode.ConfigurationTarget.Workspace;
@@ -110,6 +114,7 @@ export async function saveGitSyncSettings(patch: {
   if (patch.syncMockServers !== undefined) await c.update('gitSync.syncMockServers', patch.syncMockServers, target);
   if (patch.syncEnvironments !== undefined) await c.update('gitSync.syncEnvironments', patch.syncEnvironments, target);
   if (patch.syncAiConfig !== undefined) await c.update('gitSync.syncAiConfig', patch.syncAiConfig, target);
+  if (patch.syncThemes !== undefined) await c.update('gitSync.syncThemes', patch.syncThemes, target);
 }
 
 // ─── Export ───────────────────────────────────────────────────────────────────
@@ -379,6 +384,84 @@ export function importEnvironmentsFromWorkspace(): number {
   }
 }
 
+// ─── Themes ──────────────────────────────────────────────────────────────────
+//
+// The palettes somebody made or imported, both kinds, in one file. Daakia's
+// own five are not here: they are code rather than rows, identical in every
+// install, and exporting them would mean importing them back over themselves
+// on the other machine.
+//
+// Nothing is redacted, because nothing here is a secret. A theme is thirteen
+// colours and a name.
+
+interface SyncThemeFile {
+  version: string;
+  kind: 'themes';
+  app: ThemePayload[];
+  terminal: ThemePayload[];
+}
+
+export function exportThemesToWorkspace(): number {
+  const folder = getSyncFolder();
+  fs.mkdirSync(folder, { recursive: true });
+
+  const read = (kind: 'app' | 'terminal'): ThemePayload[] => getThemes(kind)
+    .map(row => {
+      try {
+        const parsed = JSON.parse(row.payload) as ThemePayload;
+        return parsed && typeof parsed === 'object' ? { ...parsed, id: row.id, label: row.label } : null;
+      } catch { return null; }
+    })
+    .filter((t): t is ThemePayload => t !== null);
+
+  const app = read('app');
+  const terminal = read('terminal');
+  const file = path.join(folder, 'themes.daakia.json');
+
+  if (app.length === 0 && terminal.length === 0) {
+    if (fs.existsSync(file)) fs.unlinkSync(file);
+    return 0;
+  }
+
+  const doc: SyncThemeFile = { version: '1.0', kind: 'themes', app, terminal };
+  fs.writeFileSync(file, JSON.stringify(doc, null, 2), 'utf8');
+  return app.length + terminal.length;
+}
+
+/**
+ * Import themes.daakia.json.
+ *
+ * Upsert by id, which is the whole merge strategy: a theme is one object
+ * with one owner, so there is no per-field question to answer the way an
+ * environment's variables raise one. A theme edited on both machines takes
+ * whichever was synced last, and the loser is still in that machine's own
+ * copy of the file.
+ */
+export function importThemesFromWorkspace(): number {
+  const file = path.join(getSyncFolder(), 'themes.daakia.json');
+  if (!fs.existsSync(file)) return 0;
+
+  try {
+    const doc = JSON.parse(fs.readFileSync(file, 'utf8')) as Partial<SyncThemeFile>;
+    let count = 0;
+    for (const kind of ['app', 'terminal'] as const) {
+      const list = doc[kind];
+      if (!Array.isArray(list)) continue;
+      for (const theme of list) {
+        if (!theme || typeof theme !== 'object') continue;
+        const id = typeof theme.id === 'string' ? theme.id : '';
+        const label = typeof theme.label === 'string' ? theme.label : '';
+        if (!id || !label) continue;
+        upsertTheme(kind, { id, label, payload: JSON.stringify(theme) });
+        count++;
+      }
+    }
+    return count;
+  } catch {
+    return 0;
+  }
+}
+
 // ─── AI Config (prompt library + AI feature flags + provider config) ──────────
 //
 // Provider *config* only — base URLs, model choices, default provider/model.
@@ -451,6 +534,7 @@ export interface SyncBundleCounts {
   stateMachines: number;
   environments: number;
   aiConfig: number;
+  themes: number;
 }
 
 export function exportFullBundle(): SyncBundleCounts {
@@ -462,6 +546,7 @@ export function exportFullBundle(): SyncBundleCounts {
     stateMachines: scope.mockServers ? exportStateMachineToWorkspace() : 0,
     environments: scope.environments ? exportEnvironmentsToWorkspace() : 0,
     aiConfig: scope.aiConfig ? exportAiConfigToWorkspace() : 0,
+    themes: scope.themes ? exportThemesToWorkspace() : 0,
   };
 }
 
@@ -474,6 +559,7 @@ export function importFullBundle(): SyncBundleCounts {
     stateMachines: scope.mockServers ? importStateMachineFromWorkspace() : 0,
     environments: scope.environments ? importEnvironmentsFromWorkspace() : 0,
     aiConfig: scope.aiConfig ? importAiConfigFromWorkspace() : 0,
+    themes: scope.themes ? importThemesFromWorkspace() : 0,
   };
 }
 

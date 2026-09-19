@@ -6,14 +6,17 @@
  * read, not properties of a cluster, and folding them into the pod store would
  * throw them away on every selection.
  *
- * ── Where this lives, and why not the host ──
+ * ── Where this lives, and why that changed ──
  *
- * In the webview's own `localStorage`, which in a VS Code webview is scoped to
- * the panel and survives reloads. That is the whole storage surface: no file
- * is written, no path crosses to the extension, and an imported theme never
- * becomes something on disk. A preference about colours does not deserve a
- * filesystem API, and every one avoided is one that cannot be pointed
- * somewhere it should not go.
+ * The preferences — font, cursor, scrollback — stay in this webview's
+ * `localStorage`. They are about this panel and nothing else.
+ *
+ * The themes do not. They are rows in `terminal_themes`, so Git Sync carries
+ * them: a palette somebody made is work, and work that lives in one browser
+ * profile disappears with it and cannot be handed to anybody. `localStorage`
+ * still holds a copy, as a cache for the first frame — the host answers a
+ * moment after the panel opens, and an empty swatch strip until then is
+ * worse than a stale one.
  *
  * ── Everything read back is re-validated ──
  *
@@ -28,6 +31,7 @@ import {
   TERMINAL_PALETTES, parseTerminalThemes, MAX_THEMES_STORED,
   type TerminalPalette,
 } from '@salilvnair/dui';
+import { postMsg } from '../vscode';
 
 /**
  * Six on the strip, however many are stored.
@@ -236,6 +240,14 @@ export interface Dk8sTerminalState {
   /** Returns what happened, so the caller can say it rather than guess. */
   importThemes: (input: unknown) => { ok: boolean; added: number; replaced: number; error?: string };
   removeTheme: (id: string) => void;
+  /**
+   * Replace the imported themes with what the database holds.
+   *
+   * Called when the host answers, including after a sync has pulled somebody
+   * else's in. Selection, order and which are hidden are left alone: those
+   * are about this strip, and a sync should not rearrange it.
+   */
+  hydrateThemes: (themes: unknown) => void;
   setPref: <K extends keyof TerminalPrefs>(key: K, value: TerminalPrefs[K]) => void;
   /** Preferences only — themes are left alone. */
   resetPrefs: () => void;
@@ -338,6 +350,21 @@ export const useDk8sTerminalStore = create<Dk8sTerminalState>((set, get) => ({
     return next;
   }),
 
+  hydrateThemes: (incoming) => {
+    const parsed = parseTerminalThemes(incoming);
+    if (!parsed.ok) return;
+    /* A built-in's id cannot arrive this way either — see importThemes for
+       why that matters. A synced file is no more trusted than a dropped one. */
+    const custom = parsed.themes.filter(t => !BUILT_IN_IDS.includes(t.id));
+    set(s => {
+      const order = [...s.order];
+      for (const t of custom) if (!order.includes(t.id)) order.push(t.id);
+      const next = { ...s, custom, order };
+      persist(next);
+      return next;
+    });
+  },
+
   importThemes: (input) => {
     const parsed = parseTerminalThemes(input);
     if (!parsed.ok) return { ok: false, added: 0, replaced: 0, error: parsed.error };
@@ -381,6 +408,12 @@ export const useDk8sTerminalStore = create<Dk8sTerminalState>((set, get) => ({
       persist(next);
       return next;
     });
+    /* The database is the record; the line above is the cache that got there
+       first. One message per theme, so a failed save costs that theme rather
+       than the whole import. */
+    for (const t of parsed.themes) {
+      postMsg({ type: 'themes:save', kind: 'terminal', theme: t });
+    }
     return { ok: true, added, replaced };
   },
 
@@ -416,6 +449,9 @@ export const useDk8sTerminalStore = create<Dk8sTerminalState>((set, get) => ({
 
     const next = { ...s, custom, hidden, order, selected, active };
     persist(next);
+    /* A hidden built-in is still a built-in: nothing to delete from a table
+       it was never in. */
+    if (!builtIn) postMsg({ type: 'themes:delete', kind: 'terminal', id });
     return next;
   }),
 

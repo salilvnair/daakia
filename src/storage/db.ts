@@ -387,6 +387,38 @@ function _createSchema(db: SqlJsDatabase): void {
   `);
   db.run(`CREATE INDEX IF NOT EXISTS idx_trash_expires  ON trash_bin(expires_at)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_trash_category ON trash_bin(category)`);
+
+  /*
+    ── Themes ──
+
+    The palettes somebody made or imported. The ones Daakia ships are code,
+    not rows: they would be the same five in every database and would have to
+    be migrated whenever one was adjusted.
+
+    Two tables rather than one with a `kind` column, because they are two
+    different vocabularies — thirteen seeds against nineteen ANSI slots — and
+    the only thing a query ever wants is all of one kind.
+
+    Not workspace-scoped, unlike environments and collections. A palette is
+    about the person reading the screen rather than about the project, and a
+    theme that changed when you switched workspace would read as a bug the
+    first three times it happened.
+
+    The palette is stored whole, as JSON, rather than a column per colour: a
+    seed added in a later version would otherwise be a schema migration, and
+    what reads it back validates every field anyway.
+  */
+  for (const table of ['daakia_themes', 'terminal_themes']) {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS ${table} (
+        id         TEXT PRIMARY KEY,
+        label      TEXT NOT NULL,
+        payload    TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      )
+    `);
+  }
 }
 
 // ────────────────────── Migrations ──────────────────────
@@ -1504,6 +1536,57 @@ export function upsertEnvironment(env: { id: string; name: string; variables: st
      ON CONFLICT(id) DO UPDATE SET name = excluded.name, variables = excluded.variables, is_active = excluded.is_active, updated_at = excluded.updated_at`,
     [env.id, env.name, env.variables, env.is_active, activeWorkspaceId()]
   );
+  _scheduleSave();
+}
+
+// ────────────────────── Themes ──────────────────────
+
+/** Which of the two theme tables a call is about. */
+export type ThemeKind = 'app' | 'terminal';
+
+export interface ThemeRow {
+  id: string;
+  label: string;
+  /** The whole palette, as it was written. Validated by whoever reads it. */
+  payload: string;
+  updated_at?: string;
+}
+
+/*
+  The table name is chosen from a fixed pair rather than interpolated from the
+  caller's string. It is the one place a kind reaches SQL, and a lookup cannot
+  become an injection however the argument was obtained.
+*/
+const THEME_TABLE: Record<ThemeKind, string> = {
+  app: 'daakia_themes',
+  terminal: 'terminal_themes',
+};
+
+export function getThemes(kind: ThemeKind): ThemeRow[] {
+  if (!_db) { return []; }
+  const stmt = _db.prepare(`SELECT id, label, payload, updated_at FROM ${THEME_TABLE[kind]} ORDER BY label`);
+  const results: ThemeRow[] = [];
+  while (stmt.step()) {
+    results.push(stmt.getAsObject() as unknown as ThemeRow);
+  }
+  stmt.free();
+  return results;
+}
+
+export function upsertTheme(kind: ThemeKind, theme: { id: string; label: string; payload: string }): void {
+  if (!_db) { return; }
+  _db.run(
+    `INSERT INTO ${THEME_TABLE[kind]} (id, label, payload, updated_at)
+     VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+     ON CONFLICT(id) DO UPDATE SET label = excluded.label, payload = excluded.payload, updated_at = excluded.updated_at`,
+    [theme.id, theme.label, theme.payload]
+  );
+  _scheduleSave();
+}
+
+export function deleteTheme(kind: ThemeKind, id: string): void {
+  if (!_db) { return; }
+  _db.run(`DELETE FROM ${THEME_TABLE[kind]} WHERE id = ?`, [id]);
   _scheduleSave();
 }
 
