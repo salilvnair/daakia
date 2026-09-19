@@ -23,6 +23,34 @@ import { installVarMarkerFilter } from './monaco-var-markers';
 
 const LANGUAGES = ['json', 'xml', 'html', 'javascript', 'typescript', 'graphql', 'plaintext', 'yaml'];
 
+/**
+ * How each kind is shown, as close to the popup as Monaco's widget allows.
+ *
+ * The widget has no section headings — it is one flat list and there is no
+ * API for a divider in it. What it does have is three slots per row and an
+ * icon, so the grouping is carried by those instead: a different icon per
+ * kind, the popup's own short word (`var`, `secret`, `dyn`, `fn`) right after
+ * the name, and the value or summary right-aligned. Same information, same
+ * reading order, one list.
+ *
+ * The icons are Monaco's own, chosen for how they read rather than for what
+ * they are named: a variable is a variable, a secret is a constant you should
+ * not look at, a dynamic value is a value, a helper is a function.
+ */
+const KIND_ICON: Record<string, string> = {
+  variable: 'Variable',
+  secret: 'Constant',
+  dynamic: 'Value',
+  helper: 'Function',
+};
+
+const KIND_WORD: Record<string, string> = {
+  variable: 'var',
+  secret: 'secret',
+  dynamic: 'dyn',
+  helper: 'fn',
+};
+
 /*
   Which Monaco instances have been told, remembered on `window`.
 
@@ -168,12 +196,19 @@ export function registerVarCompletions(monaco: any): void {
 
         return {
           suggestions: suggestionsFor(open.query, currentSources()).map((s, i) => ({
-            label: s.label,
-            kind: s.kind === 'helper'
-              ? monaco.languages.CompletionItemKind.Function
-              : monaco.languages.CompletionItemKind.Variable,
+            /*
+              The three-part label is what gets this close to the popup:
+              `label` is the name, `detail` sits against it in a dimmer weight,
+              and `description` is right-aligned at the end of the row.
+            */
+            label: {
+              label: s.label,
+              detail: `  ${KIND_WORD[s.kind]}`,
+              description: s.detail,
+            },
+            kind: monaco.languages.CompletionItemKind[KIND_ICON[s.kind]],
             detail: s.detail,
-            documentation: s.group,
+            documentation: { value: `**${s.group}** — ${s.detail}` },
             insertText: `${s.insert}${closing}`,
             /* What Monaco matches the typed text against — the name without
                its braces, which is what somebody is typing. */

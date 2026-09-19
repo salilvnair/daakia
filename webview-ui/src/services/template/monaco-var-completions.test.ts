@@ -11,7 +11,11 @@ import { useDynamicVarsStore } from '../../store/dynamic-vars-store';
 interface Provider {
   triggerCharacters: string[];
   provideCompletionItems: (model: unknown, position: unknown) => {
-    suggestions: { label: string; insertText: string; range: { startColumn: number }; sortText: string }[];
+    suggestions: {
+      label: { label: string; detail: string; description: string };
+      insertText: string; filterText: string; kind: number;
+      range: { startColumn: number }; sortText: string;
+    }[];
   };
 }
 
@@ -21,7 +25,7 @@ function stubMonaco() {
     providers,
     monaco: {
       languages: {
-        CompletionItemKind: { Function: 1, Variable: 4 },
+        CompletionItemKind: { Function: 1, Variable: 4, Constant: 14, Value: 12 },
         registerCompletionItemProvider: (lang: string, p: Provider) => { providers[lang] = p; },
       },
     },
@@ -125,17 +129,40 @@ describe('{{ inside an editor', () => {
   it('offers the environment, the dynamic values and the helpers together', () => {
     const { providers, monaco } = stubMonaco();
     registerVarCompletions(monaco);
-    const labels = complete(providers, '"{{').map(s => s.label);
+    const labels = complete(providers, '"{{').map(s => s.label.label);
     expect(labels).toContain('base-url');
     expect(labels).toContain('$randomUUID');
     expect(labels).toContain('randomInt');
+  });
+
+  it('carries the grouping in the row, since the widget has no headings', () => {
+    /*
+      Monaco's suggest widget is one flat list with no API for a divider, so
+      what the popup says with a heading and a chip is said here with an icon
+      and the same short word — and the value stays right-aligned, which is
+      where the popup puts it too.
+    */
+    const { providers, monaco } = stubMonaco();
+    registerVarCompletions(monaco);
+    const rows = complete(providers, '"{{');
+    const env = rows.find(r => r.label.label === 'base-url')!;
+    const dyn = rows.find(r => r.label.label === '$randomUUID')!;
+    const fn = rows.find(r => r.label.label === 'randomInt')!;
+
+    expect(env.label.detail.trim()).toBe('var');
+    expect(dyn.label.detail.trim()).toBe('dyn');
+    expect(fn.label.detail.trim()).toBe('fn');
+    expect(env.label.description).toBe('https://api.test');
+
+    // Different icons, so the kinds are told apart at a glance.
+    expect(new Set([env.kind, dyn.kind, fn.kind]).size).toBe(3);
   });
 
   it('keeps its own ordering instead of Monaco s alphabetical one', () => {
     const { providers, monaco } = stubMonaco();
     registerVarCompletions(monaco);
     const items = complete(providers, '"{{');
-    expect(items[0].label).toBe('base-url');
+    expect(items[0].label.label).toBe('base-url');
     expect(items.map(s => s.sortText)).toEqual([...items.map(s => s.sortText)].sort());
   });
 
@@ -147,7 +174,7 @@ describe('{{ inside an editor', () => {
     */
     const { providers, monaco } = stubMonaco();
     registerVarCompletions(monaco);
-    expect(complete(providers, '"{{').map(s => s.label)).toContain('base-url');
+    expect(complete(providers, '"{{').map(s => s.label.label)).toContain('base-url');
 
     useEnvStore.setState({
       environments: [{ id: 'e2', name: 'Prod', variables: [
@@ -156,7 +183,7 @@ describe('{{ inside an editor', () => {
       activeEnvId: 'e2',
     } as never);
 
-    const after = complete(providers, '"{{').map(s => s.label);
+    const after = complete(providers, '"{{').map(s => s.label.label);
     expect(after).toContain('prod-url');
     expect(after).not.toContain('base-url');
   });
