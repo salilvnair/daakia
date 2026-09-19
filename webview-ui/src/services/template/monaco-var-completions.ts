@@ -17,6 +17,7 @@ import { useTabsStore } from '../../store/tabs-store';
 import { useDynamicVarsStore } from '../../store/dynamic-vars-store';
 import { openBraces, suggestionsFor, type VarSources } from './var-suggest';
 import { installVarDecorations } from './monaco-var-decorations';
+import { installVarMarkerFilter } from './monaco-var-markers';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -104,6 +105,8 @@ export function installVarCompletions(timeoutMs = 20000): void {
       /* The other half of the same job: offering `{{` and then drawing what
          it produced the way every other field draws it. */
       installVarDecorations(monaco);
+      /* And stop the JSON service calling a template a syntax error. */
+      installVarMarkerFilter(monaco);
       return;
     }
     if (Date.now() - started < timeoutMs) setTimeout(tick, 250);
@@ -136,14 +139,22 @@ export function registerVarCompletions(monaco: any): void {
         if (!open) return { suggestions: [] };
 
         /*
-          The range starts at the braces, so accepting a suggestion replaces
-          `{{ran` rather than appending to it. Monaco's own word-based range
-          would stop at the `{`, which is how you end up with `{{ran{{random}}`.
+          The range starts AFTER the braces, and this is load bearing.
+
+          Monaco filters what a provider returns against the text inside the
+          replace range. With the range starting at `{{`, the filter text was
+          `{{ran` — which no label contains — so every item was thrown away
+          and the widget said "No suggestions" while the provider was
+          returning fifty. Starting after the braces makes the filter text
+          `ran`, which is what the labels are meant to be matched against.
+
+          The braces are therefore left in place and the insert text does not
+          repeat them.
         */
         const range = {
           startLineNumber: position.lineNumber,
           endLineNumber: position.lineNumber,
-          startColumn: open.start + 1,
+          startColumn: open.start + 3,
           endColumn: position.column,
         };
 
@@ -163,7 +174,10 @@ export function registerVarCompletions(monaco: any): void {
               : monaco.languages.CompletionItemKind.Variable,
             detail: s.detail,
             documentation: s.group,
-            insertText: `{{${s.insert}${closing}`,
+            insertText: `${s.insert}${closing}`,
+            /* What Monaco matches the typed text against — the name without
+               its braces, which is what somebody is typing. */
+            filterText: s.insert,
             range,
             /* Preserve the order suggestionsFor decided on — Monaco sorts
                alphabetically otherwise, which buries your own variables. */

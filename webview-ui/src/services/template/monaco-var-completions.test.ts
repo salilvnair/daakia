@@ -98,23 +98,28 @@ describe('{{ inside an editor', () => {
     expect(complete(providers, '{"token":"{{done}}"')).toEqual([]);
   });
 
-  it('replaces from the braces, not from the word', () => {
-    // Monaco's own word-based range stops at the `{`, which is how you get
-    // `{{ran{{randomUUID}}`.
+  it('replaces what was typed after the braces, and leaves them alone', () => {
+    /*
+      Monaco filters a provider's items against the text inside the replace
+      range. With the range starting at `{{`, the filter text was `{{ran` —
+      which no label contains — so every item was discarded and the widget
+      said "No suggestions" while fifty were being returned.
+    */
     const { providers, monaco } = stubMonaco();
     registerVarCompletions(monaco);
     const line = '{"token":"{{ran';
     const [first] = complete(providers, line);
-    expect(first.range.startColumn).toBe(line.indexOf('{{') + 1);
-    expect(first.insertText.startsWith('{{')).toBe(true);
+    expect(first.range.startColumn).toBe(line.indexOf('{{') + 3);
+    expect(first.insertText.startsWith('{{')).toBe(false);
+    expect(first.filterText).not.toContain('{');
   });
 
   it('closes the braces, unless the line already does', () => {
     const { providers, monaco } = stubMonaco();
     registerVarCompletions(monaco);
-    expect(complete(providers, '"{{base')[0].insertText).toBe('{{base-url}}');
+    expect(complete(providers, '"{{base')[0].insertText).toBe('base-url}}');
     const closed = '"{{base}}"';
-    expect(complete(providers, closed, closed.indexOf('}}') + 1)[0].insertText).toBe('{{base-url');
+    expect(complete(providers, closed, closed.indexOf('}}') + 1)[0].insertText).toBe('base-url');
   });
 
   it('offers the environment, the dynamic values and the helpers together', () => {
