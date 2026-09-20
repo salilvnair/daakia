@@ -34,8 +34,14 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { IconSize } from '@salilvnair/dui';
 import {
-  CheckIcon, CloseIcon, CopyIcon, FilterOffIcon, PlusIcon, SparkleIcon, TrashIcon,
+  CheckIcon, CloseIcon, CopyIcon, FilterIcon, FilterOffIcon, PlusIcon, SparkleIcon, TrashIcon,
 } from '../../../icons';
+import {
+  ICON_SLOT, MENU_HINT, MENU_ROW, MENU_SURFACE, MenuSeparator, SectionHeading,
+} from './filter-chrome';
+import {
+  AREA_ICONS, AREA_TONES, CONDITION_LOOK, FACET_ICONS, lookOf,
+} from './filter-icons';
 import { isAiStageEnabled } from '../../../store/ai-features-store';
 import {
   askForFilter, describeResult, readFilterAnswer,
@@ -49,7 +55,7 @@ import {
 import { buildFacet, type MatchContext } from '../../../services/history-filter/matcher';
 import type { HistoryRowLike } from '../../../services/history-filter/history-facts';
 
-const WIDTH = 380;
+const WIDTH = 392;
 const MAX_H = 620;
 const MARGIN = 8;
 
@@ -93,8 +99,17 @@ const OP_LABELS: Record<Operator, string> = {
   regex: 'matches /re/',
 };
 
-/** Facets each tab shows, and the values each offers where they are fixed. */
-const TAB_FACETS: Record<TabId, { field: TermField; label: string; fixed?: readonly string[] }[]> = {
+/**
+ * Facets each tab shows, and the values each offers where they are fixed.
+ *
+ * `icon` overrides the field's own mark, because three different sections are
+ * all built on the `has` field — "Has a body", "Secrets", "Scripts" — and
+ * inheriting one mark would have put a pair of braces above the secrets. The
+ * heading names a section, so it wears the section's icon.
+ */
+const TAB_FACETS: Record<TabId, {
+  field: TermField; label: string; fixed?: readonly string[]; icon?: React.ReactNode;
+}[]> = {
   request: [
     { field: 'method', label: 'Method' },
     { field: 'status', label: 'Status', fixed: STATUS_VALUES },
@@ -106,9 +121,12 @@ const TAB_FACETS: Record<TabId, { field: TermField; label: string; fixed?: reado
   body: [{ field: 'has', label: 'Has', fixed: ['body', 'json'] }],
   auth: [
     { field: 'auth', label: 'Auth type' },
-    { field: 'has', label: 'Secrets', fixed: ['secret'] },
+    { field: 'has', label: 'Secrets', fixed: ['secret'], icon: AREA_ICONS.auth },
   ],
-  scripts: [{ field: 'has', label: 'Scripts', fixed: ['prescript', 'postscript', 'script'] }],
+  scripts: [{
+    field: 'has', label: 'Scripts',
+    fixed: ['prescript', 'postscript', 'script'], icon: AREA_ICONS.scripts,
+  }],
 };
 
 function valueLabel(field: TermField, value: string): string {
@@ -123,38 +141,40 @@ function valueLabel(field: TermField, value: string): string {
 
 // ── Pieces ──────────────────────────────────────────────────────────────────
 
-function Heading({ label, right }: { label: string; right?: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-1.5 px-2 pb-0.5 text-[9.5px] uppercase tracking-wider"
-         style={{ color: 'var(--color-text-muted)' }}>
-      <span className="flex-1">{label}</span>
-      {right}
-    </div>
-  );
-}
-
 /**
- * One facet value.
+ * One facet value, drawn as a menu item.
  *
- * `only` and `except` ride in on hover, because the everyday interaction is a
- * tick and the other two verbs would be noise on every row if they were always
- * drawn. Alt-click excludes as well, for people who have learnt that.
+ * The icon column carries the value's own mark in the value's own colour — a
+ * green tick for 2xx, the GET green, the GraphQL pink — so the list is
+ * scannable without reading it. When the value is ticked the mark is replaced
+ * by a check, because two marks on one row is one more than a row can carry
+ * and the tick is the one that has changed.
+ *
+ * `only` and `except` ride in on hover: the everyday interaction is a tick, and
+ * two extra verbs drawn on every row would be noise on all of them. Alt-click
+ * excludes too, for people who have learnt that.
  */
-function FacetRow({ label, count, ticked, excluded, onToggle, onOnly, onExcept }: {
+function FacetRow({ field, value, label, count, ticked, excluded, onToggle, onOnly, onExcept }: {
+  field: TermField; value: string;
   label: string; count: number; ticked: boolean; excluded: boolean;
   onToggle: () => void; onOnly: () => void; onExcept: () => void;
 }) {
   const [hover, setHover] = useState(false);
+  const look = lookOf(field, value);
   const tone = excluded ? 'var(--color-error)'
     : ticked ? 'var(--color-accent, var(--color-primary))'
-    : count === 0 ? 'var(--color-text-muted)'
-    : 'var(--color-text-secondary)';
+    : look.tone;
   return (
     <div
-      className="flex items-center gap-2 w-full px-2 py-1 rounded text-[11.5px] cursor-pointer"
-      style={{ color: tone, fontWeight: ticked || excluded ? 600 : 400,
-               background: hover ? 'var(--color-surface-hover)' : 'transparent',
-               opacity: count === 0 && !ticked && !excluded ? 0.55 : 1 }}
+      className="dui_ctx-menu__item"
+      style={{
+        ...MENU_ROW,
+        color: tone,
+        fontWeight: ticked || excluded ? 700 : 500,
+        /* A value at zero stays in the list and stays readable — hiding it
+           would leave you wondering where POST went. */
+        opacity: count === 0 && !ticked && !excluded ? 0.45 : 1,
+      }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onClick={e => (e.altKey ? onExcept() : onToggle())}
@@ -162,12 +182,12 @@ function FacetRow({ label, count, ticked, excluded, onToggle, onOnly, onExcept }
       tabIndex={0}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
     >
-      <span style={{ width: 13, display: 'flex', flexShrink: 0 }}>
-        {(ticked || excluded) && <CheckIcon size={13} color="currentColor" />}
+      <span style={{ ...ICON_SLOT, color: tone }}>
+        {ticked || excluded ? <CheckIcon size={12} color="currentColor" /> : look.icon}
       </span>
       <span className="flex-1 truncate">{label}</span>
       {hover ? (
-        <span className="flex items-center gap-1 shrink-0 text-[9.5px]">
+        <span className="flex items-center gap-1.5 shrink-0 text-[10px]">
           <button type="button" className="border-none bg-transparent cursor-pointer p-0"
                   style={{ color: 'var(--color-text-muted)' }}
                   title="Only this value"
@@ -178,8 +198,7 @@ function FacetRow({ label, count, ticked, excluded, onToggle, onOnly, onExcept }
                   onClick={e => { e.stopPropagation(); onExcept(); }}>except</button>
         </span>
       ) : (
-        <span className="text-[10px] tabular-nums shrink-0"
-              style={{ color: 'var(--color-text-muted)' }}>{count}</span>
+        <span style={MENU_HINT}>{count}</span>
       )}
     </div>
   );
@@ -187,11 +206,15 @@ function FacetRow({ label, count, ticked, excluded, onToggle, onOnly, onExcept }
 
 /** The shared look of the three boxes in a condition row. */
 const BOX: React.CSSProperties = {
-  background: 'var(--color-input-bg, var(--color-surface))',
+  /* Sunk into the menu's ground rather than sitting on the panel's: on
+     `--color-elevated` an input painted `--color-surface` reads as a lighter
+     patch, which is the opposite of what a field should look like. */
+  background: 'color-mix(in srgb, var(--color-surface-bg) 70%, transparent)',
   border: '1px solid var(--color-surface-border)',
   borderRadius: 5,
-  fontSize: 11,
-  padding: '3px 6px',
+  fontSize: 11.5,
+  fontWeight: 500,
+  padding: '4px 7px',
   outline: 'none',
   minWidth: 0,
 };
@@ -368,8 +391,10 @@ export function HistoryFilterBody({ rows, state, onChange, ctx, matched }: Histo
   const [copied, setCopied] = useState(false);
 
   const facets = useMemo(
-    () => TAB_FACETS[tab].map(f =>
-      buildFacet(rows, state, f.field, f.label, f.fixed, v => valueLabel(f.field, v), ctx)),
+    () => TAB_FACETS[tab].map(f => ({
+      ...buildFacet(rows, state, f.field, f.label, f.fixed, v => valueLabel(f.field, v), ctx),
+      icon: f.icon,
+    })),
     [rows, state, tab, ctx],
   );
 
@@ -395,23 +420,31 @@ export function HistoryFilterBody({ rows, state, onChange, ctx, matched }: Histo
           const live = state.conditions.filter(c => TAB_FIELDS[t.id].includes(c.field)).length
             + state.terms.filter(term =>
               TAB_FACETS[t.id].some(f => f.field === term.field)).length;
+          /* The mark keeps its own colour on the selected tab and goes muted
+             on the others, so the strip reads as five places rather than five
+             words — and the selected one is obvious without relying on the
+             underline alone. */
+          const tone = AREA_TONES[t.id];
           return (
             <button
               key={t.id} type="button" onClick={() => setTab(t.id)}
-              className="flex-1 text-[10.5px] py-1.5 cursor-pointer border-none bg-transparent"
+              title={t.label}
+              className="flex-1 flex items-center justify-center gap-1 text-[10.5px] py-2 cursor-pointer border-none bg-transparent"
               style={{
                 color: on ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-                fontWeight: on ? 600 : 400,
-                borderBottom: on
-                  ? '2px solid var(--color-accent, var(--color-primary))'
-                  : '2px solid transparent',
+                fontWeight: on ? 600 : 500,
+                background: on ? `color-mix(in srgb, ${tone} 9%, transparent)` : 'transparent',
+                borderBottom: on ? `2px solid ${tone}` : '2px solid transparent',
               }}
             >
+              <span style={{ ...ICON_SLOT, color: on ? tone : 'var(--color-text-muted)' }}>
+                {AREA_ICONS[t.id]}
+              </span>
               {t.label}
               {!!live && (
-                <span className="ml-1 tabular-nums px-1 rounded text-[9px]"
-                      style={{ color: 'var(--color-accent, var(--color-primary))',
-                               background: 'color-mix(in srgb, var(--color-accent, var(--color-primary)) 16%, transparent)' }}>
+                <span className="tabular-nums px-1 rounded text-[9px]"
+                      style={{ color: tone,
+                               background: `color-mix(in srgb, ${tone} 18%, transparent)` }}>
                   {live}
                 </span>
               )}
@@ -428,18 +461,24 @@ export function HistoryFilterBody({ rows, state, onChange, ctx, matched }: Histo
         )}
 
         {tab === 'request' && (
-          <div className="px-2 text-[9.5px] leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-            Two ticks in one list mean <b style={{ color: 'var(--color-text-secondary)' }}>either</b>.
-            Two lists mean <b style={{ color: 'var(--color-text-secondary)' }}>both</b>.
+          <div className="mx-2 px-2 py-1.5 rounded text-[9.5px] leading-relaxed"
+               style={{ color: 'var(--color-text-muted)',
+                        background: 'color-mix(in srgb, var(--color-info) 7%, transparent)',
+                        border: '1px solid color-mix(in srgb, var(--color-info) 18%, transparent)' }}>
+            Two ticks in one list mean <b style={{ color: 'var(--color-info)' }}>either</b>.
+            Two lists mean <b style={{ color: 'var(--color-info)' }}>both</b>.
           </div>
         )}
 
-        {facets.map(facet => (
-          <section key={`${facet.field}-${facet.label}`} className="flex flex-col gap-0.5">
-            <Heading label={facet.label} />
+        {facets.map((facet, i) => (
+          <section key={`${facet.field}-${facet.label}`} className="flex flex-col">
+            {i > 0 && <MenuSeparator />}
+            <SectionHeading icon={facet.icon ?? FACET_ICONS[facet.field]} label={facet.label} />
             {facet.values.map(v => (
               <FacetRow
                 key={v.value}
+                field={facet.field}
+                value={v.value}
                 label={v.label}
                 count={v.count}
                 ticked={v.ticked}
@@ -450,15 +489,16 @@ export function HistoryFilterBody({ rows, state, onChange, ctx, matched }: Histo
               />
             ))}
             {!facet.values.length && (
-              <span className="px-2 py-1 text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
+              <span className="px-2.5 py-1 text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
                 Nothing in history has one yet.
               </span>
             )}
           </section>
         ))}
 
-        <section className="flex flex-col gap-0.5">
-          <Heading label="Conditions" />
+        <section className="flex flex-col">
+          {!!facets.length && <MenuSeparator />}
+          <SectionHeading icon={AREA_ICONS[tab]} label="Conditions" />
           {shown.map(c => (
             <ConditionRow
               key={c.id}
@@ -470,43 +510,66 @@ export function HistoryFilterBody({ rows, state, onChange, ctx, matched }: Histo
             />
           ))}
           {!shown.length && (
-            <span className="px-2 py-1 text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
+            <span className="px-2.5 py-1 text-[11px] leading-snug" style={{ color: 'var(--color-text-muted)' }}>
               {HINTS[tab]}
             </span>
           )}
-          <div className="flex flex-wrap gap-1 px-2 pt-1">
-            {fields.map(f => (
-              <button
-                key={f} type="button"
-                onClick={() => onChange(addCondition(state, f))}
-                className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded cursor-pointer"
-                style={{ color: 'var(--color-text-secondary)',
-                         border: '1px dashed var(--color-surface-border)',
-                         background: 'transparent' }}
-              >
-                <PlusIcon size={9} color="currentColor" />
-                {FIELD_LABELS[f]}
-              </button>
-            ))}
+          <div className="flex flex-wrap gap-1 px-2.5 pt-1">
+            {fields.map(f => {
+              const look = CONDITION_LOOK[f];
+              return (
+                <button
+                  key={f} type="button"
+                  onClick={() => onChange(addCondition(state, f))}
+                  title={`Add a ${FIELD_LABELS[f].toLowerCase()} condition`}
+                  className="flex items-center gap-1 text-[10.5px] px-1.5 py-1 rounded cursor-pointer"
+                  style={{
+                    color: look.tone,
+                    fontWeight: 500,
+                    border: `1px dashed color-mix(in srgb, ${look.tone} 40%, transparent)`,
+                    background: `color-mix(in srgb, ${look.tone} 8%, transparent)`,
+                  }}
+                >
+                  <PlusIcon size={9} color="currentColor" />
+                  {look.icon}
+                  {FIELD_LABELS[f]}
+                </button>
+              );
+            })}
           </div>
         </section>
       </div>
 
-      {/* The query line: what the clicking produced, for pasting somewhere. */}
-      <div className="flex items-center gap-1.5 px-2 py-1.5 shrink-0"
-           style={{ borderTop: '1px solid var(--color-surface-border)' }}>
+      {/*
+        The query line: what the clicking produced, for pasting somewhere.
+
+        Sunk a shade below the menu's ground so it reads as the panel's base
+        rather than as another row — and the count is the one number on this
+        panel worth colouring, because "0 of 2,000" is the answer people most
+        need to notice.
+      */}
+      <div className="flex items-center gap-1.5 px-2.5 py-1.5 shrink-0"
+           style={{
+             borderTop: '1px solid var(--color-surface-border)',
+             background: 'color-mix(in srgb, var(--color-surface-bg) 45%, transparent)',
+           }}>
         <span className="flex-1 truncate font-mono text-[10px]"
-              style={{ color: query ? 'var(--color-text-secondary)' : 'var(--color-text-muted)' }}
+              style={{ color: query ? 'var(--color-filter-op)' : 'var(--color-text-muted)' }}
               title={query}>
           {query || 'no filter'}
         </span>
-        <span className="text-[10px] tabular-nums shrink-0" style={{ color: 'var(--color-text-muted)' }}>
+        <span className="text-[10px] tabular-nums shrink-0 font-semibold"
+              style={{
+                color: matched === 0 && !!query ? 'var(--color-warning)'
+                  : query ? 'var(--color-success)'
+                  : 'var(--color-text-muted)',
+              }}>
           {matched} of {rows.length}
         </span>
         {!!query && (
           <button type="button" onClick={copy} title="Copy this filter"
                   className="border-none bg-transparent cursor-pointer p-0.5 flex shrink-0"
-                  style={{ color: copied ? 'var(--color-success, var(--color-primary))' : 'var(--color-text-muted)' }}>
+                  style={{ color: copied ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
             <CopyIcon size={11} color="currentColor" />
           </button>
         )}
@@ -588,18 +651,22 @@ export function HistoryFilterPopup({
   return createPortal(
     <div
       ref={box}
-      className="rounded-lg overflow-hidden flex flex-col"
+      className="overflow-hidden flex flex-col"
       style={{
+        ...MENU_SURFACE,
         position: 'fixed', top: at.top, left: at.left,
-        width: WIDTH, maxHeight: at.maxHeight, zIndex: 1000,
-        background: 'var(--color-surface)',
-        border: '1px solid var(--color-surface-border)',
-        boxShadow: '0 10px 30px rgba(0,0,0,.38)',
+        width: WIDTH, maxHeight: at.maxHeight,
+        /* dui's menus sit at 99998; this has to clear whatever the sidebar
+           stacks, but must still go under a menu opened from inside it. */
+        zIndex: 99990,
       }}
     >
-      <div className="flex items-center gap-2 px-3 py-2 shrink-0"
+      <div className="flex items-center gap-2 px-2.5 py-2 shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        <span className="text-[11.5px] flex-1"
+        <span style={{ ...ICON_SLOT, color: 'var(--color-accent, var(--color-primary))' }}>
+          <FilterIcon size={12} color="currentColor" />
+        </span>
+        <span className="text-[12px] flex-1"
               style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
           Filter history
         </span>
