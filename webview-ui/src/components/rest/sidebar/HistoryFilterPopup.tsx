@@ -32,25 +32,24 @@
  */
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { IconSize, SelectInputView } from '@salilvnair/dui';
+import { IconSize } from '@salilvnair/dui';
 import {
-  CheckIcon, CloseIcon, CopyIcon, FilterIcon, FilterOffIcon, PlusIcon, SparkleIcon, TrashIcon,
+  CheckIcon, CloseIcon, CopyIcon, FilterIcon, FilterOffIcon, SparkleIcon,
 } from '../../../icons';
 import {
   ICON_SLOT, MENU_HINT, MENU_ROW, MENU_SURFACE, MenuSeparator, SectionHeading,
 } from './filter-chrome';
-import {
-  AREA_ICONS, AREA_TONES, CONDITION_LOOK, FACET_ICONS, lookOf,
-} from './filter-icons';
+import { AREA_ICONS, AREA_TONES, FACET_ICONS, lookOf } from './filter-icons';
+import { FilterConditions } from './FilterConditions';
 import { isAiStageEnabled } from '../../../store/ai-features-store';
 import {
   askForFilter, describeResult, readFilterAnswer,
 } from '../../../services/history-filter/ai-suggest';
 import {
-  HAS_LABELS, HAS_VALUES, OPERATORS, NULLARY, STATUS_VALUES, WHEN_VALUES,
-  activeCount, addCondition, describeBrackets, dropCondition, except, formatQuery,
-  isEmpty, isUsable, only, prettyPhrase, setCondition, toggleValue,
-  type Condition, type ConditionField, type FilterState, type Operator, type TermField,
+  HAS_LABELS, HAS_VALUES, STATUS_VALUES, WHEN_VALUES,
+  activeCount, describeBrackets, except, formatQuery, isEmpty, isUsable, only,
+  prettyPhrase, toggleValue,
+  type ConditionField, type FilterState, type TermField,
 } from '../../../services/history-filter/filter-model';
 import { buildFacet, type MatchContext } from '../../../services/history-filter/matcher';
 import type { HistoryRowLike } from '../../../services/history-filter/history-facts';
@@ -101,27 +100,6 @@ const TAB_OWNS: Record<TabId, ConditionField[]> = {
   body: ['body', 'json', 'resbody', 'resjson'],
   auth: ['authfield'],
   scripts: ['script'],
-};
-
-const FIELD_LABELS: Record<ConditionField, string> = {
-  url: 'URL',
-  header: 'Request header',
-  resheader: 'Response header',
-  body: 'Request body',
-  json: 'Request JSONPath',
-  resbody: 'Response body',
-  resjson: 'Response JSONPath',
-  script: 'Script',
-  authfield: 'Auth field',
-};
-
-const OP_LABELS: Record<Operator, string> = {
-  present: 'is present',
-  absent: 'is absent',
-  equals: 'equals',
-  contains: 'contains',
-  starts: 'starts with',
-  regex: 'matches /re/',
 };
 
 /**
@@ -258,163 +236,6 @@ const BOX: React.CSSProperties = {
   outline: 'none',
   minWidth: 0,
 };
-
-/**
- * The `and` / `or` between two rows.
- *
- * ── Why a control in the gap rather than a "group" button ──
- *
- * What somebody wants is `(1 or 2) and 3`, and the shortest way to say that is
- * to point at the gap between 1 and 2 and call it `or`. Grouping tools that ask
- * you to select rows and press "group" make you hold the bracket structure in
- * your head first; this way the structure is whatever the gaps say, and there
- * is no state in which the brackets are wrong.
- *
- * `or` is the loud one: it takes the accent and a filled ground, because it is
- * the choice that changes the meaning away from the default everything else on
- * this panel uses.
- */
-function JoinToggle({ join, onChange }: {
-  join: 'and' | 'or';
-  onChange: (next: 'and' | 'or') => void;
-}) {
-  const or = join === 'or';
-  const tone = or ? 'var(--color-accent, var(--color-primary))' : 'var(--color-text-muted)';
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: GRID_GAP,
-                  padding: `1px ${SIDE_PAD}px`, marginLeft: FIELD_INDENT }}>
-      <button
-        type="button"
-        onClick={() => onChange(or ? 'and' : 'or')}
-        title={or
-          ? 'These two are ORed — click to require both instead'
-          : 'These two are ANDed — click to accept either instead'}
-        className="cursor-pointer text-[9.5px] uppercase tracking-wider px-1.5 rounded"
-        style={{
-          color: tone,
-          fontWeight: 700,
-          lineHeight: '15px',
-          border: `1px solid color-mix(in srgb, ${tone} ${or ? 45 : 22}%, transparent)`,
-          background: or ? `color-mix(in srgb, ${tone} 14%, transparent)` : 'transparent',
-        }}
-      >
-        {join}
-      </button>
-      <span style={{ flex: 1, height: 1,
-                     background: or
-                       ? `color-mix(in srgb, ${tone} 28%, transparent)`
-                       : 'var(--color-surface-border)' }} />
-    </div>
-  );
-}
-
-/**
- * The columns every condition row shares.
- *
- * A grid rather than a flex row, because the rows have to line up with each
- * other *and* with the buttons underneath them: with flex, a row whose operator
- * is `is present` loses its value box and the three that remain redistribute,
- * so no two rows agreed on where a column started. The value cell now stays
- * empty instead, which is what keeps the stack readable.
- */
-const ROW_GRID: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: `${NEG_COL}px minmax(0, 1fr) ${OP_COL}px minmax(0, 1fr) ${BIN_COL}px`,
-  alignItems: 'center',
-  gap: GRID_GAP,
-};
-
-/** The operators, as a dui menu: each with its own mark and its own colour. */
-const OP_OPTIONS = OPERATORS.map(op => ({
-  value: op,
-  label: OP_LABELS[op],
-  color: NULLARY.has(op) ? 'var(--color-text-secondary)' : 'var(--color-filter-op)',
-}));
-
-/**
- * One predicate: field, operator, value — coloured as the three things they are.
- *
- * The colours are not decoration. Three grey boxes in a row is a shape you have
- * to read left to right to parse; a blue field, a purple operator and an amber
- * value is one you recognise, which is the difference between a filter panel
- * people use and one they open once.
- *
- * The operator is dui's own select rather than a bare `<select>`: the browser's
- * dropdown is drawn by the platform, so it arrives in the platform's greys with
- * the platform's blue highlight, sitting on a dark panel it knows nothing
- * about. dui's is the same menu as everything else in this popup.
- */
-function ConditionRow({ c, onChange, onRemove, keyPlaceholder, keyChoices }: {
-  c: Condition;
-  onChange: (next: Condition) => void;
-  onRemove: () => void;
-  keyPlaceholder: string;
-  keyChoices?: readonly string[];
-}) {
-  const nullary = NULLARY.has(c.op);
-  return (
-    <div style={{ ...ROW_GRID, padding: `2px ${SIDE_PAD}px` }}>
-      <button
-        type="button"
-        title={c.negated ? 'Negated — click to match instead of exclude' : 'Click to negate'}
-        onClick={() => onChange({ ...c, negated: !c.negated })}
-        className="border-none bg-transparent cursor-pointer text-[12px] flex items-center justify-center"
-        style={{ color: c.negated ? 'var(--color-error)' : 'var(--color-text-muted)',
-                 fontWeight: c.negated ? 700 : 400, height: 24 }}
-      >
-        ¬
-      </button>
-
-      {keyChoices ? (
-        <SelectInputView
-          size="xs"
-          value={c.key}
-          onChange={key => onChange({ ...c, key })}
-          options={keyChoices.map(k => ({ value: k, label: k, color: 'var(--color-filter-field)' }))}
-          accentColor="var(--color-filter-field)"
-          width="100%"
-        />
-      ) : (
-        <input
-          value={c.key}
-          onChange={e => onChange({ ...c, key: e.target.value })}
-          placeholder={keyPlaceholder}
-          spellCheck={false}
-          style={{ ...BOX, color: 'var(--color-filter-field)', fontWeight: 600 }}
-        />
-      )}
-
-      <SelectInputView
-        size="xs"
-        value={c.op}
-        onChange={op => onChange({ ...c, op: op as Operator })}
-        options={OP_OPTIONS}
-        accentColor="var(--color-filter-op)"
-        menuMinWidth={132}
-        width="100%"
-      />
-
-      {/* A value box on `is present` would be a box that does nothing, so it
-          goes away — but its column stays, so the rows above and below keep
-          their alignment. */}
-      {nullary ? <span /> : (
-        <input
-          value={c.value}
-          onChange={e => onChange({ ...c, value: e.target.value })}
-          placeholder="value"
-          spellCheck={false}
-          style={{ ...BOX, color: 'var(--color-filter-value)' }}
-        />
-      )}
-
-      <button type="button" onClick={onRemove} title="Remove this condition"
-              className="border-none bg-transparent cursor-pointer flex items-center justify-center"
-              style={{ color: 'var(--color-text-muted)', height: 24 }}>
-        <TrashIcon size={11} color="currentColor" />
-      </button>
-    </div>
-  );
-}
 
 // ── The panel ───────────────────────────────────────────────────────────────
 
@@ -636,58 +457,13 @@ export function HistoryFilterBody({ rows, state, onChange, ctx, matched }: Histo
               </span>
             )}
           />
-          {shown.map((c, i) => (
-            <div key={c.id}>
-              {/* The first row has no gap above it, so it has no join. */}
-              {i > 0 && (
-                <JoinToggle
-                  join={c.join === 'or' ? 'or' : 'and'}
-                  onChange={join => onChange(setCondition(state, { ...c, join }))}
-                />
-              )}
-              <ConditionRow
-                c={c}
-                onChange={next => onChange(setCondition(state, next))}
-                onRemove={() => onChange(dropCondition(state, c.id))}
-                keyPlaceholder={placeholderFor(c.field)}
-                keyChoices={c.field === 'script' ? ['any', 'pre', 'post'] : undefined}
-              />
-            </div>
-          ))}
-          {!shown.length && (
-            <span className="py-1 text-[11px] leading-snug block"
-                  style={{ color: 'var(--color-text-muted)',
-                           paddingLeft: SIDE_PAD + FIELD_INDENT, paddingRight: SIDE_PAD }}>
-              {HINTS[tab]}
-            </span>
-          )}
-          <div className="flex flex-wrap gap-1 pt-1.5"
-               style={{ paddingLeft: SIDE_PAD + FIELD_INDENT, paddingRight: SIDE_PAD }}>
-            {fields.map(f => {
-              const look = CONDITION_LOOK[f];
-              return (
-                <button
-                  key={f} type="button"
-                  onClick={() => onChange(addCondition(state, f))}
-                  /* Not "Add a ${label} condition": lower-casing the labels
-                     produced "a url" and "a auth field". Naming the thing
-                     after a colon sidesteps articles entirely. */
-                  title={`Add condition: ${FIELD_LABELS[f]}`}
-                  className="flex items-center gap-1 text-[10.5px] px-1.5 py-1 rounded cursor-pointer"
-                  style={{
-                    color: look.tone,
-                    fontWeight: 500,
-                    border: `1px dashed color-mix(in srgb, ${look.tone} 40%, transparent)`,
-                    background: `color-mix(in srgb, ${look.tone} 8%, transparent)`,
-                  }}
-                >
-                  <PlusIcon size={9} color="currentColor" />
-                  {look.icon}
-                  {FIELD_LABELS[f]}
-                </button>
-              );
-            })}
-          </div>
+          <FilterConditions
+            state={state}
+            onChange={onChange}
+            fields={fields}
+            hint={HINTS[tab]}
+            addLabel={ADD_LABELS[tab]}
+          />
         </section>
       </div>
 
@@ -729,6 +505,15 @@ export function HistoryFilterBody({ rows, state, onChange, ctx, matched }: Histo
   );
 }
 
+/** What the add button says when the tab offers more than one kind. */
+const ADD_LABELS: Record<TabId, string> = {
+  request: 'Condition',
+  headers: 'Header condition',
+  body: 'Body condition',
+  auth: 'Auth condition',
+  scripts: 'Script condition',
+};
+
 const HINTS: Record<TabId, string> = {
   request: 'Add a URL condition to match part of an address.',
   headers: 'Ask whether a header was sent, or what it carried.',
@@ -737,12 +522,6 @@ const HINTS: Record<TabId, string> = {
   scripts: 'Find the requests whose scripts call something in particular.',
 };
 
-function placeholderFor(field: ConditionField): string {
-  if (field === 'header' || field === 'resheader') return 'header name or *';
-  if (field === 'json' || field === 'resjson') return '$.path.to.value';
-  if (field === 'authfield') return 'field name or *';
-  return 'text';
-}
 
 /**
  * The popup form: portalled, glued to its trigger, and closed by anything else.
