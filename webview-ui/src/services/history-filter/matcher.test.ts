@@ -199,6 +199,31 @@ describe('conditions', () => {
     expect(matchesRow(r, parseQuery('header:x-b:present body:text:contains:"a"'), ctx)).toBe(false);
   });
 
+  it('matches any row in a bracket, and every bracket', () => {
+    /*
+      `(body contains alpha or body contains beta) and method POST` — the shape
+      the user asked for, checked against all four combinations.
+    */
+    const or = (v: string, join?: 'or') =>
+      cond({ field: 'body', key: 'text', op: 'contains', value: v, join });
+    const s = state({
+      terms: [{ field: 'method', values: ['post'] }],
+      conditions: [or('alpha'), or('beta', 'or')],
+    });
+    expect(matchesRow(row({ method: 'POST', request: { body: 'alpha' } }), s, ctx)).toBe(true);
+    expect(matchesRow(row({ method: 'POST', request: { body: 'beta' } }), s, ctx)).toBe(true);
+    expect(matchesRow(row({ method: 'POST', request: { body: 'gamma' } }), s, ctx)).toBe(false);
+    expect(matchesRow(row({ method: 'GET', request: { body: 'alpha' } }), s, ctx)).toBe(false);
+  });
+
+  it('ANDs a negated row sitting in its own bracket', () => {
+    // "(1 or 2) and not 3" — the third clause of the user's example.
+    const s = parseQuery(
+      'body:text:contains:alpha|body:text:contains:beta -body:text:contains:gamma');
+    expect(matchesRow(row({ request: { body: 'alpha' } }), s, ctx)).toBe(true);
+    expect(matchesRow(row({ request: { body: 'alpha gamma' } }), s, ctx)).toBe(false);
+  });
+
   it('negates a condition without negating the others', () => {
     const r = row({ request: { headers: { cookie: 'sid=1' } } });
     expect(matchesRow(r, state({ conditions: [

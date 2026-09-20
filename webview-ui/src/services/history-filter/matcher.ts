@@ -21,7 +21,7 @@
  */
 import {
   type Condition, type FilterState, type Operator, type Term, type TermField,
-  NULLARY, isUsable, statusBucket, withinRange,
+  NULLARY, bracket, statusBucket, withinRange,
 } from './filter-model';
 import { factsOf, type HistoryFacts, type HistoryRowLike, type HeaderPair } from './history-facts';
 import { parsePath, queryPath, asText } from './json-path';
@@ -222,8 +222,20 @@ function matchesText(f: HistoryFacts, needle: string): boolean {
 
 export function matchesFacts(f: HistoryFacts, state: FilterState, ctx: MatchContext): boolean {
   for (const term of state.terms) if (!matchesTerm(f, term, ctx)) return false;
-  const conditions = state.conditions.filter(isUsable).sort(byCost);
-  for (const c of conditions) if (!matchesCondition(f, c)) return false;
+
+  /*
+    Brackets are ANDed; the rows inside one are ORed.
+
+    Sorting happens inside each bracket rather than across all of them, because
+    the cost ordering is an optimisation and moving a row between brackets
+    would change the answer. Within a bracket the cheap rows run first for the
+    same reason they do everywhere else: an OR that is satisfied by a header
+    never opens a response body.
+  */
+  for (const group of bracket(state.conditions)) {
+    const ordered = [...group].sort(byCost);
+    if (!ordered.some(c => matchesCondition(f, c))) return false;
+  }
   return matchesText(f, state.text);
 }
 

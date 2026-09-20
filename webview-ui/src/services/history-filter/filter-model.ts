@@ -18,7 +18,10 @@
  * - **Two values in one facet means either.** `method:get,post` is GET *or* POST.
  * - **Two facets means both.** `method:post status:5xx` is POST *and* failing.
  *
- * Conditions are always AND, and each carries its own negation.
+ * Conditions follow the same rule, bracketed: rows joined `or` sit in one
+ * bracket and any of them may match; brackets are ANDed. `(1 or 2) and 3` is
+ * therefore the same sentence the facets above it are already telling you.
+ * Each row also carries its own negation.
  *
  * ── What is searched ──
  *
@@ -98,6 +101,24 @@ export const NULLARY: ReadonlySet<Operator> = new Set<Operator>(['present', 'abs
 export interface Condition {
   /** Stable across edits, so React rows keep their identity while you type. */
   id: string;
+  /**
+   * How this row joins the one above it.
+   *
+   * The join describes the *gap above* the row that carries it, which is where
+   * the control sits on screen. `or` puts this row in the same bracket as the
+   * one above; anything else, including the default, starts a new bracket. So
+   * three rows where only the second says `or` read `(1 or 2) and 3` — the
+   * first row's join is never consulted, because there is no gap above it.
+   *
+   * ── Why not a group id ──
+   *
+   * A `group: number` on each row can be made inconsistent — two rows claiming
+   * group 2 with a group 1 between them is a state the UI would have to
+   * prevent and the parser would have to repair. A join describes a gap, and a
+   * list of gaps cannot be malformed however the rows are added, removed or
+   * reordered.
+   */
+  join?: 'and' | 'or';
   field: ConditionField;
   /**
    * Which one — a header name, a JSONPath, `pre`/`post`/`any` for scripts.
@@ -145,6 +166,41 @@ export function isUsable(c: Condition): boolean {
     return false;
   }
   return c.key.trim() !== '';
+}
+
+/**
+ * The rows, bracketed.
+ *
+ * Within a bracket the rows are OR; brackets are AND — the same rule the facets
+ * already use, said the same way ("two ticks in one list mean either, two lists
+ * mean both"). One convention for the whole panel is worth more than a more
+ * expressive one nobody can predict.
+ *
+ * Unusable rows are dropped *before* bracketing, so a half-typed row in the
+ * middle of an OR bracket does not split it in two and quietly change what the
+ * finished rows mean.
+ */
+export function bracket(conditions: readonly Condition[]): Condition[][] {
+  const groups: Condition[][] = [];
+  for (const c of conditions) {
+    if (!isUsable(c)) continue;
+    if (c.join === 'or' && groups.length > 0) groups[groups.length - 1].push(c);
+    else groups.push([c]);
+  }
+  return groups;
+}
+
+/** How a bracketed filter reads out loud: `(1 or 2) and 3`. */
+export function describeBrackets(conditions: readonly Condition[]): string {
+  const groups = bracket(conditions);
+  if (!groups.length) return '';
+  let n = 0;
+  return groups
+    .map(g => {
+      const nums = g.map(() => `${++n}`);
+      return nums.length > 1 ? `(${nums.join(' or ')})` : nums[0];
+    })
+    .join(' and ');
 }
 
 // ── The whole state ─────────────────────────────────────────────────────────
@@ -244,10 +300,11 @@ export function formatQuery(state: FilterState): string {
   for (const t of state.terms) {
     parts.push(`${t.negated ? '-' : ''}${t.field}:${t.values.join(',')}`);
   }
-  for (const c of state.conditions) {
-    if (!isUsable(c)) continue;
-    const head = `${c.negated ? '-' : ''}${c.field}:${c.key}:${c.op}`;
-    parts.push(NULLARY.has(c.op) ? head : `${head}:${quote(c.value)}`);
+  /* A bracket of OR'd rows is one token joined by `|`; brackets are separate
+     tokens, which the parser already ANDs. The string therefore says exactly
+     what the panel draws. */
+  for (const group of bracket(state.conditions)) {
+    parts.push(group.map(oneCondition).join('|'));
   }
   const text = state.text.trim();
   if (text) parts.push(/\s/.test(text) ? `"${text}"` : text);
@@ -260,8 +317,15 @@ export function formatQuery(state: FilterState): string {
   "INR"` is the single most likely thing to go in a body condition, and naive
   quoting turned it into an empty string followed by rubbish.
 */
+function oneCondition(c: Condition): string {
+  const head = `${c.negated ? '-' : ''}${c.field}:${c.key}:${c.op}`;
+  return NULLARY.has(c.op) ? head : `${head}:${quote(c.value)}`;
+}
+
 function quote(v: string): string {
-  if (!/[\s"\\]/.test(v)) return v;
+  /* `|` joins a bracket, so a value holding one has to be quoted or the string
+     would split a single condition into two. */
+  if (!/[\s"\\|]/.test(v)) return v;
   return `"${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
@@ -283,7 +347,20 @@ export function parseQuery(input: string): FilterState {
   const words: string[] = [];
 
   for (const token of tokenise(input)) {
-    const parsed = parseToken(token);
+    const members = splitOr(token);
+    /*
+      A token is a bracket when it has more than one member. Every member after
+      the first carries `join: 'or'`, which is what puts them back into one
+      bracket when the panel re-draws them.
+    */
+    const parsedMembers = members.map(parseToken);
+    if (members.length > 1 && parsedMembers.every(m => m && 'op' in m)) {
+      parsedMembers.forEach((m, i) => {
+        conditions.push(i === 0 ? (m as Condition) : { ...(m as Condition), join: 'or' });
+      });
+      continue;
+    }
+    const parsed = members.length === 1 ? parsedMembers[0] : undefined;
     if (!parsed) { words.push(unquote(token)); continue; }
     if ('op' in parsed) conditions.push(parsed);
     else terms.push(parsed);
@@ -334,6 +411,28 @@ function isConditionField(s: string): s is ConditionField {
 
 function isOperator(s: string): s is Operator {
   return (OPERATORS as readonly string[]).includes(s);
+}
+
+/**
+ * Split a token on the `|` that joins a bracket, ignoring any inside quotes.
+ *
+ * Written as a scan rather than a regex because the thing being skipped is a
+ * quoted span with escapes in it, and a regex that got that subtly wrong would
+ * fail on exactly the values people quote: the ones with punctuation.
+ */
+function splitOr(token: string): string[] {
+  const out: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < token.length; i++) {
+    const ch = token[i];
+    if (inQuotes && ch === '\\' && i + 1 < token.length) { current += ch + token[++i]; continue; }
+    if (ch === '"') { inQuotes = !inQuotes; current += ch; continue; }
+    if (ch === '|' && !inQuotes) { out.push(current); current = ''; continue; }
+    current += ch;
+  }
+  out.push(current);
+  return out.filter(Boolean);
 }
 
 /** Split on spaces, but not inside quotes — and an escaped quote is not a quote. */

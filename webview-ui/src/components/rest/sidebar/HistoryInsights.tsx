@@ -30,7 +30,7 @@
  * neither adds a thing that can be on for one screen and off for another.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { CloseIcon, SaveIcon, SparkleIcon, ChevronRightIcon, ExternalLinkIcon } from '../../../icons';
+import { CloseIcon, SaveIcon, SparkleIcon, ChevronLeftIcon, ChevronRightIcon, ExternalLinkIcon } from '../../../icons';
 import { SaveRequestModal } from '../../shared';
 import { isAiFeatureOn } from '../../../store/ai-features-store';
 import { logUiEvent } from '../../../store/ui-audit-store';
@@ -433,7 +433,22 @@ export function HistoryInsights({ rows, saved, collections, resolve, protocol, o
       {/* Ranking is about order, not suppression — so when there is more than
           one finding, the strip says so and steps through them. */}
       {cards.length > 1 && (
-        <div className="flex items-center gap-1 px-0.5">
+        /*
+          Both directions. It only went forwards, which meant stepping past the
+          one you wanted cost you a full lap — and on five findings that is four
+          clicks to undo one. Wrapping both ways also means neither arrow is
+          ever dead, so there is nothing to explain.
+        */
+        <div className="flex items-center gap-0.5 px-0.5">
+          <button
+            type="button"
+            onClick={() => setAt((index - 1 + cards.length) % cards.length)}
+            title="Previous finding"
+            className="border-none bg-transparent cursor-pointer p-0.5 flex"
+            style={{ color: 'var(--color-text-muted)' }}
+          >
+            <ChevronLeftIcon size={10} color="currentColor" />
+          </button>
           <span className="text-[9.5px] tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
             {index + 1} of {cards.length}
           </span>

@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
-  EMPTY, activeCount, chipsOf, describeCondition, dropField, except, formatQuery,
-  isEmpty, isUsable, newCondition, only, parseQuery, statusBucket, toggleValue,
+  EMPTY, activeCount, bracket, chipsOf, describeBrackets, describeCondition, dropField,
+  except, formatQuery, isEmpty, isUsable, newCondition, only, parseQuery, statusBucket,
+  toggleValue,
   type Condition, type FilterState,
 } from './filter-model';
 
@@ -66,6 +67,45 @@ describe('the filter state', () => {
   });
 });
 
+describe('bracketing conditions', () => {
+  const rows = (...joins: (undefined | 'or')[]) =>
+    joins.map((join, i) => cond({
+      id: `k${i}`, field: 'body', key: 'text', op: 'contains', value: `v${i}`, join,
+    }));
+
+  it('reads (1 or 2) and 3 when only the second row says or', () => {
+    // The user's own example, and the reason the join describes the gap above.
+    const cs = rows(undefined, 'or', undefined);
+    expect(bracket(cs).map(g => g.map(c => c.value))).toEqual([['v0', 'v1'], ['v2']]);
+    expect(describeBrackets(cs)).toBe('(1 or 2) and 3');
+  });
+
+  it('puts every row in its own bracket by default', () => {
+    expect(describeBrackets(rows(undefined, undefined, undefined))).toBe('1 and 2 and 3');
+  });
+
+  it('collects a run of ors into one bracket', () => {
+    expect(describeBrackets(rows(undefined, 'or', 'or'))).toBe('(1 or 2 or 3)');
+  });
+
+  it('ignores an or on the very first row, which has no gap above it', () => {
+    expect(describeBrackets(rows('or', undefined))).toBe('1 and 2');
+  });
+
+  it('drops a half-typed row without splitting the bracket around it', () => {
+    /*
+      A blank row between two ORed ones must not end up separating them — the
+      finished rows would silently start meaning AND while somebody typed.
+    */
+    const cs = [
+      cond({ id: 'a', field: 'body', key: 'text', op: 'contains', value: 'x' }),
+      cond({ id: 'b', field: 'body', key: 'text', op: 'contains', value: '', join: 'or' }),
+      cond({ id: 'c', field: 'body', key: 'text', op: 'contains', value: 'y', join: 'or' }),
+    ];
+    expect(bracket(cs).map(g => g.map(c => c.value))).toEqual([['x', 'y']]);
+  });
+});
+
 describe('the query string', () => {
   const round = (s: FilterState) => parseQuery(formatQuery(s));
 
@@ -111,6 +151,32 @@ describe('the query string', () => {
       conditions: [cond({ field: 'body', key: 'text', op: 'contains', value: '"currency": "INR"' })],
     };
     expect(round(state).conditions[0].value).toBe('"currency": "INR"');
+  });
+
+  it('writes a bracket as one token and reads it back as one bracket', () => {
+    const state: FilterState = {
+      ...EMPTY,
+      conditions: [
+        cond({ field: 'body', key: 'text', op: 'contains', value: 'x' }),
+        cond({ field: 'body', key: 'text', op: 'contains', value: 'y', join: 'or' }),
+        cond({ field: 'header', key: 'cookie', op: 'absent', value: '' }),
+      ],
+    };
+    expect(formatQuery(state))
+      .toBe('body:text:contains:x|body:text:contains:y header:cookie:absent');
+    const back = parseQuery(formatQuery(state));
+    expect(describeBrackets(back.conditions)).toBe('(1 or 2) and 3');
+  });
+
+  it('quotes a value containing the bracket separator', () => {
+    // Otherwise one condition would come back as two.
+    const state: FilterState = {
+      ...EMPTY,
+      conditions: [cond({ field: 'url', key: 'text', op: 'regex', value: 'a|b' })],
+    };
+    const back = parseQuery(formatQuery(state));
+    expect(back.conditions).toHaveLength(1);
+    expect(back.conditions[0].value).toBe('a|b');
   });
 
   it('treats anything it does not recognise as search text rather than an error', () => {
