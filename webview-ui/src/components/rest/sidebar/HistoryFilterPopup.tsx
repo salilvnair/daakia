@@ -32,9 +32,8 @@
  */
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { IconSize } from '@salilvnair/dui';
 import {
-  CheckIcon, CloseIcon, CopyIcon, FilterIcon, FilterOffIcon, SparkleIcon,
+  CheckIcon, CopyIcon, FilterIcon, FilterOffIcon, SparkleIcon,
 } from '../../../icons';
 import {
   ICON_SLOT, MENU_HINT, MENU_ROW, MENU_SURFACE, MenuSeparator, SectionHeading,
@@ -54,7 +53,14 @@ import {
 import { buildFacet, type MatchContext } from '../../../services/history-filter/matcher';
 import type { HistoryRowLike } from '../../../services/history-filter/history-facts';
 
-const WIDTH = 392;
+/*
+  Wide enough for a condition row to breathe.
+
+  A row is five columns — negate, field, operator, value, bin — and at 392 the
+  two free-text columns were around 84px each, which is not enough to read a
+  header name or a JSONPath without scrolling inside the box.
+*/
+const WIDTH = 452;
 const MAX_H = 620;
 const MARGIN = 8;
 
@@ -223,6 +229,13 @@ const SIDE_PAD = 10;
 const FIELD_INDENT = NEG_COL + GRID_GAP;
 
 /** The shared look of the three boxes in a condition row. */
+/**
+ * The ask box's input — the same 24px every other control in this panel is.
+ *
+ * `FilterConditions` owns the identical treatment for the condition rows. The
+ * two are kept apart on purpose: this one sits beside a button and nothing
+ * else, and the rows' version is tied to their grid.
+ */
 const BOX: React.CSSProperties = {
   /* Sunk into the menu's ground rather than sitting on the panel's: on
      `--color-elevated` an input painted `--color-surface` reads as a lighter
@@ -232,7 +245,9 @@ const BOX: React.CSSProperties = {
   borderRadius: 5,
   fontSize: 11.5,
   fontWeight: 500,
-  padding: '4px 7px',
+  height: 24,
+  boxSizing: 'border-box',
+  padding: '0 7px',
   outline: 'none',
   minWidth: 0,
 };
@@ -298,7 +313,29 @@ function AskBox({ rows, onChange }: {
 
   return (
     <div className="flex flex-col gap-1 px-2 pb-1">
+      {/*
+        The button leads, the box follows.
+
+        On the right it was the last thing on a line whose first thing is a long
+        placeholder, so the control that says what the row is *for* was the one
+        you reached last and read last. Leading with it, the row says "ask for a
+        filter" before it says anything else, and the button no longer moves as
+        its label changes between "Filter" and "Reading…".
+      */}
       <div className="flex items-center gap-1">
+        <button
+          type="button" onClick={ask} disabled={!question.trim() || !!pending}
+          title="Turn this into a filter"
+          className="flex items-center gap-1 text-[10px] px-1.5 rounded cursor-pointer shrink-0 justify-center"
+          style={{ background: 'color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)',
+                   color: 'var(--color-protocol-ai)',
+                   height: 24, width: 62, boxSizing: 'border-box',
+                   border: '1px solid color-mix(in srgb, var(--color-protocol-ai) 35%, transparent)',
+                   opacity: question.trim() && !pending ? 1 : 0.5 }}
+        >
+          <SparkleIcon size={10} color="currentColor" />
+          {pending ? 'Reading' : 'Filter'}
+        </button>
         <input
           value={question}
           onChange={e => setQuestion(e.target.value)}
@@ -307,17 +344,6 @@ function AskBox({ rows, onChange }: {
           spellCheck={false}
           style={{ ...BOX, flex: 1, color: 'var(--color-text-primary)' }}
         />
-        <button
-          type="button" onClick={ask} disabled={!question.trim() || !!pending}
-          title="Turn this into a filter"
-          className="flex items-center gap-1 text-[10px] px-1.5 py-1 rounded cursor-pointer shrink-0"
-          style={{ background: 'transparent', color: 'var(--color-protocol-ai)',
-                   border: '1px solid color-mix(in srgb, var(--color-protocol-ai) 35%, transparent)',
-                   opacity: question.trim() && !pending ? 1 : 0.5 }}
-        >
-          <SparkleIcon size={10} color="currentColor" />
-          {pending ? 'Reading…' : 'Filter'}
-        </button>
       </div>
       {!!said && (
         <span className="text-[9.5px] font-mono leading-snug" style={{ color: 'var(--color-text-muted)' }}>
@@ -406,13 +432,35 @@ export function HistoryFilterBody({ rows, state, onChange, ctx, matched }: Histo
           <AskBox rows={rows} onChange={onChange} />
         )}
 
+        {/*
+          The rule, as an example rather than as a rule.
+
+          It used to read "two ticks in one list mean either, two lists mean
+          both" — which is accurate, and which nobody could act on, because
+          "list" and "either" are the abstractions and the reader is looking at
+          GET and POST. Two concrete lines say the same thing and need no
+          decoding: one shows what ticking twice in a group does, the other
+          shows what ticking across groups does.
+        */}
         {tab === 'request' && (
-          <div className="mx-2 px-2 py-1.5 rounded text-[9.5px] leading-relaxed"
+          <div className="mx-2 px-2 py-1.5 rounded text-[10px] leading-relaxed flex flex-col gap-0.5"
                style={{ color: 'var(--color-text-muted)',
                         background: 'color-mix(in srgb, var(--color-info) 7%, transparent)',
                         border: '1px solid color-mix(in srgb, var(--color-info) 18%, transparent)' }}>
-            Two ticks in one list mean <b style={{ color: 'var(--color-info)' }}>either</b>.
-            Two lists mean <b style={{ color: 'var(--color-info)' }}>both</b>.
+            <span>
+              <b style={{ color: 'var(--color-method-get, var(--color-success))' }}>GET</b>
+              {' + '}
+              <b style={{ color: 'var(--color-warning)' }}>POST</b>
+              {' → requests that are '}
+              <b style={{ color: 'var(--color-info)' }}>either</b>
+            </span>
+            <span>
+              <b style={{ color: 'var(--color-method-get, var(--color-success))' }}>GET</b>
+              {' + '}
+              <b style={{ color: 'var(--color-error)' }}>5XX</b>
+              {' → requests that are '}
+              <b style={{ color: 'var(--color-info)' }}>both</b>
+            </span>
           </div>
         )}
 
@@ -544,9 +592,20 @@ export function HistoryFilterPopup({
       const above = r.top - MARGIN - 6;
       const down = below >= Math.min(MAX_H, above);
       const maxHeight = Math.max(200, Math.min(MAX_H, down ? below : above));
+      /*
+        Right-aligned to the trigger, not left-aligned.
+
+        The funnel lives at the right edge of the sidebar header, so hanging the
+        panel's *left* edge off it pushed the panel past the window and the
+        clamp then pinned it flush to the right-hand edge — as far right as it
+        could possibly go, with its scrollbar against the window frame. Lining
+        the panel's right edge up with the trigger instead puts it under the
+        button that opened it and gives the whole panel room on the left.
+      */
+      const preferred = r.right - WIDTH;
       setAt({
         top: down ? r.bottom + 6 : Math.max(MARGIN, r.top - 6 - maxHeight),
-        left: Math.max(MARGIN, Math.min(r.left, window.innerWidth - WIDTH - MARGIN)),
+        left: Math.max(MARGIN, Math.min(preferred, window.innerWidth - WIDTH - MARGIN)),
         maxHeight,
       });
     };
@@ -603,24 +662,55 @@ export function HistoryFilterPopup({
         <span style={{ ...ICON_SLOT, color: 'var(--color-accent, var(--color-primary))' }}>
           <FilterIcon size={12} color="currentColor" />
         </span>
-        <span className="text-[12px] flex-1"
+        {/* "Filter", not "Filter history": it is pinned to the History panel
+            and the panel already says so above it. */}
+        <span className="text-[12px]"
               style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-          Filter history
+          Filter
         </span>
-        {/* Only offered when there is something to clear — a permanent Clear on
-            an untouched filter reads as a thing you have forgotten to do. */}
+        {/*
+          Clear sits beside the title, not beside the close button.
+
+          It used to be the last thing before the X, which put a destructive
+          verb a few pixels from the control everybody reaches for to get out —
+          and the two do very different things to a filter you have spent a
+          minute building. Next to the title it is near the thing it acts on,
+          and the X has the far corner to itself.
+
+          It is still only drawn when there is something to clear: a permanent
+          Clear on an untouched filter reads as a thing you have forgotten to
+          do.
+        */}
         {!isEmpty(props.state) && (
           <button type="button" onClick={() => props.onChange({ terms: [], conditions: [], text: props.state.text })}
                   title="Remove every condition"
-                  className="flex items-center gap-1 text-[10.5px] cursor-pointer border-none bg-transparent px-1"
-                  style={{ color: 'var(--color-error)' }}>
-            <FilterOffIcon size={11} color="currentColor" />
+                  className="flex items-center gap-1 text-[10px] cursor-pointer px-1.5 rounded"
+                  style={{ color: 'var(--color-error)', fontWeight: 600,
+                           lineHeight: '16px',
+                           border: '1px solid color-mix(in srgb, var(--color-error) 35%, transparent)',
+                           background: 'color-mix(in srgb, var(--color-error) 9%, transparent)' }}>
+            <FilterOffIcon size={10} color="currentColor" />
             Clear
           </button>
         )}
+        <span className="flex-1" />
+        {/*
+          dui's modal close, class and all.
+
+          `dui_modal__close-btn` carries the behaviour people have already
+          learnt everywhere else in the app: muted until hovered, then a red
+          tint and a red glyph, and a small scale-down on the press. Re-creating
+          that here would have been a second copy of an interaction, and the
+          copy is always the one that drifts. The stylesheet arrives with
+          `ModalView`, which a hundred and thirty other screens already import.
+        */}
         <button type="button" onClick={onClose} title="Close"
-                className="dk-close-btn p-0.5 rounded cursor-pointer border-none bg-transparent flex">
-          <CloseIcon size={IconSize.inline} color="currentColor" />
+                className="dui_modal__close-btn"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center',
+                         width: 22, height: 22, borderRadius: 5, border: 'none',
+                         background: 'transparent', cursor: 'pointer', fontSize: 15,
+                         lineHeight: 1, fontWeight: 400, padding: 0 }}>
+          ✕
         </button>
       </div>
 

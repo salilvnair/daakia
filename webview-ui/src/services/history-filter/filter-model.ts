@@ -181,9 +181,27 @@ export function isUsable(c: Condition): boolean {
  * finished rows mean.
  */
 export function bracket(conditions: readonly Condition[]): Condition[][] {
+  return groupRows(conditions.filter(isUsable));
+}
+
+/**
+ * The same grouping, but keeping the rows that are not finished yet.
+ *
+ * ── Why the panel needs its own version ──
+ *
+ * `bracket` answers "what is running", so it drops rows with nothing typed in
+ * them. The panel asks a different question — "what has the reader built" —
+ * and a brand-new row has been built even though it matches nothing yet.
+ *
+ * Using the matching version to draw with had a nasty consequence: a fresh row
+ * was in no bracket, so it was drawn without the bracket's chrome, so the
+ * `+ or` button that lives on a bracket was not there. The one moment you most
+ * want to say "...or this" — right after adding the row you are about to say
+ * it about — was the one moment the control was missing.
+ */
+export function groupRows(conditions: readonly Condition[]): Condition[][] {
   const groups: Condition[][] = [];
   for (const c of conditions) {
-    if (!isUsable(c)) continue;
     if (c.join === 'or' && groups.length > 0) groups[groups.length - 1].push(c);
     else groups.push([c]);
   }

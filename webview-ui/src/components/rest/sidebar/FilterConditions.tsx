@@ -38,7 +38,7 @@ import { useRef, useState } from 'react';
 import { ContextMenuView, SelectInputView } from '@salilvnair/dui';
 import { PlusIcon, TrashIcon } from '../../../icons';
 import {
-  NULLARY, OPERATORS, addCondition, bracket, dropCondition, setCondition,
+  NULLARY, OPERATORS, addCondition, dropCondition, groupRows, setCondition,
   type Condition, type ConditionField, type FilterState, type Operator,
 } from '../../../services/history-filter/filter-model';
 import { CONDITION_LOOK } from './filter-icons';
@@ -313,19 +313,20 @@ export function FilterConditions({ state, onChange, fields, hint, addLabel }: {
   addLabel: string;
 }) {
   const visible = (c: Condition) => fields.includes(c.field);
-  /* Bracketing runs over every row so the structure is the real one; the
-     blocks are then filtered to what this tab shows. A bracket whose rows are
-     all on another tab simply does not appear here. */
-  const bracketed = bracket(state.conditions);
-  const blocks = bracketed
+  /*
+    `groupRows`, not `bracket`: the panel draws what has been built, including
+    rows with nothing typed in them yet. `bracket` drops those because they
+    match nothing, which is right for the matcher and wrong here — a fresh row
+    would be drawn outside any block and so without the block's `+ or` button,
+    exactly when you want it.
+
+    Grouping runs over every row so the structure is the real one; the blocks
+    are then filtered to what this tab shows, so a bracket whose rows all live
+    on another tab simply does not appear here.
+  */
+  const blocks = groupRows(state.conditions)
     .map(group => group.filter(visible))
     .filter(group => group.length > 0);
-
-  /* An unfinished row is in no bracket — it has nothing in it to match — but
-     it still has to be on screen, or typing into a new row would make it
-     vanish as soon as it was created. Those are drawn after the blocks. */
-  const inABracket = new Set(bracketed.flat().map(c => c.id));
-  const pending = state.conditions.filter(c => visible(c) && !inABracket.has(c.id));
 
   const patch = (next: Condition) => onChange(setCondition(state, next));
   const remove = (id: string) => onChange(dropCondition(state, id));
@@ -362,7 +363,7 @@ export function FilterConditions({ state, onChange, fields, hint, addLabel }: {
 
   return (
     <div className="flex flex-col" style={{ padding: '2px 10px 0' }}>
-      {!blocks.length && !pending.length && (
+      {!blocks.length && (
         <span className="py-1 text-[11px] leading-snug block"
               style={{ color: 'var(--color-text-muted)' }}>
           {hint}
@@ -428,12 +429,6 @@ export function FilterConditions({ state, onChange, fields, hint, addLabel }: {
           </div>
         );
       })}
-
-      {pending.map(c => (
-        <div key={c.id} style={{ ...blockStyle(false), marginTop: blocks.length ? 6 : 0 }}>
-          <ConditionRow c={c} onChange={patch} onRemove={() => remove(c.id)} />
-        </div>
-      ))}
 
       <div className="pt-2">
         <AddCondition

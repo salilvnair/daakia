@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   EMPTY, activeCount, bracket, chipsOf, describeBrackets, describeCondition, dropField,
+  groupRows,
   except, formatQuery, isEmpty, isUsable, newCondition, only, parseQuery, statusBucket,
   toggleValue,
   type Condition, type FilterState,
@@ -90,6 +91,21 @@ describe('bracketing conditions', () => {
 
   it('ignores an or on the very first row, which has no gap above it', () => {
     expect(describeBrackets(rows('or', undefined))).toBe('1 and 2');
+  });
+
+  it('groupRows keeps unfinished rows, because the panel has to draw them', () => {
+    /*
+      `bracket` answers "what is running" and drops them; the panel asks "what
+      has been built". Drawing with the matching version left a fresh row
+      outside any block — and so without the block's `+ or` button, at exactly
+      the moment somebody wants it.
+    */
+    const cs = [
+      cond({ id: 'a', field: 'body', key: 'text', op: 'contains', value: '' }),
+      cond({ id: 'b', field: 'body', key: 'text', op: 'contains', value: '', join: 'or' }),
+    ];
+    expect(bracket(cs)).toEqual([]);
+    expect(groupRows(cs).map(g => g.map(c => c.id))).toEqual([['a', 'b']]);
   });
 
   it('drops a half-typed row without splitting the bracket around it', () => {
