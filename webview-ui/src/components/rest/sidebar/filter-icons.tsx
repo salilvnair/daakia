@@ -80,6 +80,8 @@ const SAVED_LOOK: Record<string, { tone: string; icon: React.ReactNode }> = {
 };
 
 const HAS_LOOK: Record<string, { tone: string; icon: React.ReactNode }> = {
+  reqheaders: { tone: 'var(--color-filter-field)', icon: <RowsIcon size={SIZE} color="currentColor" /> },
+  resheaders: { tone: 'var(--color-success)', icon: <RowsIcon size={SIZE} color="currentColor" /> },
   body: { tone: 'var(--color-filter-value)', icon: <FileTextIcon size={SIZE} color="currentColor" /> },
   json: { tone: 'var(--color-filter-field)', icon: <BracesIcon size={SIZE} color="currentColor" /> },
   prescript: { tone: 'var(--color-protocol-ai)', icon: <TerminalIcon size={SIZE} color="currentColor" /> },

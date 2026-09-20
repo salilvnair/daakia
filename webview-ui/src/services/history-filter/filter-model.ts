@@ -101,24 +101,6 @@ export const NULLARY: ReadonlySet<Operator> = new Set<Operator>(['present', 'abs
 export interface Condition {
   /** Stable across edits, so React rows keep their identity while you type. */
   id: string;
-  /**
-   * How this row joins the one above it.
-   *
-   * The join describes the *gap above* the row that carries it, which is where
-   * the control sits on screen. `or` puts this row in the same bracket as the
-   * one above; anything else, including the default, starts a new bracket. So
-   * three rows where only the second says `or` read `(1 or 2) and 3` — the
-   * first row's join is never consulted, because there is no gap above it.
-   *
-   * ── Why not a group id ──
-   *
-   * A `group: number` on each row can be made inconsistent — two rows claiming
-   * group 2 with a group 1 between them is a state the UI would have to
-   * prevent and the parser would have to repair. A join describes a gap, and a
-   * list of gaps cannot be malformed however the rows are added, removed or
-   * reordered.
-   */
-  join?: 'and' | 'or';
   field: ConditionField;
   /**
    * Which one — a header name, a JSONPath, `pre`/`post`/`any` for scripts.
@@ -168,135 +150,101 @@ export function isUsable(c: Condition): boolean {
   return c.key.trim() !== '';
 }
 
-/**
- * The rows, bracketed.
- *
- * Within a bracket the rows are OR; brackets are AND — the same rule the facets
- * already use, said the same way ("two ticks in one list mean either, two lists
- * mean both"). One convention for the whole panel is worth more than a more
- * expressive one nobody can predict.
- *
- * Unusable rows are dropped *before* bracketing, so a half-typed row in the
- * middle of an OR bracket does not split it in two and quietly change what the
- * finished rows mean.
- */
-export function bracket(conditions: readonly Condition[]): Condition[][] {
-  return groupRows(conditions.filter(isUsable));
-}
+// ── Groups ──────────────────────────────────────────────────────────────────
 
 /**
- * The same grouping, but keeping the rows that are not finished yet.
+ * A box of rows that share one operator.
  *
- * ── Why the panel needs its own version ──
+ * ── Why the model has two levels, and why one was not enough ──
  *
- * `bracket` answers "what is running", so it drops rows with nothing typed in
- * them. The panel asks a different question — "what has the reader built" —
- * and a brand-new row has been built even though it matches nothing yet.
+ * The first design stored a join on each row and derived the structure from the
+ * sequence of joins. That is a *flat* model: a list of OR-brackets, ANDed. It
+ * can say `A and (B or C)`. It cannot say `(A and B) or C`, because an OR
+ * between an AND-group and anything else is a nesting, and there was no nesting
+ * to hold it.
  *
- * Using the matching version to draw with had a nasty consequence: a fresh row
- * was in no bracket, so it was drawn without the bracket's chrome, so the
- * `+ or` button that lives on a bracket was not there. The one moment you most
- * want to say "...or this" — right after adding the row you are about to say
- * it about — was the one moment the control was missing.
+ * The panel, meanwhile, drew boxes — and boxes imply exactly that nesting. So
+ * an ALL OF box with an `OR` above an ANY OF box *looked* like `(A and B) or
+ * (C or D)` and actually evaluated as `A and (B or C or D)`. The picture and
+ * the meaning had come apart, and the giveaway was that flipping the operator
+ * between two boxes collapsed one into the other — the model was re-deriving
+ * boxes it could not really represent.
+ *
+ * Two levels fix it and stop there. Rows combine inside a group with the
+ * group's operator; groups combine with each other using `groupOp`. That is
+ * unambiguous with no precedence rules to learn, it is exactly the shape the
+ * panel already drew, and it covers every arrangement anybody has asked for.
+ * Arbitrary nesting would buy expressions nobody can read off a sidebar.
  */
-export function groupRows(conditions: readonly Condition[]): Condition[][] {
-  const groups: Condition[][] = [];
-  for (const c of conditions) {
-    if (c.join === 'or' && groups.length > 0) groups[groups.length - 1].push(c);
-    else groups.push([c]);
-  }
-  return groups;
-}
-
-/**
- * A run of adjacent rows that share one join — what the panel draws as a box.
- *
- * ── Why this is not the same as a bracket ──
- *
- * `groupRows` answers "which rows are ORed together", because that is what
- * changes the meaning. A run answers "which rows can share a box and a
- * heading", which is a presentation question with a different answer: three
- * rows joined by `and` are three separate brackets but one run, and drawing
- * them as one **ALL OF** box says what they do far better than three unlabelled
- * boxes stacked with rules between them.
- *
- * `join` is how this run's own rows attach to each other, which is what the
- * heading says. How the run attaches to the one above it is a different thing
- * and is simply `rows[0].join` — a run whose first row says `and` and whose
- * second says `or` is an ANY OF box that is ANDed onto what precedes it.
- * Storing one field for both would have quietly overwritten the attachment
- * with the internal join.
- */
-export interface ConditionRun {
-  /** `or` for an ANY OF box, `and` for an ALL OF box. */
-  join: 'and' | 'or';
+export interface ConditionGroup {
+  /** Stable across edits, so React boxes keep their identity. */
+  id: string;
+  /** How the rows inside this box combine. */
+  op: 'and' | 'or';
   rows: Condition[];
 }
 
-/** How a run attaches to the run above it. Meaningless for the first run. */
-export function joinAbove(run: ConditionRun): 'and' | 'or' {
-  return run.rows[0].join === 'or' ? 'or' : 'and';
-}
+let nextGroupId = 0;
 
-/**
- * Group rows into runs for display.
- *
- * The first row has no gap above it, so it cannot state a join; its run takes
- * the join of whichever row joins it, and `and` when it stands alone.
- */
-export function buildRuns(conditions: readonly Condition[]): ConditionRun[] {
-  const runs: ConditionRun[] = [];
-  for (const c of conditions) {
-    const join: 'and' | 'or' = c.join === 'or' ? 'or' : 'and';
-    const current = runs[runs.length - 1];
-    if (!current) { runs.push({ join, rows: [c] }); continue; }
-    /* A run of one has not committed to a join yet, so the second row decides
-       it rather than being pushed into a run of its own. */
-    if (current.rows.length === 1 || current.join === join) {
-      current.join = join;
-      current.rows.push(c);
-    } else {
-      runs.push({ join, rows: [c] });
-    }
-  }
-  return runs;
-}
-
-/** How a bracketed filter reads out loud: `(1 or 2) and 3`. */
-export function describeBrackets(conditions: readonly Condition[]): string {
-  const groups = bracket(conditions);
-  if (!groups.length) return '';
-  let n = 0;
-  return groups
-    .map(g => {
-      const nums = g.map(() => `${++n}`);
-      return nums.length > 1 ? `(${nums.join(' or ')})` : nums[0];
-    })
-    .join(' and ');
+export function newGroup(rows: Condition[] = [], op: 'and' | 'or' = 'or'): ConditionGroup {
+  return { id: `g${++nextGroupId}`, op, rows };
 }
 
 // ── The whole state ─────────────────────────────────────────────────────────
 
 export interface FilterState {
   terms: Term[];
-  conditions: Condition[];
+  groups: ConditionGroup[];
+  /** How the groups combine with each other. */
+  groupOp: 'and' | 'or';
   /** The free-text box. Searches method, URL, and both bodies. */
   text: string;
 }
 
-export const EMPTY: FilterState = { terms: [], conditions: [], text: '' };
+export const EMPTY: FilterState = { terms: [], groups: [], groupOp: 'and', text: '' };
+
+/** Every row in the filter, in reading order. */
+export function allRows(state: FilterState): Condition[] {
+  return state.groups.flatMap(g => g.rows);
+}
+
+/**
+ * The groups that actually constrain anything.
+ *
+ * A group whose rows are all half-typed matches nothing yet, so it is dropped
+ * rather than counted — which matters most under `groupOp: 'or'`, where an
+ * empty group left in would be an alternative that is trivially satisfied and
+ * would quietly match the whole table.
+ */
+export function liveGroups(state: FilterState): { op: 'and' | 'or'; rows: Condition[] }[] {
+  return state.groups
+    .map(g => ({ op: g.op, rows: g.rows.filter(isUsable) }))
+    .filter(g => g.rows.length > 0);
+}
 
 export function isEmpty(state: FilterState): boolean {
   return state.terms.length === 0
-    && !state.conditions.some(isUsable)
+    && liveGroups(state).length === 0
     && state.text.trim() === '';
 }
 
 /** How many things a reader would say are switched on — the badge on the icon. */
 export function activeCount(state: FilterState): number {
   return state.terms.length
-    + state.conditions.filter(isUsable).length
+    + liveGroups(state).reduce((n, g) => n + g.rows.length, 0)
     + (state.text.trim() ? 1 : 0);
+}
+
+/** How the filter reads out loud: `(1 and 2) or (3 or 4)`. */
+export function describeStructure(state: FilterState): string {
+  const groups = liveGroups(state);
+  if (!groups.length) return '';
+  let n = 0;
+  const parts = groups.map(g => {
+    const nums = g.rows.map(() => `${++n}`);
+    return nums.length > 1 ? `(${nums.join(` ${g.op} `)})` : nums[0];
+  });
+  return parts.join(` ${state.groupOp} `);
 }
 
 // ── Changing it ─────────────────────────────────────────────────────────────
@@ -341,15 +289,52 @@ export function dropField(state: FilterState, field: TermField): FilterState {
 }
 
 export function setCondition(state: FilterState, next: Condition): FilterState {
-  return { ...state, conditions: state.conditions.map(c => (c.id === next.id ? next : c)) };
+  return {
+    ...state,
+    groups: state.groups.map(g => ({
+      ...g,
+      rows: g.rows.map(c => (c.id === next.id ? next : c)),
+    })),
+  };
 }
 
+/** A new row in a box of its own — what the main add button makes. */
 export function addCondition(state: FilterState, field?: ConditionField): FilterState {
-  return { ...state, conditions: [...state.conditions, newCondition(field)] };
+  return { ...state, groups: [...state.groups, newGroup([newCondition(field)])] };
 }
 
+/** A new row inside an existing box, beside the ones already there. */
+export function addToGroup(
+  state: FilterState, groupId: string, field?: ConditionField, op?: 'and' | 'or',
+): FilterState {
+  return {
+    ...state,
+    groups: state.groups.map(g => (g.id === groupId
+      ? { ...g, op: op ?? g.op, rows: [...g.rows, newCondition(field)] }
+      : g)),
+  };
+}
+
+export function setGroupOp(state: FilterState, groupId: string, op: 'and' | 'or'): FilterState {
+  return {
+    ...state,
+    groups: state.groups.map(g => (g.id === groupId ? { ...g, op } : g)),
+  };
+}
+
+/**
+ * Remove one row, and the box with it if that was the last one in it.
+ *
+ * An empty box left behind is a control that constrains nothing and cannot be
+ * got rid of — the bin is on the rows, not on the box.
+ */
 export function dropCondition(state: FilterState, id: string): FilterState {
-  return { ...state, conditions: state.conditions.filter(c => c.id !== id) };
+  return {
+    ...state,
+    groups: state.groups
+      .map(g => ({ ...g, rows: g.rows.filter(c => c.id !== id) }))
+      .filter(g => g.rows.length > 0),
+  };
 }
 
 function low(s: string) { return s.trim().toLowerCase(); }
@@ -372,11 +357,15 @@ export function formatQuery(state: FilterState): string {
   for (const t of state.terms) {
     parts.push(`${t.negated ? '-' : ''}${t.field}:${t.values.join(',')}`);
   }
-  /* A bracket of OR'd rows is one token joined by `|`; brackets are separate
-     tokens, which the parser already ANDs. The string therefore says exactly
-     what the panel draws. */
-  for (const group of bracket(state.conditions)) {
-    parts.push(group.map(oneCondition).join('|'));
+  /*
+    One token per box, its rows joined by the box's operator — `|` for or, `&`
+    for and. Boxes are separate tokens, which the parser ANDs by default; a
+    filter whose boxes are ORed says so with a leading `match:any`, because the
+    default has to stay the one nobody has to write down.
+  */
+  if (state.groupOp === 'or' && liveGroups(state).length > 1) parts.push('match:any');
+  for (const group of liveGroups(state)) {
+    parts.push(group.rows.map(oneCondition).join(group.op === 'or' ? '|' : '&'));
   }
   const text = state.text.trim();
   if (text) parts.push(/\s/.test(text) ? `"${text}"` : text);
@@ -395,9 +384,9 @@ function oneCondition(c: Condition): string {
 }
 
 function quote(v: string): string {
-  /* `|` joins a bracket, so a value holding one has to be quoted or the string
-     would split a single condition into two. */
-  if (!/[\s"\\|]/.test(v)) return v;
+  /* `|` and `&` join the rows of a box, so a value holding either has to be
+     quoted or the string would split one condition into two. */
+  if (!/[\s"\\|&]/.test(v)) return v;
   return `"${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
@@ -415,30 +404,32 @@ function unquote(v: string): string {
  */
 export function parseQuery(input: string): FilterState {
   const terms: Term[] = [];
-  const conditions: Condition[] = [];
+  const groups: ConditionGroup[] = [];
   const words: string[] = [];
+  let groupOp: 'and' | 'or' = 'and';
 
   for (const token of tokenise(input)) {
-    const members = splitOr(token);
-    /*
-      A token is a bracket when it has more than one member. Every member after
-      the first carries `join: 'or'`, which is what puts them back into one
-      bracket when the panel re-draws them.
-    */
+    if (token === 'match:any') { groupOp = 'or'; continue; }
+    if (token === 'match:all') { groupOp = 'and'; continue; }
+
+    /* Which separator a token uses tells us the box's operator. A token with
+       neither is a box of one, whose operator is unobservable — `or`, so that
+       the box's add button offers the alternative people reach for most. */
+    const op: 'and' | 'or' = splitMembers(token, '&').length > 1 ? 'and' : 'or';
+    const members = splitMembers(token, op === 'and' ? '&' : '|');
+
     const parsedMembers = members.map(parseToken);
     if (members.length > 1 && parsedMembers.every(m => m && 'op' in m)) {
-      parsedMembers.forEach((m, i) => {
-        conditions.push(i === 0 ? (m as Condition) : { ...(m as Condition), join: 'or' });
-      });
+      groups.push(newGroup(parsedMembers as Condition[], op));
       continue;
     }
     const parsed = members.length === 1 ? parsedMembers[0] : undefined;
     if (!parsed) { words.push(unquote(token)); continue; }
-    if ('op' in parsed) conditions.push(parsed);
+    if ('op' in parsed) groups.push(newGroup([parsed], 'or'));
     else terms.push(parsed);
   }
 
-  return { terms, conditions, text: words.join(' ') };
+  return { terms, groups, groupOp, text: words.join(' ') };
 }
 
 function parseToken(token: string): Term | Condition | undefined {
@@ -486,13 +477,14 @@ function isOperator(s: string): s is Operator {
 }
 
 /**
- * Split a token on the `|` that joins a bracket, ignoring any inside quotes.
+ * Split a token on the separator that joins a box's rows, ignoring any inside
+ * quotes.
  *
  * Written as a scan rather than a regex because the thing being skipped is a
  * quoted span with escapes in it, and a regex that got that subtly wrong would
  * fail on exactly the values people quote: the ones with punctuation.
  */
-function splitOr(token: string): string[] {
+function splitMembers(token: string, sep: string): string[] {
   const out: string[] = [];
   let current = '';
   let inQuotes = false;
@@ -500,7 +492,7 @@ function splitOr(token: string): string[] {
     const ch = token[i];
     if (inQuotes && ch === '\\' && i + 1 < token.length) { current += ch + token[++i]; continue; }
     if (ch === '"') { inQuotes = !inQuotes; current += ch; continue; }
-    if (ch === '|' && !inQuotes) { out.push(current); current = ''; continue; }
+    if (ch === sep && !inQuotes) { out.push(current); current = ''; continue; }
     current += ch;
   }
   out.push(current);
@@ -606,6 +598,8 @@ function valueWord(v: string): string {
 }
 
 export const HAS_LABELS: Record<string, string> = {
+  reqheaders: 'request headers',
+  resheaders: 'response headers',
   body: 'a body',
   json: 'a JSON body',
   prescript: 'a pre-request script',
@@ -619,7 +613,7 @@ export const HAS_LABELS: Record<string, string> = {
 export function chipsOf(state: FilterState): (ChipParts & { kind: 'term'; field: TermField } | ChipParts & { kind: 'condition'; id: string })[] {
   return [
     ...state.terms.map(t => ({ ...describeTerm(t), kind: 'term' as const, field: t.field })),
-    ...state.conditions.filter(isUsable)
+    ...allRows(state).filter(isUsable)
       .map(c => ({ ...describeCondition(c), kind: 'condition' as const, id: c.id })),
   ];
 }
@@ -647,7 +641,8 @@ export const STATUS_VALUES = ['2xx', '3xx', '4xx', '5xx', 'error'] as const;
 
 export const WHEN_VALUES = ['today', 'week', 'month', '>30d'] as const;
 
-export const HAS_VALUES = ['body', 'json', 'prescript', 'postscript', 'secret', 'response'] as const;
+export const HAS_VALUES =
+  ['reqheaders', 'resheaders', 'body', 'json', 'prescript', 'postscript', 'secret', 'response'] as const;
 
 // ── Re-exported so callers need one import ──────────────────────────────────
 

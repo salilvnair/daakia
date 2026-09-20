@@ -21,7 +21,7 @@
  */
 import {
   type Condition, type FilterState, type Operator, type Term, type TermField,
-  NULLARY, bracket, statusBucket, withinRange,
+  NULLARY, liveGroups, statusBucket, withinRange,
 } from './filter-model';
 import { factsOf, type HistoryFacts, type HistoryRowLike, type HeaderPair } from './history-facts';
 import { parsePath, queryPath, asText } from './json-path';
@@ -51,6 +51,8 @@ export function valuesOf(f: HistoryFacts, field: TermField, ctx: MatchContext): 
     case 'ids': return [String(f.id)];
     case 'has': {
       const out: string[] = [];
+      if (f.headers.length) out.push('reqheaders');
+      if (f.responseHeaders.length) out.push('resheaders');
       if (f.body.trim()) out.push('body');
       if (f.bodyJson !== undefined) out.push('json');
       if (f.preScript.trim()) out.push('prescript');
@@ -224,17 +226,25 @@ export function matchesFacts(f: HistoryFacts, state: FilterState, ctx: MatchCont
   for (const term of state.terms) if (!matchesTerm(f, term, ctx)) return false;
 
   /*
-    Brackets are ANDed; the rows inside one are ORed.
+    Rows combine inside a box with the box's operator; boxes combine with each
+    other using `groupOp`.
 
-    Sorting happens inside each bracket rather than across all of them, because
-    the cost ordering is an optimisation and moving a row between brackets
-    would change the answer. Within a bracket the cheap rows run first for the
-    same reason they do everywhere else: an OR that is satisfied by a header
-    never opens a response body.
+    Sorting happens inside a box rather than across all of them, because the
+    cost ordering is an optimisation and moving a row between boxes would
+    change the answer. Within a box the cheap rows run first for the same
+    reason they do everywhere else — an `or` satisfied by a header never opens
+    a response body, and an `and` that fails on one never opens it either.
   */
-  for (const group of bracket(state.conditions)) {
-    const ordered = [...group].sort(byCost);
-    if (!ordered.some(c => matchesCondition(f, c))) return false;
+  const groups = liveGroups(state);
+  if (groups.length) {
+    const hit = (g: { op: 'and' | 'or'; rows: Condition[] }) => {
+      const ordered = [...g.rows].sort(byCost);
+      return g.op === 'and'
+        ? ordered.every(c => matchesCondition(f, c))
+        : ordered.some(c => matchesCondition(f, c));
+    };
+    const ok = state.groupOp === 'and' ? groups.every(hit) : groups.some(hit);
+    if (!ok) return false;
   }
   return matchesText(f, state.text);
 }

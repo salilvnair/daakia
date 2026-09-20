@@ -145,7 +145,8 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
     setSearch('');
     setFilter({
       terms: [{ field: 'ids', values: rowIds.map(String) }],
-      conditions: [],
+      groups: [],
+      groupOp: 'and',
       text: '',
     });
   };

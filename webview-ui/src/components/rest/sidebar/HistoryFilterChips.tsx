@@ -67,7 +67,7 @@ export function HistoryFilterChips({ state, onChange }: {
           type="button"
           className="text-[10px] px-1 border-none bg-transparent cursor-pointer"
           style={{ color: 'var(--color-text-muted)' }}
-          onClick={() => onChange({ terms: [], conditions: [], text: state.text })}
+          onClick={() => onChange({ ...state, terms: [], groups: [] })}
         >
           clear all
         </button>

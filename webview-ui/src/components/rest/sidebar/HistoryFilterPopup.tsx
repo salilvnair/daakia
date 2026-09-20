@@ -46,7 +46,7 @@ import {
 } from '../../../services/history-filter/ai-suggest';
 import {
   HAS_LABELS, HAS_VALUES, STATUS_VALUES, WHEN_VALUES,
-  activeCount, describeBrackets, except, formatQuery, isEmpty, isUsable, only,
+  activeCount, allRows, describeStructure, except, formatQuery, isEmpty, isUsable, only,
   prettyPhrase, toggleValue,
   type ConditionField, type FilterState, type TermField,
 } from '../../../services/history-filter/filter-model';
@@ -126,7 +126,7 @@ const TAB_FACETS: Record<TabId, {
     { field: 'when', label: 'Sent', fixed: WHEN_VALUES },
     { field: 'protocol', label: 'Protocol' },
   ],
-  headers: [],
+  headers: [{ field: 'has', label: 'Has', fixed: ['reqheaders', 'resheaders', 'secret'] }],
   body: [{ field: 'has', label: 'Has', fixed: ['body', 'json'] }],
   auth: [
     { field: 'auth', label: 'Auth type' },
@@ -367,10 +367,10 @@ export function HistoryFilterBody({ rows, state, onChange, ctx, matched }: Histo
   );
 
   const fields = TAB_FIELDS[tab];
-  const shown = state.conditions.filter(c => fields.includes(c.field));
+  const shown = allRows(state).filter(c => fields.includes(c.field));
   /* The bracket sentence is about every row, not the ones this tab shows, so a
      tab that hides one does not misreport what the filter means. */
-  const brackets = describeBrackets(state.conditions);
+  const brackets = describeStructure(state);
   const query = formatQuery(state);
 
   const copy = () => {
@@ -388,7 +388,7 @@ export function HistoryFilterBody({ rows, state, onChange, ctx, matched }: Histo
           /* A tab with something switched on inside it says so, because the
              one thing a tabbed filter must never do is hide a filter that is
              running. */
-          const live = state.conditions.filter(c =>
+          const live = allRows(state).filter(c =>
             TAB_OWNS[t.id].includes(c.field) && isUsable(c)).length
             + state.terms.filter(term =>
               TAB_FACETS[t.id].some(f => f.field === term.field)).length;
@@ -680,15 +680,18 @@ export function HistoryFilterPopup({
           It is still only drawn when there is something to clear: a permanent
           Clear on an untouched filter reads as a thing you have forgotten to
           do.
+
+          It is bare, and lit the way the close button is: `dui_modal__close-btn`
+          stays muted until hovered and then takes the red tint and the small
+          press. A boxed button beside a bare one read as two different kinds
+          of control, when both are just "undo what is on screen".
         */}
         {!isEmpty(props.state) && (
-          <button type="button" onClick={() => props.onChange({ terms: [], conditions: [], text: props.state.text })}
+          <button type="button" onClick={() => props.onChange({ ...props.state, terms: [], groups: [] })}
                   title="Remove every condition"
-                  className="flex items-center gap-1 text-[10px] cursor-pointer px-1.5 rounded"
+                  className="dui_modal__close-btn flex items-center gap-1 text-[10px] cursor-pointer px-1.5 rounded"
                   style={{ color: 'var(--color-error)', fontWeight: 600,
-                           lineHeight: '16px',
-                           border: '1px solid color-mix(in srgb, var(--color-error) 35%, transparent)',
-                           background: 'color-mix(in srgb, var(--color-error) 9%, transparent)' }}>
+                           lineHeight: '18px', border: 'none', background: 'transparent' }}>
             <FilterOffIcon size={10} color="currentColor" />
             Clear
           </button>
@@ -708,7 +711,7 @@ export function HistoryFilterPopup({
                 className="dui_modal__close-btn"
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center',
                          width: 22, height: 22, borderRadius: 5, border: 'none',
-                         background: 'transparent', cursor: 'pointer', fontSize: 15,
+                         background: 'transparent', cursor: 'pointer', fontSize: 12,
                          lineHeight: 1, fontWeight: 400, padding: 0 }}>
           ✕
         </button>

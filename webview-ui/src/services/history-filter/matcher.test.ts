@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  EMPTY, HAS_VALUES, STATUS_VALUES, WHEN_VALUES, newCondition, parseQuery,
+  EMPTY, HAS_VALUES, STATUS_VALUES, WHEN_VALUES, newCondition, newGroup, parseQuery,
   type Condition, type FilterState,
 } from './filter-model';
 import { applyFilter, buildFacet, contextOf, matchesRow } from './matcher';
@@ -30,8 +30,18 @@ function cond(patch: Partial<Condition>): Condition {
   return { ...newCondition(), ...patch };
 }
 
-function state(patch: Partial<FilterState>): FilterState {
-  return { ...EMPTY, ...patch };
+/*
+  `conditions` is a convenience for the many tests that just want a handful of
+  ANDed rows: each becomes its own box, which is what a list of separate
+  conditions means. Tests about boxes build `groups` directly.
+*/
+function state(patch: Partial<FilterState> & { conditions?: Condition[] }): FilterState {
+  const { conditions, ...rest } = patch;
+  return {
+    ...EMPTY,
+    ...(conditions ? { groups: conditions.map(c => newGroup([c], 'or')) } : {}),
+    ...rest,
+  };
 }
 
 const ctx = contextOf(undefined, NOW);
@@ -204,11 +214,10 @@ describe('conditions', () => {
       `(body contains alpha or body contains beta) and method POST` — the shape
       the user asked for, checked against all four combinations.
     */
-    const or = (v: string, join?: 'or') =>
-      cond({ field: 'body', key: 'text', op: 'contains', value: v, join });
+    const or = (v: string) => cond({ field: 'body', key: 'text', op: 'contains', value: v });
     const s = state({
       terms: [{ field: 'method', values: ['post'] }],
-      conditions: [or('alpha'), or('beta', 'or')],
+      groups: [newGroup([or('alpha'), or('beta')], 'or')],
     });
     expect(matchesRow(row({ method: 'POST', request: { body: 'alpha' } }), s, ctx)).toBe(true);
     expect(matchesRow(row({ method: 'POST', request: { body: 'beta' } }), s, ctx)).toBe(true);
