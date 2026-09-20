@@ -559,23 +559,30 @@ export function HistoryFilterPopup({
     };
   }, [anchorRef]);
 
-  /* The trigger counts as inside: it has its own toggle, and letting this see
-     that click as an outside one makes the two fight on the same press. */
-  useEffect(() => {
-    const away = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (box.current?.contains(t) || anchorRef.current?.contains(t)) return;
-      onClose();
-    };
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('mousedown', away);
-    document.addEventListener('keydown', key);
-    return () => {
-      document.removeEventListener('mousedown', away);
-      document.removeEventListener('keydown', key);
-    };
-  }, [onClose, anchorRef]);
+  /*
+    ── Why this panel has no click-away and no Escape ──
 
+    It had both, and both were wrong here.
+
+    **Click-away closed it from inside itself.** Every menu this panel opens —
+    the operator select, the add-a-condition picker — is portalled to
+    `document.body`, because that is the only way a menu escapes an ancestor's
+    `overflow`. So picking `contains` from a dropdown was, to a handler asking
+    "is the click inside my box", a click somewhere else entirely: the panel
+    closed under the menu the reader had just opened. Enumerating dui's portals
+    and forgiving each one would work until the next component portals
+    something new, and the failure mode is this one again.
+
+    **Escape closed it twice.** dui's select already closes on Escape. With a
+    listener here too, one press dismissed the dropdown *and* the panel behind
+    it, which is the same complaint in a different key.
+
+    So the panel closes two ways, both of them deliberate: the X, and the
+    funnel that opened it. Neither can fire by accident, and a filter you are
+    halfway through building cannot be lost to a stray click — which matters
+    more here than the usual dismissal conventions, because what is on screen
+    is unsaved work rather than a menu of verbs.
+  */
   if (!at) return null;
 
   return createPortal(
