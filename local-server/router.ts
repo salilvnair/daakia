@@ -154,9 +154,16 @@ import {
 } from '../src/panel/main/handlers/terminal-handler';
 
 export type PostMessage = (msg: unknown) => void;
+import { historyCap } from '../src/services/history-cap';
 
+/**
+ * Everything the cap allows — see `MainPanel._sendHistory` for why.
+ *
+ * The shim's `getConfiguration` returns the caller's default, so `historyCap()`
+ * gives both builds the same answer from the same stored setting.
+ */
 function sendHistory(post: PostMessage, protocol?: string) {
-  const entries = getHistory(100, 0, protocol);
+  const entries = getHistory(historyCap(), 0, protocol);
   post({ type: 'historyData', entries, protocol: protocol || 'rest' });
 }
 

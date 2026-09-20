@@ -32,6 +32,15 @@ interface BulkSaveItem {
   id: number;
   method: string;
   url: string;
+  /**
+   * A name the caller has already proposed, used instead of the URL heuristic.
+   *
+   * History's save suggestion shows a name on its card before you press the
+   * button — one derived from the path, or one the Request Namer wrote. Saving
+   * under a different name than the card displayed would make the card a
+   * decoration.
+   */
+  name?: string;
   request_data?: string;
   status?: number;
   status_text?: string;
@@ -365,7 +374,7 @@ export function SaveRequestModal({ open, tab, onClose, bulkItems, bulkProtocol }
           protocol,
           request: {
             id: crypto.randomUUID(),
-            name: nameFromUrl(item.method, item.url),
+            name: item.name?.trim() || nameFromUrl(item.method, item.url),
             method: item.method,
             url: item.url,
             data: JSON.stringify(buildSaveDataFromHistoryItem(item, protocol)),

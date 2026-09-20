@@ -23,6 +23,7 @@ import {
 } from './script-vars';
 import { runPhase, debugFor } from './script-phase';
 import { afterScript } from '../../../services/template/after-script';
+import { historyCap } from '../../../services/history-cap';
 
 type PostMessage = (msg: unknown) => void;
 type RefreshFn = () => void;
@@ -435,12 +436,16 @@ export async function handleExecuteRequest(
         : undefined,
     });
 
-    // Trim history to configured max entries. Global-only — history is one
-    // shared table, so a per-request cap on it would not mean anything.
-    const maxEntries = ((getSetting<Record<string, unknown>>('general') ?? {}).maxHistoryEntries as number)
-      || vscode.workspace.getConfiguration('daakia').get<number>('maxHistoryEntries', 500)
-      || 500;
-    trimHistory(maxEntries);
+    /*
+      Trim history to the configured cap. Global-only — history is one shared
+      table, so a per-request cap on it would not mean anything.
+
+      The number is two thousand, raised from five hundred when History became
+      searchable: a cap is a trade between what the table costs and what it can
+      answer, and the filter moved that line. `historyCap()` is where it lives,
+      because the other eleven trim sites used to disagree with this one.
+    */
+    trimHistory(historyCap());
 
     // Push updated history to webview
     refreshHistory();
@@ -493,7 +498,7 @@ export async function handleExecuteRequest(
           postResponseScript: msg.postResponseScript,
         }),
       });
-      trimHistory(500);
+      trimHistory(historyCap());
       refreshHistory();
     } catch { /* ignore history errors */ }
   }

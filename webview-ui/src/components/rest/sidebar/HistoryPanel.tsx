@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { TagChips } from '../../shared/tags/TagChips';
 import { tagsFromData } from '../../shared/tags/request-tags';
 import { postMsg } from '../../../vscode';
@@ -17,6 +17,14 @@ import { AiDocGeneratorModal } from '../../ai/AiDocGeneratorModal';
 import { METHOD_COLORS, getProtocolAccent } from '../../../colors';
 import { MoreVerticalIcon, ClockIcon, ChevronRightIcon, ExternalLinkIcon, PlusSquareIcon, DownloadIcon, TrashIcon, SaveIcon, ExpandAllIcon, CollapseAllIcon, DocumentIcon, ServerIcon, SearchIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge } from '../../../icons';
 import { logUiEvent } from '../../../store/ui-audit-store';
+import { FilterIcon } from '../../../icons';
+import { useEnvStore } from '../../../store/env-store';
+import { EMPTY, activeCount } from '../../../services/history-filter/filter-model';
+import { applyFilter, contextOf } from '../../../services/history-filter/matcher';
+import { buildSavedIndex } from '../../../services/history-filter/saved-index';
+import { HistoryFilterPopup } from './HistoryFilterPopup';
+import { HistoryFilterChips } from './HistoryFilterChips';
+import { HistorySaveSuggestions } from './HistorySaveSuggestions';
 
 /** Long provider/endpoint URLs (e.g. AI base URLs) read poorly at full length in a narrow sidebar row. */
 function trimUrl(url: string, max = 42): string {
@@ -75,6 +83,15 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
   const setStoreHistory = useSidebarDataStore(s => s.setHistory);
   const [history, setHistory] = useState<HistoryItem[]>(cachedHistory as HistoryItem[]);
   const [search, setSearch] = useState('');
+  /*
+    The facets and conditions. The text box stays its own piece of state
+    because it is typed into constantly and the filter is not — folding them
+    into one object would re-run the facet counting on every keystroke in a box
+    that the counts do not depend on.
+  */
+  const [filter, setFilter] = useState(EMPTY);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterButton = useRef<HTMLButtonElement>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -278,19 +295,43 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
     setCollapsedSubGroups(new Set(allSubKeys));
   };
 
-  const filtered = useMemo(() =>
-    history.filter((h) =>
-      h.url.toLowerCase().includes(search.toLowerCase()) ||
-      h.method.toLowerCase().includes(search.toLowerCase())
-    ), [history, search]);
+  /*
+    Which history rows are already in a collection.
 
-  // Auto-expand all groups when searching, restore collapsed state when cleared
+    Rebuilt when the collections or the environment change, because both move
+    the answer: saving a request adds a key, and switching environment changes
+    what `{{baseUrl}}` resolves to and therefore which history rows that saved
+    request covers.
+  */
+  const collections = useSidebarDataStore(s => s.getCollections(protocol as never));
+  const activeEnvId = useEnvStore(s => s.activeEnvId);
+  const resolveVariable = useEnvStore(s => s.resolveVariable);
+  const savedIndex = useMemo(
+    () => buildSavedIndex(collections as never, resolveVariable),
+    [collections, resolveVariable, activeEnvId],
+  );
+
+  /*
+    `now` is fixed per filter change rather than read inside the matcher, so
+    every row in one pass is measured against the same clock — otherwise a list
+    long enough to take a millisecond can put two rows sent in the same second
+    on opposite sides of "today".
+  */
+  const ctx = useMemo(() => contextOf(savedIndex, Date.now()), [savedIndex, filter]);
+
+  const filtered = useMemo(
+    () => applyFilter(history, { ...filter, text: search }, ctx),
+    [history, filter, search, ctx]);
+
+  // Auto-expand all groups when searching or filtering, restore when cleared.
+  // A filter that leaves three matches inside collapsed day-groups looks like
+  // a filter that found nothing.
   useEffect(() => {
-    if (search.trim()) {
+    if (search.trim() || activeCount(filter) > 0) {
       setCollapsedGroups(new Set());
       setCollapsedSubGroups(new Set());
     }
-  }, [search]);
+  }, [search, filter]);
 
   const groups = useMemo(() => buildGroups(filtered), [filtered]);
 
@@ -399,8 +440,40 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
         <span className="flex-shrink-0" style={{ color: getProtocolAccent(protocol as any) }}>
           <ProtocolHeaderIcon protocol={protocol} />
         </span>
-        <span>History</span>
+        <span className="flex-1">History</span>
+        {/*
+          The filter lives on the header rather than in the More menu: it is a
+          thing you switch on and then need to see is on, and a menu item can
+          only be one of those two.
+        */}
+        <button
+          ref={filterButton}
+          type="button"
+          onClick={() => setFilterOpen(o => !o)}
+          title="Filter history"
+          className="flex items-center gap-1 px-1 py-0.5 rounded cursor-pointer border-none bg-transparent"
+          style={{ color: activeCount(filter)
+            ? 'var(--color-accent, var(--color-primary))'
+            : 'var(--color-text-muted)' }}
+        >
+          <FilterIcon size={13} color="currentColor" />
+          {!!activeCount(filter) && (
+            <span className="text-[9px] tabular-nums">{activeCount(filter)}</span>
+          )}
+        </button>
       </div>
+
+      {filterOpen && (
+        <HistoryFilterPopup
+          rows={history}
+          state={{ ...filter, text: search }}
+          onChange={next => { setFilter({ ...next, text: '' }); setSearch(next.text); }}
+          ctx={ctx}
+          matched={filtered.length}
+          anchorRef={filterButton}
+          onClose={() => setFilterOpen(false)}
+        />
+      )}
 
       {/* Search */}
       <div className="px-3 py-2 border-b border-[var(--color-surface-border)]">
@@ -426,6 +499,21 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
           )}
         />
       </div>
+
+      <HistoryFilterChips
+        state={{ ...filter, text: search }}
+        onChange={next => { setFilter({ ...next, text: '' }); setSearch(next.text); }}
+      />
+
+      {/* Requests sent over and over and never saved — offered here rather
+          than as a toast, because this is where saving one happens. */}
+      <HistorySaveSuggestions
+        rows={history}
+        saved={savedIndex}
+        collections={collections as never}
+        resolve={resolveVariable}
+        protocol={protocol}
+      />
 
       {/* Actions row */}
       {history.length > 0 && (

@@ -166,6 +166,19 @@
   --color-var-pill-text: #c084fc;
   --color-var-pill-border: rgba(139, 92, 246, 0.38);
 
+  /*
+    Filter conditions — field → operator → value.
+
+    A condition row reads like one expression, so it is coloured like one: the
+    thing being looked at, the comparison, and the text to compare against.
+    Three grey pills in a row are unreadable at a glance, and a filter is read
+    at a glance or not at all. The operator deliberately borrows the variable
+    pill's purple, because it is the same "this is syntax, not content" role.
+  */
+  --color-filter-field: #7dd3fc;
+  --color-filter-op: var(--color-var-pill-text);
+  --color-filter-value: #fcd34d;
+
   /* Component — PromptCardView */
   --color-promptcard-avatar-bg: color-mix(in srgb, var(--color-protocol-ai) 20%, var(--color-surface));
   --color-promptcard-avatar-text: var(--color-protocol-ai);
@@ -428,6 +441,11 @@
   --color-var-pill-bg: rgba(124, 58, 237, 0.1);
   --color-var-pill-text: #6d28d9;
   --color-var-pill-border: rgba(124, 58, 237, 0.3);
+
+  /* Filter conditions — the same three roles, deep enough to read on white. */
+  --color-filter-field: #0369a1;
+  --color-filter-op: var(--color-var-pill-text);
+  --color-filter-value: #a16207;
 
   /* JSON TREE / DEBUGGER TOKEN COLORS — VS Code Light+ palette */
   --color-debug-key:     #0451a5;

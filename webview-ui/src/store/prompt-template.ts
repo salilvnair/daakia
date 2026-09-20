@@ -354,6 +354,9 @@ export type AiPromptTemplateKey =
   | 'platform.webhook.debugger.system'
   | 'platform.request.clustering'
   | 'platform.request.clustering.system'
+  // ── History Filter — a sentence turned into a filter ──
+  | 'history.filter.parse'
+  | 'history.filter.parse.system'
   // ── AI Enrich Captured Traffic ────────────────────────────────────────────
   | 'mock.traffic.enrich'
   | 'mock.traffic.enrich.system'
@@ -938,6 +941,10 @@ Rules:
     `You are a webhook debugging expert. Analyze webhook payloads, validate HMAC signatures, explain event structures, and help identify why webhooks fail. You understand common webhook patterns from Stripe, GitHub, Shopify, Twilio, and other major platforms. Be specific about signature validation steps and response handling.`,
   'platform.request.clustering':
     `Cluster these API requests into logical groups and suggest a collection structure:\n\nRequest history:\n{requests}\n\nGroup by:\n1. Resource domain (users, orders, products, payments, etc.)\n2. Authentication and initialization flows\n3. CRUD patterns (list/get/create/update/delete on the same resource)\n4. Microservice or API boundaries (different base URLs)\n5. Workflow sequences (requests that are always called together)\n\nFor each cluster: suggest a collection name, folder structure, and which requests belong. Output as JSON with collectionName, folders (name + requestIds), and ungrouped remainder.`,
+  'history.filter.parse':
+    `Turn this request into a Daakia history filter query.\n\nWhat the user typed: {question}\n\nMethods seen in this history: {methods}\nHeader names seen: {headers}\n\nGrammar:\n- Facets: method:get,post  status:2xx|3xx|4xx|5xx|error  protocol:rest  auth:bearer  saved:yes|no  when:today|week|month|>30d  has:body|json|prescript|postscript|script|secret|response\n- A leading "-" negates a facet: -status:2xx\n- Conditions: field:key:operator:value\n  - fields: header, resheader, body, resbody, json, resjson, script, authfield, url\n  - operators: present, absent, equals, contains, starts, regex\n  - key is a header name, a JSONPath, "any"/"pre"/"post" for scripts, or * for any\n  - quote a value containing spaces: body:text:contains:"currency": "INR"\n- Several tokens are ANDed. Several values in one facet are ORed.\n\nExamples:\n- "failing posts from this week that were never saved" -> method:post status:5xx,4xx when:week saved:no\n- "requests whose response mentions a socket timeout" -> resbody:text:contains:SocketTimeout\n- "anything still sending a cookie header" -> header:cookie:present\n\nReturn ONLY the query string on one line. No explanation, no quotes around the whole line, no markdown.`,
+  'history.filter.parse.system':
+    `You translate plain English into one line of Daakia's history filter grammar. Return only the query. Never invent a field, an operator or a facet that is not in the grammar you were given — if part of the request cannot be expressed, leave that part out rather than approximating it with something that means something else. Prefer facets over conditions where both would work, because facets are cheaper and read better as chips.`,
   'platform.request.clustering.system':
     `You are an API request clustering expert. Group API request histories into logical domains and resource families, then suggest collection names and folder structures. Identify patterns: authentication flows, CRUD operations on the same resource, related microservice calls. Return ONLY valid JSON — no explanation, no fences.`,
   // ── AI Enrich Captured Traffic ────────────────────────────────────────────
@@ -1163,6 +1170,8 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   'platform.gql.federation.system': { label: 'GraphQL Federation — System',      description: 'Behavioral rules for the GraphQL Federation explorer (subgraph ownership, entity resolution)' },
   'platform.webhook.debugger':        { label: 'Webhook Debugger',               description: 'Daakia AI tab → platform tools → "Webhook ✦" button: analyzes payloads, validates HMAC, explains structure' },
   'platform.webhook.debugger.system': { label: 'Webhook Debugger — System',      description: 'Behavioral rules for the webhook debugger (HMAC validation steps, field explanations)' },
+  'history.filter.parse':        { label: 'Filter from a sentence',   description: 'History → filter popup: turns "failing posts this week I never saved" into a filter query' },
+  'history.filter.parse.system': { label: 'Filter from a sentence — System', description: 'Behavioural rules for the history filter parser (return only the query line)' },
   'platform.request.clustering':        { label: 'Request Clustering',           description: 'Daakia AI tab → platform tools → "Cluster ✦" button: groups request history into logical API domains' },
   'platform.request.clustering.system': { label: 'Request Clustering — System',  description: 'Behavioral rules for the request clustering engine (JSON only, collectionName + folders + requestIds)' },
   'mock.traffic.enrich':        { label: 'AI Enrich Traffic',        description: 'Traffic Inspector → "AI Enrich ✦" button: generates N route variations from a captured real API interaction by swapping entity names' },
@@ -1234,6 +1243,8 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'data.generate':        ['{dataType}', '{count}', '{format}', '{customDescription}'],
   'data.generate.system': [],
   'rest.request.name':    ['{method}', '{url}', '{bodyPreview}'],
+  'history.filter.parse':        ['{question}', '{methods}', '{headers}'],
+  'history.filter.parse.system': [],
   'rest.collection.organize':        ['{collectionName}', '{requests}'],
   'rest.collection.organize.system': [],
   'rest.curl.explain':               ['{curlCommand}'],
@@ -1409,6 +1420,7 @@ export const AI_TEMPLATE_CATEGORIES: {
       'rest.changelog.generate', 'rest.api.flow', 'rest.agent.workflow',
       'collection.dependency.graph', 'collection.compliance',
       'collection.sdk.generate', 'collection.optimize', 'collection.regression',
+      'history.filter.parse',
     ],
   },
   // ── Import & Reverse Engineer ──────────────────────────────────────────────
@@ -1503,6 +1515,8 @@ export const AI_TEMPLATE_CATEGORIES: {
 ];
 
 export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
+  'history.filter.parse': '#7dd3fc',
+  'history.filter.parse.system': '#7dd3fc',
   'dkgh.compose': '#de7356',
   'dkgh.compose.system': '#de7356',
   'dk8s.log.askWhy': '#22d3ee',

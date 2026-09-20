@@ -4,6 +4,7 @@
  */
 import { handleScanPickFolder, handleScanInspect, handleScanRun } from './handlers/scan-handler';
 import * as vscode from 'vscode';
+import { historyCap } from '../../services/history-cap';
 import {
   handleTerminalOpen, handleTerminalInput, handleTerminalResize,
   handleTerminalClose, closeAllTerminals,
@@ -1843,8 +1844,21 @@ export class MainPanel {
 
   // ────────────────── History (inline — too small to extract) ──────────────────
 
+  /**
+   * Everything the cap allows, not the first hundred.
+   *
+   * The sidebar used to show a list you scrolled, so a hundred rows was a
+   * screenful and more than enough. It now *filters* — by header, by body, by
+   * JSONPath, by what a script called — and a filter that searches the newest
+   * hundred of two thousand rows answers "no matches" to questions it never
+   * asked, which is worse than not offering the filter.
+   *
+   * So the page size is the retention cap: whatever is kept is what is
+   * searchable. Raising the cap in Settings raises both together, which is the
+   * relationship somebody changing that number expects.
+   */
   private _sendHistory(protocol?: string) {
-    const entries = getHistory(100, 0, protocol);
+    const entries = getHistory(historyCap(), 0, protocol);
     this.postMessage({ type: 'historyData', entries, protocol: protocol || 'rest' });
   }
 

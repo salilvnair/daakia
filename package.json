@@ -277,8 +277,8 @@
         },
         "daakia.maxHistoryEntries": {
           "type": "number",
-          "default": 500,
-          "description": "Maximum number of request history entries to keep."
+          "default": 2000,
+          "description": "Maximum number of request history entries to keep. History is searchable — headers, bodies, scripts and stored responses — so a deeper history is a bigger haystack to find things in."
         },
         "daakia.saveResponseInHistory": {
           "type": "boolean",

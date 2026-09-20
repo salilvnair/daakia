@@ -3,7 +3,8 @@
  */
 import WebSocket from 'ws';
 import { loadEnvVars, resolveEnvString } from './env-resolver';
-import { insertHistory, trimHistory, getSetting } from '../../../storage/db';
+import { insertHistory, trimHistory } from '../../../storage/db';
+import { historyCap } from '../../../services/history-cap';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -75,8 +76,7 @@ export function handleWsConnect(
             },
           }),
         });
-        const maxHistory = parseInt(getSetting('maxHistoryEntries') || '100', 10);
-        trimHistory(maxHistory);
+        trimHistory(historyCap());
         if (refreshHistory) refreshHistory();
       } catch { /* ignore history errors */ }
     });

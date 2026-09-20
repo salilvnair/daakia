@@ -21,6 +21,7 @@ import {
   loadScriptEnvVars, loadCollectionVars, loadGlobalVars, persistScriptVars,
 } from './script-vars';
 import type { ScriptContext } from '../../../services/script-runtime';
+import { historyCap } from '../../../services/history-cap';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -349,7 +350,7 @@ function saveGrpcHistory(tabId: string, endpoint: string, method: string, status
       protocol: 'grpc',
       request_data: requestData ? JSON.stringify(requestData) : undefined,
     });
-    trimHistory(500);
+    trimHistory(historyCap());
     if (refreshHistory) refreshHistory();
   } catch {
     // Non-critical: don't fail the request if history save fails

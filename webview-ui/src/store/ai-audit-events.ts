@@ -71,6 +71,7 @@ const SCREEN_PREFIXES: [string, string][] = [
   ['websocket', 'WebSocket'],
   ['mcp', 'MCP'],
   ['import', 'Import'],
+  ['history', 'History'],
   ['data', 'REST · Request'],
   ['test', 'REST · Response'],
   ['agent', 'Daakia AI'],

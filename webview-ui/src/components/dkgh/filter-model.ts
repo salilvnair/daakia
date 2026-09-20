@@ -28,6 +28,15 @@
  * and showing its unfiltered count would be a lie you could act on.
  */
 import type { BoardIssue, ProposedDimension } from './board-types';
+/*
+  The date phrases moved to `services/filter/date-range` when the history
+  filter wanted the same ones. They are re-exported here under the names this
+  file already published, so every caller — and this file's own tests — keep
+  importing them from where they have always been.
+*/
+import { resolveRange, prettyPhrase, withinRange } from '../../services/filter/date-range';
+export { resolveRange, prettyPhrase };
+export type { DateRange } from '../../services/filter/date-range';
 
 /** One clause. Values inside it are OR; separate terms are AND. */
 export interface Term {
@@ -100,8 +109,6 @@ export interface MatchContext {
   now?: number;
 }
 
-const DAY = 86_400_000;
-
 /**
  * Does one term hold for one issue?
  *
@@ -173,50 +180,7 @@ export function inWindow(iso: string | undefined, phrase: string, ctx: MatchCont
   if (!iso) return phrase === 'none';
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return false;
-  const range = resolveRange(phrase, ctx.now ?? Date.now());
-  if (!range) return false;
-  if (range.from !== undefined && t < range.from) return false;
-  if (range.to !== undefined && t > range.to) return false;
-  return true;
-}
-
-export interface DateRange { from?: number; to?: number }
-
-export function resolveRange(phrase: string, now: number): DateRange | undefined {
-  const p = phrase.trim().toLowerCase();
-  if (!p) return undefined;
-
-  if (p === 'today') return { from: startOfDay(now) };
-  if (p === 'week') return { from: now - 7 * DAY };
-  if (p === 'sprint') return { from: now - 14 * DAY };
-  if (p === 'month') return { from: now - 30 * DAY };
-
-  /* `>30d` — older than thirty days. The comparison is on age, so the sign
-     points the way a reader says it out loud rather than the way the timestamp
-     compares. */
-  let m = p.match(/^([<>]=?)?(\d+)d$/);
-  if (m) {
-    const n = Number(m[2]) * DAY;
-    if (m[1]?.startsWith('>')) return { to: now - n };
-    return { from: now - n };
-  }
-
-  m = p.match(/^([<>]=?)(\d{4}-\d{2}-\d{2})$/);
-  if (m) {
-    const at = Date.parse(m[2]);
-    if (Number.isNaN(at)) return undefined;
-    return m[1].startsWith('>') ? { from: at } : { to: at + DAY - 1 };
-  }
-
-  const exact = Date.parse(p);
-  if (!Number.isNaN(exact)) return { from: startOfDay(exact), to: startOfDay(exact) + DAY - 1 };
-  return undefined;
-}
-
-function startOfDay(at: number): number {
-  const d = new Date(at);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
+  return withinRange(t, phrase, ctx.now ?? Date.now());
 }
 
 /** Every term, ANDed. The search text is applied separately — see `runSearch`. */
@@ -527,18 +491,6 @@ function prettyValue(v: string): string {
   if (v === 'none') return 'Nobody';
   if (v === '@me') return 'me';
   return v.toUpperCase() === v ? v : v.charAt(0).toUpperCase() + v.slice(1);
-}
-
-export function prettyPhrase(p: string): string {
-  if (p === 'today') return 'today';
-  if (p === 'week') return 'this week';
-  if (p === 'sprint') return 'this sprint';
-  if (p === 'month') return 'this month';
-  const m = p.match(/^([<>]=?)?(\d+)d$/);
-  if (m) return m[1]?.startsWith('>') ? `older than ${m[2]} days` : `last ${m[2]} days`;
-  const abs = p.match(/^([<>]=?)(\d{4}-\d{2}-\d{2})$/);
-  if (abs) return `${abs[1].startsWith('>') ? 'after' : 'before'} ${abs[2]}`;
-  return p;
 }
 
 /** The sentence under the count: "open · PROD · unassigned · quiet 14 days". */

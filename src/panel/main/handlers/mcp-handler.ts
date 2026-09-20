@@ -5,6 +5,7 @@
 import { McpClient } from '../../../mcp/mcp-client';
 import { loadEnvVars, resolveEnvString } from './env-resolver';
 import { insertHistory, trimHistory } from '../../../storage/db';
+import { historyCap } from '../../../services/history-cap';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -189,7 +190,7 @@ export async function handleMcpCallTool(
         }),
         response_data: JSON.stringify(result).slice(0, 4000),
       });
-      trimHistory(500);
+      trimHistory(historyCap());
       refreshHistory?.();
     } catch { /* ignore */ }
   } catch (err) {

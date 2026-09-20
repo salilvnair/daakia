@@ -55,6 +55,7 @@ import { decryptIfNeeded, decryptEnvVariables, encryptEnvVariables } from '../..
 import {
   loadScriptEnvVars, loadCollectionVars, loadGlobalVars, persistScriptVars,
 } from './script-vars';
+import { historyCap } from '../../../services/history-cap';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -449,7 +450,7 @@ export async function handleExecuteGraphQL(
         ? JSON.stringify({ headers: Object.fromEntries(Object.entries(res.headers).map(([k, v]) => [k, String(v)])), body: body.slice(0, 50000), contentType: res.headers['content-type'] || 'application/json' })
         : undefined,
     });
-    trimHistory(500);
+    trimHistory(historyCap());
     refreshHistory?.();
   } catch (err: any) {
     const elapsed = Date.now() - startTime;
@@ -501,7 +502,7 @@ export async function handleExecuteGraphQL(
           postResponseScript: postResponseScript || undefined,
         }),
       });
-      trimHistory(500);
+      trimHistory(historyCap());
       refreshHistory?.();
     } catch { /* ignore history errors */ }
   } finally {

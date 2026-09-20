@@ -19,6 +19,7 @@ import type { ScriptContext } from '../../../services/script-runtime';
 import {
   loadScriptEnvVars, loadCollectionVars, loadGlobalVars, persistScriptVars,
 } from './script-vars';
+import { historyCap } from '../../../services/history-cap';
 
 /** The endpoint may not parse yet; the executor reports that properly. */
 function safeHostname(endpoint: string): string {
@@ -252,7 +253,7 @@ export async function handleSoapInvoke(
           hasFault: result.hasFault,
         }),
       });
-      trimHistory(500);
+      trimHistory(historyCap());
       if (refreshHistory) refreshHistory();
     } catch { /* ignore history errors */ }
 
@@ -324,7 +325,7 @@ export async function handleSoapInvoke(
           postResponseScript: msg.postResponseScript || '',
         }),
       });
-      trimHistory(500);
+      trimHistory(historyCap());
       if (refreshHistory) refreshHistory();
     } catch { /* ignore history errors */ }
   }
