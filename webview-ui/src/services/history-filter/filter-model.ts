@@ -49,10 +49,22 @@ export type TermField =
   | 'auth'
   | 'saved'
   | 'when'
-  | 'has';
+  | 'has'
+  /**
+   * Specific rows, by id.
+   *
+   * Not a facet — nobody ticks a run id out of a list. It exists so that
+   * "show me those three runs" is a *filter* rather than a special display
+   * mode: the chip says what happened, taking it off puts the list back, and
+   * the code path is the one every other narrowing already uses. A card that
+   * highlighted rows some other way would be a second way for the list to be
+   * showing a subset, and the panel could then disagree with itself about
+   * what it was showing.
+   */
+  | 'ids';
 
 export const TERM_FIELDS: readonly TermField[] =
-  ['method', 'status', 'protocol', 'auth', 'saved', 'when', 'has'];
+  ['method', 'status', 'protocol', 'auth', 'saved', 'when', 'has', 'ids'];
 
 function isTermField(s: string): s is TermField {
   return (TERM_FIELDS as readonly string[]).includes(s);
@@ -371,6 +383,16 @@ export interface ChipParts {
 }
 
 export function describeTerm(term: Term): ChipParts {
+  /* A list of row ids is not a phrase anybody reads — the chip says how many,
+     which is the part that means something. */
+  if (term.field === 'ids') {
+    return {
+      key: 'showing',
+      op: '',
+      value: `${term.values.length} ${term.values.length === 1 ? 'run' : 'runs'}`,
+      negated: !!term.negated,
+    };
+  }
   const value = term.values.map(valueWord).join(' or ');
   return {
     key: TERM_LABELS[term.field],
@@ -399,6 +421,7 @@ export const TERM_LABELS: Record<TermField, string> = {
   saved: 'saved',
   when: 'sent',
   has: 'has',
+  ids: 'runs',
 };
 
 function valueWord(v: string): string {

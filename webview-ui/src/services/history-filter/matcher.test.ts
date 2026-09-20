@@ -99,6 +99,17 @@ describe('facet terms', () => {
     expect(matchesRow(blank, secret, ctx)).toBe(false);
   });
 
+  it('matches specific rows by id, which is how a card shows its runs', () => {
+    /*
+      Not a facet anybody ticks — it exists so "show me those three runs" is a
+      filter with a chip you can take off, rather than a second display mode
+      the panel could disagree with.
+    */
+    const rows = [row({ id: 501 }), row({ id: 502 }), row({ id: 503 })];
+    const ids = state({ terms: [{ field: 'ids', values: ['501', '503'] }] });
+    expect(applyFilter(rows, ids, ctx).map(r => r.id)).toEqual([501, 503]);
+  });
+
   it('has:script covers either script, and the two are separable', () => {
     const pre = row({ request: { preRequestScript: 'dk.env.set("a",1)' } });
     expect(matchesRow(pre, state({ terms: [{ field: 'has', values: ['script'] }] }), ctx)).toBe(true);

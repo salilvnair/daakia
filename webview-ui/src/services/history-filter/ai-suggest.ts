@@ -24,6 +24,7 @@ import {
   activeCount, formatQuery, parseQuery, type FilterState,
 } from './filter-model';
 import type { SaveSuggestion } from './repeat-suggest';
+import type { FailureBoundary } from './first-failure';
 
 /** How much of history is described to the model. Enough to ground it, no more. */
 const SAMPLE = 400;
@@ -140,4 +141,48 @@ export function readNameAnswer(answer: string): string {
     .map(l => l.trim().replace(/^["']|["'.]$/g, ''))
     .find(Boolean)
     ?.slice(0, 60) ?? '';
+}
+
+/**
+ * Why would that change break it?
+ *
+ * This is the Response Diff Analyzer, asked from History: the two runs it
+ * compares are the last good one and the first bad one, which is exactly the
+ * pair its prompt was written for. Reusing it means one switch, one prompt and
+ * one place to improve — a second "explain a diff" feature would have been a
+ * second thing to keep in step with this one.
+ *
+ * The boundary is already found and the diff is already computed when this is
+ * called. The model is being asked for a sentence about a fact, never for the
+ * fact.
+ */
+export function askWhyItBroke(boundary: FailureBoundary, rows: readonly HistoryRowLike[]): string {
+  const resolve = useAiPromptTemplatesStore.getState().resolve;
+  const body = (rowId: number) => {
+    const row = rows.find(r => r.id === rowId);
+    return row ? factsOf(row).responseBody.slice(0, 4000) : '';
+  };
+
+  /*
+    The request diff goes in alongside the responses, redaction and all. It is
+    the half that says what *you* changed, and without it the model is left
+    explaining two error bodies with no cause in front of it.
+  */
+  const changes = boundary.changes
+    .map(c => `${c.where} ${c.key}: ${c.before || '(absent)'} → ${c.after || '(absent)'}`)
+    .join('\n');
+
+  return sendAiRequest({
+    stage: 'rest.response.diff',
+    feature: 'responseDiff',
+    screen: 'History',
+    systemPrompts: [resolve('rest.response.diff.system')],
+    userPrompt: `${resolve('rest.response.diff', {
+      labelA: `last good run — ${boundary.lastGood.status}`,
+      responseA: body(boundary.lastGood.rowId) || '(no response stored)',
+      labelB: `first failing run — ${boundary.firstBad.status || 'no response'}`,
+      responseB: body(boundary.firstBad.rowId) || '(no response stored)',
+    })}\n\nWhat changed in the request between them:\n${changes || '(nothing)'}\n\nAnswer in two sentences: the likeliest cause, and what to try.`,
+    settings: { temperature: 0.2, maxTokens: 220, stream: true },
+  });
 }

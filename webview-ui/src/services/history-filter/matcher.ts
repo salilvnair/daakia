@@ -48,6 +48,7 @@ export function valuesOf(f: HistoryFacts, field: TermField, ctx: MatchContext): 
     case 'protocol': return [f.protocol];
     case 'auth': return [f.auth.type || 'none'];
     case 'saved': return [ctx.saved.has({ method: f.method, url: f.url }) ? 'yes' : 'no'];
+    case 'ids': return [String(f.id)];
     case 'has': {
       const out: string[] = [];
       if (f.body.trim()) out.push('body');

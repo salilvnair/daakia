@@ -24,7 +24,7 @@ import { applyFilter, contextOf } from '../../../services/history-filter/matcher
 import { buildSavedIndex } from '../../../services/history-filter/saved-index';
 import { HistoryFilterPopup } from './HistoryFilterPopup';
 import { HistoryFilterChips } from './HistoryFilterChips';
-import { HistorySaveSuggestions } from './HistorySaveSuggestions';
+import { HistoryInsights } from './HistoryInsights';
 
 /** Long provider/endpoint URLs (e.g. AI base URLs) read poorly at full length in a narrow sidebar row. */
 function trimUrl(url: string, max = 42): string {
@@ -130,6 +130,30 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
   useEffect(() => {
     setHistory(cachedHistory as HistoryItem[]);
   }, [cachedHistory]);
+
+  /*
+    Narrow the list to a set of rows a card is about.
+
+    Done as a filter rather than by scrolling to them: the rows in a sweep
+    finding are usually scattered across days, and "here they are, and nothing
+    else" is the only presentation that lets somebody check all of them. It
+    goes through the same `ids` term every other filter does, so the chip says
+    what happened and one click puts it back.
+  */
+  const showRows = (rowIds: number[]) => {
+    logUiEvent('history.insight.showRows', { count: rowIds.length, protocol });
+    setSearch('');
+    setFilter({
+      terms: [{ field: 'ids', values: rowIds.map(String) }],
+      conditions: [],
+      text: '',
+    });
+  };
+
+  const openRow = (rowId: number) => {
+    const item = history.find(h => h.id === rowId);
+    if (item) replayHistoryItem(item, true, protocol);
+  };
 
   const handleClearAll = () => {
     logUiEvent('history.clear', { protocol });
@@ -505,14 +529,19 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
         onChange={next => { setFilter({ ...next, text: '' }); setSearch(next.text); }}
       />
 
-      {/* Requests sent over and over and never saved — offered here rather
-          than as a toast, because this is where saving one happens. */}
-      <HistorySaveSuggestions
+      {/*
+        A secret somewhere odd, an endpoint that just broke, a request you keep
+        sending and never saved — offered here rather than as a toast, because
+        this is where you would act on any of them.
+      */}
+      <HistoryInsights
         rows={history}
         saved={savedIndex}
         collections={collections as never}
         resolve={resolveVariable}
         protocol={protocol}
+        onShowSecretRows={showRows}
+        onOpenRow={openRow}
       />
 
       {/* Actions row */}

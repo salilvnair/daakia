@@ -999,6 +999,17 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       clearHistory(msg.protocol as string | undefined);
       sendHistory(post, msg.protocol as string | undefined);
       break;
+    /*
+      Both names, because the webview only ever sends the second one.
+
+      This case was wired as `deleteHistoryById` while `HistoryPanel` posts
+      `deleteHistoryEntry` — the name `MainPanel` dispatches on. In the real
+      extension deleting a history row worked; in the browser build it fell
+      through to the default case, logged "no handler wired", and the row
+      stayed exactly where it was with no error anywhere the user could see.
+      Keeping the old name too costs nothing and cannot break a caller.
+    */
+    case 'deleteHistoryEntry':
     case 'deleteHistoryById':
       deleteHistoryById(msg.id as number);
       sendHistory(post, msg.protocol as string | undefined);
