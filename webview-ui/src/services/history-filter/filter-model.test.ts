@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   EMPTY, activeCount, bracket, chipsOf, describeBrackets, describeCondition, dropField,
-  groupRows,
+  groupRows, buildRuns, joinAbove,
   except, formatQuery, isEmpty, isUsable, newCondition, only, parseQuery, statusBucket,
   toggleValue,
   type Condition, type FilterState,
@@ -119,6 +119,60 @@ describe('bracketing conditions', () => {
       cond({ id: 'c', field: 'body', key: 'text', op: 'contains', value: 'y', join: 'or' }),
     ];
     expect(bracket(cs).map(g => g.map(c => c.value))).toEqual([['x', 'y']]);
+  });
+});
+
+describe('runs — how the panel boxes the rows', () => {
+  const rows = (...joins: (undefined | 'and' | 'or')[]) =>
+    joins.map((join, i) => cond({
+      id: `k${i}`, field: 'body', key: 'text', op: 'contains', value: `v${i}`, join,
+    }));
+
+  const shape = (cs: Condition[]) =>
+    buildRuns(cs).map(r => `${r.join}:${r.rows.map(c => c.id).join(',')}`);
+
+  it('boxes ANDed rows together, so three clauses are one ALL OF', () => {
+    /*
+      They are three separate brackets to the matcher. Drawing them as three
+      unlabelled boxes with rules between said far less than one box that
+      names what it is.
+    */
+    expect(shape(rows(undefined, 'and', 'and'))).toEqual(['and:k0,k1,k2']);
+  });
+
+  it('boxes ORed rows together as one ANY OF', () => {
+    expect(shape(rows(undefined, 'or', 'or'))).toEqual(['or:k0,k1,k2']);
+  });
+
+  it('starts a new run where the join changes', () => {
+    expect(shape(rows(undefined, 'or', 'and'))).toEqual(['or:k0,k1', 'and:k2']);
+  });
+
+  it('lets a second row decide a lone run rather than splitting off alone', () => {
+    // A run of one has not committed to anything yet.
+    expect(shape(rows(undefined, 'or'))).toEqual(['or:k0,k1']);
+  });
+
+  it('keeps how a run attaches apart from how its rows relate', () => {
+    /*
+      A run whose first row says `and` and whose second says `or` is an ANY OF
+      box ANDed onto what precedes it. One field for both would have
+      overwritten the attachment with the internal join.
+    */
+    const cs = rows(undefined, 'or', 'and', 'or');
+    const runs = buildRuns(cs);
+    expect(shape(cs)).toEqual(['or:k0,k1', 'or:k2,k3']);
+    /* The second box's rows are ORed with each other, and the box as a whole
+       is ANDed onto the first — which is `k2`'s own join. */
+    expect(runs[1].join).toBe('or');
+    expect(joinAbove(runs[1])).toBe('and');
+  });
+
+  it('does not change what the filter means — that is still bracketing', () => {
+    // Runs are presentation; `bracket` is meaning. They disagree on purpose.
+    const cs = rows(undefined, 'and', 'and');
+    expect(buildRuns(cs)).toHaveLength(1);
+    expect(bracket(cs)).toHaveLength(3);
   });
 });
 

@@ -208,6 +208,60 @@ export function groupRows(conditions: readonly Condition[]): Condition[][] {
   return groups;
 }
 
+/**
+ * A run of adjacent rows that share one join — what the panel draws as a box.
+ *
+ * ── Why this is not the same as a bracket ──
+ *
+ * `groupRows` answers "which rows are ORed together", because that is what
+ * changes the meaning. A run answers "which rows can share a box and a
+ * heading", which is a presentation question with a different answer: three
+ * rows joined by `and` are three separate brackets but one run, and drawing
+ * them as one **ALL OF** box says what they do far better than three unlabelled
+ * boxes stacked with rules between them.
+ *
+ * `join` is how this run's own rows attach to each other, which is what the
+ * heading says. How the run attaches to the one above it is a different thing
+ * and is simply `rows[0].join` — a run whose first row says `and` and whose
+ * second says `or` is an ANY OF box that is ANDed onto what precedes it.
+ * Storing one field for both would have quietly overwritten the attachment
+ * with the internal join.
+ */
+export interface ConditionRun {
+  /** `or` for an ANY OF box, `and` for an ALL OF box. */
+  join: 'and' | 'or';
+  rows: Condition[];
+}
+
+/** How a run attaches to the run above it. Meaningless for the first run. */
+export function joinAbove(run: ConditionRun): 'and' | 'or' {
+  return run.rows[0].join === 'or' ? 'or' : 'and';
+}
+
+/**
+ * Group rows into runs for display.
+ *
+ * The first row has no gap above it, so it cannot state a join; its run takes
+ * the join of whichever row joins it, and `and` when it stands alone.
+ */
+export function buildRuns(conditions: readonly Condition[]): ConditionRun[] {
+  const runs: ConditionRun[] = [];
+  for (const c of conditions) {
+    const join: 'and' | 'or' = c.join === 'or' ? 'or' : 'and';
+    const current = runs[runs.length - 1];
+    if (!current) { runs.push({ join, rows: [c] }); continue; }
+    /* A run of one has not committed to a join yet, so the second row decides
+       it rather than being pushed into a run of its own. */
+    if (current.rows.length === 1 || current.join === join) {
+      current.join = join;
+      current.rows.push(c);
+    } else {
+      runs.push({ join, rows: [c] });
+    }
+  }
+  return runs;
+}
+
 /** How a bracketed filter reads out loud: `(1 or 2) and 3`. */
 export function describeBrackets(conditions: readonly Condition[]): string {
   const groups = bracket(conditions);

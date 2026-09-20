@@ -15,16 +15,19 @@
  * in the heading is a caption for something already visible rather than the
  * only place it exists.
  *
- * ── The two verbs, and why there are only two ──
+ * ── One control, in every gap ──
  *
- * - **The `AND` rule between two blocks is clickable** — it merges them.
- * - **The `or` tag on a row is clickable** — it splits that row into its own
- *   block.
+ * The first attempt had two different verbs — a one-way `or` tag that split a
+ * row out, and an `AND` rule that merged two blocks — and they were not the
+ * same control, so `AND` could not become `OR` the way `OR` could become
+ * `AND`. Half the arrangements were reachable in one direction only.
  *
- * They are exact inverses, which means there is no arrangement you can reach
- * and not get back from, and nothing to learn beyond "click the word between
- * the things you want joined". `+ or` inside a block adds a row already in it,
- * so the common case — "also accept this" — never needs either verb.
+ * Now **every gap between two adjacent rows holds the same chip**, showing
+ * that gap's join and toggling it. There is nothing else to learn: to change
+ * how two rows relate, click the word between them. Runs of rows that share a
+ * join are boxed together and the box says which word it is — **ANY OF** for a
+ * run of `or`, **ALL OF** for a run of `and` — and the heading is the same
+ * toggle again, for flipping a whole run at once.
  *
  * ── Uniform control heights ──
  *
@@ -38,8 +41,8 @@ import { useRef, useState } from 'react';
 import { ContextMenuView, SelectInputView } from '@salilvnair/dui';
 import { PlusIcon, TrashIcon } from '../../../icons';
 import {
-  NULLARY, OPERATORS, addCondition, dropCondition, groupRows, setCondition,
-  type Condition, type ConditionField, type FilterState, type Operator,
+  NULLARY, OPERATORS, addCondition, buildRuns, dropCondition, joinAbove, setCondition,
+  type Condition, type ConditionField, type ConditionRun, type FilterState, type Operator,
 } from '../../../services/history-filter/filter-model';
 import { CONDITION_LOOK } from './filter-icons';
 
@@ -61,9 +64,11 @@ const OP_COL = 104;
   or not the tag is there, because a trailing column that resized per row would
   move the bin up and down the stack.
 */
-const BIN_COL = 40;
+const BIN_COL = 22;
 const GRID_GAP = 5;
 const BLOCK_PAD = 6;
+/** Where the field boxes start — what the gap chips and add buttons line up to. */
+const FIELD_INDENT = NEG_COL + GRID_GAP;
 
 export const FIELD_LABELS: Record<ConditionField, string> = {
   url: 'URL',
@@ -135,12 +140,10 @@ function placeholderFor(field: ConditionField): string {
  * drawn by the platform — platform greys and a platform blue highlight, on a
  * dark panel it knows nothing about.
  */
-function ConditionRow({ c, onChange, onRemove, onSplit }: {
+function ConditionRow({ c, onChange, onRemove }: {
   c: Condition;
   onChange: (next: Condition) => void;
   onRemove: () => void;
-  /** Present only on a row that is inside a bracket with something above it. */
-  onSplit?: () => void;
 }) {
   const nullary = NULLARY.has(c.op);
   const keyChoices = c.field === 'script' ? ['any', 'pre', 'post'] : undefined;
@@ -202,23 +205,9 @@ function ConditionRow({ c, onChange, onRemove, onSplit }: {
       )}
 
       <div className="flex items-center justify-end" style={{ gap: 2 }}>
-        {/*
-          The `or` tag says why this row is inside the block, and clicking it
-          takes it back out. A label rather than an icon because the word is
-          already the explanation — an icon here would need a tooltip to say
-          what a two-letter word says on its own.
-        */}
-        {!!onSplit && (
-          <button
-            type="button"
-            onClick={onSplit}
-            title="Move this row out into its own group"
-            className="cursor-pointer text-[9px] uppercase tracking-wider border-none bg-transparent"
-            style={{ color: 'var(--color-accent, var(--color-primary))', fontWeight: 700 }}
-          >
-            or
-          </button>
-        )}
+        {/* The join used to live here as a one-way `or` tag. It is a chip in
+            the gap above the row now, where the relationship it describes
+            actually is. */}
         <button type="button" onClick={onRemove} title="Remove this condition"
                 className="border-none bg-transparent cursor-pointer flex items-center justify-center"
                 style={{ color: 'var(--color-text-muted)', height: CTRL_H, width: 18 }}>
@@ -314,115 +303,173 @@ export function FilterConditions({ state, onChange, fields, hint, addLabel }: {
 }) {
   const visible = (c: Condition) => fields.includes(c.field);
   /*
-    `groupRows`, not `bracket`: the panel draws what has been built, including
-    rows with nothing typed in them yet. `bracket` drops those because they
-    match nothing, which is right for the matcher and wrong here — a fresh row
-    would be drawn outside any block and so without the block's `+ or` button,
-    exactly when you want it.
+    Runs are built from what has been typed *and* what has not: `bracket` drops
+    rows with nothing in them because they match nothing, which is right for
+    the matcher and wrong here — a fresh row would be drawn outside any box and
+    so without the box's add button, at exactly the moment somebody wants it.
 
-    Grouping runs over every row so the structure is the real one; the blocks
-    are then filtered to what this tab shows, so a bracket whose rows all live
-    on another tab simply does not appear here.
+    Filtered to this tab's fields first, so a run whose rows all live on
+    another tab simply does not appear here.
   */
-  const blocks = groupRows(state.conditions)
-    .map(group => group.filter(visible))
-    .filter(group => group.length > 0);
-
   const patch = (next: Condition) => onChange(setCondition(state, next));
   const remove = (id: string) => onChange(dropCondition(state, id));
 
-  /** Add a row already inside this bracket — the common case, and no verb needed. */
-  const addToBlock = (after: Condition, field: ConditionField) => {
-    const fresh = { ...newRow(field), join: 'or' as const };
+  /** Add a row straight after another, joined the way the caller asks. */
+  const addBeside = (after: Condition, join: 'and' | 'or') => {
+    const fresh = { ...newRow(after.field), join };
     const at = state.conditions.findIndex(c => c.id === after.id);
     const conditions = [...state.conditions];
     conditions.splice(at + 1, 0, fresh);
     onChange({ ...state, conditions });
   };
 
-  const renderRow = (c: Condition, indexInBlock: number) => (
-    <ConditionRow
-      key={c.id}
-      c={c}
-      onChange={patch}
-      onRemove={() => remove(c.id)}
-      onSplit={indexInBlock > 0 ? () => patch({ ...c, join: 'and' }) : undefined}
-    />
-  );
+  /** Flip one gap. The only verb in this panel. */
+  const flip = (c: Condition) =>
+    patch({ ...c, join: c.join === 'or' ? 'and' : 'or' });
 
-  const blockStyle = (multi: boolean): React.CSSProperties => ({
-    border: multi
-      ? '1px solid color-mix(in srgb, var(--color-accent, var(--color-primary)) 30%, transparent)'
-      : '1px solid var(--color-surface-border)',
-    background: multi
-      ? 'color-mix(in srgb, var(--color-accent, var(--color-primary)) 5%, transparent)'
-      : 'transparent',
-    borderRadius: 6,
-    padding: BLOCK_PAD,
-  });
+  /** Flip a whole run — the heading, doing what each of its gaps would do. */
+  const flipRun = (run: ConditionRun) => {
+    const join = run.join === 'or' ? 'and' : 'or';
+    const ids = new Set(run.rows.slice(1).map(r => r.id));
+    onChange({
+      ...state,
+      conditions: state.conditions.map(c => (ids.has(c.id) ? { ...c, join } : c)),
+    });
+  };
+
+  const runs = buildRuns(state.conditions.filter(visible));
+
+  const tone = (join: 'and' | 'or') => (join === 'or'
+    ? 'var(--color-accent, var(--color-primary))'
+    : 'var(--color-text-muted)');
+
+  /**
+   * The chip in a gap.
+   *
+   * Drawn the same whether the gap is between two rows of one box or between
+   * two boxes, because it is the same control doing the same thing — the only
+   * difference is which side of a border it happens to fall on.
+   */
+  const GapChip = ({ join, onFlip, title }: {
+    join: 'and' | 'or'; onFlip: () => void; title: string;
+  }) => (
+    <div className="flex items-center gap-1.5" style={{ padding: '3px 0', marginLeft: FIELD_INDENT }}>
+      <button
+        type="button"
+        onClick={onFlip}
+        title={title}
+        className="cursor-pointer text-[9px] uppercase tracking-wider px-1.5 rounded"
+        style={{
+          color: tone(join),
+          fontWeight: 700,
+          lineHeight: '15px',
+          border: `1px solid color-mix(in srgb, ${tone(join)} ${join === 'or' ? 45 : 28}%, transparent)`,
+          background: join === 'or'
+            ? `color-mix(in srgb, ${tone(join)} 14%, transparent)`
+            : 'transparent',
+        }}
+      >
+        {join}
+      </button>
+      <span style={{ flex: 1, height: 1,
+                     background: join === 'or'
+                       ? `color-mix(in srgb, ${tone(join)} 25%, transparent)`
+                       : 'var(--color-surface-border)' }} />
+    </div>
+  );
 
   return (
     <div className="flex flex-col" style={{ padding: '2px 10px 0' }}>
-      {!blocks.length && (
+      {!runs.length && (
         <span className="py-1 text-[11px] leading-snug block"
               style={{ color: 'var(--color-text-muted)' }}>
           {hint}
         </span>
       )}
 
-      {blocks.map((group, i) => {
-        const multi = group.length > 1;
+      {runs.map((run, i) => {
+        const multi = run.rows.length > 1;
+        const boxed = multi && run.join === 'or';
         return (
-          <div key={group[0].id}>
-            {/*
-              The rule between two blocks, and the verb that merges them. It is
-              the exact inverse of the `or` tag on a row, so nothing you can do
-              here is one-way.
-            */}
+          <div key={run.rows[0].id}>
+            {/* The gap between this run and the one above it. */}
             {i > 0 && (
-              <button
-                type="button"
-                onClick={() => patch({ ...group[0], join: 'or' })}
-                title="Merge with the group above — either may match"
-                className="flex items-center gap-1.5 w-full cursor-pointer border-none bg-transparent"
-                style={{ padding: '5px 0' }}
-              >
-                <span className="text-[9px] uppercase tracking-wider px-1.5 rounded"
-                      style={{ color: 'var(--color-text-muted)', fontWeight: 700,
-                               border: '1px solid var(--color-surface-border)', lineHeight: '14px' }}>
-                  and
-                </span>
-                <span style={{ flex: 1, height: 1, background: 'var(--color-surface-border)' }} />
-              </button>
+              <GapChip
+                join={joinAbove(run)}
+                title={joinAbove(run) === 'or'
+                  ? 'Either side may match — click to require both'
+                  : 'Both sides must match — click to accept either'}
+                onFlip={() => flip(run.rows[0])}
+              />
             )}
 
-            <div style={blockStyle(multi)}>
-              {multi && (
-                <div className="text-[9px] uppercase tracking-wider pb-0.5"
-                     style={{ color: 'var(--color-accent, var(--color-primary))', fontWeight: 700 }}>
-                  any of
-                </div>
-              )}
-              {group.map(renderRow)}
+            <div style={{
+              border: boxed
+                ? `1px solid color-mix(in srgb, ${tone('or')} 30%, transparent)`
+                : '1px solid var(--color-surface-border)',
+              background: boxed
+                ? `color-mix(in srgb, ${tone('or')} 5%, transparent)`
+                : 'transparent',
+              borderRadius: 6,
+              padding: BLOCK_PAD,
+            }}>
               {/*
-                Adding into this bracket. Only offered once a bracket exists to
-                add to, and it inherits the last row's field, because a second
-                clause is nearly always about the same thing as the first.
+                The heading names the run and flips it. Only on a run that has
+                a join to name: one row on its own relates to nothing, so a
+                label over it would be describing a relationship that is not
+                there.
               */}
-              <div className="pt-1" style={{ paddingLeft: NEG_COL + GRID_GAP }}>
+              {multi && (
                 <button
                   type="button"
-                  onClick={() => addToBlock(group[group.length - 1], group[group.length - 1].field)}
-                  title="Add another row to this group — either may match"
+                  onClick={() => flipRun(run)}
+                  title={run.join === 'or'
+                    ? 'Any of these may match — click to require all of them'
+                    : 'All of these must match — click to accept any of them'}
+                  className="text-[9px] uppercase tracking-wider pb-0.5 cursor-pointer border-none bg-transparent block text-left"
+                  style={{ color: tone(run.join), fontWeight: 700 }}
+                >
+                  {run.join === 'or' ? 'any of' : 'all of'}
+                </button>
+              )}
+
+              {run.rows.map((c, j) => (
+                <div key={c.id}>
+                  {/* The gaps inside the run — the same chip again. */}
+                  {j > 0 && (
+                    <GapChip
+                      join={run.join}
+                      title={run.join === 'or'
+                        ? 'Either row may match — click to require both'
+                        : 'Both rows must match — click to accept either'}
+                      onFlip={() => flip(c)}
+                    />
+                  )}
+                  <ConditionRow c={c} onChange={patch} onRemove={() => remove(c.id)} />
+                </div>
+              ))}
+
+              {/*
+                Adding into this run, with the run's own join — so a row added
+                to an ANY OF box is another alternative, and one added to an
+                ALL OF box is another requirement. It inherits the last row's
+                field, because a second clause is nearly always about the same
+                thing as the first.
+              */}
+              <div className="pt-1" style={{ paddingLeft: FIELD_INDENT }}>
+                <button
+                  type="button"
+                  onClick={() => addBeside(run.rows[run.rows.length - 1], multi ? run.join : 'or')}
+                  title={`Add another row joined by ${multi ? run.join : 'or'}`}
                   className="flex items-center gap-1 text-[9.5px] uppercase tracking-wider px-1.5 rounded cursor-pointer"
                   style={{
-                    color: 'var(--color-accent, var(--color-primary))', fontWeight: 700,
+                    color: tone(multi ? run.join : 'or'), fontWeight: 700,
                     lineHeight: '16px', background: 'transparent',
-                    border: '1px dashed color-mix(in srgb, var(--color-accent, var(--color-primary)) 35%, transparent)',
+                    border: `1px dashed color-mix(in srgb, ${tone(multi ? run.join : 'or')} 35%, transparent)`,
                   }}
                 >
                   <PlusIcon size={8} color="currentColor" />
-                  or
+                  {multi ? run.join : 'or'}
                 </button>
               </div>
             </div>
