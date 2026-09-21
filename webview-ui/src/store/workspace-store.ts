@@ -30,7 +30,15 @@ export interface Workspace {
   sort_order: number;
   created_at: string;
   last_used_at: string | null;
+  /** 1 when Git Sync publishes this workspace to teammates. Only on your own. */
+  shared?: number;
+  /** Set on a teammate's shared workspace: their sync id and name. Read-only. */
+  owner_id?: string | null;
+  owner_name?: string | null;
 }
+
+/** A teammate's workspace, brought in by Git Sync — you can use it, not change it. */
+export const isReadOnly = (w: Workspace | undefined): boolean => !!w?.owner_id;
 
 export interface WorkspaceStats {
   collections: number;
@@ -56,6 +64,7 @@ interface WorkspaceState {
   rename: (id: string, name: string) => void;
   remove: (id: string) => void;
   saveDocs: (id: string, docs: string) => void;
+  setShared: (id: string, shared: boolean) => void;
 
   /** Applied from the host's replies — see wireWorkspaceMessages below. */
   _apply: (data: { workspaces?: Workspace[]; activeId?: string; stats?: WorkspaceStats }) => void;
@@ -85,6 +94,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   rename: (id, name) => postMsg({ type: 'renameWorkspace', id, name }),
   remove: (id) => postMsg({ type: 'deleteWorkspace', id }),
   saveDocs: (id, docs) => postMsg({ type: 'saveWorkspaceDocs', id, docs }),
+  setShared: (id, shared) => postMsg({ type: 'setWorkspaceShared', id, shared }),
 
   _apply: (data) => set(s => ({
     workspaces: data.workspaces ?? s.workspaces,

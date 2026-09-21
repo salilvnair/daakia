@@ -33,6 +33,25 @@
 .ws-head-icon { color: var(--color-workspace); flex-shrink: 0; }
 .ws-head-spacer { flex: 1; }
 
+/* Whose workspace this is. Teal for yours-and-shared (the workspace colour);
+   muted with a lock for a teammate's read-only copy. */
+.ws-owner-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--color-workspace);
+  background: color-mix(in srgb, var(--color-workspace) 14%, transparent);
+}
+.ws-owner-pill--theirs {
+  color: var(--color-text-secondary, var(--color-text-muted));
+  background: color-mix(in srgb, var(--color-text-muted) 16%, transparent);
+}
+
 .ws-name {
   display: inline-flex;
   align-items: center;
@@ -126,6 +145,15 @@
 .ws-menu-item--danger { color: var(--color-error); }
 .ws-menu-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ws-menu-tick { margin-left: auto; flex-shrink: 0; }
+.ws-menu-owner {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .ws-menu-rule { height: 1px; background: var(--color-surface-border); margin: 5px 4px; }
 
 .ws-error {

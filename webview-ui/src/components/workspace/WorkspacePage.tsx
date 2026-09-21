@@ -11,7 +11,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { ImportModal } from './ImportModal';
-import { useWorkspaceStore, type Workspace } from '../../store/workspace-store';
+import { useWorkspaceStore, isReadOnly, type Workspace } from '../../store/workspace-store';
 import { useTabsStore } from '../../store/tabs-store';
 import { SplitPanelView, AlertDialogView } from '@salilvnair/dui';
 import { NewItemModal } from '../shared/modals/NewItemModal';
@@ -21,7 +21,7 @@ import {
   LayoutGridIcon, ChevronDownIcon, CheckIcon, PlusIcon, FolderIcon, FolderOpenIcon,
   DownloadIcon, GlobeIcon, SettingsIcon, PencilIcon, TrashIcon, CloseIcon,
   UploadIcon, DocumentIcon, CollectionsFolderIcon, ClockIcon,
-  FolderImportIcon, FolderExportIcon,
+  FolderImportIcon, FolderExportIcon, UsersIcon, LockIcon,
 } from '../../icons';
 import { WorkspaceDocs } from './WorkspaceDocs';
 import {
@@ -75,9 +75,10 @@ export const shortWorkspaceName = (name: string | undefined) => cut(name, MAX_NA
 export const railWorkspaceName = (name: string | undefined) => cut(name, MAX_RAIL_NAME);
 
 export function WorkspacePage() {
-  const { workspaces, activeId, stats, load, switchTo, create, rename, remove, error } =
+  const { workspaces, activeId, stats, load, switchTo, create, rename, remove, setShared, error } =
     useWorkspaceStore();
   const active = workspaces.find(w => w.id === activeId);
+  const readOnly = isReadOnly(active);
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   /* Everything the workspace tab remembers.
@@ -142,6 +143,7 @@ export function WorkspacePage() {
         onRenameStart={() => { setRenaming(true); setMenuOpen(false); }}
         onRenameDone={(name) => { if (active && name.trim()) rename(active.id, name); setRenaming(false); }}
         onDelete={() => { setConfirmingDelete(true); setMenuOpen(false); }}
+        onToggleShared={() => { if (active) setShared(active.id, active.shared !== 1); }}
       />
 
       {/* One tab per thing a workspace owns, plus the overview. No Git tab:
@@ -204,15 +206,19 @@ export function WorkspacePage() {
                 menu already uses for import and export — blue in, amber out.
                 A third pair of colours for the same two verbs is one more thing
                 to learn for nothing. */}
-            <Action tone="imp" icon={<FolderImportIcon size={12} />} label="Import"
-              onClick={() => setImporting(true)} />
+            {!readOnly && (
+              <Action tone="imp" icon={<FolderImportIcon size={12} />} label="Import"
+                onClick={() => setImporting(true)} />
+            )}
             <Action tone="exp" icon={<FolderExportIcon size={12} />} label="Export"
               onClick={() => postMsg({ type: 'exportWorkspace' })} />
             {/* Both of these open the panel's own dialog rather than a second
                 create flow of their own — one flow, so they cannot disagree
                 about what a collection or an environment needs. */}
-            <Action tone="new" icon={<PlusIcon size={12} />} label="New collection"
-              onClick={() => { setSub('collections'); setCreateColl(n => n + 1); }} />
+            {!readOnly && (
+              <Action tone="new" icon={<PlusIcon size={12} />} label="New collection"
+                onClick={() => { setSub('collections'); setCreateColl(n => n + 1); }} />
+            )}
             <Action tone="env" icon={<GlobeIcon size={12} />} label="New environment"
               onClick={() => { setSub('environments'); setCreateEnv(n => n + 1); }} />
           </div>
@@ -258,7 +264,7 @@ export function WorkspacePage() {
 function WorkspaceHeader({
   active, workspaces, menuOpen, menuRef, renaming, docsOpen, onShowDocs,
   onToggleMenu, onPick, onCreate, onOpen, onImport, onExport,
-  onRenameStart, onRenameDone, onDelete,
+  onRenameStart, onRenameDone, onDelete, onToggleShared,
 }: {
   active?: Workspace;
   workspaces: Workspace[];
@@ -277,8 +283,25 @@ function WorkspaceHeader({
   onRenameStart: () => void;
   onRenameDone: (name: string) => void;
   onDelete: () => void;
+  onToggleShared: () => void;
 }) {
   const [overflow, setOverflow] = useState(false);
+  const readOnly = isReadOnly(active);
+  const mine = workspaces.filter(w => !isReadOnly(w));
+  const theirs = workspaces.filter(w => isReadOnly(w));
+  const item = (w: Workspace) => (
+    <button
+      key={w.id}
+      type="button"
+      className={`ws-menu-item${w.id === active?.id ? ' ws-menu-item--on' : ''}`}
+      onClick={() => onPick(w.id)}
+    >
+      {isReadOnly(w) ? <UsersIcon size={12} /> : <LayoutGridIcon size={12} />}
+      <span className="ws-menu-label" title={w.name}>{shortWorkspaceName(w.name)}</span>
+      {isReadOnly(w) && <span className="ws-menu-owner">{w.owner_name}</span>}
+      {w.id === active?.id && <CheckIcon size={12} className="ws-menu-tick" />}
+    </button>
+  );
 
   return (
     <header className="ws-head">
@@ -303,6 +326,19 @@ function WorkspaceHeader({
         </button>
       )}
 
+      {/* Whose it is, said where the name is. A read-only workspace that looks
+          like your own is an edit that fails for no visible reason. */}
+      {readOnly ? (
+        <span className="ws-owner-pill ws-owner-pill--theirs"
+              title="Shared with you through Git Sync. It refreshes on every sync and cannot be changed here.">
+          <LockIcon size={11} /> {active?.owner_name} · read-only
+        </span>
+      ) : active?.shared === 1 ? (
+        <span className="ws-owner-pill" title="Teammates get a read-only copy through Git Sync.">
+          <UsersIcon size={11} /> Shared
+        </span>
+      ) : null}
+
       <div className="ws-head-spacer" />
 
       {/*
@@ -324,17 +360,23 @@ function WorkspaceHeader({
         </button>
       )}
 
-      <button
-        type="button"
-        className="ws-overflow"
-        title="Rename or delete this workspace"
-        onClick={() => setOverflow(o => !o)}
-      >
-        <SettingsIcon size={13} />
-      </button>
+      {!readOnly && (
+        <button
+          type="button"
+          className="ws-overflow"
+          title="Share, rename or delete this workspace"
+          onClick={() => setOverflow(o => !o)}
+        >
+          <SettingsIcon size={13} />
+        </button>
+      )}
 
-      {overflow && (
+      {overflow && !readOnly && (
         <div className="ws-menu ws-menu--right" onMouseLeave={() => setOverflow(false)}>
+          <button type="button" className="ws-menu-item" onClick={() => { setOverflow(false); onToggleShared(); }}
+                  title="Teammates on the same Git Sync repo get a read-only copy. History is never shared.">
+            <UsersIcon size={12} /> {active?.shared === 1 ? 'Stop sharing' : 'Share with team'}
+          </button>
           <button type="button" className="ws-menu-item" onClick={() => { setOverflow(false); onRenameStart(); }}>
             <PencilIcon size={12} /> Rename
           </button>
@@ -347,18 +389,12 @@ function WorkspaceHeader({
       {menuOpen && (
         <div className="ws-menu" ref={menuRef}>
           <div className="ws-menu-head">Workspaces</div>
-          {workspaces.map(w => (
-            <button
-              key={w.id}
-              type="button"
-              className={`ws-menu-item${w.id === active?.id ? ' ws-menu-item--on' : ''}`}
-              onClick={() => onPick(w.id)}
-            >
-              <LayoutGridIcon size={12} />
-              <span className="ws-menu-label" title={w.name}>{shortWorkspaceName(w.name)}</span>
-              {w.id === active?.id && <CheckIcon size={12} className="ws-menu-tick" />}
-            </button>
-          ))}
+          {mine.map(item)}
+          {theirs.length > 0 && <>
+            <div className="ws-menu-rule" />
+            <div className="ws-menu-head">Shared with you</div>
+            {theirs.map(item)}
+          </>}
           <div className="ws-menu-rule" />
           <button type="button" className="ws-menu-item" onClick={onCreate}>
             <PlusIcon size={12} /> Create workspace
@@ -431,6 +467,17 @@ function WorkspaceFacts({ active, stats }: {
           {stats.environments > 0 && <> and {stats.environments} environment{stats.environments === 1 ? '' : 's'}</>}.
         </p>
       )}
+      {isReadOnly(active) ? (
+        <p className="ws-fact">
+          Shared by <b>{active?.owner_name}</b> through Git Sync. It is read-only here and
+          refreshes on every sync. Secret variables arrive blank — fill those in yourself.
+        </p>
+      ) : active?.shared === 1 ? (
+        <p className="ws-fact">
+          Shared with your team through Git Sync: collections and environments, secrets
+          redacted. History stays yours.
+        </p>
+      ) : null}
       <p className="ws-fact ws-fact--muted">
         Mock servers, dk8s and your model providers are shared across every workspace — a
         workspace scopes what you are testing, not what you are testing it with.

@@ -35,6 +35,7 @@ import {
   handleRenameWorkspace, handleDeleteWorkspace, handleSaveWorkspaceDocs,
   handleWorkspaceDocsContext,
   handleImportWorkspace, handleOpenWorkspace, handleExportWorkspace,
+  handleSetWorkspaceShared, refuseIfReadOnly,
 } from './handlers/workspace-handler';
 import {
   handleGetCollections, handleGetCollectionTree, handleGetCollectionChildren,
@@ -84,7 +85,7 @@ import { handleAiMcpConnect, handleAiMcpDisconnect, cleanupAiMcpClients } from '
 import { handleSaveUiState, handleGetUiState, handleSaveWorkspaceSnapshot, handleGetWorkspaceSnapshot } from './handlers/ui-state-handler';
 import {
   handleGitSyncGetSettings, handleGitSyncSaveSettings, handleGitSyncGetStatus,
-  handleGitSyncInit, handleGitSyncNow, handleGitSyncExportOnly, handleGitSyncImportOnly,
+  handleGitSyncInit, handleGitSyncNow, handleGitSyncExportOnly, handleGitSyncImportOnly, handleGitSyncSetIdentity,
 } from './handlers/git-sync-handler';
 import {
   handleVaultGetStatus, handleVaultSetPassphrase, handleVaultUnlock, handleVaultLock, handleVaultClear,
@@ -326,6 +327,8 @@ export class MainPanel {
        off screen until the panel was reopened. */
     handleGetEnvironments(this._post);
     handleGetThemes(this._post);
+    /* Teammates' shared workspaces arrive, change and leave with a sync. */
+    handleGetWorkspaces(this._post);
   }
 
   // ────────────────── Message Router ──────────────────
@@ -334,6 +337,11 @@ export class MainPanel {
     // ── Script Debugger (handle before switch for prefix matching) ──
     if (msg.type.startsWith('scriptDebug:')) {
       handleDebugMessage(msg, this._post);
+      return;
+    }
+
+    // A teammate's shared workspace is read-only; refuse collection writes here, once.
+    if (refuseIfReadOnly(msg, this._post, () => handleGetCollections(this._post, msg.protocol as string | undefined))) {
       return;
     }
 
@@ -1298,6 +1306,9 @@ export class MainPanel {
       case 'deleteWorkspace':
         handleDeleteWorkspace(msg, this._post);
         break;
+      case 'setWorkspaceShared':
+        handleSetWorkspaceShared(msg, this._post);
+        break;
       case 'saveWorkspaceDocs':
         handleSaveWorkspaceDocs(msg, this._post);
         break;
@@ -1673,6 +1684,9 @@ export class MainPanel {
       case 'gitSync:importOnly':
         handleGitSyncImportOnly(this._post);
         this._broadcastSyncedData();
+        break;
+      case 'gitSync:setIdentity':
+        handleGitSyncSetIdentity(msg as { id?: string }, this._post);
         break;
 
       // ── Vault (Environments secret encryption) ──

@@ -636,8 +636,17 @@ export const DEFAULT_WORKSPACE_ID = 'ws-default';
  * half-initialised depending on which is loaded first.
  */
 function activeWorkspaceId(): string {
+  if (_activeWorkspaceResolver) return _activeWorkspaceResolver();
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   return (require('./workspaces') as typeof import('./workspaces')).getActiveWorkspaceId();
+}
+
+/* workspaces.ts hands itself over when it loads. The require above is then
+   never reached — which matters under vitest, whose module loader serves
+   `import` but not a runtime `require` of a .ts file. */
+let _activeWorkspaceResolver: (() => string) | undefined;
+export function _registerActiveWorkspaceResolver(fn: () => string): void {
+  _activeWorkspaceResolver = fn;
 }
 
 /**
@@ -669,6 +678,24 @@ function _createWorkspacesTable(db: SqlJsDatabase): void {
   `);
 }
 
+/**
+ * Who a workspace belongs to, and whether its owner shares it.
+ *
+ * `owner_id` is null for your own workspaces. A teammate's shared workspace,
+ * brought in by Git Sync, carries their sync id and name here and is read-only:
+ * it is a copy of something they own, rebuilt from their folder on every sync,
+ * so an edit made to it would be thrown away the next time anyway.
+ *
+ * `shared` only means anything on your own: it is the switch that makes Git
+ * Sync publish the workspace to teammates.
+ */
+function _addWorkspaceOwnership(db: SqlJsDatabase): void {
+  const cols = _columns(db, 'workspaces');
+  if (!cols.includes('shared')) db.run('ALTER TABLE workspaces ADD COLUMN shared INTEGER NOT NULL DEFAULT 0');
+  if (!cols.includes('owner_id')) db.run('ALTER TABLE workspaces ADD COLUMN owner_id TEXT');
+  if (!cols.includes('owner_name')) db.run('ALTER TABLE workspaces ADD COLUMN owner_name TEXT');
+}
+
 /** Columns on a table, or [] when the table is not there yet. */
 function _columns(db: SqlJsDatabase, table: string): string[] {
   try {
@@ -689,6 +716,7 @@ export function _migrateWorkspacesForTest(db: SqlJsDatabase): void {
 
 function _migrateWorkspaces(db: SqlJsDatabase): void {
   _createWorkspacesTable(db);
+  _addWorkspaceOwnership(db);
 
   // Someone has to own the rows that already exist.
   const existing = db.exec('SELECT COUNT(*) FROM workspaces');

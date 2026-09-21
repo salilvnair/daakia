@@ -1,6 +1,10 @@
 /**
  * GitSyncSettings — configure + drive git-native sync.
  *
+ * Every install has a sync id and writes only its own folder in the repo, so
+ * two people syncing never touch the same file. Workspaces are private unless
+ * their owner shares one; a teammate's shared workspace arrives read-only.
+ *
  * Daakia clones the configured remote into a fixed local folder
  * (`~/.salilvnair/daakia-vsce/daakia-vsce-git`, independent of whatever VS Code
  * workspace is open) and writes collections, history, mock server configs, and
@@ -16,7 +20,7 @@ import { ButtonView, TextInputView, CheckboxView, SelectInputView, type SelectOp
 import { postMsg } from '../../vscode';
 import { useToastStore } from '../../store/toast-store';
 
-import { GitHubIcon, CheckCircleFilledIcon, WarningTriangleIcon, XCircleIcon, GitBranchIcon, ArrowUpIcon, ArrowDownIcon, UploadIcon, DownloadIcon, RefreshIcon } from '../../icons';
+import { GitHubIcon, CheckCircleFilledIcon, WarningTriangleIcon, XCircleIcon, GitBranchIcon, ArrowUpIcon, ArrowDownIcon, UploadIcon, DownloadIcon, RefreshIcon, UsersIcon, CopyIcon, LayoutGridIcon } from '../../icons';
 
 const ACCENT = 'var(--color-settings)';
 
@@ -41,8 +45,11 @@ interface GitSyncSettingsData {
   syncThemes: boolean;
 }
 
+interface SyncIdentity { id: string; name: string }
+interface TeamMember { id: string; name: string; isMe: boolean; shared: { id: string; name: string }[] }
+
 const SYNC_SCOPE_ITEMS: { key: keyof Pick<GitSyncSettingsData, 'syncHistory' | 'syncCollections' | 'syncMockServers' | 'syncEnvironments' | 'syncAiConfig' | 'syncThemes'>; label: string }[] = [
-  { key: 'syncHistory', label: 'History' },
+  { key: 'syncHistory', label: 'History (credentials redacted)' },
   { key: 'syncCollections', label: 'Collections' },
   { key: 'syncMockServers', label: 'Mock Server (incl. state machine)' },
   { key: 'syncEnvironments', label: 'Environments (secret values redacted)' },
@@ -86,6 +93,10 @@ export function GitSyncSettings() {
   const [busy, setBusy] = useState<'init' | 'sync' | 'export' | 'import' | null>(null);
   const [dirtySettings, setDirtySettings] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [identity, setIdentity] = useState<SyncIdentity | null>(null);
+  const [team, setTeam] = useState<TeamMember[]>([]);
+  const [linking, setLinking] = useState(false);
+  const [linkId, setLinkId] = useState('');
   const addToast = useToastStore(s => s.addToast);
 
   useEffect(() => {
@@ -97,6 +108,8 @@ export function GitSyncSettings() {
       if (msg.type === 'gitSync:settingsData') {
         setSettings(msg.settings);
         setDirtySettings(false);
+        if (msg.identity) setIdentity(msg.identity);
+        if (Array.isArray(msg.team)) setTeam(msg.team);
       } else if (msg.type === 'gitSync:statusData') {
         setStatus(msg.status);
       } else if (msg.type === 'gitSync:initResult') {
@@ -106,6 +119,11 @@ export function GitSyncSettings() {
         setBusy(null);
         if (msg.result.ok) setLastSyncedAt(new Date().toISOString());
         addToast({ type: msg.result.ok ? 'success' : 'error', message: msg.result.message });
+        /* The team list is read from the repo, which the sync just refreshed. */
+        postMsg({ type: 'gitSync:getSettings' });
+      } else if (msg.type === 'gitSync:identityResult') {
+        addToast({ type: msg.result.ok ? 'success' : 'error', message: msg.result.message });
+        if (msg.result.ok) { setLinking(false); setLinkId(''); }
       } else if (msg.type === 'gitSync:autoSyncTick') {
         if (msg.result?.ok) setLastSyncedAt(msg.at);
       } else if (msg.type === 'gitSync:exportResult') {
@@ -115,7 +133,7 @@ export function GitSyncSettings() {
       } else if (msg.type === 'gitSync:importResult') {
         setBusy(null);
         const c = msg.counts;
-        addToast({ type: 'success', message: `Imported: ${c.collections} request(s), ${c.history} new history row(s), ${c.mockServers} mock server(s), ${c.stateMachines} workflow(s), ${c.environments} environment(s), ${c.aiConfig} prompt(s).` });
+        addToast({ type: 'success', message: `Imported: ${c.shared ?? 0} shared workspace(s), ${c.collections} request(s), ${c.history} new history row(s), ${c.mockServers} mock server(s), ${c.stateMachines} workflow(s), ${c.environments} environment(s), ${c.aiConfig} prompt(s).` });
       }
     };
     window.addEventListener('message', handler);
@@ -160,15 +178,81 @@ export function GitSyncSettings() {
         <p className="text-[14px] font-semibold text-[var(--color-text-primary)]">Git Sync</p>
         <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">
           Keep collections, history, mock servers, and state machine workflows as diffable JSON files in a local clone of your remote and sync them over SSH.
+          Each person writes only their own folder, so syncing at the same time never conflicts.
         </p>
       </div>
+
+      {/* Who you are in the repo */}
+      {identity && (
+        <div className="max-w-[600px]">
+          <p className="text-[13px] font-medium text-[var(--color-text-primary)]">You</p>
+          <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-2">
+            Your name comes from git's global <code>user.name</code>, or this computer's user when git has none. Your workspaces are private unless you share one from the workspace menu.
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[12px] font-semibold text-[var(--color-text-primary)]">{identity.name}</span>
+            <code className="text-[11px] px-2 py-0.5 rounded" style={{ background: 'color-mix(in srgb, var(--color-text-primary) 6%, transparent)', color: 'var(--color-text-secondary)' }}>{identity.id}</code>
+            <ButtonView size="sm" variant="ghost" accentColor={ACCENT} iconLeft={<CopyIcon size={11} />}
+              onClick={() => { void navigator.clipboard?.writeText(identity.id); addToast({ type: 'success', message: 'Sync ID copied.' }); }}>
+              Copy
+            </ButtonView>
+            {!linking && (
+              <ButtonView size="sm" variant="ghost" accentColor={ACCENT} onClick={() => setLinking(true)}>
+                Use my ID from another computer
+              </ButtonView>
+            )}
+          </div>
+          {linking && (
+            <div className="flex items-center gap-2 mt-2">
+              <TextInputView value={linkId} onChange={(e) => setLinkId(e.target.value)} size="sm" accentColor={ACCENT}
+                placeholder="Paste the sync ID shown on your other computer" style={{ width: 320 }} />
+              <ButtonView size="sm" variant="primary" accentColor={ACCENT} disabled={!linkId.trim()}
+                onClick={() => postMsg({ type: 'gitSync:setIdentity', id: linkId })}>
+                Link
+              </ButtonView>
+              <ButtonView size="sm" variant="ghost" accentColor={ACCENT} onClick={() => { setLinking(false); setLinkId(''); }}>Cancel</ButtonView>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Everyone else in the repo */}
+      {team.some(m => !m.isMe) && (
+        <div className="max-w-[600px]">
+          <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Team</p>
+          <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-2">
+            People syncing to this repo, and the workspaces they share with you. Shared workspaces show up read-only in your workspace switcher.
+          </p>
+          <div className="flex flex-col gap-1.5">
+            {team.filter(m => !m.isMe).map(m => (
+              <div key={m.id} className="flex items-start gap-2 text-[12px]">
+                <UsersIcon size={13} style={{ color: ACCENT, marginTop: 2 }} />
+                <div className="min-w-0">
+                  <span className="font-semibold text-[var(--color-text-primary)]">{m.name}</span>
+                  <span className="ml-2 text-[10.5px] text-[var(--color-text-muted)]">{m.id.slice(0, 8)}</span>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {m.shared.length === 0 ? (
+                      <span className="text-[11px] text-[var(--color-text-muted)]">Shares nothing yet</span>
+                    ) : m.shared.map(ws => (
+                      <span key={ws.id} className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full"
+                        style={{ color: 'var(--color-workspace)', background: 'color-mix(in srgb, var(--color-workspace) 12%, transparent)' }}>
+                        <LayoutGridIcon size={10} /> {ws.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Auto sync interval */}
       <div className="flex items-center gap-4 max-w-[600px]">
         <div className="flex-1 min-w-0">
           <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Auto Sync</p>
           <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">
-            When on, runs a full sync (export → commit → pull → push → import) of collections, history, mock servers, and state machine workflows on this interval — always one cycle at a time, never overlapping
+            When on, runs a full sync on this interval: fetch, write your folder, bring in teammates' shared workspaces, commit and push. Always one cycle at a time, never overlapping
           </p>
         </div>
         <SelectInputView
@@ -196,7 +280,7 @@ export function GitSyncSettings() {
       {/* Sync scope */}
       <div>
         <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Sync</p>
-        <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-2">What to include in export/import and auto sync</p>
+        <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-2">What goes into your folder. Teammates' Daakia reads only the workspaces you share, but anyone who can clone the repo can read the files.</p>
         <div className="flex flex-col gap-2">
           {SYNC_SCOPE_ITEMS.map(item => (
             <label key={item.key} className="flex items-center gap-2 cursor-pointer w-fit">

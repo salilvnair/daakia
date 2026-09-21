@@ -23,7 +23,7 @@
  * `workspace-scope.test.ts` asserts every SELECT against the three scoped
  * tables goes through it.
  */
-import { getDb, scheduleSave, getSetting, setSetting, DEFAULT_WORKSPACE_ID } from './db';
+import { getDb, scheduleSave, getSetting, setSetting, DEFAULT_WORKSPACE_ID, _registerActiveWorkspaceResolver } from './db';
 
 export interface WorkspaceRow {
   id: string;
@@ -34,6 +34,11 @@ export interface WorkspaceRow {
   sort_order: number;
   created_at: string;
   last_used_at: string | null;
+  /** 1 when Git Sync publishes this workspace to teammates. Yours only. */
+  shared: number;
+  /** A teammate's sync id when this is their shared workspace; null when it is yours. */
+  owner_id: string | null;
+  owner_name: string | null;
 }
 
 export interface WorkspaceStats {
@@ -100,7 +105,8 @@ export function listWorkspaces(): WorkspaceRow[] {
   const db = getDb();
   if (!db) return [];
   const stmt = db.prepare(
-    `SELECT id, name, path, color, docs, sort_order, created_at, last_used_at
+    `SELECT id, name, path, color, docs, sort_order, created_at, last_used_at,
+            shared, owner_id, owner_name
        FROM workspaces ORDER BY sort_order, name`,
   );
   const rows: WorkspaceRow[] = [];
@@ -130,7 +136,7 @@ export function createWorkspace(name: string, opts: { path?: string; color?: str
 export function renameWorkspace(id: string, name: string): boolean {
   const db = getDb();
   const clean = name.trim();
-  if (!db || !clean || !_exists(id)) return false;
+  if (!db || !clean || !_exists(id) || isReadOnlyWorkspace(id)) return false;
   db.run('UPDATE workspaces SET name = ? WHERE id = ?', [clean, id]);
   scheduleSave();
   return true;
@@ -138,7 +144,7 @@ export function renameWorkspace(id: string, name: string): boolean {
 
 export function setWorkspaceDocs(id: string, docs: string): boolean {
   const db = getDb();
-  if (!db || !_exists(id)) return false;
+  if (!db || !_exists(id) || isReadOnlyWorkspace(id)) return false;
   db.run('UPDATE workspaces SET docs = ? WHERE id = ?', [docs, id]);
   scheduleSave();
   return true;
@@ -205,7 +211,78 @@ export function getWorkspaceStats(id = getActiveWorkspaceId()): WorkspaceStats {
   };
 }
 
+// ── Ownership and sharing ────────────────────────────────────────────────────
+
+/**
+ * Somebody else's workspace, brought in by Git Sync.
+ *
+ * Read-only because it is a copy: every sync rebuilds it from its owner's
+ * folder, so an edit made here would be silently thrown away at the next one.
+ * Refusing up front is honest; accepting and losing it is not.
+ */
+export function isReadOnlyWorkspace(id = getActiveWorkspaceId()): boolean {
+  const row = getWorkspace(id);
+  return !!row?.owner_id;
+}
+
+/** Publish (or stop publishing) one of your own workspaces to teammates. */
+export function setWorkspaceShared(id: string, shared: boolean): boolean {
+  const db = getDb();
+  if (!db || !_exists(id) || isReadOnlyWorkspace(id)) return false;
+  db.run('UPDATE workspaces SET shared = ? WHERE id = ?', [shared ? 1 : 0, id]);
+  scheduleSave();
+  return true;
+}
+
+/**
+ * Create a workspace with a known id, or bring an existing one's details up to
+ * date. Git Sync's way in: it needs the id to match the folder it came from,
+ * which `createWorkspace` — minting a fresh one — cannot give it.
+ */
+export function ensureWorkspace(row: {
+  id: string; name: string; color?: string | null; docs?: string | null;
+  owner_id?: string | null; owner_name?: string | null;
+}): void {
+  const db = getDb();
+  if (!db) return;
+  if (_exists(row.id)) {
+    db.run(
+      'UPDATE workspaces SET name = ?, color = ?, docs = ?, owner_id = ?, owner_name = ? WHERE id = ?',
+      [row.name, row.color ?? null, row.docs ?? null, row.owner_id ?? null, row.owner_name ?? null, row.id],
+    );
+  } else {
+    db.run(
+      `INSERT INTO workspaces (id, name, color, docs, sort_order, owner_id, owner_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [row.id, row.name, row.color ?? null, row.docs ?? null, listWorkspaces().length,
+       row.owner_id ?? null, row.owner_name ?? null],
+    );
+  }
+  scheduleSave();
+}
+
+/**
+ * Run `fn` as though `id` were the active workspace, then put things back.
+ *
+ * Every scoped query reads the active workspace rather than taking one, which
+ * is the right trade for the UI and the wrong one for Git Sync, which has to
+ * read and write every workspace in one pass. This borrows the pointer in
+ * memory only — nothing is persisted and `last_used_at` is not touched — and
+ * the storage layer is synchronous, so nothing else can observe the swap.
+ */
+export function withWorkspace<T>(id: string, fn: () => T): T {
+  const previous = getActiveWorkspaceId();
+  _active = id;
+  try {
+    return fn();
+  } finally {
+    _active = previous;
+  }
+}
+
 /** Testing seam: forget the cached active id so the next read re-resolves it. */
 export function _resetActiveWorkspaceCache(): void {
   _active = undefined;
 }
+
+_registerActiveWorkspaceResolver(getActiveWorkspaceId);

@@ -12,7 +12,9 @@
 import {
   listWorkspaces, getWorkspace, createWorkspace, renameWorkspace, deleteWorkspace,
   setWorkspaceDocs, setActiveWorkspaceId, getActiveWorkspaceId, getWorkspaceStats,
+  setWorkspaceShared, isReadOnlyWorkspace,
 } from '../../../storage/workspaces';
+import { COLLECTION_MUTATION_TYPES } from '../../../services/git-sync';
 import { getAllCollectionTrees, getAllEnvironments } from '../../../storage/db';
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -81,6 +83,58 @@ export function handleDeleteWorkspace(msg: Record<string, unknown>, post: PostMe
   /* Deleting the active one moves you elsewhere, so this is a switch as much as
      a delete — the scoped views have to reload either way. */
   post({ type: 'workspaceChanged', ...snapshot() });
+}
+
+/** Publish one of your workspaces to teammates through Git Sync, or stop. */
+export function handleSetWorkspaceShared(msg: Record<string, unknown>, post: PostMessage) {
+  const id = String(msg.id ?? getActiveWorkspaceId());
+  const shared = msg.shared === true;
+  if (!setWorkspaceShared(id, shared)) {
+    post({ type: 'workspaceError', message: 'Only your own workspaces can be shared.' });
+  } else {
+    const name = getWorkspace(id)?.name ?? 'This workspace';
+    post({
+      type: 'toast',
+      toastType: 'success',
+      message: shared
+        ? `${name} is shared. Teammates get a read-only copy on their next Git Sync.`
+        : `${name} is private again. It leaves teammates' Daakia on their next Git Sync.`,
+    });
+  }
+  post({ type: 'workspacesData', ...snapshot() });
+}
+
+/**
+ * Everything that writes to collections, which a teammate's workspace refuses.
+ *
+ * The collection mutations plus every way of importing into one. Environments
+ * are not here on purpose: a shared workspace's secrets arrive blank, and
+ * filling them in is the one edit you are expected to make.
+ */
+const READ_ONLY_REFUSED = new Set([
+  ...COLLECTION_MUTATION_TYPES,
+  'clearCollections', 'importCollectionRequest', 'importBrunoRequest', 'importCollectionDaakia',
+  'importCollectionUrl', 'soap:importWsdlToCollection', 'soap:importSoapUi',
+]);
+
+/**
+ * Refuse a collection write in a teammate's shared workspace.
+ *
+ * Checked once, at the router, rather than in each of the fifteen handlers —
+ * one forgotten check there would be an edit that looks saved and is then
+ * silently undone by the next sync. Returns true when the message was refused;
+ * `refresh` re-sends the real tree so an optimistic edit in the view snaps back.
+ */
+export function refuseIfReadOnly(msg: { type: string }, post: PostMessage, refresh: () => void): boolean {
+  if (!READ_ONLY_REFUSED.has(msg.type) || !isReadOnlyWorkspace()) return false;
+  const ws = getWorkspace(getActiveWorkspaceId());
+  post({
+    type: 'toast',
+    toastType: 'error',
+    message: `${ws?.name ?? 'This workspace'} is shared by ${ws?.owner_name ?? 'a teammate'} and is read-only here. Changes to it come from their syncs.`,
+  });
+  refresh();
+  return true;
 }
 
 export function handleSaveWorkspaceDocs(msg: Record<string, unknown>, post: PostMessage) {

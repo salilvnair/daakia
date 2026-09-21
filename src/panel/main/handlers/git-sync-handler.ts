@@ -5,6 +5,7 @@
 import {
   getAutoSyncSeconds, getSyncFolder, getRemoteUrl, getBranch, getSyncScope, saveGitSyncSettings,
   getGitStatus, ensureGitRepo, gitSyncNow, exportFullBundle, importFullBundle,
+  getSyncIdentity, setSyncIdentityId, listTeam,
 } from '../../../services/git-sync';
 
 type PostMessage = (msg: unknown) => void;
@@ -25,6 +26,8 @@ export function handleGitSyncGetSettings(post: PostMessage): void {
       syncAiConfig: scope.aiConfig,
       syncThemes: scope.themes,
     },
+    identity: getSyncIdentity(),
+    team: listTeam(),
   });
 }
 
@@ -66,4 +69,14 @@ export function handleGitSyncExportOnly(post: PostMessage): void {
 export function handleGitSyncImportOnly(post: PostMessage): void {
   const counts = importFullBundle();
   post({ type: 'gitSync:importResult', counts });
+}
+
+/**
+ * Use another machine's sync id here, so both share one private folder.
+ * The next sync reads that folder in before writing to it.
+ */
+export function handleGitSyncSetIdentity(msg: { id?: string }, post: PostMessage): void {
+  const result = setSyncIdentityId(String(msg.id ?? ''));
+  post({ type: 'gitSync:identityResult', result });
+  handleGitSyncGetSettings(post);
 }

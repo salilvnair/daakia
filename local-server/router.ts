@@ -95,13 +95,14 @@ import { handleGetDynamicVariables } from '../src/panel/main/handlers/dynamic-va
 import { handleGetThemes, handleSaveTheme, handleDeleteTheme } from '../src/panel/main/handlers/theme-handler';
 import {
   handleGitSyncGetSettings, handleGitSyncSaveSettings, handleGitSyncGetStatus, handleGitSyncInit,
-  handleGitSyncNow, handleGitSyncExportOnly, handleGitSyncImportOnly,
+  handleGitSyncNow, handleGitSyncExportOnly, handleGitSyncImportOnly, handleGitSyncSetIdentity,
 } from '../src/panel/main/handlers/git-sync-handler';
 import {
   handleGetWorkspaces, handleSwitchWorkspace, handleCreateWorkspace,
   handleRenameWorkspace, handleDeleteWorkspace, handleSaveWorkspaceDocs,
   handleWorkspaceDocsContext,
   handleImportWorkspace, handleOpenWorkspace, handleExportWorkspace,
+  handleSetWorkspaceShared, refuseIfReadOnly,
 } from '../src/panel/main/handlers/workspace-handler';
 import {
   handleGetCollections, handleGetCollectionTree, handleGetCollectionChildren,
@@ -185,6 +186,7 @@ function broadcastSyncedData(post: PostMessage) {
   handleSmWorkflowGetAll(post);
   handleGetEnvironments(post);
   handleGetThemes(post);
+  handleGetWorkspaces(post);
 }
 
 /** Mirrors MainPanel.refreshInitialState() for the subsystems wired here. */
@@ -205,6 +207,9 @@ export function sendInitialState(post: PostMessage) {
 }
 
 export async function routeMessage(msg: { type: string; [key: string]: unknown }, post: PostMessage) {
+  // A teammate's shared workspace is read-only; refuse collection writes here, once.
+  if (refuseIfReadOnly(msg, post, () => handleGetCollections(post, msg.protocol as string | undefined))) return;
+
   switch (msg.type) {
     case 'ready':
       sendInitialState(post);
@@ -250,6 +255,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
     case 'gitSync:importOnly':
       handleGitSyncImportOnly(post);
       broadcastSyncedData(post);
+      break;
+    case 'gitSync:setIdentity':
+      handleGitSyncSetIdentity(msg as { id?: string }, post);
       break;
     case 'themes:save':
       handleSaveTheme(msg, post);
@@ -940,6 +948,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'deleteWorkspace':
       handleDeleteWorkspace(msg, post);
+      break;
+    case 'setWorkspaceShared':
+      handleSetWorkspaceShared(msg, post);
       break;
     case 'saveWorkspaceDocs':
       handleSaveWorkspaceDocs(msg, post);

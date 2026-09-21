@@ -20,12 +20,18 @@ import type { ThemePayload } from '../panel/main/handlers/theme-handler';
 import * as os from 'os';
 import { execFile as execFileCb } from 'child_process';
 import { promisify } from 'util';
+import { randomUUID } from 'crypto';
 import {
   getCollectionTree, upsertCollection, upsertCollectionRequest, type CollectionTreeNode,
   getHistory, insertHistoryIfNew, findAll, upsert,
-  getAllEnvironments, upsertEnvironment,
+  getAllEnvironments, upsertEnvironment, deleteEnvironment, getDb,
   getAllPrompts, upsertPrompt, getAiFeatures, setAiFeatures, getSetting, setSetting,
 } from '../storage/db';
+import {
+  listWorkspaces, getWorkspace, ensureWorkspace, setWorkspaceShared, deleteWorkspace, withWorkspace,
+  type WorkspaceRow,
+} from '../storage/workspaces';
+import { redactHistoryRow, REDACTED } from './sync-redact';
 import { loadSavedConfigs, saveConfigs } from '../mock/mock-server-manager';
 
 const execFile = promisify(execFileCb);
@@ -35,6 +41,10 @@ const SYNC_PROTOCOLS = ['rest', 'graphql', 'websocket', 'grpc', 'soap', 'ai', 'm
 const SM_COL_MACHINE = 'sm_machine';
 const SM_COL_FOLDER = 'sm_folder';
 const SM_COL_TODO = 'sm_todo';
+
+const SETTING_AI_PROVIDERS = 'aiProviders';
+const SETTING_AI_DEFAULT_PROVIDER = 'aiDefaultProvider';
+const SETTING_AI_DEFAULT_MODEL = 'aiDefaultModel';
 
 let _exporting = false;
 let _exportTimer: ReturnType<typeof setTimeout> | undefined;
@@ -176,417 +186,215 @@ export async function saveGitSyncSettings(patch: Partial<StoredGitSync>): Promis
   setSetting(SETTINGS_KEY, next);
 }
 
-// ─── Export ───────────────────────────────────────────────────────────────────
-
-/** Write every protocol's collection tree into the sync folder. Returns file count. */
-export function exportCollectionsToWorkspace(): number {
-  const folder = getSyncFolder();
-  fs.mkdirSync(folder, { recursive: true });
-
-  let written = 0;
-  _exporting = true;
-  try {
-    for (const protocol of SYNC_PROTOCOLS) {
-      const tree = getCollectionTree(protocol);
-      const file = path.join(folder, `${protocol}.daakia.json`);
-      if (tree.length === 0) {
-        // remove stale file so deletions also sync
-        if (fs.existsSync(file)) { fs.unlinkSync(file); }
-        continue;
-      }
-      fs.writeFileSync(file, JSON.stringify({ version: '1.0', protocol, collections: tree }, null, 2), 'utf8');
-      written++;
-    }
-  } finally {
-    // let watcher events from our own writes settle before re-enabling import
-    setTimeout(() => { _exporting = false; }, 500);
-  }
-  return written;
-}
-
-/** Debounced write-through used after collection mutations when auto-sync is on. */
-export function scheduleAutoExport(): void {
-  if (!isGitSyncEnabled()) return;
-  if (_exportTimer) clearTimeout(_exportTimer);
-  _exportTimer = setTimeout(() => { exportCollectionsToWorkspace(); }, 1500);
-}
-
-// ─── Import ───────────────────────────────────────────────────────────────────
-
-function upsertTree(nodes: CollectionTreeNode[], protocol: string, parentId: string | null): number {
-  let count = 0;
-  for (const node of nodes) {
-    upsertCollection(node.id, node.name, parentId, protocol);
-    for (const req of node.requests ?? []) {
-      upsertCollectionRequest({ ...req, collection_id: node.id });
-      count++;
-    }
-    count += upsertTree(node.children ?? [], protocol, node.id);
-  }
-  return count;
-}
-
-/** Read every *.daakia.json in the sync folder and upsert into the DB. Returns request count. */
-export function importCollectionsFromWorkspace(): number {
-  const folder = getSyncFolder();
-  if (!fs.existsSync(folder)) return 0;
-
-  let total = 0;
-  for (const file of fs.readdirSync(folder)) {
-    if (!file.endsWith('.daakia.json')) continue;
-    try {
-      const doc = JSON.parse(fs.readFileSync(path.join(folder, file), 'utf8')) as {
-        protocol?: string;
-        collections?: CollectionTreeNode[];
-      };
-      if (!Array.isArray(doc.collections)) continue;
-      const protocol = doc.protocol || file.replace('.daakia.json', '');
-      total += upsertTree(doc.collections, protocol, null);
-    } catch {
-      // malformed file — skip, never crash the extension
-    }
-  }
-  return total;
-}
-
-// ─── History ──────────────────────────────────────────────────────────────────
-
-/** Write every history row into history.daakia.json. Returns row count. */
-export function exportHistoryToWorkspace(): number {
-  const folder = getSyncFolder();
-  fs.mkdirSync(folder, { recursive: true });
-
-  const entries = getHistory(100_000, 0);
-  const file = path.join(folder, 'history.daakia.json');
-  if (entries.length === 0) {
-    if (fs.existsSync(file)) fs.unlinkSync(file);
-    return 0;
-  }
-  fs.writeFileSync(file, JSON.stringify({ version: '1.0', kind: 'history', entries }, null, 2), 'utf8');
-  return entries.length;
-}
-
-/** Import history.daakia.json — dedup-safe (request_id + created_at), never overwrites or deletes. */
-export function importHistoryFromWorkspace(): number {
-  const file = path.join(getSyncFolder(), 'history.daakia.json');
-  if (!fs.existsSync(file)) return 0;
-
-  try {
-    const doc = JSON.parse(fs.readFileSync(file, 'utf8')) as { entries?: unknown[] };
-    if (!Array.isArray(doc.entries)) return 0;
-    let imported = 0;
-    for (const entry of doc.entries as Parameters<typeof insertHistoryIfNew>[0][]) {
-      if (insertHistoryIfNew(entry)) imported++;
-    }
-    return imported;
-  } catch {
-    return 0;
-  }
-}
-
-// ─── Mock Server ──────────────────────────────────────────────────────────────
-
-/** Write all mock server configs (routes + state-machine linkage) into mock-servers.daakia.json. */
-export function exportMockServersToWorkspace(): number {
-  const folder = getSyncFolder();
-  fs.mkdirSync(folder, { recursive: true });
-
-  const configs = loadSavedConfigs();
-  const file = path.join(folder, 'mock-servers.daakia.json');
-  if (configs.length === 0) {
-    if (fs.existsSync(file)) fs.unlinkSync(file);
-    return 0;
-  }
-  fs.writeFileSync(file, JSON.stringify({ version: '1.0', kind: 'mock-servers', configs }, null, 2), 'utf8');
-  return configs.length;
-}
-
-/** Import mock-servers.daakia.json — full replace (export always runs first in a sync cycle, so
- * anything local-only was already flushed to disk before this reads the post-pull merged file). */
-export function importMockServersFromWorkspace(): number {
-  const file = path.join(getSyncFolder(), 'mock-servers.daakia.json');
-  if (!fs.existsSync(file)) return 0;
-
-  try {
-    const doc = JSON.parse(fs.readFileSync(file, 'utf8')) as { configs?: unknown[] };
-    if (!Array.isArray(doc.configs)) return 0;
-    saveConfigs(doc.configs as Parameters<typeof saveConfigs>[0]);
-    return doc.configs.length;
-  } catch {
-    return 0;
-  }
-}
-
-// ─── State Machine ──────────────────────────────────────────────────────────────
-
-/** Write every state-machine workflow (machines/folders/todos) into state-machine.daakia.json. */
-export function exportStateMachineToWorkspace(): number {
-  const folder = getSyncFolder();
-  fs.mkdirSync(folder, { recursive: true });
-
-  const machines = findAll<Record<string, unknown>>(SM_COL_MACHINE);
-  const folders = findAll<Record<string, unknown>>(SM_COL_FOLDER);
-  const todosBlob = findAll<{ items?: unknown[] }>(SM_COL_TODO);
-  const todos = todosBlob.find(b => Array.isArray(b.items))?.items ?? [];
-
-  const file = path.join(folder, 'state-machine.daakia.json');
-  if (machines.length === 0 && folders.length === 0 && todos.length === 0) {
-    if (fs.existsSync(file)) fs.unlinkSync(file);
-    return 0;
-  }
-  fs.writeFileSync(file, JSON.stringify({ version: '1.0', kind: 'state-machine', machines, folders, todos }, null, 2), 'utf8');
-  return machines.length;
-}
-
-/** Import state-machine.daakia.json — upserts by id, never deletes a locally-only workflow. */
-export function importStateMachineFromWorkspace(): number {
-  const file = path.join(getSyncFolder(), 'state-machine.daakia.json');
-  if (!fs.existsSync(file)) return 0;
-
-  try {
-    const doc = JSON.parse(fs.readFileSync(file, 'utf8')) as {
-      machines?: Array<Record<string, unknown>>;
-      folders?: Array<Record<string, unknown>>;
-      todos?: Array<Record<string, unknown>>;
-    };
-    let count = 0;
-    for (const m of doc.machines ?? []) {
-      if (!m.id) continue;
-      upsert(SM_COL_MACHINE, m.id as string, m);
-      count++;
-    }
-    for (const f of doc.folders ?? []) {
-      if (!f.id) continue;
-      upsert(SM_COL_FOLDER, f.id as string, f);
-    }
-    if (Array.isArray(doc.todos)) {
-      upsert(SM_COL_TODO, '__todos__', { items: doc.todos });
-    }
-    return count;
-  } catch {
-    return 0;
-  }
-}
-
-// ─── Environments ─────────────────────────────────────────────────────────────
+// ─── Layout: one folder per person ────────────────────────────────────────────
 //
-// Secret-flagged variable values are NEVER written to disk here — not even
-// encrypted. Only the key survives (as `REDACTED`), same rule the Environments
-// panel's own JSON/Postman/Bruno/Insomnia/HTTPie/Gist exports follow (see
-// `redactSecrets()` in environment-handler.ts). Import never overwrites a local
-// secret with the `REDACTED` placeholder — it keeps whatever's already local.
+//   users/<id>/profile.json                       who this is
+//   users/<id>/private/common/*.daakia.json       themes, mock servers, state machines, AI config
+//   users/<id>/private/workspaces/<ws>/…          every workspace: collections, environments, history
+//   users/<id>/shared/<ws>/workspace.daakia.json  the workspaces they chose to share
+//
+// ── Why a folder each ──
+//
+// The first layout was one set of files for everybody, and history was a
+// single file every sync appended to. Two people sending requests between
+// syncs both changed it, git could not merge the two appends, and the rebase
+// stopped — then stopped again on every retry, forever. Real concurrent use
+// broke on the first day.
+//
+// A sync now writes only its own folder. No two people ever edit the same
+// file, so there is nothing for git to merge and nothing to conflict.
+//
+// ── Private, and what that means ──
+//
+// Daakia imports your own `private/` (your other machines, same sync id) and
+// nobody else's. That is private *from the app*: anyone who can clone the repo
+// can still read the files. Hence environments leave with secret values
+// redacted, and history with credentials redacted (see sync-redact.ts).
+//
+// ── Shared ──
+//
+// A workspace you mark shared is also written, collections and environments
+// only, to `shared/`. Teammates get it as a read-only workspace under your
+// name, rebuilt from your folder on every sync; stop sharing it and it
+// disappears from theirs on their next sync.
+
+export const USERS_DIR = 'users';
+
+function usersRoot(): string { return path.join(getSyncFolder(), USERS_DIR); }
+function userDir(id: string): string { return path.join(usersRoot(), id); }
+function privateDir(id: string): string { return path.join(userDir(id), 'private'); }
+function commonDir(id: string): string { return path.join(privateDir(id), 'common'); }
+function workspacesDir(id: string): string { return path.join(privateDir(id), 'workspaces'); }
+function sharedDir(id: string): string { return path.join(userDir(id), 'shared'); }
+
+function writeJson(file: string, doc: unknown): void {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(doc, null, 2) + '\n', 'utf8');
+}
+
+function readJson<T>(file: string): T | undefined {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8')) as T;
+  } catch {
+    return undefined;
+  }
+}
+
+function subdirs(dir: string): string[] {
+  try {
+    return fs.readdirSync(dir, { withFileTypes: true }).filter(d => d.isDirectory()).map(d => d.name);
+  } catch {
+    return [];
+  }
+}
+
+/** Ids end up as folder names; anything that could climb out of one is refused. */
+function safeSegment(id: string): boolean {
+  return /^[A-Za-z0-9._-]{1,128}$/.test(id) && id !== '.' && id !== '..';
+}
+
+// ─── Identity ────────────────────────────────────────────────────────────────
+
+export interface SyncIdentity {
+  /** A UUID minted on first use. The name of your folder in the repo. */
+  id: string;
+  /** Git's global user.name, or this machine's user when git has none. */
+  name: string;
+}
+
+const IDENTITY_KEY = 'gitSyncIdentity';
+
+function osUserName(): string {
+  try { return os.userInfo().username || 'daakia'; } catch { return 'daakia'; }
+}
+
+/**
+ * Who this install is in the sync repo. Minted once and kept, so your folder
+ * stays yours across restarts — the id never changes unless you link this
+ * machine to another one's.
+ */
+export function getSyncIdentity(): SyncIdentity {
+  const saved = getSetting<Partial<SyncIdentity>>(IDENTITY_KEY);
+  if (saved?.id && safeSegment(saved.id)) return { id: saved.id, name: saved.name || osUserName() };
+  const fresh: SyncIdentity = { id: randomUUID(), name: saved?.name || osUserName() };
+  setSetting(IDENTITY_KEY, fresh);
+  return fresh;
+}
+
+/**
+ * Refresh the display name from `git config --global user.name`.
+ *
+ * Asked every sync rather than once, so setting a git name later shows up
+ * without anyone touching Daakia. Falls back to the OS user, never to blank.
+ */
+export async function refreshSyncIdentityName(): Promise<SyncIdentity> {
+  const current = getSyncIdentity();
+  let name = '';
+  try {
+    name = (await execFile('git', ['config', '--global', 'user.name'], { cwd: os.homedir(), timeout: 5_000 })).stdout.trim();
+  } catch { /* no global name — that is what the fallback is for */ }
+  const next = { ...current, name: name || osUserName() };
+  if (next.name !== current.name) setSetting(IDENTITY_KEY, next);
+  return next;
+}
+
+/**
+ * Use another machine's sync id on this one, so both read and write one
+ * private folder. The id is the only thing that links them; there is no
+ * account behind it.
+ */
+export function setSyncIdentityId(id: string): { ok: boolean; message: string } {
+  const clean = id.trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clean)) {
+    return { ok: false, message: 'That is not a sync id. Copy it from the other machine\'s Git Sync settings.' };
+  }
+  setSetting(IDENTITY_KEY, { ...getSyncIdentity(), id: clean.toLowerCase() });
+  /* The folder that was ours on the remote is no longer the one we compare
+     against, so the next sync must read it in before writing over it. */
+  setSetting(STATE_KEY, {});
+  return { ok: true, message: 'Linked. The next sync brings in that id\'s private data.' };
+}
+
+// ─── Private: collections, environments, history per workspace ──────────────
+
+interface WorkspaceMeta {
+  version: string;
+  kind: 'workspace';
+  id: string;
+  name: string;
+  color: string | null;
+  docs: string | null;
+  shared: boolean;
+}
 
 interface SyncEnvVariable { id: string; key: string; initialValue: string; currentValue: string; isSecret?: boolean }
 interface SyncEnvironment { id: string; name: string; isActive: boolean; variables: SyncEnvVariable[] }
 
-/** Write every environment into environments.daakia.json — secret values redacted. Returns count. */
-export function exportEnvironmentsToWorkspace(): number {
-  const folder = getSyncFolder();
-  fs.mkdirSync(folder, { recursive: true });
-
-  const rows = getAllEnvironments();
-  const environments: SyncEnvironment[] = rows.map(r => {
+/** The active workspace's environments, secret values redacted. */
+function readEnvironments(): SyncEnvironment[] {
+  return getAllEnvironments().map(r => {
     let variables: SyncEnvVariable[] = [];
     try { variables = JSON.parse(r.variables || '[]'); } catch { /* ignore malformed row */ }
     return {
       id: r.id,
       name: r.name,
       isActive: r.is_active === 1,
-      variables: variables.map(v => v.isSecret ? { ...v, initialValue: 'REDACTED', currentValue: 'REDACTED' } : v),
+      variables: variables.map(v => v.isSecret ? { ...v, initialValue: REDACTED, currentValue: REDACTED } : v),
     };
   });
-
-  const file = path.join(folder, 'environments.daakia.json');
-  if (environments.length === 0) {
-    if (fs.existsSync(file)) fs.unlinkSync(file);
-    return 0;
-  }
-  fs.writeFileSync(file, JSON.stringify({ version: '1.0', kind: 'environments', environments }, null, 2), 'utf8');
-  return environments.length;
-}
-
-/** Import environments.daakia.json — merges per-variable by key, never overwrites a local secret
- * value with the `REDACTED` placeholder (keeps the local value, or leaves it blank if there
- * wasn't one yet, so the teammate knows to fill it in). Non-secret variables replace as-is. */
-export function importEnvironmentsFromWorkspace(): number {
-  const file = path.join(getSyncFolder(), 'environments.daakia.json');
-  if (!fs.existsSync(file)) return 0;
-
-  try {
-    const doc = JSON.parse(fs.readFileSync(file, 'utf8')) as { environments?: SyncEnvironment[] };
-    if (!Array.isArray(doc.environments)) return 0;
-
-    const existingById = new Map(getAllEnvironments().map(r => [r.id, r]));
-    let count = 0;
-    for (const env of doc.environments) {
-      const existing = existingById.get(env.id);
-      let existingVars: SyncEnvVariable[] = [];
-      if (existing) { try { existingVars = JSON.parse(existing.variables || '[]'); } catch { /* ignore */ } }
-      const existingByKey = new Map(existingVars.map(v => [v.key, v]));
-
-      const mergedVariables = env.variables.map(v => {
-        if (v.isSecret && v.initialValue === 'REDACTED') {
-          return existingByKey.get(v.key) ?? { ...v, initialValue: '', currentValue: '' };
-        }
-        return v;
-      });
-
-      upsertEnvironment({
-        id: env.id, name: env.name, variables: JSON.stringify(mergedVariables),
-        is_active: existing ? existing.is_active : (env.isActive ? 1 : 0),
-      });
-      count++;
-    }
-    return count;
-  } catch {
-    return 0;
-  }
-}
-
-// ─── Themes ──────────────────────────────────────────────────────────────────
-//
-// The palettes somebody made or imported, both kinds, in one file. Daakia's
-// own five are not here: they are code rather than rows, identical in every
-// install, and exporting them would mean importing them back over themselves
-// on the other machine.
-//
-// Nothing is redacted, because nothing here is a secret. A theme is thirteen
-// colours and a name.
-
-interface SyncThemeFile {
-  version: string;
-  kind: 'themes';
-  app: ThemePayload[];
-  terminal: ThemePayload[];
-}
-
-export function exportThemesToWorkspace(): number {
-  const folder = getSyncFolder();
-  fs.mkdirSync(folder, { recursive: true });
-
-  const read = (kind: 'app' | 'terminal'): ThemePayload[] => getThemes(kind)
-    .map(row => {
-      try {
-        const parsed = JSON.parse(row.payload) as ThemePayload;
-        return parsed && typeof parsed === 'object' ? { ...parsed, id: row.id, label: row.label } : null;
-      } catch { return null; }
-    })
-    .filter((t): t is ThemePayload => t !== null);
-
-  const app = read('app');
-  const terminal = read('terminal');
-  const file = path.join(folder, 'themes.daakia.json');
-
-  if (app.length === 0 && terminal.length === 0) {
-    if (fs.existsSync(file)) fs.unlinkSync(file);
-    return 0;
-  }
-
-  const doc: SyncThemeFile = { version: '1.0', kind: 'themes', app, terminal };
-  fs.writeFileSync(file, JSON.stringify(doc, null, 2), 'utf8');
-  return app.length + terminal.length;
 }
 
 /**
- * Import themes.daakia.json.
+ * Merge environments into the active workspace by id, variables by key.
  *
- * Upsert by id, which is the whole merge strategy: a theme is one object
- * with one owner, so there is no per-field question to answer the way an
- * environment's variables raise one. A theme edited on both machines takes
- * whichever was synced last, and the loser is still in that machine's own
- * copy of the file.
+ * A `REDACTED` secret never overwrites a local value: the local one is kept,
+ * or left blank if there was none, so whoever is importing knows to fill it in.
+ * Non-secret variables replace as-is.
  */
-export function importThemesFromWorkspace(): number {
-  const file = path.join(getSyncFolder(), 'themes.daakia.json');
-  if (!fs.existsSync(file)) return 0;
+function mergeEnvironments(envs: SyncEnvironment[], idOf: (id: string) => string = id => id): number {
+  const existingById = new Map(getAllEnvironments().map(r => [r.id, r]));
+  let count = 0;
+  for (const env of envs) {
+    if (!env || typeof env.id !== 'string' || !Array.isArray(env.variables)) continue;
+    const id = idOf(env.id);
+    const existing = existingById.get(id);
+    let existingVars: SyncEnvVariable[] = [];
+    if (existing) { try { existingVars = JSON.parse(existing.variables || '[]'); } catch { /* ignore */ } }
+    const existingByKey = new Map(existingVars.map(v => [v.key, v]));
 
-  try {
-    const doc = JSON.parse(fs.readFileSync(file, 'utf8')) as Partial<SyncThemeFile>;
-    let count = 0;
-    for (const kind of ['app', 'terminal'] as const) {
-      const list = doc[kind];
-      if (!Array.isArray(list)) continue;
-      for (const theme of list) {
-        if (!theme || typeof theme !== 'object') continue;
-        const id = typeof theme.id === 'string' ? theme.id : '';
-        const label = typeof theme.label === 'string' ? theme.label : '';
-        if (!id || !label) continue;
-        upsertTheme(kind, { id, label, payload: JSON.stringify(theme) });
-        count++;
+    const variables = env.variables.map(v => {
+      if (v.isSecret && v.initialValue === REDACTED) {
+        return existingByKey.get(v.key) ?? { ...v, initialValue: '', currentValue: '' };
       }
-    }
-    return count;
-  } catch {
-    return 0;
+      return v;
+    });
+
+    upsertEnvironment({
+      id, name: env.name, variables: JSON.stringify(variables),
+      is_active: existing ? existing.is_active : (env.isActive ? 1 : 0),
+    });
+    count++;
   }
+  return count;
 }
 
-// ─── AI Config (prompt library + AI feature flags + provider config) ──────────
-//
-// Provider *config* only — base URLs, model choices, default provider/model.
-// AI provider API keys live exclusively in VS Code SecretStorage (OS keychain,
-// see secret-store.ts) and are never read or written by this file.
-
-const SETTING_AI_PROVIDERS = 'aiProviders';
-const SETTING_AI_DEFAULT_PROVIDER = 'aiDefaultProvider';
-const SETTING_AI_DEFAULT_MODEL = 'aiDefaultModel';
-
-/** Write prompt library + AI feature flags + AI provider config into ai-config.daakia.json. */
-export function exportAiConfigToWorkspace(): number {
-  const folder = getSyncFolder();
-  fs.mkdirSync(folder, { recursive: true });
-
-  const prompts = getAllPrompts();
-  const aiFeatures = getAiFeatures();
-  const aiProviders = getSetting<unknown>(SETTING_AI_PROVIDERS) ?? null;
-  const aiDefaultProvider = getSetting<string>(SETTING_AI_DEFAULT_PROVIDER) ?? null;
-  const aiDefaultModel = getSetting<string>(SETTING_AI_DEFAULT_MODEL) ?? null;
-
-  const file = path.join(folder, 'ai-config.daakia.json');
-  if (prompts.length === 0 && aiProviders === null) {
-    if (fs.existsSync(file)) fs.unlinkSync(file);
-    return 0;
-  }
-  fs.writeFileSync(file, JSON.stringify({
-    version: '1.0', kind: 'ai-config', prompts, aiFeatures, aiProviders, aiDefaultProvider, aiDefaultModel,
-  }, null, 2), 'utf8');
-  return prompts.length;
-}
-
-/** Import ai-config.daakia.json — upserts prompts by scenario, full-replaces feature flags and
- * provider config (config only — never touches the actual API keys in SecretStorage). */
-export function importAiConfigFromWorkspace(): number {
-  const file = path.join(getSyncFolder(), 'ai-config.daakia.json');
-  if (!fs.existsSync(file)) return 0;
-
-  try {
-    const doc = JSON.parse(fs.readFileSync(file, 'utf8')) as {
-      prompts?: Array<{ scenario: string; system_prompt: string; user_prompt?: string; agent_name?: string }>;
-      aiFeatures?: Record<string, boolean>;
-      aiProviders?: unknown;
-      aiDefaultProvider?: string | null;
-      aiDefaultModel?: string | null;
-    };
-
-    let count = 0;
-    for (const p of doc.prompts ?? []) {
-      if (!p.scenario) continue;
-      upsertPrompt(p.scenario, { scenario: p.scenario, system_prompt: p.system_prompt, user_prompt: p.user_prompt, agent_name: p.agent_name });
+function upsertTree(nodes: CollectionTreeNode[], protocol: string, parentId: string | null, idOf: (id: string) => string = id => id): number {
+  let count = 0;
+  for (const node of nodes) {
+    if (!node || typeof node.id !== 'string') continue;
+    const id = idOf(node.id);
+    upsertCollection(id, node.name, parentId, protocol);
+    for (const req of node.requests ?? []) {
+      upsertCollectionRequest({ ...req, id: idOf(req.id), collection_id: id });
       count++;
     }
-    if (doc.aiFeatures) setAiFeatures(doc.aiFeatures as unknown as Parameters<typeof setAiFeatures>[0]);
-    if (doc.aiProviders !== undefined && doc.aiProviders !== null) setSetting(SETTING_AI_PROVIDERS, doc.aiProviders);
-    if (doc.aiDefaultProvider) setSetting(SETTING_AI_DEFAULT_PROVIDER, doc.aiDefaultProvider);
-    if (doc.aiDefaultModel) setSetting(SETTING_AI_DEFAULT_MODEL, doc.aiDefaultModel);
-    return count;
-  } catch {
-    return 0;
+    count += upsertTree(node.children ?? [], protocol, id, idOf);
   }
+  return count;
 }
 
-// ─── Full bundle (scoped by getSyncScope()) ────────────────────────────────────
-
 export interface SyncBundleCounts {
+  workspaces: number;
   collections: number;
   history: number;
   mockServers: number;
@@ -594,47 +402,437 @@ export interface SyncBundleCounts {
   environments: number;
   aiConfig: number;
   themes: number;
+  /** Workspaces you publish (export) or teammates' you received (import). */
+  shared: number;
 }
 
+const zeroCounts = (): SyncBundleCounts => ({
+  workspaces: 0, collections: 0, history: 0, mockServers: 0, stateMachines: 0,
+  environments: 0, aiConfig: 0, themes: 0, shared: 0,
+});
+
+/** One of your workspaces, into its folder under `private/workspaces/`. */
+function exportPrivateWorkspace(ws: WorkspaceRow, dir: string, scope: GitSyncScope, counts: SyncBundleCounts): void {
+  const meta: WorkspaceMeta = {
+    version: '1.0', kind: 'workspace', id: ws.id, name: ws.name,
+    color: ws.color, docs: ws.docs, shared: ws.shared === 1,
+  };
+  writeJson(path.join(dir, 'workspace.json'), meta);
+  counts.workspaces++;
+
+  withWorkspace(ws.id, () => {
+    if (scope.collections) {
+      for (const protocol of SYNC_PROTOCOLS) {
+        const tree = getCollectionTree(protocol);
+        if (tree.length === 0) continue;
+        writeJson(path.join(dir, `${protocol}.daakia.json`), { version: '1.0', protocol, collections: tree });
+        counts.collections++;
+      }
+    }
+    if (scope.environments) {
+      const environments = readEnvironments();
+      if (environments.length > 0) {
+        writeJson(path.join(dir, 'environments.daakia.json'), { version: '1.0', kind: 'environments', environments });
+        counts.environments += environments.length;
+      }
+    }
+    if (scope.history) {
+      const entries = getHistory(100_000, 0).map(row => redactHistoryRow(row));
+      if (entries.length > 0) {
+        writeJson(path.join(dir, 'history.daakia.json'), { version: '1.0', kind: 'history', entries });
+        counts.history += entries.length;
+      }
+    }
+  });
+}
+
+function importPrivateWorkspace(dir: string, scope: GitSyncScope, counts: SyncBundleCounts): void {
+  const meta = readJson<WorkspaceMeta>(path.join(dir, 'workspace.json'));
+  if (!meta || meta.kind !== 'workspace' || typeof meta.id !== 'string' || !safeSegment(meta.id)) return;
+  /* Somebody else's copy of a workspace can never be overwritten by your own
+     private data, even if the ids somehow matched. */
+  const local = getWorkspace(meta.id);
+  if (local?.owner_id) return;
+
+  ensureWorkspace({ id: meta.id, name: meta.name || 'Workspace', color: meta.color, docs: meta.docs });
+  setWorkspaceShared(meta.id, !!meta.shared);
+  counts.workspaces++;
+
+  withWorkspace(meta.id, () => {
+    if (scope.collections) {
+      for (const protocol of SYNC_PROTOCOLS) {
+        const doc = readJson<{ collections?: CollectionTreeNode[] }>(path.join(dir, `${protocol}.daakia.json`));
+        if (Array.isArray(doc?.collections)) counts.collections += upsertTree(doc.collections, protocol, null);
+      }
+    }
+    if (scope.environments) {
+      const doc = readJson<{ environments?: SyncEnvironment[] }>(path.join(dir, 'environments.daakia.json'));
+      if (Array.isArray(doc?.environments)) counts.environments += mergeEnvironments(doc.environments);
+    }
+    if (scope.history) {
+      const doc = readJson<{ entries?: Parameters<typeof insertHistoryIfNew>[0][] }>(path.join(dir, 'history.daakia.json'));
+      for (const entry of doc?.entries ?? []) {
+        if (entry && insertHistoryIfNew(entry)) counts.history++;
+      }
+    }
+  });
+}
+
+// ─── Private: what is not in a workspace ─────────────────────────────────────
+//
+// Mock servers, state machines, AI config and themes are yours rather than a
+// project's (see workspaces.ts), so they sit beside the workspaces, not in one.
+
+function exportCommon(dir: string, scope: GitSyncScope, counts: SyncBundleCounts): void {
+  if (scope.mockServers) {
+    const configs = loadSavedConfigs();
+    if (configs.length > 0) {
+      writeJson(path.join(dir, 'mock-servers.daakia.json'), { version: '1.0', kind: 'mock-servers', configs });
+      counts.mockServers = configs.length;
+    }
+
+    const machines = findAll<Record<string, unknown>>(SM_COL_MACHINE);
+    const folders = findAll<Record<string, unknown>>(SM_COL_FOLDER);
+    const todosBlob = findAll<{ items?: unknown[] }>(SM_COL_TODO);
+    const todos = todosBlob.find(b => Array.isArray(b.items))?.items ?? [];
+    if (machines.length > 0 || folders.length > 0 || todos.length > 0) {
+      writeJson(path.join(dir, 'state-machine.daakia.json'), { version: '1.0', kind: 'state-machine', machines, folders, todos });
+      counts.stateMachines = machines.length;
+    }
+  }
+
+  if (scope.aiConfig) {
+    /* Provider *config* only — base URLs, models, defaults. API keys live in
+       the OS keychain (secret-store.ts) and are never read here. */
+    const prompts = getAllPrompts();
+    const aiProviders = getSetting<unknown>(SETTING_AI_PROVIDERS) ?? null;
+    if (prompts.length > 0 || aiProviders !== null) {
+      writeJson(path.join(dir, 'ai-config.daakia.json'), {
+        version: '1.0', kind: 'ai-config', prompts, aiFeatures: getAiFeatures(), aiProviders,
+        aiDefaultProvider: getSetting<string>(SETTING_AI_DEFAULT_PROVIDER) ?? null,
+        aiDefaultModel: getSetting<string>(SETTING_AI_DEFAULT_MODEL) ?? null,
+      });
+      counts.aiConfig = prompts.length;
+    }
+  }
+
+  if (scope.themes) {
+    /* Only the palettes somebody made or imported. Daakia's own are code,
+       identical in every install. A theme is colours and a name — no secrets. */
+    const read = (kind: 'app' | 'terminal'): ThemePayload[] => getThemes(kind)
+      .map(row => {
+        try {
+          const parsed = JSON.parse(row.payload) as ThemePayload;
+          return parsed && typeof parsed === 'object' ? { ...parsed, id: row.id, label: row.label } : null;
+        } catch { return null; }
+      })
+      .filter((t): t is ThemePayload => t !== null);
+    const app = read('app');
+    const terminal = read('terminal');
+    if (app.length + terminal.length > 0) {
+      writeJson(path.join(dir, 'themes.daakia.json'), { version: '1.0', kind: 'themes', app, terminal });
+      counts.themes = app.length + terminal.length;
+    }
+  }
+}
+
+function importCommon(dir: string, scope: GitSyncScope, counts: SyncBundleCounts): void {
+  if (scope.mockServers) {
+    const mocks = readJson<{ configs?: unknown[] }>(path.join(dir, 'mock-servers.daakia.json'));
+    if (Array.isArray(mocks?.configs)) {
+      saveConfigs(mocks.configs as Parameters<typeof saveConfigs>[0]);
+      counts.mockServers = mocks.configs.length;
+    }
+
+    const sm = readJson<{
+      machines?: Array<Record<string, unknown>>;
+      folders?: Array<Record<string, unknown>>;
+      todos?: Array<Record<string, unknown>>;
+    }>(path.join(dir, 'state-machine.daakia.json'));
+    for (const m of sm?.machines ?? []) {
+      if (!m?.id) continue;
+      upsert(SM_COL_MACHINE, m.id as string, m);
+      counts.stateMachines++;
+    }
+    for (const f of sm?.folders ?? []) {
+      if (f?.id) upsert(SM_COL_FOLDER, f.id as string, f);
+    }
+    if (Array.isArray(sm?.todos)) upsert(SM_COL_TODO, '__todos__', { items: sm.todos });
+  }
+
+  if (scope.aiConfig) {
+    const ai = readJson<{
+      prompts?: Array<{ scenario: string; system_prompt: string; user_prompt?: string; agent_name?: string }>;
+      aiFeatures?: Record<string, boolean>;
+      aiProviders?: unknown;
+      aiDefaultProvider?: string | null;
+      aiDefaultModel?: string | null;
+    }>(path.join(dir, 'ai-config.daakia.json'));
+    if (ai) {
+      for (const p of ai.prompts ?? []) {
+        if (!p?.scenario) continue;
+        upsertPrompt(p.scenario, { scenario: p.scenario, system_prompt: p.system_prompt, user_prompt: p.user_prompt, agent_name: p.agent_name });
+        counts.aiConfig++;
+      }
+      if (ai.aiFeatures) setAiFeatures(ai.aiFeatures as unknown as Parameters<typeof setAiFeatures>[0]);
+      if (ai.aiProviders !== undefined && ai.aiProviders !== null) setSetting(SETTING_AI_PROVIDERS, ai.aiProviders);
+      if (ai.aiDefaultProvider) setSetting(SETTING_AI_DEFAULT_PROVIDER, ai.aiDefaultProvider);
+      if (ai.aiDefaultModel) setSetting(SETTING_AI_DEFAULT_MODEL, ai.aiDefaultModel);
+    }
+  }
+
+  if (scope.themes) {
+    /* Upsert by id: a theme is one object with one owner, so the last one
+       synced wins and there is no per-field merge to get wrong. */
+    const doc = readJson<{ app?: ThemePayload[]; terminal?: ThemePayload[] }>(path.join(dir, 'themes.daakia.json'));
+    for (const kind of ['app', 'terminal'] as const) {
+      const list = doc?.[kind];
+      if (!Array.isArray(list)) continue;
+      for (const theme of list) {
+        if (!theme || typeof theme !== 'object') continue;
+        const id = typeof theme.id === 'string' ? theme.id : '';
+        const label = typeof theme.label === 'string' ? theme.label : '';
+        if (!id || !label) continue;
+        upsertTheme(kind, { id, label, payload: JSON.stringify(theme) });
+        counts.themes++;
+      }
+    }
+  }
+}
+
+// ─── Shared workspaces ───────────────────────────────────────────────────────
+
+interface SharedWorkspaceDoc {
+  version: string;
+  kind: 'shared-workspace';
+  owner: { id: string; name: string };
+  workspace: { id: string; name: string; color: string | null; docs: string | null };
+  collections: Record<string, CollectionTreeNode[]>;
+  environments: SyncEnvironment[];
+}
+
+const SHARED_FILE = 'workspace.daakia.json';
+
+function exportSharedWorkspace(ws: WorkspaceRow, me: SyncIdentity): void {
+  const doc = withWorkspace(ws.id, (): SharedWorkspaceDoc => {
+    const collections: Record<string, CollectionTreeNode[]> = {};
+    for (const protocol of SYNC_PROTOCOLS) {
+      const tree = getCollectionTree(protocol);
+      if (tree.length > 0) collections[protocol] = tree;
+    }
+    return {
+      version: '1.0',
+      kind: 'shared-workspace',
+      owner: { id: me.id, name: me.name },
+      workspace: { id: ws.id, name: ws.name, color: ws.color, docs: ws.docs },
+      collections,
+      environments: readEnvironments(),
+    };
+  });
+  writeJson(path.join(sharedDir(me.id), ws.id, SHARED_FILE), doc);
+}
+
+/**
+ * The local id of a teammate's workspace, collection, request or environment.
+ *
+ * Namespaced by owner because ids are only unique per install: every install's
+ * first workspace is `ws-default`, and a teammate's collection id landing on
+ * one of yours would update *your* row — `upsertCollection` keeps the
+ * workspace a row already has. Deterministic, so a re-import lands on the same
+ * rows and an open tab keeps pointing at the right request.
+ */
+export function sharedLocalId(ownerId: string, id: string): string {
+  return `sh-${ownerId.slice(0, 8)}-${id}`;
+}
+
+export function sharedWorkspaceLocalId(ownerId: string, wsId: string): string {
+  return `shared-${ownerId}-${wsId}`;
+}
+
+/**
+ * Rebuild one teammate's workspace from their file.
+ *
+ * Rebuilt rather than merged: it is read-only here, so their file is the whole
+ * truth, and a collection they deleted must go. Only environment secrets are
+ * kept, because those are the one thing you are expected to fill in yourself.
+ */
+function importSharedWorkspace(doc: SharedWorkspaceDoc, ownerName: string): string | undefined {
+  const ownerId = doc.owner?.id;
+  const wsId = doc.workspace?.id;
+  if (typeof ownerId !== 'string' || typeof wsId !== 'string' || !safeSegment(ownerId) || !safeSegment(wsId)) return undefined;
+
+  const localId = sharedWorkspaceLocalId(ownerId, wsId);
+  const idOf = (id: string) => sharedLocalId(ownerId, id);
+  ensureWorkspace({
+    id: localId, name: doc.workspace.name || 'Shared workspace',
+    color: doc.workspace.color, docs: doc.workspace.docs,
+    owner_id: ownerId, owner_name: ownerName,
+  });
+
+  const db = getDb();
+  withWorkspace(localId, () => {
+    if (db) {
+      db.run(`DELETE FROM collection_requests WHERE collection_id IN
+                (SELECT id FROM collections WHERE workspace_id = ?)`, [localId]);
+      db.run('DELETE FROM collections WHERE workspace_id = ?', [localId]);
+    }
+    for (const [protocol, tree] of Object.entries(doc.collections ?? {})) {
+      if (SYNC_PROTOCOLS.includes(protocol) && Array.isArray(tree)) upsertTree(tree, protocol, null, idOf);
+    }
+
+    const envs = Array.isArray(doc.environments) ? doc.environments : [];
+    const keep = new Set(envs.map(e => idOf(e.id)));
+    for (const row of getAllEnvironments()) {
+      if (!keep.has(row.id)) deleteEnvironment(row.id);
+    }
+    mergeEnvironments(envs, idOf);
+  });
+  return localId;
+}
+
+// ─── The team ────────────────────────────────────────────────────────────────
+
+interface ProfileDoc { version: string; kind: 'profile'; id: string; name: string }
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  isMe: boolean;
+  shared: { id: string; name: string }[];
+}
+
+/** Everybody with a folder in the repo, and what each of them shares. */
+export function listTeam(): TeamMember[] {
+  const me = getSyncIdentity();
+  const team: TeamMember[] = [];
+  for (const id of subdirs(usersRoot())) {
+    if (!safeSegment(id)) continue;
+    const profile = readJson<ProfileDoc>(path.join(userDir(id), 'profile.json'));
+    const shared = subdirs(sharedDir(id)).flatMap(ws => {
+      const doc = readJson<SharedWorkspaceDoc>(path.join(sharedDir(id), ws, SHARED_FILE));
+      return doc?.workspace?.name ? [{ id: ws, name: doc.workspace.name }] : [];
+    });
+    team.push({ id, name: profile?.name || id.slice(0, 8), isMe: id === me.id, shared });
+  }
+  return team.sort((a, b) => Number(b.isMe) - Number(a.isMe) || a.name.localeCompare(b.name));
+}
+
+// ─── The whole of it ─────────────────────────────────────────────────────────
+
+/**
+ * Rewrite your folder from the database.
+ *
+ * The folder is deleted and written fresh rather than patched, which is what
+ * makes deletions travel: a workspace you removed, or stopped sharing, is
+ * simply not written again.
+ */
 export function exportFullBundle(): SyncBundleCounts {
+  const me = getSyncIdentity();
   const scope = getSyncScope();
-  return {
-    collections: scope.collections ? exportCollectionsToWorkspace() : 0,
-    history: scope.history ? exportHistoryToWorkspace() : 0,
-    mockServers: scope.mockServers ? exportMockServersToWorkspace() : 0,
-    stateMachines: scope.mockServers ? exportStateMachineToWorkspace() : 0,
-    environments: scope.environments ? exportEnvironmentsToWorkspace() : 0,
-    aiConfig: scope.aiConfig ? exportAiConfigToWorkspace() : 0,
-    themes: scope.themes ? exportThemesToWorkspace() : 0,
-  };
+  const counts = zeroCounts();
+
+  _exporting = true;
+  try {
+    fs.rmSync(userDir(me.id), { recursive: true, force: true });
+    writeJson(path.join(userDir(me.id), 'profile.json'), { version: '1.0', kind: 'profile', id: me.id, name: me.name } satisfies ProfileDoc);
+
+    const mine = listWorkspaces().filter(ws => !ws.owner_id);
+    for (const ws of mine) {
+      if (!safeSegment(ws.id)) continue;
+      exportPrivateWorkspace(ws, path.join(workspacesDir(me.id), ws.id), scope, counts);
+      if (ws.shared === 1) {
+        exportSharedWorkspace(ws, me);
+        counts.shared++;
+      }
+    }
+    exportCommon(commonDir(me.id), scope, counts);
+  } finally {
+    // let watcher events from our own writes settle before re-enabling import
+    setTimeout(() => { _exporting = false; }, 500);
+  }
+  return counts;
 }
 
-export function importFullBundle(): SyncBundleCounts {
+/** Your own private data — written by this machine, or another one using your sync id. */
+export function importPrivateBundle(): SyncBundleCounts {
+  const me = getSyncIdentity();
   const scope = getSyncScope();
-  return {
-    collections: scope.collections ? importCollectionsFromWorkspace() : 0,
-    history: scope.history ? importHistoryFromWorkspace() : 0,
-    mockServers: scope.mockServers ? importMockServersFromWorkspace() : 0,
-    stateMachines: scope.mockServers ? importStateMachineFromWorkspace() : 0,
-    environments: scope.environments ? importEnvironmentsFromWorkspace() : 0,
-    aiConfig: scope.aiConfig ? importAiConfigFromWorkspace() : 0,
-    themes: scope.themes ? importThemesFromWorkspace() : 0,
-  };
+  const counts = zeroCounts();
+  if (!fs.existsSync(privateDir(me.id))) return counts;
+
+  for (const ws of subdirs(workspacesDir(me.id))) {
+    importPrivateWorkspace(path.join(workspacesDir(me.id), ws), scope, counts);
+  }
+  importCommon(commonDir(me.id), scope, counts);
+  return counts;
+}
+
+/**
+ * Every teammate's shared workspaces, read-only — and nothing else of theirs.
+ * A shared workspace whose owner stopped sharing it, or left, is removed here.
+ */
+export function importSharedFromTeam(): number {
+  const me = getSyncIdentity();
+  const seen = new Set<string>();
+
+  for (const ownerId of subdirs(usersRoot())) {
+    if (ownerId === me.id || !safeSegment(ownerId)) continue;
+    const profile = readJson<ProfileDoc>(path.join(userDir(ownerId), 'profile.json'));
+    for (const ws of subdirs(sharedDir(ownerId))) {
+      const doc = readJson<SharedWorkspaceDoc>(path.join(sharedDir(ownerId), ws, SHARED_FILE));
+      if (!doc || doc.kind !== 'shared-workspace' || doc.owner?.id !== ownerId) continue;
+      const localId = importSharedWorkspace(doc, profile?.name || doc.owner.name || ownerId.slice(0, 8));
+      if (localId) seen.add(localId);
+    }
+  }
+
+  for (const ws of listWorkspaces()) {
+    if (ws.owner_id && !seen.has(ws.id)) deleteWorkspace(ws.id);
+  }
+  return seen.size;
+}
+
+/** Both halves of an import. The watcher and "Import only" use this. */
+export function importFullBundle(): SyncBundleCounts {
+  const counts = importPrivateBundle();
+  counts.shared = importSharedFromTeam();
+  return counts;
+}
+
+/** Debounced write-through used after collection mutations when auto-sync is on. */
+export function scheduleAutoExport(): void {
+  if (!isGitSyncEnabled()) return;
+  if (_exportTimer) clearTimeout(_exportTimer);
+  _exportTimer = setTimeout(() => {
+    if (!_syncInProgress) exportFullBundle();
+  }, 1500);
+}
+
+/** The `daakia.exportCollectionsToWorkspace` command. Returns files written. */
+export function exportCollectionsToWorkspace(): number {
+  return exportFullBundle().collections;
+}
+
+/** The `daakia.importCollectionsFromWorkspace` command. Returns requests imported. */
+export function importCollectionsFromWorkspace(): number {
+  return importFullBundle().collections;
 }
 
 // ─── Watcher (auto mode) ──────────────────────────────────────────────────────
 
-/** Watch the local clone folder and import external edits (e.g. after a manual `git pull`). */
+/** Watch the local clone and import external edits (e.g. after a manual `git pull`). */
 export function initGitSyncWatcher(context: vscode.ExtensionContext, onImported?: () => void): void {
-  const pattern = new vscode.RelativePattern(vscode.Uri.file(getSyncFolder()), '*.daakia.json');
+  const pattern = new vscode.RelativePattern(vscode.Uri.file(getSyncFolder()), `${USERS_DIR}/**/*.daakia.json`);
   const watcher = vscode.workspace.createFileSystemWatcher(pattern);
 
   const onFsEvent = () => {
-    if (!isGitSyncEnabled() || _exporting) return;
+    /* A sync rewrites these files itself and imports as part of the cycle. */
+    if (!isGitSyncEnabled() || _exporting || _syncInProgress) return;
     if (_importTimer) clearTimeout(_importTimer);
     _importTimer = setTimeout(() => {
-      const n = importCollectionsFromWorkspace();
-      if (n > 0) onImported?.();
+      if (_syncInProgress) return;
+      const n = importFullBundle();
+      if (n.collections > 0 || n.shared > 0) onImported?.();
     }, 1000);
   };
 
@@ -822,11 +1020,72 @@ export async function ensureGitRepo(remoteUrl: string, branch: string): Promise<
   }
 }
 
-/** Export → commit anything changed → pull --rebase → push → import (pick up what was pulled).
- * `_syncInProgress`-guarded — a sync already running short-circuits immediately instead of
- * running a second set of git commands against the same working directory. */
-export async function gitSyncNow(): Promise<{ ok: boolean; message: string; committed: boolean; pulled: boolean; pushed: boolean }> {
-  const result = { ok: false, message: '', committed: false, pulled: false, pushed: false };
+export interface SyncResult {
+  ok: boolean;
+  message: string;
+  committed: boolean;
+  pulled: boolean;
+  pushed: boolean;
+  /** Teammates' shared workspaces now in the switcher. */
+  shared: number;
+}
+
+/** Where the last successful sync left the remote, so the next can tell if your folder moved. */
+const STATE_KEY = 'gitSyncState';
+interface SyncState { lastSyncedCommit?: string; identityId?: string }
+
+/**
+ * Did your folder change on the remote since this machine last synced?
+ *
+ * Only true when another machine using your sync id pushed — nobody else
+ * writes there. That is the one case where your private data has to be read
+ * in before this machine's copy is written over it. Otherwise it is skipped,
+ * which is what keeps a local delete deleted: importing first would bring
+ * back everything you had removed since the last sync.
+ */
+async function myFolderMoved(folder: string, me: SyncIdentity, remoteRef: string): Promise<boolean> {
+  const state = getSetting<SyncState>(STATE_KEY) ?? {};
+  const rel = `${USERS_DIR}/${me.id}`;
+  if (!state.lastSyncedCommit || state.identityId !== me.id) {
+    /* Never synced as this id here: whatever is there came from elsewhere. */
+    return fs.existsSync(userDir(me.id));
+  }
+  try {
+    await runGit(['diff', '--quiet', state.lastSyncedCommit, remoteRef, '--', rel], folder);
+    return false;
+  } catch (err) {
+    /* Exit 1 means "differs". Anything else — the commit is gone after a
+       force-push, say — is treated the same way: read it in, to be safe. */
+    return (err as { code?: number }).code !== 0;
+  }
+}
+
+function isRejectedPush(err: unknown): boolean {
+  const text = `${(err as { stderr?: string }).stderr ?? ''} ${(err as Error).message ?? ''}`;
+  return /rejected|non-fast-forward|fetch first|failed to push some refs/i.test(text);
+}
+
+/**
+ * One sync: take the remote as it is, fold in what changed, write your
+ * folder, push.
+ *
+ *   1. fetch, and reset the clone to the remote branch
+ *   2. import your own folder — only if another machine of yours changed it
+ *   3. export your folder fresh from the database
+ *   4. import every teammate's shared workspaces
+ *   5. commit and push; if someone pushed meanwhile, go round again
+ *
+ * ── Why a reset, not a pull ──
+ *
+ * The database is the source of truth and the clone is Daakia's own scratch
+ * copy of the remote, so there is never local work in it to preserve — step 3
+ * regenerates it. Resetting to the remote and re-writing your folder on top
+ * cannot conflict, because nothing else in the repo is yours to write. The old
+ * pull --rebase could, and a failed rebase then failed identically on every
+ * retry, with no way out from inside the app.
+ */
+export async function gitSyncNow(): Promise<SyncResult> {
+  const result: SyncResult = { ok: false, message: '', committed: false, pulled: false, pushed: false, shared: 0 };
   if (_syncInProgress) return { ...result, message: 'A sync is already in progress — try again shortly.' };
 
   const folder = getSyncFolder();
@@ -837,41 +1096,61 @@ export async function gitSyncNow(): Promise<{ ok: boolean; message: string; comm
   if (!remoteUrl) return { ...result, message: 'No remote SSH URL configured.' };
 
   _syncInProgress = true;
+  _exporting = true;
   try {
-    exportFullBundle();
+    const me = await refreshSyncIdentityName();
+    const identity = await commitIdentityArgs(folder);
+    const remoteRef = `origin/${branch}`;
 
-    await runGit(['add', '-A'], folder);
-    const { stdout: statusOut } = await runGit(['status', '--porcelain'], folder);
-    if (statusOut.trim().length > 0) {
-      const identity = await commitIdentityArgs(folder);
-      await runGit([...identity, 'commit', '-m', `Daakia: sync (${new Date().toISOString()})`], folder);
-      result.committed = true;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const remoteExists = await remoteHasBranch(folder, branch);
+      if (remoteExists) {
+        await runGit(['fetch', 'origin', branch], folder);
+        await runGit(['checkout', '-B', branch, remoteRef], folder);
+        await runGit(['reset', '--hard', remoteRef], folder);
+        await runGit(['clean', '-fdq'], folder);
+        result.pulled = true;
+        if (await myFolderMoved(folder, me, remoteRef)) importPrivateBundle();
+      }
+
+      exportFullBundle();
+      result.shared = importSharedFromTeam();
+
+      await runGit(['add', '-A'], folder);
+      const { stdout: statusOut } = await runGit(['status', '--porcelain'], folder);
+      if (statusOut.trim().length > 0) {
+        await runGit([...identity, 'commit', '-m', `Daakia: sync from ${me.name} (${new Date().toISOString()})`], folder);
+        result.committed = true;
+      }
+
+      if (!result.committed && remoteExists) {
+        /* Nothing of ours changed — there is nothing to push. */
+        result.pushed = false;
+      } else {
+        try {
+          await runGit(['push', '-u', 'origin', branch], folder);
+          result.pushed = true;
+        } catch (err) {
+          /* Someone pushed between our fetch and our push. Their change is in
+             their folder, ours in ours; fetching again and re-writing is all
+             it takes. */
+          if (isRejectedPush(err) && attempt < 3) { result.committed = false; continue; }
+          throw err;
+        }
+      }
+
+      const { stdout: head } = await runGit(['rev-parse', 'HEAD'], folder);
+      setSetting(STATE_KEY, { lastSyncedCommit: head.trim(), identityId: me.id } satisfies SyncState);
+
+      const teammates = result.shared === 1 ? '1 shared workspace from a teammate' : `${result.shared} shared workspaces from teammates`;
+      return { ...result, ok: true, message: `Synced as ${me.name}. ${teammates}.` };
     }
-
-    /* The first push to an empty remote has nothing to pull — skip straight to
-       pushing, which is what creates the branch. */
-    if (await remoteHasBranch(folder, branch)) try {
-      /* A rebase rewrites commits, so it needs an identity too. */
-      const identity = await commitIdentityArgs(folder);
-      await runGit([...identity, 'pull', '--rebase', 'origin', branch], folder);
-      result.pulled = true;
-    } catch (err) {
-      // Leave a rebase-in-progress in as clean a state as possible — never leave the repo
-      // silently half-merged. The user resolves conflicts themselves (in VS Code's own Git UI).
-      try { await runGit(['rebase', '--abort'], folder); } catch { /* nothing to abort */ }
-      return { ...result, message: `Pull failed — most likely a conflict or missing upstream branch: ${describeGitError(err)}` };
-    }
-
-    await runGit(['push', '-u', 'origin', branch], folder);
-    result.pushed = true;
-
-    importFullBundle();
-
-    return { ...result, ok: true, message: 'Synced successfully.' };
+    return { ...result, message: 'The remote kept changing while syncing. Try again in a moment.' };
   } catch (err) {
     return { ...result, message: describeGitError(err) };
   } finally {
     _syncInProgress = false;
+    setTimeout(() => { _exporting = false; }, 500);
   }
 }
 
