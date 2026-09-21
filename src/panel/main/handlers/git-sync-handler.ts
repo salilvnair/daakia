@@ -5,8 +5,9 @@
 import {
   getAutoSyncSeconds, getSyncFolder, getRemoteUrl, getBranch, getSyncScope, saveGitSyncSettings,
   getGitStatus, ensureGitRepo, gitSyncNow, exportFullBundle, importFullBundle,
-  getSyncIdentity, setSyncIdentityId, listTeam,
+  getSyncIdentity, setSyncIdentityId, listTeam, showSharedInSwitcher,
 } from '../../../services/git-sync';
+import { handleGetWorkspaces } from './workspace-handler';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -25,6 +26,7 @@ export function handleGitSyncGetSettings(post: PostMessage): void {
       syncEnvironments: scope.environments,
       syncAiConfig: scope.aiConfig,
       syncThemes: scope.themes,
+      showSharedInSwitcher: showSharedInSwitcher(),
     },
     identity: getSyncIdentity(),
     team: listTeam(),
@@ -36,10 +38,13 @@ export async function handleGitSyncSaveSettings(msg: {
     autoSyncSeconds?: number; remoteUrl?: string; branch?: string;
     syncHistory?: boolean; syncCollections?: boolean; syncMockServers?: boolean;
     syncEnvironments?: boolean; syncAiConfig?: boolean; syncThemes?: boolean;
+    showSharedInSwitcher?: boolean;
   };
 }, post: PostMessage): Promise<void> {
   await saveGitSyncSettings(msg.settings);
   handleGitSyncGetSettings(post);
+  /* The workspace menu reads the show-shared switch from its own snapshot. */
+  handleGetWorkspaces(post);
 }
 
 export async function handleGitSyncGetStatus(post: PostMessage): Promise<void> {

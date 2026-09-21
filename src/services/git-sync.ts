@@ -91,6 +91,8 @@ interface StoredGitSync {
   syncEnvironments: boolean;
   syncAiConfig: boolean;
   syncThemes: boolean;
+  /** Teammates' shared workspaces and Import shared, in the workspace menu. */
+  showSharedInSwitcher: boolean;
 }
 
 const DEFAULT_SYNC: StoredGitSync = {
@@ -103,6 +105,7 @@ const DEFAULT_SYNC: StoredGitSync = {
   syncEnvironments: true,
   syncAiConfig: true,
   syncThemes: true,
+  showSharedInSwitcher: true,
 };
 
 function stored(): StoredGitSync {
@@ -121,9 +124,15 @@ function stored(): StoredGitSync {
     syncEnvironments: c.get<boolean>('gitSync.syncEnvironments', true),
     syncAiConfig: c.get<boolean>('gitSync.syncAiConfig', true),
     syncThemes: c.get<boolean>('gitSync.syncThemes', true),
+    showSharedInSwitcher: true,
   };
   setSetting(SETTINGS_KEY, legacy);
   return legacy;
+}
+
+/** Whether the workspace menu shows teammates' shared workspaces and Import shared. */
+export function showSharedInSwitcher(): boolean {
+  return stored().showSharedInSwitcher !== false;
 }
 
 /** Seconds between full auto-syncs; 0 = off. Replaces the old boolean `gitSync.enabled`. */
@@ -942,7 +951,7 @@ export function importSharedWorkspaceFromTeam(ownerId: string, wsId: string): { 
   if (!found) return { ok: false, message: 'That workspace is no longer shared. Run Git Sync to refresh the list.' };
   const id = importSharedWorkspace(found.doc, found.ownerName);
   return id
-    ? { ok: true, id, message: `Imported ${found.doc.workspace.name} from ${found.ownerName}, read-only.` }
+    ? { ok: true, id, message: `Opened ${found.doc.workspace.name} from ${found.ownerName}, read-only.` }
     : { ok: false, message: 'Could not import that workspace.' };
 }
 

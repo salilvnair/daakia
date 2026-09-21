@@ -16,6 +16,7 @@ import {
 } from '../../../storage/workspaces';
 import {
   COLLECTION_MUTATION_TYPES, listTeam, importSharedWorkspaceFromTeam, copyWorkspaceToMine, previewSharedWorkspace,
+  showSharedInSwitcher,
 } from '../../../services/git-sync';
 import { getAllCollectionTrees, getAllEnvironments } from '../../../storage/db';
 import * as vscode from 'vscode';
@@ -35,6 +36,8 @@ function snapshot() {
     /* What teammates offer through Git Sync, for the switcher's Import shared
        menu. Read from the local clone, so it is as fresh as the last sync. */
     team: listTeam().filter(m => !m.isMe && m.shared.length > 0),
+    /* Settings → Git Sync can hide teammates' workspaces from the menu. */
+    showShared: showSharedInSwitcher(),
   };
 }
 

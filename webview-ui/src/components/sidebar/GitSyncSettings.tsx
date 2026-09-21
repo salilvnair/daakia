@@ -16,7 +16,7 @@
  * at a time — a sync already in progress blocks the next until it finishes.
  */
 import { useEffect, useState } from 'react';
-import { ButtonView, TextInputView, CheckboxView, SelectInputView, type SelectOption } from '@salilvnair/dui';
+import { ButtonView, TextInputView, CheckboxView, SelectInputView, ToggleSwitchView, type SelectOption } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { useToastStore } from '../../store/toast-store';
 
@@ -43,6 +43,8 @@ interface GitSyncSettingsData {
   syncEnvironments: boolean;
   syncAiConfig: boolean;
   syncThemes: boolean;
+  /** Teammates' shared workspaces and Import shared, in the workspace menu. */
+  showSharedInSwitcher: boolean;
 }
 
 interface SyncIdentity { id: string; name: string }
@@ -88,6 +90,7 @@ export function GitSyncSettings() {
     autoSyncSeconds: 0, localPath: '', remoteUrl: '', branch: 'main',
     syncHistory: true, syncCollections: true, syncMockServers: true,
     syncEnvironments: true, syncAiConfig: true, syncThemes: true,
+    showSharedInSwitcher: true,
   });
   const [status, setStatus] = useState<GitStatus | null>(null);
   const [busy, setBusy] = useState<'init' | 'sync' | 'export' | 'import' | null>(null);
@@ -216,12 +219,28 @@ export function GitSyncSettings() {
         </div>
       )}
 
+      {/* Whether teammates show up in the workspace menu at all */}
+      <div className="flex items-center gap-4 max-w-[600px]">
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Teammates in the workspace menu</p>
+          <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">
+            List each teammate's shared workspaces under their name (read-only), with Import shared to make your own editable copy. Off hides both.
+          </p>
+        </div>
+        <ToggleSwitchView
+          checked={settings.showSharedInSwitcher !== false}
+          onChange={(on: boolean) => { patch({ showSharedInSwitcher: on }); handleSaveSettings({ showSharedInSwitcher: on }); }}
+          accentColor={ACCENT}
+          size="sm"
+        />
+      </div>
+
       {/* Everyone else in the repo */}
       {team.some(m => !m.isMe) && (
         <div className="max-w-[600px]">
           <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Team</p>
           <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-2">
-            People syncing to this repo, and the workspaces they share. Add one from the workspace menu's Import shared — you get a read-only copy to send requests from.
+            People syncing to this repo, and the workspaces they share. Open one read-only from the workspace menu, under their name, or use Import shared there for an editable copy of your own.
           </p>
           <div className="flex flex-col gap-1.5">
             {team.filter(m => !m.isMe).map(m => (

@@ -39,6 +39,43 @@ export interface Workspace {
   owner_name?: string | null;
 }
 
+/** One teammate's subgroup in the workspace menu. */
+export interface SharedGroup {
+  ownerId: string;
+  ownerName: string;
+  /** `localId` once you have opened it here — the read-only copy's id. */
+  items: { workspaceId: string; name: string; localId?: string }[];
+}
+
+/**
+ * Teammates' workspaces, grouped by who shares them: what they offer (from the
+ * repo), plus any read-only copy you already have. Keyed by owner, so one
+ * person is one subgroup however their workspaces reached you.
+ */
+export function sharedGroups(team: SharingTeammate[], workspaces: Workspace[]): SharedGroup[] {
+  const groups = new Map<string, SharedGroup>();
+  const group = (ownerId: string, ownerName: string) => {
+    let g = groups.get(ownerId);
+    if (!g) { g = { ownerId, ownerName, items: [] }; groups.set(ownerId, g); }
+    return g;
+  };
+  const byId = new Map(workspaces.map(w => [w.id, w]));
+  for (const member of team) {
+    for (const ws of member.shared) {
+      const localId = `shared-${member.id}-${ws.id}`;
+      group(member.id, member.name).items.push({ workspaceId: ws.id, name: ws.name, localId: byId.has(localId) ? localId : undefined });
+    }
+  }
+  for (const w of workspaces) {
+    if (!w.owner_id) continue;
+    const prefix = `shared-${w.owner_id}-`;
+    const workspaceId = w.id.startsWith(prefix) ? w.id.slice(prefix.length) : w.id;
+    const g = group(w.owner_id, w.owner_name ?? 'Teammate');
+    if (!g.items.some(i => i.localId === w.id)) g.items.push({ workspaceId, name: w.name, localId: w.id });
+  }
+  return [...groups.values()].sort((a, b) => a.ownerName.localeCompare(b.ownerName));
+}
+
 /** A teammate's workspace, brought in by Git Sync — you can use it, not change it. */
 export const isReadOnly = (w: Workspace | undefined): boolean => !!w?.owner_id;
 
@@ -71,6 +108,8 @@ interface WorkspaceState {
   stats: WorkspaceStats;
   /** Teammates' shared workspaces, for Import shared. Empty without Git Sync. */
   team: SharingTeammate[];
+  /** Settings → Git Sync: show teammates' workspaces and Import shared in the menu. */
+  showShared: boolean;
   loaded: boolean;
   error: string | null;
 
@@ -89,7 +128,7 @@ interface WorkspaceState {
   copyToMine: (source: { id: string } | { ownerId: string; workspaceId: string }) => void;
 
   /** Applied from the host's replies — see wireWorkspaceMessages below. */
-  _apply: (data: { workspaces?: Workspace[]; activeId?: string; stats?: WorkspaceStats; team?: SharingTeammate[] }) => void;
+  _apply: (data: { workspaces?: Workspace[]; activeId?: string; stats?: WorkspaceStats; team?: SharingTeammate[]; showShared?: boolean }) => void;
   _setError: (message: string | null) => void;
 }
 
@@ -100,6 +139,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   activeId: null,
   stats: EMPTY_STATS,
   team: [],
+  showShared: true,
   loaded: false,
   error: null,
 
@@ -126,6 +166,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     activeId: data.activeId ?? s.activeId,
     stats: data.stats ?? s.stats,
     team: data.team ?? s.team,
+    showShared: data.showShared ?? s.showShared,
     loaded: true,
     error: null,
   })),
