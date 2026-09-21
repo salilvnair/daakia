@@ -248,8 +248,9 @@ export function PaletteSettings({ mode }: { mode: Half }) {
         how far the colours reach.
       */}
       <p className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
-        Themes are saved in this panel only &mdash; not to a file, and not synced to your other
-        machines. Use <strong>Export all</strong> or a card&rsquo;s copy button to keep or share one.
+        Themes you make or import are kept in Daakia&rsquo;s database and travel with
+        <strong> Git Sync</strong>. Use <strong>Export all</strong> or a card&rsquo;s copy button to
+        hand one to somebody directly.
         The colours reach Daakia&rsquo;s panel; VS Code&rsquo;s own title bar, activity bar and
         status bar keep their own theme.
       </p>

@@ -38,14 +38,18 @@ interface GitSyncSettingsData {
   syncMockServers: boolean;
   syncEnvironments: boolean;
   syncAiConfig: boolean;
+  syncThemes: boolean;
 }
 
-const SYNC_SCOPE_ITEMS: { key: keyof Pick<GitSyncSettingsData, 'syncHistory' | 'syncCollections' | 'syncMockServers' | 'syncEnvironments' | 'syncAiConfig'>; label: string }[] = [
+const SYNC_SCOPE_ITEMS: { key: keyof Pick<GitSyncSettingsData, 'syncHistory' | 'syncCollections' | 'syncMockServers' | 'syncEnvironments' | 'syncAiConfig' | 'syncThemes'>; label: string }[] = [
   { key: 'syncHistory', label: 'History' },
   { key: 'syncCollections', label: 'Collections' },
   { key: 'syncMockServers', label: 'Mock Server (incl. state machine)' },
   { key: 'syncEnvironments', label: 'Environments (secret values redacted)' },
   { key: 'syncAiConfig', label: 'AI Config (prompt library, feature flags, provider config)' },
+  /* Themes have synced since they moved into the database, but had no switch
+     here — the one category that could not be turned off. */
+  { key: 'syncThemes', label: 'Themes (the ones you made or imported)' },
 ];
 
 interface GitStatus {
@@ -76,7 +80,7 @@ export function GitSyncSettings() {
   const [settings, setSettings] = useState<GitSyncSettingsData>({
     autoSyncSeconds: 0, localPath: '', remoteUrl: '', branch: 'main',
     syncHistory: true, syncCollections: true, syncMockServers: true,
-    syncEnvironments: true, syncAiConfig: true,
+    syncEnvironments: true, syncAiConfig: true, syncThemes: true,
   });
   const [status, setStatus] = useState<GitStatus | null>(null);
   const [busy, setBusy] = useState<'init' | 'sync' | 'export' | 'import' | null>(null);

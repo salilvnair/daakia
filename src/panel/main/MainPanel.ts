@@ -321,6 +321,11 @@ export class MainPanel {
     for (const p of HISTORY_PROTOCOLS) this._sendHistory(p);
     handleGetMockServerState(this._post);
     handleSmWorkflowGetAll(this._post);
+    /* Environments and themes sync as well, and were missing here — a
+       teammate's environment or palette landed in the database and stayed
+       off screen until the panel was reopened. */
+    handleGetEnvironments(this._post);
+    handleGetThemes(this._post);
   }
 
   // ────────────────── Message Router ──────────────────

@@ -23,9 +23,9 @@
  * Scope (see local-server/README.md for what's NOT wired yet): request
  * execution (REST/GraphQL/gRPC/SOAP), realtime clients (WebSocket/SSE/
  * Socket.IO/MQTT), mock servers (all protocols), SM workflows, environments,
- * collections, history, UI state — enough to fully exercise mock-server +
- * every protocol client end-to-end against real SQLite + real mock servers.
- * AI/MCP/git-sync message types are not wired yet and hit the default case
+ * collections, history, UI state, Git Sync — enough to fully exercise
+ * mock-server + every protocol client end-to-end against real SQLite + real
+ * mock servers. AI/MCP message types are not wired yet and hit the default case
  * (logged, not a crash) — add handlers here the same way as the mock-server
  * block below when needed.
  */
@@ -93,6 +93,10 @@ import {
 } from '../src/panel/main/handlers/environment-handler';
 import { handleGetDynamicVariables } from '../src/panel/main/handlers/dynamic-vars-handler';
 import { handleGetThemes, handleSaveTheme, handleDeleteTheme } from '../src/panel/main/handlers/theme-handler';
+import {
+  handleGitSyncGetSettings, handleGitSyncSaveSettings, handleGitSyncGetStatus, handleGitSyncInit,
+  handleGitSyncNow, handleGitSyncExportOnly, handleGitSyncImportOnly,
+} from '../src/panel/main/handlers/git-sync-handler';
 import {
   handleGetWorkspaces, handleSwitchWorkspace, handleCreateWorkspace,
   handleRenameWorkspace, handleDeleteWorkspace, handleSaveWorkspaceDocs,
@@ -167,6 +171,22 @@ function sendHistory(post: PostMessage, protocol?: string) {
   post({ type: 'historyData', entries, protocol: protocol || 'rest' });
 }
 
+/**
+ * Everything a sync can have changed, re-sent — mirrors
+ * `MainPanel._broadcastSyncedData`, including the environments and themes that
+ * one was missing.
+ */
+function broadcastSyncedData(post: PostMessage) {
+  for (const p of ['rest', 'graphql', 'websocket', 'grpc', 'soap', 'ai', 'mcp']) handleGetCollections(post, p);
+  for (const p of ['rest', 'graphql', 'websocket', 'sse', 'socketio', 'mqtt', 'grpc', 'soap', 'ai', 'mcp']) {
+    sendHistory(post, p);
+  }
+  handleGetMockServerState(post);
+  handleSmWorkflowGetAll(post);
+  handleGetEnvironments(post);
+  handleGetThemes(post);
+}
+
 /** Mirrors MainPanel.refreshInitialState() for the subsystems wired here. */
 export function sendInitialState(post: PostMessage) {
   const status = getSqliteStatus();
@@ -195,6 +215,41 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
     //    driving them in a browser is how they get looked at. ──
     case 'themes:get':
       handleGetThemes(post);
+      break;
+
+    /*
+      ── Git Sync ──
+
+      Was not wired here at all, so in the browser build the Git Sync screen
+      sent messages into the default case and sat empty. Its settings used to
+      be VS Code settings, which this build cannot read, so wiring it was
+      pointless until they moved into the database; now it is the same code
+      path as the extension. The auto-sync timer is the one piece left out —
+      it belongs to an open panel, and this build has no panel lifecycle to
+      hang it on.
+    */
+    case 'gitSync:getSettings':
+      handleGitSyncGetSettings(post);
+      break;
+    case 'gitSync:saveSettings':
+      await handleGitSyncSaveSettings(msg as never, post);
+      break;
+    case 'gitSync:getStatus':
+      await handleGitSyncGetStatus(post);
+      break;
+    case 'gitSync:init':
+      await handleGitSyncInit(post);
+      break;
+    case 'gitSync:syncNow':
+      await handleGitSyncNow(post);
+      broadcastSyncedData(post);
+      break;
+    case 'gitSync:exportOnly':
+      handleGitSyncExportOnly(post);
+      break;
+    case 'gitSync:importOnly':
+      handleGitSyncImportOnly(post);
+      broadcastSyncedData(post);
       break;
     case 'themes:save':
       handleSaveTheme(msg, post);

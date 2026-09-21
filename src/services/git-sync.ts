@@ -50,9 +50,74 @@ function config() {
   return vscode.workspace.getConfiguration('daakia');
 }
 
+/*
+  ── Where these settings live, and why not VS Code's settings ──
+
+  They used to be VS Code settings, written with `ConfigurationTarget.Workspace`.
+  That tied them to whichever folder happened to be open: with no folder open,
+  saving failed outright, and opening a different folder showed a Git Sync that
+  had never been configured — for a sync whose folder, a few lines up, is
+  deliberately machine-global and "never depends on which VS Code workspace is
+  open". The browser build could not read them at all, because it has no VS
+  Code settings.
+
+  Everything else Daakia keeps — collections, environments, themes, history —
+  lives in its own database, and now these do too, under one `app_settings`
+  key. Same answer in every window, every folder and both builds.
+
+  The first read after the move copies whatever VS Code's settings held (any
+  scope) into the database once, so an existing setup survives the upgrade.
+*/
+const SETTINGS_KEY = 'gitSync';
+
+interface StoredGitSync {
+  autoSyncSeconds: number;
+  remoteUrl: string;
+  branch: string;
+  syncHistory: boolean;
+  syncCollections: boolean;
+  syncMockServers: boolean;
+  syncEnvironments: boolean;
+  syncAiConfig: boolean;
+  syncThemes: boolean;
+}
+
+const DEFAULT_SYNC: StoredGitSync = {
+  autoSyncSeconds: 0,
+  remoteUrl: '',
+  branch: 'main',
+  syncHistory: true,
+  syncCollections: true,
+  syncMockServers: true,
+  syncEnvironments: true,
+  syncAiConfig: true,
+  syncThemes: true,
+};
+
+function stored(): StoredGitSync {
+  const saved = getSetting<Partial<StoredGitSync>>(SETTINGS_KEY);
+  if (saved) return { ...DEFAULT_SYNC, ...saved };
+
+  /* Nothing in the database yet: carry VS Code's values over, once. */
+  const c = config();
+  const legacy: StoredGitSync = {
+    autoSyncSeconds: c.get<number>('gitSync.autoSyncSeconds', 0) || 0,
+    remoteUrl: (c.get<string>('gitSync.remoteUrl', '') || '').trim(),
+    branch: (c.get<string>('gitSync.branch', 'main') || 'main').trim() || 'main',
+    syncHistory: c.get<boolean>('gitSync.syncHistory', true),
+    syncCollections: c.get<boolean>('gitSync.syncCollections', true),
+    syncMockServers: c.get<boolean>('gitSync.syncMockServers', true),
+    syncEnvironments: c.get<boolean>('gitSync.syncEnvironments', true),
+    syncAiConfig: c.get<boolean>('gitSync.syncAiConfig', true),
+    syncThemes: c.get<boolean>('gitSync.syncThemes', true),
+  };
+  setSetting(SETTINGS_KEY, legacy);
+  return legacy;
+}
+
 /** Seconds between full auto-syncs; 0 = off. Replaces the old boolean `gitSync.enabled`. */
 export function getAutoSyncSeconds(): number {
-  return config().get<number>('gitSync.autoSyncSeconds', 0) || 0;
+  return stored().autoSyncSeconds || 0;
 }
 
 export function isGitSyncEnabled(): boolean {
@@ -70,11 +135,11 @@ export function getSyncFolder(): string {
 }
 
 export function getRemoteUrl(): string {
-  return config().get<string>('gitSync.remoteUrl', '').trim();
+  return stored().remoteUrl.trim();
 }
 
 export function getBranch(): string {
-  return config().get<string>('gitSync.branch', 'main').trim() || 'main';
+  return stored().branch.trim() || 'main';
 }
 
 export interface GitSyncScope {
@@ -88,33 +153,27 @@ export interface GitSyncScope {
 
 /** Which data categories are included in export/import — all default on. */
 export function getSyncScope(): GitSyncScope {
-  const c = config();
+  const s = stored();
   return {
-    history: c.get<boolean>('gitSync.syncHistory', true),
-    collections: c.get<boolean>('gitSync.syncCollections', true),
-    mockServers: c.get<boolean>('gitSync.syncMockServers', true),
-    environments: c.get<boolean>('gitSync.syncEnvironments', true),
-    aiConfig: c.get<boolean>('gitSync.syncAiConfig', true),
-    themes: c.get<boolean>('gitSync.syncThemes', true),
+    history: s.syncHistory,
+    collections: s.syncCollections,
+    mockServers: s.syncMockServers,
+    environments: s.syncEnvironments,
+    aiConfig: s.syncAiConfig,
+    themes: s.syncThemes,
   };
 }
 
-export async function saveGitSyncSettings(patch: {
-  autoSyncSeconds?: number; remoteUrl?: string; branch?: string;
-  syncHistory?: boolean; syncCollections?: boolean; syncMockServers?: boolean;
-  syncEnvironments?: boolean; syncAiConfig?: boolean; syncThemes?: boolean;
-}): Promise<void> {
-  const c = config();
-  const target = vscode.ConfigurationTarget.Workspace;
-  if (patch.autoSyncSeconds !== undefined) await c.update('gitSync.autoSyncSeconds', patch.autoSyncSeconds, target);
-  if (patch.remoteUrl !== undefined) await c.update('gitSync.remoteUrl', patch.remoteUrl, target);
-  if (patch.branch !== undefined) await c.update('gitSync.branch', patch.branch, target);
-  if (patch.syncHistory !== undefined) await c.update('gitSync.syncHistory', patch.syncHistory, target);
-  if (patch.syncCollections !== undefined) await c.update('gitSync.syncCollections', patch.syncCollections, target);
-  if (patch.syncMockServers !== undefined) await c.update('gitSync.syncMockServers', patch.syncMockServers, target);
-  if (patch.syncEnvironments !== undefined) await c.update('gitSync.syncEnvironments', patch.syncEnvironments, target);
-  if (patch.syncAiConfig !== undefined) await c.update('gitSync.syncAiConfig', patch.syncAiConfig, target);
-  if (patch.syncThemes !== undefined) await c.update('gitSync.syncThemes', patch.syncThemes, target);
+/** Merge a partial update into the stored settings. Only keys actually given change. */
+export async function saveGitSyncSettings(patch: Partial<StoredGitSync>): Promise<void> {
+  const next = { ...stored() };
+  /* Only the keys this file owns. The screen sends back everything it was
+     given, including the read-only `localPath`, and storing that would put a
+     second, stale copy of a computed path in the database. */
+  for (const [key, value] of Object.entries(patch) as [keyof StoredGitSync, unknown][]) {
+    if (value !== undefined && key in DEFAULT_SYNC) (next as Record<string, unknown>)[key] = value;
+  }
+  setSetting(SETTINGS_KEY, next);
 }
 
 // ─── Export ───────────────────────────────────────────────────────────────────
@@ -618,6 +677,50 @@ async function runGit(args: string[], cwd: string): Promise<{ stdout: string; st
   return execFile('git', args, { cwd, timeout: 30_000, maxBuffer: 10 * 1024 * 1024 });
 }
 
+/**
+ * The author for a sync commit, when git has none of its own.
+ *
+ * ── Why this is needed ──
+ *
+ * Plenty of machines have no global `user.name` / `user.email` — people set
+ * them per repository, which is exactly what this machine does. The sync clone
+ * is a repository Daakia creates, so it inherits nothing, and `git commit`
+ * refuses with "unable to auto-detect email address". That surfaced as a raw
+ * git error on the very first sync, with every file exported and staged and
+ * nothing committed.
+ *
+ * Whatever identity git *does* have is always used — this only fills the gap,
+ * per commit, via `-c`, so nothing is written to anybody's git config. The
+ * fallback names the OS user so a teammate reading the log can still tell
+ * whose machine a sync came from.
+ */
+async function commitIdentityArgs(cwd: string): Promise<string[]> {
+  const has = async (key: string) => {
+    try { return (await runGit(['config', key], cwd)).stdout.trim() !== ''; } catch { return false; }
+  };
+  const [name, email] = await Promise.all([has('user.name'), has('user.email')]);
+  if (name && email) return [];
+  const user = (() => { try { return os.userInfo().username; } catch { return 'daakia'; } })() || 'daakia';
+  return [
+    ...(name ? [] : ['-c', `user.name=${user} (Daakia sync)`]),
+    ...(email ? [] : ['-c', `user.email=${user}@daakia-sync.local`]),
+  ];
+}
+
+/**
+ * Does the branch exist on the remote yet?
+ *
+ * A brand-new remote — which is what every first-time setup points at — has
+ * no branches at all, so there is nothing to pull, and `pull --rebase origin
+ * main` fails with "couldn't find remote ref". The sync treated that as a
+ * conflict and stopped before pushing, so an empty remote could never receive
+ * its first commit.
+ */
+async function remoteHasBranch(cwd: string, branch: string): Promise<boolean> {
+  const { stdout } = await runGit(['ls-remote', '--heads', 'origin', branch], cwd);
+  return stdout.trim() !== '';
+}
+
 export async function isGitAvailable(): Promise<boolean> {
   try {
     await execFile('git', ['--version'], { timeout: 5_000 });
@@ -740,12 +843,17 @@ export async function gitSyncNow(): Promise<{ ok: boolean; message: string; comm
     await runGit(['add', '-A'], folder);
     const { stdout: statusOut } = await runGit(['status', '--porcelain'], folder);
     if (statusOut.trim().length > 0) {
-      await runGit(['commit', '-m', `Daakia: sync (${new Date().toISOString()})`], folder);
+      const identity = await commitIdentityArgs(folder);
+      await runGit([...identity, 'commit', '-m', `Daakia: sync (${new Date().toISOString()})`], folder);
       result.committed = true;
     }
 
-    try {
-      await runGit(['pull', '--rebase', 'origin', branch], folder);
+    /* The first push to an empty remote has nothing to pull — skip straight to
+       pushing, which is what creates the branch. */
+    if (await remoteHasBranch(folder, branch)) try {
+      /* A rebase rewrites commits, so it needs an identity too. */
+      const identity = await commitIdentityArgs(folder);
+      await runGit([...identity, 'pull', '--rebase', 'origin', branch], folder);
       result.pulled = true;
     } catch (err) {
       // Leave a rebase-in-progress in as clean a state as possible — never leave the repo
