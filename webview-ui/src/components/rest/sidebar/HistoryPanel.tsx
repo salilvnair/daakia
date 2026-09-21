@@ -10,7 +10,8 @@ import { useTabsStore } from '../../../store/tabs-store';
 import { useScrollRestore } from '../../../hooks/useScrollRestore';
 import { ConfirmDialog, SaveRequestModal } from '../../shared';
 import { SearchInputView, IconButtonView, ContextMenuView, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
-import { useWorkspaceEditable } from '../../../store/workspace-store';
+import { useWorkspaceEditable, useWorkspaceStore, isReadOnly } from '../../../store/workspace-store';
+import { COLLECTION_PROTOCOL_LABELS } from '../../../services/collections/collection-protocol';
 import { lockEdits, HISTORY_EDIT_IDS, HISTORY_TO_COLLECTION_IDS } from '../../../services/workspace/editable';
 import { buildGroups, formatFullTimestamp, exportHistoryItem, exportHistoryItems, type TopGroup, type SubGroup } from '../../../services/history';
 import { replayHistoryItem } from '../../../services/collections';
@@ -187,6 +188,20 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
      history, but "Save to Collection" writes a collection. */
   const canEditHistory = useWorkspaceEditable('history');
   const canEditCollections = useWorkspaceEditable('collections');
+  /*
+    What a delete actually does, said in the dialog: which workspace, which
+    protocol, and that it goes to the Bin rather than away for good. In a
+    teammate's shared workspace it also says what it does not touch — the
+    rows are the requests you sent from it, and their workspace is theirs.
+  */
+  const activeWs = useWorkspaceStore(s => s.workspaces.find(w => w.id === s.activeId));
+  const protocolLabel = COLLECTION_PROTOCOL_LABELS[protocol] ?? protocol.toUpperCase();
+  const wsName = activeWs?.name ?? 'this workspace';
+  const sharedNote = isReadOnly(activeWs)
+    ? ` This is your own history in ${activeWs?.owner_name ?? 'a teammate'}'s shared workspace — their workspace and collections are not affected.`
+    : '';
+  const binNote = 'It moves to the Bin (Settings → Bin), where you can restore it for 30 days.';
+
   const lockMenu = (items: DuiContextMenuItem[]) =>
     lockEdits(lockEdits(items, canEditHistory, HISTORY_EDIT_IDS), canEditCollections, HISTORY_TO_COLLECTION_IDS);
 
@@ -454,8 +469,8 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
         {/* Delete confirmation */}
         {deleteConfirmId === item.id && (
           <ConfirmDialog
-            title="Delete Entry?"
-            message="This history entry will be permanently deleted."
+            title="Delete this request from history?"
+            message={`${item.method} ${item.url} — sent from "${wsName}". ${binNote}${sharedNote}`}
             confirmLabel="Delete"
             danger
             onConfirm={() => confirmDelete(item.id)}
@@ -815,9 +830,9 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
       {/* Clear all confirmation */}
       {showClearConfirm && (
         <ConfirmDialog
-          title="Clear All History?"
-          message="This will permanently delete all history entries. This cannot be undone."
-          confirmLabel="Delete All"
+          title={`Clear ${protocolLabel} history in "${wsName}"?`}
+          message={`All ${history.length} ${protocolLabel} request${history.length === 1 ? '' : 's'} sent from this workspace move to the Bin (Settings → Bin), where you can restore them for 30 days. Other workspaces and other protocols are not affected.${sharedNote}`}
+          confirmLabel="Clear history"
           danger
           onConfirm={handleClearAll}
           onCancel={() => setShowClearConfirm(false)}

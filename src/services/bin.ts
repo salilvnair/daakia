@@ -18,6 +18,7 @@ import {
   getAllEnvironments, upsertEnvironment, deleteEnvironment, type EnvironmentRow,
 } from '../storage/db';
 import { loadSavedConfigs, saveConfigs } from '../mock/mock-server-manager';
+import { getWorkspace, withWorkspace } from '../storage/workspaces';
 import type { MockServerConfig } from '../mock/mock-types';
 
 export { getTrashEntries, getTrashCounts, purgeExpiredTrash };
@@ -145,11 +146,26 @@ const RESTORERS: Record<TrashCategory, (entry: TrashEntry) => void> = {
   environment: restoreEnvironmentEntry,
 };
 
+/**
+ * Restore into the workspace it was deleted from.
+ *
+ * Every restorer writes through the scoped storage calls, which use the active
+ * workspace — so restoring a request deleted in "Payments" while "Orders" was
+ * open put it in "Orders". The entry now records its workspace; restoring
+ * borrows that one for the duration. If that workspace has since been deleted,
+ * or the entry predates the record, the open one is the only home left.
+ */
+function restoreInPlace(entry: TrashEntry): void {
+  const home = entry.workspace_id && getWorkspace(entry.workspace_id) ? entry.workspace_id : undefined;
+  if (home) withWorkspace(home, () => RESTORERS[entry.category](entry));
+  else RESTORERS[entry.category](entry);
+}
+
 /** Restores one bin entry and removes it from the bin. Returns false if the entry doesn't exist. */
 export function restoreEntry(id: string): boolean {
   const entry = getTrashEntry(id);
   if (!entry) return false;
-  RESTORERS[entry.category](entry);
+  restoreInPlace(entry);
   deleteTrashEntry(id);
   return true;
 }
@@ -159,7 +175,7 @@ export function restoreEntry(id: string): boolean {
 export function restoreGroup(groupId: string): number {
   const entries = getTrashGroup(groupId);
   for (const entry of entries) {
-    RESTORERS[entry.category](entry);
+    restoreInPlace(entry);
   }
   if (entries.length > 0) deleteTrashGroup(groupId);
   return entries.length;

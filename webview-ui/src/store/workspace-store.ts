@@ -181,10 +181,25 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
  * directly, because those import from here for the active id and a store that
  * imports its own subscribers is a cycle.
  */
+/**
+ * Data the tab counts are made of. The counts come from the host with the
+ * workspace snapshot, which was only sent on a switch — so deleting a history
+ * row, sending a request or adding a collection left the badge showing the
+ * old number over a list that disagreed with it. When any of these arrive,
+ * the snapshot is asked for again (once, for a burst).
+ */
+const COUNTED = new Set(['historyData', 'collectionsData', 'environmentsData']);
+let _statsTimer: ReturnType<typeof setTimeout> | undefined;
+function refreshStatsSoon(): void {
+  if (_statsTimer) clearTimeout(_statsTimer);
+  _statsTimer = setTimeout(() => { _statsTimer = undefined; postMsg({ type: 'getWorkspaces' }); }, 400);
+}
+
 export function wireWorkspaceMessages(onSwitched: () => void): () => void {
   const handler = (event: MessageEvent) => {
     const msg = event.data as { type?: string; message?: string } & Record<string, unknown>;
     if (!msg?.type) return;
+    if (COUNTED.has(msg.type)) refreshStatsSoon();
 
     switch (msg.type) {
       case 'workspacesData':
