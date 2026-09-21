@@ -6,6 +6,7 @@
  */
 import { useEffect } from 'react';
 import { wireWorkspaceMessages } from '../store/workspace-store';
+import { loadWorkspaceScopedData } from './workspace-scoped-data';
 import { applyChainExtractions } from '../services/request/chaining';
 import { logUiEvent } from '../store/ui-audit-store';
 import { nameForStage, screenForStage } from '../store/ai-audit-events';
@@ -657,21 +658,4 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
   }, []);
 }
 
-/**
- * Everything scoped to a workspace, asked for again.
- *
- * Called on startup and after every workspace switch. One list, because
- * "loaded at boot" and "reloaded after a switch" are the same requirement, and
- * two lists that have to stay in step is a bug waiting to happen.
- */
-export function loadWorkspaceScopedData(): void {
-  getVsCodeApi().postMessage({ type: 'getEnvironments' });
-  // One request per protocol so the sidebar cache is never contaminated with
-  // cross-protocol entries.
-  (['rest', 'graphql', 'websocket', 'grpc', 'soap', 'mcp'] as const).forEach(p =>
-    getVsCodeApi().postMessage({ type: 'getHistory', protocol: p })
-  );
-  (['rest', 'graphql', 'websocket'] as const).forEach(p =>
-    getVsCodeApi().postMessage({ type: 'getCollections', protocol: p })
-  );
-}
+export { loadWorkspaceScopedData };

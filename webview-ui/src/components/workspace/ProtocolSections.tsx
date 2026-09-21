@@ -54,7 +54,7 @@ function useCreateSignal(signal: number, onAsk: () => void) {
 }
 
 /** Every protocol that can own a collection, in rail order. */
-const PROTOCOLS: { id: Protocol; label: string }[] = [
+export const PROTOCOLS: { id: Protocol; label: string }[] = [
   { id: 'rest', label: 'REST' },
   { id: 'graphql', label: 'GraphQL' },
   { id: 'websocket', label: 'Realtime' },
