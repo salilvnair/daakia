@@ -3,7 +3,7 @@ import {
   EMPTY, ROOT_ID, activeCount, addCondition, addToGroup, allRows, chipsOf, describeCondition,
   describeStructure, dropCondition, dropField, except, flipGap, formatQuery, isEmpty, isGroup,
   isUsable, liveTree, newCondition, newGroup, only, parseQuery, setGroupOp, statusBucket,
-  toggleValue, wrapWith,
+  toggleValue, wrapWith, addJoined, setCondition,
   type Condition, type ConditionGroup, type FilterState,
 } from './filter-model';
 
@@ -164,6 +164,24 @@ describe('flipping one gap', () => {
     const state = withGroups([{ rows: [body('a')] }, { rows: [body('b')] }, { rows: [body('c')] }]);
     const ids = top(state).map(c => c.id);
     expect(describeStructure(flipGap(state, ROOT_ID, ids[0], ids[1]))).toBe('(1 or 2) and 3');
+  });
+});
+
+describe('adding with either word', () => {
+  it('adds with the box own word by just joining the box', () => {
+    const state = withGroups([{ op: 'or', rows: [body('a'), body('b')] }]);
+    const box = top(state)[0] as ConditionGroup;
+    const next = addJoined(state, box.id, 'body', 'or');
+    expect((top(next)[0] as ConditionGroup).children).toHaveLength(3);
+  });
+
+  it('adds with the other word by joining only the last row', () => {
+    // (A or B) + and → (A or (B and C)) — what the chip in that gap would make.
+    const state = withGroups([{ op: 'or', rows: [body('a'), body('b')] }]);
+    const box = top(state)[0] as ConditionGroup;
+    const next = addJoined(state, box.id, 'body', 'and');
+    const withValue = setCondition(next, { ...allRows(next)[2], value: 'c' });
+    expect(describeStructure(withValue)).toBe('1 or (2 and 3)');
   });
 });
 

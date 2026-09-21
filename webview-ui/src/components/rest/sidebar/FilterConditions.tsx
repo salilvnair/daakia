@@ -43,7 +43,7 @@ import { useRef, useState } from 'react';
 import { ContextMenuView, SelectInputView } from '@salilvnair/dui';
 import { PlusIcon, TrashIcon } from '../../../icons';
 import {
-  NULLARY, OPERATORS, addCondition, addToGroup, dropCondition, flipGap, isGroup,
+  NULLARY, OPERATORS, addCondition, addJoined, dropCondition, flipGap, isGroup,
   setCondition, setGroupOp, wrapWith,
   type Condition, type ConditionField, type ConditionGroup, type ConditionNode,
   type FilterState, type Op, type Operator,
@@ -369,8 +369,8 @@ export function FilterConditions({ state, onChange, fields, hint, addLabel }: {
       type="button"
       onClick={onAdd}
       title={op === 'or'
-        ? 'Add a row this box will accept as an alternative'
-        : 'Add a row this box will also require'}
+        ? 'Add a row joined by OR'
+        : 'Add a row joined by AND'}
       className="flex items-center gap-1 text-[9.5px] uppercase tracking-wider px-1.5 rounded cursor-pointer"
       style={{
         color: tone(op), fontWeight: 700, lineHeight: '16px', background: 'transparent',
@@ -432,9 +432,16 @@ export function FilterConditions({ state, onChange, fields, hint, addLabel }: {
           </div>
         ))}
 
+        {/*
+          Both words, in every box. The box's own word first, because it is
+          the one that just adds a row; the other word joins the new row to the
+          last one only — the same thing the chip in that gap would do.
+        */}
         <div className="pt-1 flex gap-1" style={{ paddingLeft: FIELD_INDENT }}>
           <AddButton op={group.op}
-                     onAdd={() => onChange(addToGroup(state, group.id, lastField, group.op))} />
+                     onAdd={() => onChange(addJoined(state, group.id, lastField, group.op))} />
+          <AddButton op={group.op === 'and' ? 'or' : 'and'}
+                     onAdd={() => onChange(addJoined(state, group.id, lastField, group.op === 'and' ? 'or' : 'and'))} />
         </div>
       </div>
     );

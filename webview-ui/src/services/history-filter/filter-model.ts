@@ -392,6 +392,30 @@ export function addToGroup(
 }
 
 /**
+ * A new row at the end of a group, joined to the last one by `op`.
+ *
+ * With the group's own word it simply joins the group. With the other word it
+ * joins only the last row — `(A or B)` plus `+ and` gives `(A or (B and C))` —
+ * which is the same thing clicking the chip in that gap would do, so the add
+ * buttons and the chips can never disagree about what a gap means. It is
+ * literally `flipGap` on the new gap.
+ */
+export function addJoined(
+  state: FilterState, groupId: string, field: ConditionField, op: Op,
+): FilterState {
+  const group = findGroup(state.root, groupId);
+  if (!group) return state;
+  if (op === group.op || group.children.length < 2) return addToGroup(state, groupId, field, op);
+  const fresh = newCondition(field);
+  const withRow: FilterState = {
+    ...state,
+    root: mapGroups(state.root, g => (g.id === groupId ? { ...g, children: [...g.children, fresh] } : g)),
+  };
+  const last = group.children[group.children.length - 1];
+  return flipGap(withRow, groupId, last.id, fresh.id);
+}
+
+/**
  * A new row joined to one row that has no box of its own yet.
  *
  * A lone row at the top level is drawn as a box of one, and its `+ and` /
