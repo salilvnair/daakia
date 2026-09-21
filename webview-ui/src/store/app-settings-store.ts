@@ -45,7 +45,9 @@ const DEFAULTS: GeneralAppSettings = {
   sslVerification: true,
   timeout: 0,
   saveResponseInHistory: true,
-  maxHistoryEntries: 500,
+  /* 2,000 since History became searchable — see `services/history-cap` on
+     the host, which holds the same number. */
+  maxHistoryEntries: 2000,
   maxAiChatMessages: 200,
   dk8sAiHistoryTurns: 5,
   encoding: 'enable',

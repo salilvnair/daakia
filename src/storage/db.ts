@@ -494,6 +494,49 @@ function _runMigrations(db: SqlJsDatabase): void {
   } catch (err) {
     console.error('[daakia] request-label migration failed:', err);
   }
+
+  // Migration 7: the history cap's old default, stored as though chosen.
+  try {
+    _raiseLegacyHistoryCap(db);
+  } catch (err) {
+    console.error('[daakia] history-cap migration failed:', err);
+  }
+}
+
+/**
+ * Raise a stored history cap of exactly 500 to 2,000 — once.
+ *
+ * ── Why this is needed at all ──
+ *
+ * The default went from 500 to 2,000 when History became searchable. But the
+ * Settings panel saves the whole `general` object whenever anything in it
+ * changes, defaults included, so almost everybody who has ever touched a
+ * setting has `maxHistoryEntries: 500` stored — and a stored value wins over
+ * the default. The raise reached nobody who had used Settings.
+ *
+ * ── Why exactly 500, and why only once ──
+ *
+ * 500 is the value the old default wrote; anything else is somebody's own
+ * number and is left alone. The marker lives under its own key rather than
+ * inside `general`, because the panel rewrites `general` wholesale and would
+ * drop an unknown field — and then a 500 somebody chose deliberately, after
+ * this ran, would be raised again on the next start.
+ */
+function _raiseLegacyHistoryCap(db: SqlJsDatabase): void {
+  const MARKER = 'migration.historyCap2000';
+  const done = db.exec('SELECT value FROM app_settings WHERE key = ?', [MARKER]);
+  if (done.length && done[0].values.length) return;
+
+  const rows = db.exec('SELECT value FROM app_settings WHERE key = ?', ['general']);
+  const raw = rows.length && rows[0].values.length ? rows[0].values[0][0] : undefined;
+  if (typeof raw === 'string') {
+    const general = JSON.parse(raw) as Record<string, unknown>;
+    if (general.maxHistoryEntries === 500) {
+      general.maxHistoryEntries = 2000;
+      db.run('UPDATE app_settings SET value = ? WHERE key = ?', [JSON.stringify(general), 'general']);
+    }
+  }
+  db.run('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)', [MARKER, '"done"']);
 }
 
 /**
@@ -574,6 +617,11 @@ function _relabelNonRestRequests(db: SqlJsDatabase): void {
 }
 
 /** Testing seam: run the relabel migration against a handle the test owns. */
+/** The history-cap migration, exposed for its test. */
+export function _raiseLegacyHistoryCapForTest(db: SqlJsDatabase): void {
+  _raiseLegacyHistoryCap(db);
+}
+
 export function _relabelNonRestRequestsForTest(db: SqlJsDatabase): void {
   _relabelNonRestRequests(db);
 }

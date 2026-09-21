@@ -338,7 +338,7 @@ function GeneralGeneralContent() {
         <TextInputView
           type="number"
           value={String(settings.maxHistoryEntries)}
-          onChange={(e) => save({ maxHistoryEntries: Math.max(10, parseInt(e.target.value) || 500) })}
+          onChange={(e) => save({ maxHistoryEntries: Math.max(10, parseInt(e.target.value) || 2000) })}
           size="md"
           accentColor="var(--color-settings)"
           style={{ width: 120 }}
