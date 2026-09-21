@@ -102,7 +102,7 @@ import {
   handleRenameWorkspace, handleDeleteWorkspace, handleSaveWorkspaceDocs,
   handleWorkspaceDocsContext,
   handleImportWorkspace, handleOpenWorkspace, handleExportWorkspace,
-  handleSetWorkspaceShared, refuseIfReadOnly,
+  handleSetWorkspaceShared, refuseIfReadOnly, handleImportSharedWorkspace,
 } from '../src/panel/main/handlers/workspace-handler';
 import {
   handleGetCollections, handleGetCollectionTree, handleGetCollectionChildren,
@@ -951,6 +951,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'setWorkspaceShared':
       handleSetWorkspaceShared(msg, post);
+      break;
+    case 'importSharedWorkspace':
+      handleImportSharedWorkspace(msg, post);
       break;
     case 'saveWorkspaceDocs':
       handleSaveWorkspaceDocs(msg, post);

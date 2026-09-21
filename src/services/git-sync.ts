@@ -698,7 +698,8 @@ export interface TeamMember {
   id: string;
   name: string;
   isMe: boolean;
-  shared: { id: string; name: string }[];
+  /** What they share. `imported` when you have added it to your workspaces. */
+  shared: { id: string; name: string; imported: boolean }[];
 }
 
 /** Everybody with a folder in the repo, and what each of them shares. */
@@ -710,7 +711,9 @@ export function listTeam(): TeamMember[] {
     const profile = readJson<ProfileDoc>(path.join(userDir(id), 'profile.json'));
     const shared = subdirs(sharedDir(id)).flatMap(ws => {
       const doc = readJson<SharedWorkspaceDoc>(path.join(sharedDir(id), ws, SHARED_FILE));
-      return doc?.workspace?.name ? [{ id: ws, name: doc.workspace.name }] : [];
+      return doc?.workspace?.name
+        ? [{ id: ws, name: doc.workspace.name, imported: !!getWorkspace(sharedWorkspaceLocalId(id, ws)) }]
+        : [];
     });
     team.push({ id, name: profile?.name || id.slice(0, 8), isMe: id === me.id, shared });
   }
@@ -767,29 +770,55 @@ export function importPrivateBundle(): SyncBundleCounts {
   return counts;
 }
 
+/** A teammate's shared workspace file in the clone, or undefined. */
+function readSharedDoc(ownerId: string, wsId: string): { doc: SharedWorkspaceDoc; ownerName: string } | undefined {
+  if (!safeSegment(ownerId) || !safeSegment(wsId)) return undefined;
+  const doc = readJson<SharedWorkspaceDoc>(path.join(sharedDir(ownerId), wsId, SHARED_FILE));
+  if (!doc || doc.kind !== 'shared-workspace' || doc.owner?.id !== ownerId) return undefined;
+  const profile = readJson<ProfileDoc>(path.join(userDir(ownerId), 'profile.json'));
+  return { doc, ownerName: profile?.name || doc.owner.name || ownerId.slice(0, 8) };
+}
+
 /**
- * Every teammate's shared workspaces, read-only — and nothing else of theirs.
- * A shared workspace whose owner stopped sharing it, or left, is removed here.
+ * Refresh the teammates' workspaces you have imported — and only those.
+ *
+ * Sharing offers a workspace; it does not push it into anybody's switcher.
+ * You pick it from Import shared, and from then on every sync rebuilds your
+ * copy from its owner's folder. If they stop sharing it, your copy goes.
+ * Removing your copy is how you stop following it: nothing re-adds it.
  */
 export function importSharedFromTeam(): number {
-  const me = getSyncIdentity();
-  const seen = new Set<string>();
-
-  for (const ownerId of subdirs(usersRoot())) {
-    if (ownerId === me.id || !safeSegment(ownerId)) continue;
-    const profile = readJson<ProfileDoc>(path.join(userDir(ownerId), 'profile.json'));
-    for (const ws of subdirs(sharedDir(ownerId))) {
-      const doc = readJson<SharedWorkspaceDoc>(path.join(sharedDir(ownerId), ws, SHARED_FILE));
-      if (!doc || doc.kind !== 'shared-workspace' || doc.owner?.id !== ownerId) continue;
-      const localId = importSharedWorkspace(doc, profile?.name || doc.owner.name || ownerId.slice(0, 8));
-      if (localId) seen.add(localId);
-    }
-  }
-
+  let refreshed = 0;
   for (const ws of listWorkspaces()) {
-    if (ws.owner_id && !seen.has(ws.id)) deleteWorkspace(ws.id);
+    if (!ws.owner_id) continue;
+    const prefix = `shared-${ws.owner_id}-`;
+    const found = ws.id.startsWith(prefix) ? readSharedDoc(ws.owner_id, ws.id.slice(prefix.length)) : undefined;
+    if (found && importSharedWorkspace(found.doc, found.ownerName)) refreshed++;
+    else deleteWorkspace(ws.id);
   }
-  return seen.size;
+  return refreshed;
+}
+
+/** Shared workspaces teammates offer that you have not imported. */
+export function countSharedAvailable(): number {
+  return listTeam().filter(m => !m.isMe).reduce((n, m) => n + m.shared.filter(s => !s.imported).length, 0);
+}
+
+/**
+ * Import one teammate's shared workspace into a read-only copy of your own.
+ *
+ * Read from the local clone, so it is whatever the last sync brought in. The
+ * copy is yours to use — requests sent from it land in your history — but its
+ * collections change only when the owner's do.
+ */
+export function importSharedWorkspaceFromTeam(ownerId: string, wsId: string): { ok: boolean; id?: string; message: string } {
+  if (ownerId === getSyncIdentity().id) return { ok: false, message: 'That is one of your own workspaces.' };
+  const found = readSharedDoc(ownerId, wsId);
+  if (!found) return { ok: false, message: 'That workspace is no longer shared. Run Git Sync to refresh the list.' };
+  const id = importSharedWorkspace(found.doc, found.ownerName);
+  return id
+    ? { ok: true, id, message: `Imported ${found.doc.workspace.name} from ${found.ownerName}, read-only.` }
+    : { ok: false, message: 'Could not import that workspace.' };
 }
 
 /** Both halves of an import. The watcher and "Import only" use this. */
@@ -1026,7 +1055,7 @@ export interface SyncResult {
   committed: boolean;
   pulled: boolean;
   pushed: boolean;
-  /** Teammates' shared workspaces now in the switcher. */
+  /** Teammates' workspaces you imported, refreshed by this sync. */
   shared: number;
 }
 
@@ -1142,8 +1171,10 @@ export async function gitSyncNow(): Promise<SyncResult> {
       const { stdout: head } = await runGit(['rev-parse', 'HEAD'], folder);
       setSetting(STATE_KEY, { lastSyncedCommit: head.trim(), identityId: me.id } satisfies SyncState);
 
-      const teammates = result.shared === 1 ? '1 shared workspace from a teammate' : `${result.shared} shared workspaces from teammates`;
-      return { ...result, ok: true, message: `Synced as ${me.name}. ${teammates}.` };
+      const available = countSharedAvailable();
+      const offered = available === 0 ? ''
+        : ` ${available} shared workspace${available === 1 ? '' : 's'} from teammates to import from the workspace menu.`;
+      return { ...result, ok: true, message: `Synced as ${me.name}.${offered}` };
     }
     return { ...result, message: 'The remote kept changing while syncing. Try again in a moment.' };
   } catch (err) {

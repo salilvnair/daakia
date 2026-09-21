@@ -113,6 +113,35 @@
   box-shadow: 0 14px 38px rgba(0, 0, 0, 0.45);
 }
 .ws-menu--right { left: auto; right: 10px; width: 168px; }
+.ws-menu--wide { width: 210px; }
+
+/* Import shared: a flyout beside the switcher, one group per teammate. */
+.ws-menu-subwrap { position: relative; }
+.ws-menu-sub {
+  top: -5px;
+  left: calc(100% + 4px);
+  width: 250px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.ws-menu-item--hover { background: color-mix(in srgb, var(--color-text-primary) 8%, transparent); }
+.ws-menu-head.ws-menu-head--user {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--color-workspace);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-menu-empty {
+  padding: 8px 9px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
 
 .ws-menu-head {
   font-size: 9.5px;

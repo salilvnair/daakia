@@ -14,7 +14,7 @@ import {
   setWorkspaceDocs, setActiveWorkspaceId, getActiveWorkspaceId, getWorkspaceStats,
   setWorkspaceShared, isReadOnlyWorkspace,
 } from '../../../storage/workspaces';
-import { COLLECTION_MUTATION_TYPES } from '../../../services/git-sync';
+import { COLLECTION_MUTATION_TYPES, listTeam, importSharedWorkspaceFromTeam } from '../../../services/git-sync';
 import { getAllCollectionTrees, getAllEnvironments } from '../../../storage/db';
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -30,7 +30,22 @@ function snapshot() {
     workspaces: listWorkspaces(),
     activeId: getActiveWorkspaceId(),
     stats: getWorkspaceStats(),
+    /* What teammates offer through Git Sync, for the switcher's Import shared
+       menu. Read from the local clone, so it is as fresh as the last sync. */
+    team: listTeam().filter(m => !m.isMe && m.shared.length > 0),
   };
+}
+
+/** Add a teammate's shared workspace as a read-only copy, and go to it. */
+export function handleImportSharedWorkspace(msg: Record<string, unknown>, post: PostMessage) {
+  const result = importSharedWorkspaceFromTeam(String(msg.ownerId ?? ''), String(msg.workspaceId ?? ''));
+  if (!result.ok || !result.id) {
+    post({ type: 'workspaceError', message: result.message });
+    post({ type: 'workspacesData', ...snapshot() });
+    return;
+  }
+  setActiveWorkspaceId(result.id);
+  post({ type: 'workspaceChanged', ...snapshot(), toast: result.message });
 }
 
 export function handleGetWorkspaces(post: PostMessage) {
@@ -97,8 +112,8 @@ export function handleSetWorkspaceShared(msg: Record<string, unknown>, post: Pos
       type: 'toast',
       toastType: 'success',
       message: shared
-        ? `${name} is shared. Teammates get a read-only copy on their next Git Sync.`
-        : `${name} is private again. It leaves teammates' Daakia on their next Git Sync.`,
+        ? `${name} is shared. After your next Git Sync, teammates can import it read-only from their workspace menu.`
+        : `${name} is private again. Copies teammates imported go away on their next Git Sync.`,
     });
   }
   post({ type: 'workspacesData', ...snapshot() });

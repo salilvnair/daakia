@@ -221,7 +221,7 @@ export function GitSyncSettings() {
         <div className="max-w-[600px]">
           <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Team</p>
           <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-2">
-            People syncing to this repo, and the workspaces they share with you. Shared workspaces show up read-only in your workspace switcher.
+            People syncing to this repo, and the workspaces they share. Add one from the workspace menu's Import shared — you get a read-only copy to send requests from.
           </p>
           <div className="flex flex-col gap-1.5">
             {team.filter(m => !m.isMe).map(m => (
@@ -384,7 +384,7 @@ function GitStatusCard({ status, configuredBranch }: { status: GitStatus | null;
       {(state === 'pending' || state === 'clean') && status && (
         <div className="px-3.5 py-3 flex flex-wrap gap-2">
           <StatusChip label="Branch" value={status.branch || configuredBranch} icon={<GitBranchIcon size={11} />} />
-          <StatusChip label="Remote" value={status.hasRemote ? 'origin configured' : 'none'} tone={status.hasRemote ? 'success' : 'warning'} />
+          <StatusChip label="Remote" value={status.hasRemote ? 'origin' : 'none'} tone={status.hasRemote ? 'success' : 'warning'} />
           {status.ahead > 0 && <StatusChip label="Ahead" value={String(status.ahead)} icon={<ArrowUpIcon size={11} />} tone="warning" />}
           {status.behind > 0 && <StatusChip label="Behind" value={String(status.behind)} icon={<ArrowDownIcon size={11} />} tone="warning" />}
           <StatusChip label="Working Tree" value={status.dirty ? 'Dirty' : 'Clean'} tone={status.dirty ? 'warning' : 'success'} />

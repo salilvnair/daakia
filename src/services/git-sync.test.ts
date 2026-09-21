@@ -25,7 +25,7 @@ import {
 import { refuseIfReadOnly } from '../panel/main/handlers/workspace-handler';
 import {
   ensureGitRepo, gitSyncNow, getSyncIdentity, getSyncFolder, saveGitSyncSettings,
-  sharedWorkspaceLocalId, USERS_DIR,
+  sharedWorkspaceLocalId, USERS_DIR, listTeam, importSharedWorkspaceFromTeam,
 } from './git-sync';
 
 /*
@@ -36,7 +36,7 @@ import {
   What it pins is the collaboration contract: every sync writes only its own
   folder, so two people syncing in turn never conflict; your private data stays
   out of everybody else's Daakia; a shared workspace arrives read-only, under
-  its owner's name, and leaves when they stop sharing it.
+  its owner's name only when you import it, and leaves when they stop sharing.
 */
 
 const ROOT = path.resolve(__dirname, '../..');
@@ -123,14 +123,25 @@ describe('Git Sync between two people', () => {
     expect(shared).not.toContain('sk_live');
   }, 60_000);
 
-  it('gives a teammate the shared workspace read-only, and nothing private', async () => {
+  it('offers a teammate the shared workspace, and imports it only when they pick it', async () => {
     await become('bob');
     expect((await ensureGitRepo(remote, 'main')).ok).toBe(true);
     insertHistory({ method: 'GET', url: 'https://bob.test/', status: 200, protocol: 'rest' });
 
     const result = await gitSyncNow();
     expect(result.ok, result.message).toBe(true);
-    expect(result.shared).toBe(1);
+    expect(result.message).toContain('1 shared workspace from teammates');
+
+    // Offered, not added.
+    expect(listWorkspaces().some(w => w.owner_id)).toBe(false);
+    const alice = listTeam().find(m => m.id === ALICE);
+    expect(alice?.shared).toEqual([{ id: paymentsId, name: 'Payments', imported: false }]);
+    // Alice's private workspaces are never offered.
+    expect(alice?.shared.map(s => s.name)).not.toContain('My Workspace');
+
+    const imported = importSharedWorkspaceFromTeam(ALICE, paymentsId);
+    expect(imported.ok, imported.message).toBe(true);
+    expect(listTeam().find(m => m.id === ALICE)?.shared[0].imported).toBe(true);
 
     const copy = listWorkspaces().find(w => w.id === sharedWorkspaceLocalId(ALICE, paymentsId));
     expect(copy?.owner_id).toBe(ALICE);
@@ -152,7 +163,27 @@ describe('Git Sync between two people', () => {
     const posted: unknown[] = [];
     expect(refuseIfReadOnly({ type: 'createCollection' }, m => posted.push(m), () => undefined)).toBe(true);
     expect(refuseIfReadOnly({ type: 'getCollections' }, m => posted.push(m), () => undefined)).toBe(false);
+    // Sending from it is fine, and lands in Bob's own history for that copy.
+    expect(refuseIfReadOnly({ type: 'executeRequest' }, m => posted.push(m), () => undefined)).toBe(false);
+    insertHistory({ method: 'POST', url: 'https://pay.test/charge', status: 201, protocol: 'rest' });
+    expect(getHistory(100, 0).map(h => h.url)).toEqual(['https://pay.test/charge']);
     setActiveWorkspaceId('ws-default');
+
+    // The next sync refreshes the copy rather than dropping it.
+    const again = await gitSyncNow();
+    expect(again.ok, again.message).toBe(true);
+    expect(again.shared).toBe(1);
+  }, 60_000);
+
+  it('does not bring back a copy you removed', async () => {
+    await become('bob');
+    const id = sharedWorkspaceLocalId(ALICE, paymentsId);
+    expect(deleteWorkspace(id).ok).toBe(true);
+    const result = await gitSyncNow();
+    expect(result.ok, result.message).toBe(true);
+    expect(listWorkspaces().some(w => w.id === id)).toBe(false);
+    // Still on offer, so it can be imported again.
+    expect(importSharedWorkspaceFromTeam(ALICE, paymentsId).ok).toBe(true);
   }, 60_000);
 
   it('never conflicts when both people changed things between syncs', async () => {

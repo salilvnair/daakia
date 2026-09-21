@@ -11,7 +11,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { ImportModal } from './ImportModal';
-import { useWorkspaceStore, isReadOnly, type Workspace } from '../../store/workspace-store';
+import { useWorkspaceStore, isReadOnly, type Workspace, type SharingTeammate } from '../../store/workspace-store';
 import { useTabsStore } from '../../store/tabs-store';
 import { SplitPanelView, AlertDialogView } from '@salilvnair/dui';
 import { NewItemModal } from '../shared/modals/NewItemModal';
@@ -21,7 +21,7 @@ import {
   LayoutGridIcon, ChevronDownIcon, CheckIcon, PlusIcon, FolderIcon, FolderOpenIcon,
   DownloadIcon, GlobeIcon, SettingsIcon, PencilIcon, TrashIcon, CloseIcon,
   UploadIcon, DocumentIcon, CollectionsFolderIcon, ClockIcon,
-  FolderImportIcon, FolderExportIcon, UsersIcon, LockIcon,
+  FolderImportIcon, FolderExportIcon, UsersIcon, LockIcon, ChevronRightIcon,
 } from '../../icons';
 import { WorkspaceDocs } from './WorkspaceDocs';
 import {
@@ -75,7 +75,7 @@ export const shortWorkspaceName = (name: string | undefined) => cut(name, MAX_NA
 export const railWorkspaceName = (name: string | undefined) => cut(name, MAX_RAIL_NAME);
 
 export function WorkspacePage() {
-  const { workspaces, activeId, stats, load, switchTo, create, rename, remove, setShared, error } =
+  const { workspaces, activeId, stats, team, load, switchTo, create, rename, remove, setShared, importShared, error } =
     useWorkspaceStore();
   const active = workspaces.find(w => w.id === activeId);
   const readOnly = isReadOnly(active);
@@ -129,6 +129,13 @@ export function WorkspacePage() {
       <WorkspaceHeader
         active={active}
         workspaces={workspaces}
+        team={team}
+        onImportShared={(ownerId, wsId) => {
+          /* Already imported: that is just a switch to your copy. */
+          const copy = workspaces.find(w => w.id === `shared-${ownerId}-${wsId}`);
+          if (copy) switchTo(copy.id); else importShared(ownerId, wsId);
+          setMenuOpen(false);
+        }}
         menuOpen={menuOpen}
         menuRef={menuRef}
         renaming={renaming}
@@ -248,9 +255,13 @@ export function WorkspacePage() {
 
       <AlertDialogView
         open={confirmingDelete}
-        title={`Delete "${active?.name ?? 'this workspace'}"?`}
-        message="Its collections, environments and history go with it. This cannot be undone."
-        confirmLabel="Delete"
+        title={readOnly
+          ? `Remove "${active?.name ?? 'this workspace'}"?`
+          : `Delete "${active?.name ?? 'this workspace'}"?`}
+        message={readOnly
+          ? `Your copy and the history you sent from it go. ${active?.owner_name ?? 'The owner'} still has theirs, and you can import it again from Import shared.`
+          : 'Its collections, environments and history go with it. This cannot be undone.'}
+        confirmLabel={readOnly ? 'Remove' : 'Delete'}
         danger
         onConfirm={() => { if (active) remove(active.id); setConfirmingDelete(false); }}
         onCancel={() => setConfirmingDelete(false)}
@@ -262,12 +273,15 @@ export function WorkspacePage() {
 // ── Header ───────────────────────────────────────────────────────────────────
 
 function WorkspaceHeader({
-  active, workspaces, menuOpen, menuRef, renaming, docsOpen, onShowDocs,
+  active, workspaces, team, onImportShared, menuOpen, menuRef, renaming, docsOpen, onShowDocs,
   onToggleMenu, onPick, onCreate, onOpen, onImport, onExport,
   onRenameStart, onRenameDone, onDelete, onToggleShared,
 }: {
   active?: Workspace;
   workspaces: Workspace[];
+  /** Teammates' shared workspaces, offered under Import shared. */
+  team: SharingTeammate[];
+  onImportShared: (ownerId: string, workspaceId: string) => void;
   /** Whether the documentation panel is showing — see `onShowDocs`. */
   docsOpen: boolean;
   onShowDocs: () => void;
@@ -286,6 +300,7 @@ function WorkspaceHeader({
   onToggleShared: () => void;
 }) {
   const [overflow, setOverflow] = useState(false);
+  const [sharedOpen, setSharedOpen] = useState(false);
   const readOnly = isReadOnly(active);
   const mine = workspaces.filter(w => !isReadOnly(w));
   const theirs = workspaces.filter(w => isReadOnly(w));
@@ -360,29 +375,35 @@ function WorkspaceHeader({
         </button>
       )}
 
-      {!readOnly && (
-        <button
-          type="button"
-          className="ws-overflow"
-          title="Share, rename or delete this workspace"
-          onClick={() => setOverflow(o => !o)}
-        >
-          <SettingsIcon size={13} />
-        </button>
-      )}
+      <button
+        type="button"
+        className="ws-overflow"
+        title={readOnly ? 'Remove this shared workspace' : 'Share, rename or delete this workspace'}
+        onClick={() => setOverflow(o => !o)}
+      >
+        <SettingsIcon size={13} />
+      </button>
 
-      {overflow && !readOnly && (
-        <div className="ws-menu ws-menu--right" onMouseLeave={() => setOverflow(false)}>
-          <button type="button" className="ws-menu-item" onClick={() => { setOverflow(false); onToggleShared(); }}
-                  title="Teammates on the same Git Sync repo get a read-only copy. History is never shared.">
-            <UsersIcon size={12} /> {active?.shared === 1 ? 'Stop sharing' : 'Share with team'}
-          </button>
-          <button type="button" className="ws-menu-item" onClick={() => { setOverflow(false); onRenameStart(); }}>
-            <PencilIcon size={12} /> Rename
-          </button>
-          <button type="button" className="ws-menu-item ws-menu-item--danger" onClick={() => { setOverflow(false); onDelete(); }}>
-            <TrashIcon size={12} /> Delete
-          </button>
+      {overflow && (
+        <div className={`ws-menu ws-menu--right${readOnly ? ' ws-menu--wide' : ''}`} onMouseLeave={() => setOverflow(false)}>
+          {readOnly ? (
+            /* A copy is yours to drop. Nothing brings it back on its own —
+               you import it again if you want it. */
+            <button type="button" className="ws-menu-item ws-menu-item--danger" onClick={() => { setOverflow(false); onDelete(); }}>
+              <TrashIcon size={12} /> Remove from my workspaces
+            </button>
+          ) : <>
+            <button type="button" className="ws-menu-item" onClick={() => { setOverflow(false); onToggleShared(); }}
+                    title="Teammates on the same Git Sync repo can import a read-only copy. History is never shared.">
+              <UsersIcon size={12} /> {active?.shared === 1 ? 'Stop sharing' : 'Share with team'}
+            </button>
+            <button type="button" className="ws-menu-item" onClick={() => { setOverflow(false); onRenameStart(); }}>
+              <PencilIcon size={12} /> Rename
+            </button>
+            <button type="button" className="ws-menu-item ws-menu-item--danger" onClick={() => { setOverflow(false); onDelete(); }}>
+              <TrashIcon size={12} /> Delete
+            </button>
+          </>}
         </div>
       )}
 
@@ -395,6 +416,44 @@ function WorkspaceHeader({
             <div className="ws-menu-head">Shared with you</div>
             {theirs.map(item)}
           </>}
+          <div className="ws-menu-rule" />
+          {/* What teammates share through Git Sync, grouped by who shares it.
+              Picking one makes a read-only copy of your own and opens it. */}
+          <div className="ws-menu-subwrap"
+               onMouseEnter={() => setSharedOpen(true)}
+               onMouseLeave={() => setSharedOpen(false)}>
+            <button type="button" className={`ws-menu-item${sharedOpen ? ' ws-menu-item--hover' : ''}`}
+                    onClick={() => setSharedOpen(true)}>
+              <UsersIcon size={12} /> <span className="ws-menu-label">Import shared</span>
+              <ChevronRightIcon size={11} className="ws-menu-tick" />
+            </button>
+            {sharedOpen && (
+              <div className="ws-menu ws-menu-sub">
+                {team.length === 0 ? (
+                  <div className="ws-menu-empty">
+                    Nothing shared with you yet. Teammates share a workspace from its ⚙ menu; it shows
+                    up here after a Git Sync.
+                  </div>
+                ) : team.map(member => (
+                  <div key={member.id}>
+                    <div className="ws-menu-head ws-menu-head--user" title={member.name}>
+                      <UsersIcon size={10} /> {member.name}
+                    </div>
+                    {member.shared.map(ws => (
+                      <button key={ws.id} type="button" className="ws-menu-item"
+                              title={ws.imported ? 'Already in your workspaces — open it' : 'Import a read-only copy'}
+                              onClick={() => onImportShared(member.id, ws.id)}>
+                        <LockIcon size={11} />
+                        <span className="ws-menu-label">{ws.name}</span>
+                        <span className="ws-menu-owner">Read Only</span>
+                        {ws.imported && <CheckIcon size={11} className="ws-menu-tick" />}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="ws-menu-rule" />
           <button type="button" className="ws-menu-item" onClick={onCreate}>
             <PlusIcon size={12} /> Create workspace

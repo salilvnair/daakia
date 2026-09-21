@@ -20,6 +20,7 @@
  */
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
+import { useToastStore } from './toast-store';
 
 export interface Workspace {
   id: string;
@@ -40,6 +41,13 @@ export interface Workspace {
 /** A teammate's workspace, brought in by Git Sync — you can use it, not change it. */
 export const isReadOnly = (w: Workspace | undefined): boolean => !!w?.owner_id;
 
+/** A teammate on the Git Sync repo, and the workspaces they offer. */
+export interface SharingTeammate {
+  id: string;
+  name: string;
+  shared: { id: string; name: string; imported: boolean }[];
+}
+
 export interface WorkspaceStats {
   collections: number;
   environments: number;
@@ -52,6 +60,8 @@ interface WorkspaceState {
   workspaces: Workspace[];
   activeId: string | null;
   stats: WorkspaceStats;
+  /** Teammates' shared workspaces, for Import shared. Empty without Git Sync. */
+  team: SharingTeammate[];
   loaded: boolean;
   error: string | null;
 
@@ -65,9 +75,10 @@ interface WorkspaceState {
   remove: (id: string) => void;
   saveDocs: (id: string, docs: string) => void;
   setShared: (id: string, shared: boolean) => void;
+  importShared: (ownerId: string, workspaceId: string) => void;
 
   /** Applied from the host's replies — see wireWorkspaceMessages below. */
-  _apply: (data: { workspaces?: Workspace[]; activeId?: string; stats?: WorkspaceStats }) => void;
+  _apply: (data: { workspaces?: Workspace[]; activeId?: string; stats?: WorkspaceStats; team?: SharingTeammate[] }) => void;
   _setError: (message: string | null) => void;
 }
 
@@ -77,6 +88,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   workspaces: [],
   activeId: null,
   stats: EMPTY_STATS,
+  team: [],
   loaded: false,
   error: null,
 
@@ -95,11 +107,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   remove: (id) => postMsg({ type: 'deleteWorkspace', id }),
   saveDocs: (id, docs) => postMsg({ type: 'saveWorkspaceDocs', id, docs }),
   setShared: (id, shared) => postMsg({ type: 'setWorkspaceShared', id, shared }),
+  importShared: (ownerId, workspaceId) => postMsg({ type: 'importSharedWorkspace', ownerId, workspaceId }),
 
   _apply: (data) => set(s => ({
     workspaces: data.workspaces ?? s.workspaces,
     activeId: data.activeId ?? s.activeId,
     stats: data.stats ?? s.stats,
+    team: data.team ?? s.team,
     loaded: true,
     error: null,
   })),
@@ -126,6 +140,9 @@ export function wireWorkspaceMessages(onSwitched: () => void): () => void {
       case 'workspaceChanged':
         useWorkspaceStore.getState()._apply(msg as never);
         onSwitched();
+        /* Import, Open and Import shared say what they did. Nothing showed
+           this before, so a successful import was silent. */
+        if (typeof msg.toast === 'string') useToastStore.getState().addToast({ type: 'success', message: msg.toast });
         break;
       case 'workspaceDocsSaved': {
         const saved = msg.workspace as Workspace | undefined;
