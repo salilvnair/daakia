@@ -17,6 +17,182 @@ let _sqliteError: string | undefined;
 let _dbPath = '';
 let _extensionPath = '';
 let _saveTimer: ReturnType<typeof setTimeout> | null = null;
+let _SQL: { Database: new (data?: ArrayLike<number> | Buffer | null) => SqlJsDatabase } | null = null;
+
+/*
+  ── One file, more than one Daakia ──
+
+  sql.js keeps the whole database in memory and every save writes the whole
+  file. The VS Code extension and the browser build's local server both open
+  ~/.salilvnair/daakia-vsce/db/daakia.db, each with its own in-memory copy.
+  Before this, the last one to save won outright: a window that had loaded
+  the file an hour earlier wrote that hour-old copy back over everything the
+  other had done since. Workspaces vanished with their collections and
+  history, and nothing said so.
+
+  Now each process remembers the file as it last saw it (mtime and size,
+  taken right after it loads or writes). When somebody else writes, the
+  watcher reloads from disk, so this process builds on their data rather
+  than on a stale copy. If a save finds the file changed underneath it —
+  both sides wrote in the same moment — it does not overwrite: its copy goes
+  to a conflict file next to the database, the disk version is reloaded,
+  and the UI is told. Nothing is dropped without a file to recover it from.
+*/
+interface DiskStamp { mtimeMs: number; size: number }
+let _diskStamp: DiskStamp | null = null;
+let _watching = false;
+
+export type DbReloadReason = 'external' | 'conflict';
+export interface DbReloadEvent {
+  reason: DbReloadReason;
+  /** Where this process's copy was kept before the reload. */
+  backupPath?: string;
+}
+const _reloadListeners = new Set<(e: DbReloadEvent) => void>();
+
+let _lastExternalToast = 0;
+
+/**
+ * What to tell the person, for a reload — shared so the extension panel and the
+ * browser build say the same thing. A conflict always says so: a change made
+ * here was set aside. A plain "another window changed it" is said at most once
+ * a minute, because two windows in use at once would otherwise toast on
+ * every save.
+ */
+export function describeDbReload(e: DbReloadEvent): { toastType: 'warning' | 'info'; message: string } | undefined {
+  const kept = e.backupPath ? path.basename(e.backupPath) : undefined;
+  if (e.reason === 'conflict') {
+    return {
+      toastType: 'warning',
+      message: 'Another Daakia window (VS Code or the browser build) saved at the same moment. Its version was kept'
+        + (kept ? `; the change you just made here was set aside in ${kept}, next to the database.` : '.'),
+    };
+  }
+  const now = Date.now();
+  if (now - _lastExternalToast < 60_000) return undefined;
+  _lastExternalToast = now;
+  return { toastType: 'info', message: 'Daakia data was changed in another window (VS Code or the browser build). Showing the latest.' };
+}
+
+/** Told whenever the in-memory database is replaced from disk. Returns an unsubscribe. */
+export function onDbReloaded(listener: (e: DbReloadEvent) => void): () => void {
+  _reloadListeners.add(listener);
+  return () => { _reloadListeners.delete(listener); };
+}
+
+function _stamp(): DiskStamp | null {
+  try {
+    const s = fs.statSync(_dbPath);
+    return { mtimeMs: s.mtimeMs, size: s.size };
+  } catch {
+    return null;
+  }
+}
+
+/** Has somebody other than this process written the file since we last read or wrote it? */
+function _changedOnDisk(): boolean {
+  const now = _stamp();
+  if (!now || !_diskStamp) return false;
+  return now.mtimeMs !== _diskStamp.mtimeMs || now.size !== _diskStamp.size;
+}
+
+/** Pragmas, migrations and schema — everything an opened database needs, first open or reload. */
+function _prepare(db: SqlJsDatabase): void {
+  db.run('PRAGMA journal_mode = WAL');
+  db.run('PRAGMA busy_timeout = 5000');
+  db.run('PRAGMA synchronous = NORMAL');
+  db.run('PRAGMA foreign_keys = ON');
+
+  const hasCollectionsTable = _tableExists(db, 'collections');
+  // Run migrations for existing databases before any schema statements that
+  // depend on newly added columns such as collections.parent_id.
+  if (hasCollectionsTable) _runMigrations(db);
+  // Create tables and indexes.
+  _createSchema(db);
+  if (!hasCollectionsTable) _runMigrations(db);
+}
+
+/** Keep this process's copy beside the database before replacing it. */
+function _backup(suffix: string): string | undefined {
+  if (!_db) return undefined;
+  const target = `${_dbPath}.${suffix}`;
+  try {
+    fs.writeFileSync(target, Buffer.from(_db.export()));
+    return target;
+  } catch (e) {
+    console.error('[daakia] Could not keep a copy before reloading the database:', e);
+    return undefined;
+  }
+}
+
+/** Replace the in-memory database with what is on disk now, and say so. */
+function _reloadFromDisk(event: DbReloadEvent): void {
+  if (!_SQL) return;
+  try {
+    const bytes = fs.readFileSync(_dbPath);
+    /* A file caught mid-write by an older Daakia (which writes in place) is
+       empty or cut short. Loading it would replace good data with nothing;
+       leave things as they are and let the next change retry. */
+    if (bytes.length === 0) return;
+    const next = new _SQL.Database(bytes);
+    next.exec('SELECT count(*) FROM sqlite_master');
+    _prepare(next);
+    const previous = _db;
+    _db = next;
+    _diskStamp = _stamp();
+    try { previous?.close(); } catch { /* already gone */ }
+    console.warn(`[daakia] Database reloaded (${event.reason}) — another Daakia window changed ${_dbPath}.`
+      + (event.backupPath ? ` This window's copy was kept at ${event.backupPath}.` : ''));
+    for (const listener of _reloadListeners) {
+      try { listener(event); } catch (e) { console.error('[daakia] db reload listener failed:', e); }
+    }
+  } catch (e) {
+    console.error('[daakia] Could not reload the database from disk:', e);
+  }
+}
+
+/**
+ * The file changed and it was not us. With nothing of ours waiting to be
+ * saved, their version is simply newer: reload it, keeping ours as
+ * `.before-reload` — which is the only copy left of our last saves if the
+ * other side was an older Daakia that wrote a stale snapshot. With a save
+ * pending, both of us changed it: that is a conflict.
+ */
+export function _checkForExternalChange(): void {
+  if (!_db || !_changedOnDisk()) return;
+  if (_saveTimer) {
+    clearTimeout(_saveTimer);
+    _saveTimer = null;
+    _resolveConflict();
+    return;
+  }
+  _reloadFromDisk({ reason: 'external', backupPath: _backup('before-reload') });
+}
+
+/** Both sides changed it: theirs stays on disk, ours goes to a conflict file, and we reload. */
+function _resolveConflict(): void {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  _reloadFromDisk({ reason: 'conflict', backupPath: _backup(`conflict-${stamp}`) });
+}
+
+/** Poll the file (fs.watch is unreliable for rewrite-in-place on Windows and network drives). */
+function _watchForOtherWriters(): void {
+  if (_watching || !_dbPath) return;
+  _watching = true;
+  fs.watchFile(_dbPath, { interval: 1000, persistent: false }, () => _checkForExternalChange());
+}
+
+/** Testing seam: save now, the way the debounce would. */
+export function _saveNowForTest(): void {
+  if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
+  _saveToDisk();
+}
+
+function _stopWatching(): void {
+  if (!_watching) return;
+  fs.unwatchFile(_dbPath);
+  _watching = false;
+}
 
 // ────────────────────── Initialization ──────────────────────
 
@@ -31,6 +207,7 @@ export async function initDb(extensionPath: string): Promise<void> {
 
   try {
     fs.mkdirSync(path.dirname(_dbPath), { recursive: true });
+    _removeStaleTempFiles();
 
     // Load sql.js with the WASM binary from the extension's dist folder
     const wasmPath = path.join(extensionPath, 'dist', 'sql-wasm.wasm');
@@ -40,41 +217,24 @@ export async function initDb(extensionPath: string): Promise<void> {
     const SQL = await initSqlJs({
       locateFile: () => wasmPath,
     });
+    _SQL = SQL;
 
     // Load existing DB from disk or create new
     if (fs.existsSync(_dbPath)) {
-      const buffer = fs.readFileSync(_dbPath);
-      _db = new SQL.Database(buffer);
+      _db = new SQL.Database(fs.readFileSync(_dbPath));
     } else {
       _db = new SQL.Database();
     }
+    _diskStamp = _stamp();
 
-    // Pragmas
-    _db.run('PRAGMA journal_mode = WAL');
-    _db.run('PRAGMA busy_timeout = 5000');
-    _db.run('PRAGMA synchronous = NORMAL');
-    _db.run('PRAGMA foreign_keys = ON');
-
-    const hasCollectionsTable = _tableExists(_db, 'collections');
-
-    // Run migrations for existing databases before any schema statements that
-    // depend on newly added columns such as collections.parent_id.
-    if (hasCollectionsTable) {
-      _runMigrations(_db);
-    }
-
-    // Create tables and indexes.
-    _createSchema(_db);
-
-    if (!hasCollectionsTable) {
-      _runMigrations(_db);
-    }
+    _prepare(_db);
 
     // Seed AI feature flags (idempotent — inserts missing keys, migrates old JSON blob).
     seedAiFeatureDefaults();
 
     // Initial save
     _saveToDisk();
+    _watchForOtherWriters();
 
     _sqliteOk = true;
     _sqliteError = undefined;
@@ -119,16 +279,18 @@ export function getRawDb(): SqlJsDatabase | null {
 }
 
 export function closeDb(): void {
-  if (_db) {
-    _saveToDiskSync();
-    _db.close();
-    _db = null;
-    _sqliteOk = false;
-  }
+  _stopWatching();
   if (_saveTimer) {
     clearTimeout(_saveTimer);
     _saveTimer = null;
   }
+  if (_db) {
+    _saveToDisk();
+    _db.close();
+    _db = null;
+    _sqliteOk = false;
+  }
+  _diskStamp = null;
 }
 
 // ────────────────────── Persistence ──────────────────────
@@ -136,28 +298,60 @@ export function closeDb(): void {
 /** Debounced save — writes the full DB to disk after 500ms of inactivity */
 function _scheduleSave(): void {
   if (_saveTimer) clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(() => _saveToDisk(), 500);
+  _saveTimer = setTimeout(() => { _saveTimer = null; _saveToDisk(); }, 500);
 }
 
+/**
+ * Write the whole database — unless another Daakia wrote the file since we
+ * last saw it, in which case overwriting would throw their changes away.
+ * Then ours goes to a conflict file and theirs is reloaded (see above).
+ */
 function _saveToDisk(): void {
   if (!_db) return;
+  if (_changedOnDisk()) {
+    _resolveConflict();
+    return;
+  }
   try {
-    const data = _db.export();
-    const buffer = Buffer.from(data);
-    fs.writeFileSync(_dbPath, buffer);
+    _writeAtomically(_dbPath, Buffer.from(_db.export()));
+    _diskStamp = _stamp();
   } catch (e) {
     console.error('[daakia] Failed to save DB:', e);
   }
 }
 
-function _saveToDiskSync(): void {
-  if (!_db) return;
+/**
+ * Write beside the file, then rename over it.
+ *
+ * writeFileSync truncates first and fills after, so for a moment the database
+ * is zero bytes — and another Daakia reading it then (which is exactly what
+ * the reload above does) would load an empty file. A rename swaps the whole
+ * file at once. If the rename is refused (Windows, while another process has
+ * the file open for a read), the plain write is the fallback.
+ */
+/** A process killed between writing its temp file and renaming it leaves the temp behind. */
+function _removeStaleTempFiles(): void {
+  const dir = path.dirname(_dbPath);
+  const prefix = `${path.basename(_dbPath)}.tmp-`;
   try {
-    const data = _db.export();
-    const buffer = Buffer.from(data);
-    fs.writeFileSync(_dbPath, buffer);
-  } catch (e) {
-    console.error('[daakia] Failed to save DB:', e);
+    for (const name of fs.readdirSync(dir)) {
+      if (!name.startsWith(prefix)) continue;
+      const full = path.join(dir, name);
+      /* Old ones only: a minute is far longer than any save takes, so this
+         cannot pull a temp file out from under another Daakia mid-write. */
+      if (Date.now() - fs.statSync(full).mtimeMs > 60_000) fs.rmSync(full, { force: true });
+    }
+  } catch { /* housekeeping only */ }
+}
+
+function _writeAtomically(target: string, data: Buffer): void {
+  const temp = `${target}.tmp-${process.pid}`;
+  try {
+    fs.writeFileSync(temp, data);
+    fs.renameSync(temp, target);
+  } catch {
+    try { fs.rmSync(temp, { force: true }); } catch { /* nothing to clean */ }
+    fs.writeFileSync(target, data);
   }
 }
 
@@ -385,6 +579,11 @@ function _createSchema(db: SqlJsDatabase): void {
       expires_at  TEXT NOT NULL
     )
   `);
+  /* Which workspace an entry was deleted from, so a restore puts it back
+     there — not into whichever workspace happens to be open at the time. */
+  if (!_columns(db, 'trash_bin').includes('workspace_id')) {
+    db.run('ALTER TABLE trash_bin ADD COLUMN workspace_id TEXT');
+  }
   db.run(`CREATE INDEX IF NOT EXISTS idx_trash_expires  ON trash_bin(expires_at)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_trash_category ON trash_bin(category)`);
 
@@ -2351,6 +2550,8 @@ export interface TrashEntry {
   data: string;
   deleted_at: string;
   expires_at: string;
+  /** Where it was deleted from. Null on entries from before this was recorded. */
+  workspace_id?: string | null;
 }
 
 const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -2363,8 +2564,8 @@ export function insertTrashEntry(category: TrashCategory, originalId: string, la
   const deletedAt = now.toISOString();
   const expiresAt = new Date(now.getTime() + TRASH_RETENTION_MS).toISOString();
   _db.run(
-    'INSERT INTO trash_bin (id, category, original_id, group_id, label, data, deleted_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    [crypto.randomUUID(), category, originalId, groupId ?? null, label, JSON.stringify(data), deletedAt, expiresAt]
+    'INSERT INTO trash_bin (id, category, original_id, group_id, label, data, deleted_at, expires_at, workspace_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [crypto.randomUUID(), category, originalId, groupId ?? null, label, JSON.stringify(data), deletedAt, expiresAt, activeWorkspaceId()]
   );
   _scheduleSave();
 }

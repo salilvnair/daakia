@@ -93,6 +93,7 @@ import {
 } from '../src/panel/main/handlers/environment-handler';
 import { handleGetDynamicVariables } from '../src/panel/main/handlers/dynamic-vars-handler';
 import { handleGetThemes, handleSaveTheme, handleDeleteTheme } from '../src/panel/main/handlers/theme-handler';
+import { archiveHistoryEntry, archiveHistoryBatch } from '../src/services/bin';
 import {
   handleGitSyncGetSettings, handleGitSyncSaveSettings, handleGitSyncGetStatus, handleGitSyncInit,
   handleGitSyncNow, handleGitSyncExportOnly, handleGitSyncImportOnly, handleGitSyncSetIdentity,
@@ -178,7 +179,7 @@ function sendHistory(post: PostMessage, protocol?: string) {
  * `MainPanel._broadcastSyncedData`, including the environments and themes that
  * one was missing.
  */
-function broadcastSyncedData(post: PostMessage) {
+export function broadcastSyncedData(post: PostMessage) {
   for (const p of ['rest', 'graphql', 'websocket', 'grpc', 'soap', 'ai', 'mcp']) handleGetCollections(post, p);
   for (const p of ['rest', 'graphql', 'websocket', 'sse', 'socketio', 'mqtt', 'grpc', 'soap', 'ai', 'mcp']) {
     sendHistory(post, p);
@@ -1071,8 +1072,10 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
     case 'getHistory':
       sendHistory(post, msg.protocol as string | undefined);
       break;
+    /* To the Bin, as the extension does — this build deleted for good, so the
+       same click was undoable in VS Code and gone in the browser. */
     case 'clearHistory':
-      clearHistory(msg.protocol as string | undefined);
+      archiveHistoryBatch(msg.protocol as string | undefined);
       sendHistory(post, msg.protocol as string | undefined);
       break;
     /*
@@ -1087,7 +1090,7 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
     */
     case 'deleteHistoryEntry':
     case 'deleteHistoryById':
-      deleteHistoryById(msg.id as number);
+      archiveHistoryEntry(msg.id as number);
       sendHistory(post, msg.protocol as string | undefined);
       break;
 

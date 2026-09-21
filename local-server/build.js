@@ -27,6 +27,8 @@ const OUT = path.join(__dirname, 'dist', 'server.js');
 
 /** The server process, when `--serve` is running one. */
 let child;
+/** True while an old server is on its way out and a new one is waiting to start. */
+let restarting = false;
 
 /**
  * Restart the server on the bundle that was just written.
@@ -39,7 +41,8 @@ let child;
 function restart() {
   const start = () => {
     child = spawn(process.execPath, [OUT], {
-      stdio: 'inherit',
+      /* 'ipc' so the old server can be asked to save and exit, below. */
+      stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
       cwd: path.resolve(__dirname, '..'),
     });
     child.on('exit', code => {
@@ -49,16 +52,31 @@ function restart() {
     });
   };
 
+  /* Two rebuilds in quick succession used to start two servers: the second
+     call found `child` already cleared and started one at once, while the
+     first was still waiting for the old process to exit — two processes,
+     each with its own copy of the database. The server that is about to
+     start will run the newest bundle anyway. */
+  if (restarting) return;
   if (!child) { start(); return; }
   const old = child;
   child = undefined;
-  old.once('exit', start);
-  old.kill();
+  restarting = true;
+  old.once('exit', () => { restarting = false; start(); });
+  /* Ask first, so it saves the database and exits cleanly; kill only if it
+     does not. A kill in the middle of a save cuts the database file short. */
+  try { old.send('shutdown'); } catch { old.kill(); }
+  setTimeout(() => { if (old.exitCode === null && old.signalCode === null) old.kill(); }, 4000);
 }
 
 /* Ctrl-C should take the server with it, not orphan it holding the port. */
 for (const sig of ['SIGINT', 'SIGTERM']) {
-  process.on(sig, () => { child?.kill(); process.exit(0); });
+  process.on(sig, () => {
+    if (!child) process.exit(0);
+    child.once('exit', () => process.exit(0));
+    try { child.send('shutdown'); } catch { child.kill(); }
+    setTimeout(() => { child?.kill(); process.exit(0); }, 4000);
+  });
 }
 
 /** @type {import('esbuild').Plugin} */

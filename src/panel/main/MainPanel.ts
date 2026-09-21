@@ -11,7 +11,7 @@ import {
 } from './handlers/terminal-handler';
 import * as path from 'path';
 import * as fs from 'fs';
-import { getSqliteStatus, getDbPath, getHistory, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt, getAiPromptTemplates, setAiPromptTemplates, saveAiConversation, loadAiConversation, clearAiConversation, type AiConversationMessage, getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries, insertUiAudit, getUiAuditEntries, clearUiAuditEntries, getDbTables, getDbTableRows, deleteDbRow } from '../../storage/db';
+import { getSqliteStatus, getDbPath, getHistory, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt, getAiPromptTemplates, setAiPromptTemplates, saveAiConversation, loadAiConversation, clearAiConversation, type AiConversationMessage, getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries, insertUiAudit, getUiAuditEntries, clearUiAuditEntries, getDbTables, getDbTableRows, deleteDbRow, onDbReloaded, describeDbReload } from '../../storage/db';
 import { handleGetDynamicVariables } from './handlers/dynamic-vars-handler';
 import { handleGetThemes, handleSaveTheme, handleDeleteTheme } from './handlers/theme-handler';
 import { archiveHistoryEntry, archiveHistoryBatch } from '../../services/bin';
@@ -238,6 +238,16 @@ export class MainPanel {
     );
 
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
+
+    /* Another Daakia (the browser build, or a second VS Code window) rewrote
+       the database file and it was reloaded here: re-send everything, and
+       say so when it matters. See storage/db.ts. */
+    const offReload = onDbReloaded(e => {
+      this._broadcastSyncedData();
+      const note = describeDbReload(e);
+      if (note) this._post({ type: 'toast', toastType: note.toastType, message: note.message });
+    });
+    this._disposables.push({ dispose: offReload });
   }
 
   public postMessage(msg: unknown) {

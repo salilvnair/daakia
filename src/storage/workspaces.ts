@@ -23,7 +23,7 @@
  * `workspace-scope.test.ts` asserts every SELECT against the three scoped
  * tables goes through it.
  */
-import { getDb, scheduleSave, getSetting, setSetting, DEFAULT_WORKSPACE_ID, _registerActiveWorkspaceResolver } from './db';
+import { getDb, scheduleSave, getSetting, setSetting, DEFAULT_WORKSPACE_ID, _registerActiveWorkspaceResolver, onDbReloaded } from './db';
 
 export interface WorkspaceRow {
   id: string;
@@ -286,3 +286,7 @@ export function _resetActiveWorkspaceCache(): void {
 }
 
 _registerActiveWorkspaceResolver(getActiveWorkspaceId);
+
+/* Another Daakia window rewrote the database: the workspace we had cached may
+   not be in it any more, so resolve it again from what was loaded. */
+onDbReloaded(() => { _active = undefined; });

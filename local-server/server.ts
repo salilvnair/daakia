@@ -23,9 +23,9 @@ import * as path from 'path';
 import express from 'express';
 import cors from 'cors';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { initDb, getDbPath } from '../src/storage/db';
+import { initDb, getDbPath, closeDb, onDbReloaded, describeDbReload } from '../src/storage/db';
 import { initMockServerManager } from '../src/mock/mock-server-manager';
-import { routeMessage, sendInitialState, type PostMessage } from './router';
+import { routeMessage, sendInitialState, broadcastSyncedData, type PostMessage } from './router';
 
 const PORT = Number(process.env.LOCAL_SERVER_PORT) || 7890;
 // The real extension passes `context.extensionPath` (the repo root when run
@@ -59,6 +59,15 @@ async function main() {
     // Mirrors the real webview's own 'ready' handshake on mount.
     sendInitialState(post);
 
+    /* Another Daakia rewrote the database and it was reloaded: this page is
+       showing the old data until it is re-sent. See storage/db.ts. */
+    const offReload = onDbReloaded(e => {
+      broadcastSyncedData(post);
+      const note = describeDbReload(e);
+      if (note) post({ type: 'toast', toastType: note.toastType, message: note.message });
+    });
+    ws.on('close', offReload);
+
     ws.on('message', (raw) => {
       let msg: { type: string; [key: string]: unknown };
       try {
@@ -81,6 +90,24 @@ async function main() {
     console.log(`[local-server] db: ${getDbPath()}`);
   });
 }
+
+/*
+  Shutting down with the database saved.
+
+  local-server/build.js restarts this process on every rebuild. A plain kill
+  lost whatever was still inside the 500ms save debounce, and a kill that
+  landed during a save left a cut-off database file — its newest pages, which
+  are the newest workspaces and collections, simply gone. The dev runner now
+  asks first over IPC, and this saves, closes and exits. It still kills after
+  a few seconds if this does not answer.
+*/
+function shutdown(): void {
+  try { closeDb(); } catch (err) { console.error('[local-server] could not save the database on the way out:', err); }
+  process.exit(0);
+}
+process.on('message', (msg) => { if (msg === 'shutdown') shutdown(); });
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 main().catch((err) => {
   console.error('[local-server] fatal startup error:', err);
