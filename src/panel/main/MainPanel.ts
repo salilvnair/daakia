@@ -35,7 +35,7 @@ import {
   handleRenameWorkspace, handleDeleteWorkspace, handleSaveWorkspaceDocs,
   handleWorkspaceDocsContext,
   handleImportWorkspace, handleOpenWorkspace, handleExportWorkspace,
-  handleSetWorkspaceShared, refuseIfReadOnly, handleImportSharedWorkspace,
+  handleSetWorkspaceShared, refuseIfReadOnly, handleImportSharedWorkspace, handleCopyWorkspaceToMine,
 } from './handlers/workspace-handler';
 import {
   handleGetCollections, handleGetCollectionTree, handleGetCollectionChildren,
@@ -1311,6 +1311,9 @@ export class MainPanel {
         break;
       case 'importSharedWorkspace':
         handleImportSharedWorkspace(msg, this._post);
+        break;
+      case 'copyWorkspaceToMine':
+        handleCopyWorkspaceToMine(msg, this._post);
         break;
       case 'saveWorkspaceDocs':
         handleSaveWorkspaceDocs(msg, this._post);

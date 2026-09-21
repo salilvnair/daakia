@@ -8,6 +8,8 @@ import { EnvironmentModal } from '../../shared';
 import { TrashIcon, RenameIcon, CopyIcon, PlusIcon, MoreVerticalIcon, GlobeIcon, CheckCircleFilledIcon, FolderImportIcon, FolderExportIcon, SearchIcon, HelpCircleIcon } from '../../../icons';
 import { getProtocolAccent } from '../../../colors';
 import { IconButtonView, TextInputView, ContextMenuView, InfoPopupView, ButtonView, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
+import { useWorkspaceEditable } from '../../../store/workspace-store';
+import { lockEdits, ENVIRONMENT_EDIT_IDS, READ_ONLY_REASON } from '../../../services/workspace/editable';
 import { logUiEvent } from '../../../store/ui-audit-store';
 
 export function EnvironmentsPanel({ createSignal = 0 }: {
@@ -187,6 +189,11 @@ export function EnvironmentsPanel({ createSignal = 0 }: {
     setShowDeleteAllConfirm(false);
   };
 
+  /* Editable even in a teammate's shared workspace today — their secret
+     values arrive blank and you fill them in — but asked for here so the
+     table in services/workspace/editable.ts is the one place that decides. */
+  const canEdit = useWorkspaceEditable('environments');
+
   const openRowMenu = (e: React.MouseEvent, envId: string) => {
     e.stopPropagation();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -253,6 +260,8 @@ export function EnvironmentsPanel({ createSignal = 0 }: {
           size="sm"
           iconLeft={<PlusIcon size={14} />}
           onClick={openCreateModal}
+          disabled={!canEdit}
+          title={canEdit ? undefined : READ_ONLY_REASON}
           accentColor="var(--color-sidebar-environments)"
         >
           New
@@ -317,7 +326,7 @@ export function EnvironmentsPanel({ createSignal = 0 }: {
         anchorEl={null}
         position={headerMenu?.kind === 'importExport' ? { x: headerMenu.x - 220, y: headerMenu.y } : undefined}
         onClose={() => setHeaderMenu(null)}
-        items={[
+        items={lockEdits([
           { id: 'import-postman',  label: 'Import from Postman',      shortcut: 'P', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-info)' }} />, onClick: () => { postMsg({ type: 'importEnvironmentsPostman' }); setHeaderMenu(null); } },
           { id: 'import-insomnia', label: 'Import from Insomnia',     shortcut: 'I', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-info)' }} />, onClick: () => { postMsg({ type: 'importEnvironmentsInsomnia' }); setHeaderMenu(null); } },
           { id: 'import-json',     label: 'Import Daakia JSON',       shortcut: 'J', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-info)' }} />, onClick: () => { postMsg({ type: 'importEnvironmentsJson' }); setHeaderMenu(null); } },
@@ -328,7 +337,7 @@ export function EnvironmentsPanel({ createSignal = 0 }: {
           { id: 'export-bruno',    label: 'Export as Bruno .env',     shortcut: 'B', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { postMsg({ type: 'exportEnvironmentsBruno', environments, activeEnvId }); setHeaderMenu(null); } },
           { id: 'export-insomnia', label: 'Export as Insomnia',       shortcut: 'N', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { postMsg({ type: 'exportEnvironmentsInsomnia', environments, activeEnvId }); setHeaderMenu(null); } },
           { id: 'export-httpie',   label: 'Export as HTTPie session',  shortcut: 'H', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { postMsg({ type: 'exportEnvironmentsHttpie', environments, activeEnvId }); setHeaderMenu(null); } },
-        ] as DuiContextMenuItem[]}
+        ] as DuiContextMenuItem[], canEdit, ENVIRONMENT_EDIT_IDS)}
       />
 
       {/* More options context menu */}
@@ -337,9 +346,9 @@ export function EnvironmentsPanel({ createSignal = 0 }: {
         anchorEl={null}
         position={headerMenu?.kind === 'more' ? { x: headerMenu.x - 220, y: headerMenu.y } : undefined}
         onClose={() => setHeaderMenu(null)}
-        items={[
+        items={lockEdits([
           { id: 'delete-all', label: 'Delete all environments', danger: true, shortcut: 'D', icon: <TrashIcon size={14} style={{ color: 'var(--color-error)' }} />, onClick: () => { setShowDeleteAllConfirm(true); setHeaderMenu(null); } },
-        ] as DuiContextMenuItem[]}
+        ] as DuiContextMenuItem[], canEdit, ENVIRONMENT_EDIT_IDS)}
       />
 
       <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] px-1 py-1 space-y-1">
@@ -351,6 +360,8 @@ export function EnvironmentsPanel({ createSignal = 0 }: {
               size="md"
               accentColor={getProtocolAccent(activeProtocol as any)}
               onClick={openCreateModal}
+          disabled={!canEdit}
+          title={canEdit ? undefined : READ_ONLY_REASON}
             >
               + New Environment
             </ButtonView>
@@ -376,7 +387,7 @@ export function EnvironmentsPanel({ createSignal = 0 }: {
           anchorEl={null}
           position={rowMenu.position}
           onClose={() => setRowMenu(null)}
-          items={buildRowMenuItems(rowMenu.envId)}
+          items={lockEdits(buildRowMenuItems(rowMenu.envId), canEdit, ENVIRONMENT_EDIT_IDS)}
         />
       )}
 

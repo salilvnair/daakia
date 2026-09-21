@@ -17,7 +17,7 @@
  */
 
 export interface CaptureDirective {
-  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow' | 'openWikiTab' | 'openDk8sTab' | 'seedDk8sState' | 'openWorkspaceTab' | 'seedWorkspaces' | 'openDaakiaAiTab' | 'seedSchemaDiff' | 'openDkghTab' | 'seedDkgh' | 'seedDk8sSearch';
+  action: 'click' | 'clickText' | 'contextMenuText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow' | 'openWikiTab' | 'openDk8sTab' | 'seedDk8sState' | 'openWorkspaceTab' | 'seedWorkspaces' | 'openDaakiaAiTab' | 'seedSchemaDiff' | 'openDkghTab' | 'seedDkgh' | 'seedDk8sSearch';
   selector?: string;
   text?: string;
   ms?: number;

@@ -14,7 +14,7 @@ import {
   setWorkspaceDocs, setActiveWorkspaceId, getActiveWorkspaceId, getWorkspaceStats,
   setWorkspaceShared, isReadOnlyWorkspace,
 } from '../../../storage/workspaces';
-import { COLLECTION_MUTATION_TYPES, listTeam, importSharedWorkspaceFromTeam } from '../../../services/git-sync';
+import { COLLECTION_MUTATION_TYPES, listTeam, importSharedWorkspaceFromTeam, copyWorkspaceToMine } from '../../../services/git-sync';
 import { getAllCollectionTrees, getAllEnvironments } from '../../../storage/db';
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -42,6 +42,21 @@ export function handleImportSharedWorkspace(msg: Record<string, unknown>, post: 
   if (!result.ok || !result.id) {
     post({ type: 'workspaceError', message: result.message });
     post({ type: 'workspacesData', ...snapshot() });
+    return;
+  }
+  setActiveWorkspaceId(result.id);
+  post({ type: 'workspaceChanged', ...snapshot(), toast: result.message });
+}
+
+/** An editable copy of a workspace (or of a teammate's share) in your own, and go to it. */
+export function handleCopyWorkspaceToMine(msg: Record<string, unknown>, post: PostMessage) {
+  const result = copyWorkspaceToMine({
+    id: typeof msg.id === 'string' ? msg.id : undefined,
+    ownerId: typeof msg.ownerId === 'string' ? msg.ownerId : undefined,
+    workspaceId: typeof msg.workspaceId === 'string' ? msg.workspaceId : undefined,
+  });
+  if (!result.ok || !result.id) {
+    post({ type: 'workspaceError', message: result.message });
     return;
   }
   setActiveWorkspaceId(result.id);

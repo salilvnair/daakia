@@ -31,7 +31,7 @@ import { useWorkspaceStore } from '../../../../store/workspace-store';
 import { getVsCodeApi } from '../../../../vscode';
 
 export interface CaptureDirective {
-  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow' | 'openWikiTab' | 'openDk8sTab' | 'seedDk8sState' | 'openWorkspaceTab' | 'seedWorkspaces' | 'openDaakiaAiTab' | 'seedSchemaDiff' | 'openDkghTab' | 'seedDkgh' | 'seedDk8sSearch';
+  action: 'click' | 'clickText' | 'contextMenuText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow' | 'openWikiTab' | 'openDk8sTab' | 'seedDk8sState' | 'openWorkspaceTab' | 'seedWorkspaces' | 'openDaakiaAiTab' | 'seedSchemaDiff' | 'openDkghTab' | 'seedDkgh' | 'seedDk8sSearch';
   selector?: string;       // CSS selector — click, type
   text?: string;           // type
   ms?: number;             // wait
@@ -259,6 +259,22 @@ async function runDirective(d: CaptureDirective): Promise<void> {
       if (!target) throw new Error(`clickText: no match ${nth} for "${d.text}"`);
       target.click();
       return;
+    }
+    case 'contextMenuText': {
+      /* Right-click the element showing this text: a real contextmenu event,
+         bubbling, at its position — what a tree row's menu listens for. */
+      const start = Date.now();
+      for (;;) {
+        const hit = Array.from(document.querySelectorAll<HTMLElement>('body *'))
+          .find(el => el.children.length === 0 && el.textContent?.trim() === d.text);
+        if (hit) {
+          const r = hit.getBoundingClientRect();
+          hit.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.x + 4, clientY: r.y + 4 }));
+          return;
+        }
+        if (Date.now() - start > 3000) throw new Error('contextMenuText: no element with text "' + d.text + '"');
+        await new Promise(res => setTimeout(res, 50));
+      }
     }
     case 'type': {
       const el = await waitForSelector<HTMLInputElement | HTMLTextAreaElement>(d.selector!);

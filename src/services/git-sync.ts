@@ -29,6 +29,7 @@ import {
 } from '../storage/db';
 import {
   listWorkspaces, getWorkspace, ensureWorkspace, setWorkspaceShared, deleteWorkspace, withWorkspace,
+  createWorkspace, setWorkspaceDocs,
   type WorkspaceRow,
 } from '../storage/workspaces';
 import { redactHistoryRow, REDACTED } from './sync-redact';
@@ -136,6 +137,9 @@ export function isGitSyncEnabled(): boolean {
 
 /** Fixed, machine-global base directory — never depends on which (if any) VS Code workspace is open. */
 function getSyncBaseDir(): string {
+  /* The e2e harness points this at a temp folder, the way it does the
+     database, so a test sync can never touch a real clone. */
+  if (process.env.DAAKIA_TEST_SYNC_DIR) return process.env.DAAKIA_TEST_SYNC_DIR;
   return path.join(os.homedir(), '.salilvnair', 'daakia-vsce');
 }
 
@@ -811,6 +815,73 @@ export function countSharedAvailable(): number {
  * copy is yours to use — requests sent from it land in your history — but its
  * collections change only when the owner's do.
  */
+/**
+ * An editable copy in your own workspaces — the other way to take something
+ * a teammate shares.
+ *
+ * From a read-only copy you already have (so the secret values you filled in
+ * come along), or straight from their shared file. Every id is new: the copy
+ * is yours, it does not follow their changes, and nothing you do to it can
+ * land on their rows or on the read-only copy's.
+ */
+export function copyWorkspaceToMine(source: { id?: string; ownerId?: string; workspaceId?: string }): { ok: boolean; id?: string; message: string } {
+  let name = '';
+  let docs: string | null = null;
+  let collections: Record<string, CollectionTreeNode[]> = {};
+  let environments: { name: string; isActive: boolean; variables: SyncEnvVariable[] }[] = [];
+
+  if (source.id) {
+    const ws = getWorkspace(source.id);
+    if (!ws) return { ok: false, message: 'That workspace no longer exists.' };
+    name = ws.name;
+    docs = ws.docs;
+    withWorkspace(ws.id, () => {
+      for (const protocol of SYNC_PROTOCOLS) {
+        const tree = getCollectionTree(protocol);
+        if (tree.length > 0) collections[protocol] = tree;
+      }
+      environments = getAllEnvironments().map(r => {
+        let variables: SyncEnvVariable[] = [];
+        try { variables = JSON.parse(r.variables || '[]'); } catch { /* malformed row: no variables */ }
+        return { name: r.name, isActive: r.is_active === 1, variables };
+      });
+    });
+  } else {
+    const found = readSharedDoc(String(source.ownerId ?? ''), String(source.workspaceId ?? ''));
+    if (!found) return { ok: false, message: 'That workspace is no longer shared. Run Git Sync to refresh the list.' };
+    name = found.doc.workspace.name;
+    docs = found.doc.workspace.docs;
+    collections = found.doc.collections ?? {};
+    /* Their secrets arrive redacted; a copy starts them blank for you to fill. */
+    environments = (found.doc.environments ?? []).map(e => ({
+      name: e.name,
+      isActive: e.isActive,
+      variables: e.variables.map(v => v.isSecret && v.initialValue === REDACTED ? { ...v, initialValue: '', currentValue: '' } : v),
+    }));
+  }
+
+  const created = createWorkspace(name || 'Copied workspace');
+  if (!created) return { ok: false, message: 'Could not create the workspace.' };
+  const fresh = new Map<string, string>();
+  const idOf = (id: string) => {
+    let next = fresh.get(id);
+    if (!next) { next = randomUUID(); fresh.set(id, next); }
+    return next;
+  };
+
+  withWorkspace(created.id, () => {
+    for (const [protocol, tree] of Object.entries(collections)) {
+      if (SYNC_PROTOCOLS.includes(protocol) && Array.isArray(tree)) upsertTree(tree, protocol, null, idOf);
+    }
+    for (const env of environments) {
+      upsertEnvironment({ id: randomUUID(), name: env.name, variables: JSON.stringify(env.variables), is_active: env.isActive ? 1 : 0 });
+    }
+  });
+  if (docs) setWorkspaceDocs(created.id, docs);
+
+  return { ok: true, id: created.id, message: `Copied "${created.name}" into your workspaces. It is yours to change.` };
+}
+
 export function importSharedWorkspaceFromTeam(ownerId: string, wsId: string): { ok: boolean; id?: string; message: string } {
   if (ownerId === getSyncIdentity().id) return { ok: false, message: 'That is one of your own workspaces.' };
   const found = readSharedDoc(ownerId, wsId);

@@ -10,6 +10,8 @@ import { useTabsStore } from '../../../store/tabs-store';
 import { useScrollRestore } from '../../../hooks/useScrollRestore';
 import { ConfirmDialog, SaveRequestModal } from '../../shared';
 import { SearchInputView, IconButtonView, ContextMenuView, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
+import { useWorkspaceEditable } from '../../../store/workspace-store';
+import { lockEdits, HISTORY_EDIT_IDS, HISTORY_TO_COLLECTION_IDS } from '../../../services/workspace/editable';
 import { buildGroups, formatFullTimestamp, exportHistoryItem, exportHistoryItems, type TopGroup, type SubGroup } from '../../../services/history';
 import { replayHistoryItem } from '../../../services/collections';
 import type { CollectionTreeNode } from '../../../services/collections/tree-helpers';
@@ -180,6 +182,13 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
   const handleExport = (item: HistoryItem) => {
     exportHistoryItem(item);
   };
+
+  /* Two flags, because a history menu reaches two areas: deleting rows is
+     history, but "Save to Collection" writes a collection. */
+  const canEditHistory = useWorkspaceEditable('history');
+  const canEditCollections = useWorkspaceEditable('collections');
+  const lockMenu = (items: DuiContextMenuItem[]) =>
+    lockEdits(lockEdits(items, canEditHistory, HISTORY_EDIT_IDS), canEditCollections, HISTORY_TO_COLLECTION_IDS);
 
   const openHistoryContextMenu = (e: React.MouseEvent, item: HistoryItem) => {
     e.preventDefault();
@@ -760,7 +769,7 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
           anchorEl={null}
           position={contextMenu.position}
           onClose={() => setContextMenu(null)}
-          items={contextMenu.items}
+          items={lockMenu(contextMenu.items)}
         />
       )}
 
@@ -771,7 +780,7 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
           anchorEl={null}
           position={headerMenu.position}
           onClose={() => setHeaderMenu(null)}
-          items={headerMenu.items}
+          items={lockMenu(headerMenu.items)}
         />
       )}
 
@@ -782,7 +791,7 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
           anchorEl={null}
           position={groupMenu.position}
           onClose={() => setGroupMenu(null)}
-          items={groupMenu.items}
+          items={lockMenu(groupMenu.items)}
         />
       )}
 

@@ -21,6 +21,7 @@
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
 import { useToastStore } from './toast-store';
+import { permissionsFor, type WorkspaceArea } from '../services/workspace/editable';
 
 export interface Workspace {
   id: string;
@@ -40,6 +41,14 @@ export interface Workspace {
 
 /** A teammate's workspace, brought in by Git Sync — you can use it, not change it. */
 export const isReadOnly = (w: Workspace | undefined): boolean => !!w?.owner_id;
+
+/**
+ * Can this area of the active workspace be changed? Every panel asks this for
+ * its own area; the answers live in one table (services/workspace/editable.ts).
+ */
+export function useWorkspaceEditable(area: WorkspaceArea): boolean {
+  return useWorkspaceStore(s => permissionsFor(s.workspaces.find(w => w.id === s.activeId))[area]);
+}
 
 /** A teammate on the Git Sync repo, and the workspaces they offer. */
 export interface SharingTeammate {
@@ -76,6 +85,8 @@ interface WorkspaceState {
   saveDocs: (id: string, docs: string) => void;
   setShared: (id: string, shared: boolean) => void;
   importShared: (ownerId: string, workspaceId: string) => void;
+  /** An editable copy in your own workspaces — of a workspace here, or straight from a teammate's share. */
+  copyToMine: (source: { id: string } | { ownerId: string; workspaceId: string }) => void;
 
   /** Applied from the host's replies — see wireWorkspaceMessages below. */
   _apply: (data: { workspaces?: Workspace[]; activeId?: string; stats?: WorkspaceStats; team?: SharingTeammate[] }) => void;
@@ -108,6 +119,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   saveDocs: (id, docs) => postMsg({ type: 'saveWorkspaceDocs', id, docs }),
   setShared: (id, shared) => postMsg({ type: 'setWorkspaceShared', id, shared }),
   importShared: (ownerId, workspaceId) => postMsg({ type: 'importSharedWorkspace', ownerId, workspaceId }),
+  copyToMine: (source) => postMsg({ type: 'copyWorkspaceToMine', ...source }),
 
   _apply: (data) => set(s => ({
     workspaces: data.workspaces ?? s.workspaces,

@@ -25,7 +25,7 @@ import {
 import { refuseIfReadOnly } from '../panel/main/handlers/workspace-handler';
 import {
   ensureGitRepo, gitSyncNow, getSyncIdentity, getSyncFolder, saveGitSyncSettings,
-  sharedWorkspaceLocalId, USERS_DIR, listTeam, importSharedWorkspaceFromTeam,
+  sharedWorkspaceLocalId, USERS_DIR, listTeam, importSharedWorkspaceFromTeam, copyWorkspaceToMine,
 } from './git-sync';
 
 /*
@@ -173,6 +173,32 @@ describe('Git Sync between two people', () => {
     const again = await gitSyncNow();
     expect(again.ok, again.message).toBe(true);
     expect(again.shared).toBe(1);
+  }, 60_000);
+
+  it('copies a shared workspace into your own, editable and independent', async () => {
+    await become('bob');
+    // Straight from the share, and from the read-only copy: both editable.
+    for (const source of [{ ownerId: ALICE, workspaceId: paymentsId }, { id: sharedWorkspaceLocalId(ALICE, paymentsId) }]) {
+      const copied = copyWorkspaceToMine(source);
+      expect(copied.ok, copied.message).toBe(true);
+      const ws = listWorkspaces().find(w => w.id === copied.id)!;
+      expect(ws.name).toBe('Payments');
+      expect(ws.owner_id).toBeNull();
+
+      setActiveWorkspaceId(ws.id);
+      expect(refuseIfReadOnly({ type: 'createCollection' }, () => undefined, () => undefined)).toBe(false);
+      const tree = getCollectionTree('rest');
+      expect(tree.map(c => c.name)).toEqual(['Payments API']);
+      // New ids: nothing shared with Alice's rows or the read-only copy's.
+      expect(tree[0].id).not.toBe('col-pay');
+      expect(tree[0].id).not.toBe(`sh-${ALICE.slice(0, 8)}-col-pay`);
+      expect(tree[0].requests[0].name).toBe('Charge');
+    }
+    setActiveWorkspaceId('ws-default');
+
+    // A sync neither removes nor refreshes the copies — they are Bob's.
+    expect((await gitSyncNow()).ok).toBe(true);
+    expect(listWorkspaces().filter(w => w.name === 'Payments' && !w.owner_id)).toHaveLength(2);
   }, 60_000);
 
   it('does not bring back a copy you removed', async () => {

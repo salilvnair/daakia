@@ -34,7 +34,9 @@ async function main() {
       // CollectionsEnvView.tsx's SIDEBAR_PANEL_CROP): its DESIGN_WIDTH=1280
       // assumption only holds if every capture really is taken at 1280px.
       launchArgs: ['--disable-extensions', '--window-size=1280,800'],
-      extensionTestsEnv: { DAAKIA_TEST_DB_PATH: testDbPath },
+      // Git Sync's clone lives under the home folder too; a sync test must
+      // never push from, reset or rewrite the developer's real one.
+      extensionTestsEnv: { DAAKIA_TEST_DB_PATH: testDbPath, DAAKIA_TEST_SYNC_DIR: path.join(testDbDir, 'sync') },
     });
 
     fs.rmSync(testDbDir, { recursive: true, force: true });

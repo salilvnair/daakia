@@ -25,6 +25,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { ModalView, ButtonView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
+import { useWorkspaceEditable } from '../../store/workspace-store';
+import { READ_ONLY_REASON } from '../../services/workspace/editable';
 import { useSidebarDataStore } from '../../store/sidebar-data-store';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { useEnvStore } from '../../store/env-store';
@@ -187,7 +189,8 @@ export function WorkspaceCollections({ createSignal = 0 }: { createSignal?: numb
     for (const p of PROTOCOLS) postMsg({ type: 'getCollections', protocol: p.id });
   }, []);
 
-  useCreateSignal(createSignal, () => setCreating(true));
+  const canEdit = useWorkspaceEditable('collections');
+  useCreateSignal(createSignal, () => { if (canEdit) setCreating(true); });
 
   const counts = (p: Protocol) =>
     ((store.getCollections(p) ?? []) as unknown as TreeNode[])
@@ -212,6 +215,8 @@ export function WorkspaceCollections({ createSignal = 0 }: { createSignal?: numb
             iconLeft={<PlusIcon size={13} />}
             accentColor="var(--color-workspace)"
             onClick={() => setCreating(true)}
+            disabled={!canEdit}
+            title={canEdit ? undefined : READ_ONLY_REASON}
           >
             New Collection
           </ButtonView>

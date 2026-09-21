@@ -38,6 +38,8 @@ import { AiCompatibilityScorerModal } from '../../ai/AiCompatibilityScorerModal'
 import { AiDocGeneratorModal } from '../../ai/AiDocGeneratorModal';
 import { AiSmartTestSuiteModal } from '../../ai/AiSmartTestSuiteModal';
 import { InsomniaImportModal } from '../../power/InsomniaImportModal';
+import { useWorkspaceEditable } from '../../../store/workspace-store';
+import { lockEdits, COLLECTION_EDIT_IDS, READ_ONLY_REASON } from '../../../services/workspace/editable';
 import { IconButtonView, ContextMenuView, TextInputView, InfoPopupView, ModalView, ButtonView, UptimeMonitorIcon, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
 import { logUiEvent } from '../../../store/ui-audit-store';
 import { sendAiRequest } from '../../../services/ai/ai-client';
@@ -129,6 +131,10 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
   // Runner modal state
   const [runnerCollectionId, setRunnerCollectionId] = useState<string | null>(null);
   const [runnerCollectionName, setRunnerCollectionName] = useState('');
+
+  /* False in a teammate's shared workspace: every edit below is disabled
+     through this one flag, never hidden. */
+  const canEdit = useWorkspaceEditable('collections');
 
   // Context menu state (collection folders — DUI ContextMenuView)
   const [contextMenu, setContextMenu] = useState<{ position: { x: number; y: number }; items: DuiContextMenuItem[] } | null>(null);
@@ -500,6 +506,8 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
   // ── Drag and Drop Handlers ──
 
   const handleDragStart = (e: React.DragEvent, id: string, type: 'collection' | 'request', parentId: string | null) => {
+    /* Reordering is an edit too. */
+    if (!canEdit) { e.preventDefault(); return; }
     setDragItem({ id, type, parentId });
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', id);
@@ -864,6 +872,8 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
             size="sm"
             iconLeft={<PlusIcon size={14} />}
             onClick={openNewCollection}
+            disabled={!canEdit}
+            title={canEdit ? undefined : READ_ONLY_REASON}
             accentColor={getProtocolAccent(protocol as any)}
           >
             New
@@ -872,8 +882,9 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
             <IconButtonView
               icon={<SparkleIcon size={12} />}
               size="sm"
-              tooltip="AI Auto-Discovery Agent — probe a base URL to discover endpoints"
+              tooltip={canEdit ? 'AI Auto-Discovery Agent — probe a base URL to discover endpoints' : READ_ONLY_REASON}
               accentColor="var(--color-protocol-ai)"
+              disabled={!canEdit}
               onClick={() => setShowDiscovery(true)}
             />
           )}
@@ -947,7 +958,7 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
             anchorEl={null}
             position={headerMenu?.kind === 'importExport' ? { x: headerMenu.x, y: headerMenu.y } : undefined}
             onClose={() => setHeaderMenu(null)}
-            items={[
+            items={lockEdits([
               // Two submenus rather than one flat list — the combined set runs well past the
               // height of the sidebar, and it mirrors the per-collection right-click menu.
               {
@@ -981,14 +992,14 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
                   { id: 'export-docs-html', label: 'API Docs (HTML page)', shortcut: 'W', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-info)' }} />, onClick: () => { postMsg({ type: 'exportCollectionDocsHtml' }); setHeaderMenu(null); } },
                 ],
               },
-            ] as DuiContextMenuItem[]}
+            ] as DuiContextMenuItem[], canEdit, COLLECTION_EDIT_IDS)}
           />
           <ContextMenuView
             open={headerMenu?.kind === 'more'}
             anchorEl={null}
             position={headerMenu?.kind === 'more' ? { x: headerMenu.x, y: headerMenu.y } : undefined}
             onClose={() => setHeaderMenu(null)}
-            items={[
+            items={lockEdits([
               /*
                 Not under Import, deliberately. Import takes a file somebody
                 exported — Postman, OpenAPI, HAR — and this reads a codebase.
@@ -1006,7 +1017,7 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
                 { id: 'scan-sep', label: '', separator: true },
                 { id: 'delete-all', label: 'Delete all collections', danger: true, shortcut: 'D', icon: <TrashIcon size={14} />, onClick: () => { setShowDeleteAllConfirm(true); setHeaderMenu(null); } },
               ] as DuiContextMenuItem[] : []),
-            ] as DuiContextMenuItem[]}
+            ] as DuiContextMenuItem[], canEdit, COLLECTION_EDIT_IDS)}
           />
         </div>
       </div>
@@ -1143,7 +1154,7 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
           anchorEl={null}
           position={contextMenu.position}
           onClose={() => setContextMenu(null)}
-          items={contextMenu.items}
+          items={lockEdits(contextMenu.items, canEdit, COLLECTION_EDIT_IDS)}
         />
       )}
 
@@ -1154,7 +1165,7 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
           anchorEl={null}
           position={reqContextMenu.position}
           onClose={() => setReqContextMenu(null)}
-          items={[
+          items={lockEdits([
             {
               id: 'star',
               label: starredIds.has(reqContextMenu.req.id) ? 'Unstar' : 'Star',
@@ -1186,7 +1197,7 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
             } },
             { id: 'sep2', label: '', separator: true },
             { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon size={13} />, onClick: () => { setDeleteTarget({ id: reqContextMenu.req.id, type: 'request', name: reqContextMenu.req.name }); setReqContextMenu(null); } },
-          ] as DuiContextMenuItem[]}
+          ] as DuiContextMenuItem[], canEdit, COLLECTION_EDIT_IDS)}
         />
       )}
 

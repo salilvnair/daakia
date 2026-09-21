@@ -136,6 +136,24 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.ws-menu-shared-row { display: flex; align-items: center; gap: 2px; }
+.ws-menu-shared-row .ws-menu-item { flex: 1; min-width: 0; }
+.ws-menu-copy {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--color-workspace);
+}
+.ws-menu-copy:hover { background: color-mix(in srgb, var(--color-workspace) 14%, transparent); }
+.ws-act:disabled, .ws-docs-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .ws-menu-empty {
   padding: 8px 9px;
   font-size: 11px;

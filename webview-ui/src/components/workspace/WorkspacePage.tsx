@@ -11,7 +11,8 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { ImportModal } from './ImportModal';
-import { useWorkspaceStore, isReadOnly, type Workspace, type SharingTeammate } from '../../store/workspace-store';
+import { useWorkspaceStore, isReadOnly, useWorkspaceEditable, type Workspace, type SharingTeammate } from '../../store/workspace-store';
+import { READ_ONLY_REASON } from '../../services/workspace/editable';
 import { useTabsStore } from '../../store/tabs-store';
 import { SplitPanelView, AlertDialogView } from '@salilvnair/dui';
 import { NewItemModal } from '../shared/modals/NewItemModal';
@@ -21,7 +22,7 @@ import {
   LayoutGridIcon, ChevronDownIcon, CheckIcon, PlusIcon, FolderIcon, FolderOpenIcon,
   DownloadIcon, GlobeIcon, SettingsIcon, PencilIcon, TrashIcon, CloseIcon,
   UploadIcon, DocumentIcon, CollectionsFolderIcon, ClockIcon,
-  FolderImportIcon, FolderExportIcon, UsersIcon, LockIcon, ChevronRightIcon,
+  FolderImportIcon, FolderExportIcon, UsersIcon, LockIcon, ChevronRightIcon, CopyIcon,
 } from '../../icons';
 import { WorkspaceDocs } from './WorkspaceDocs';
 import {
@@ -75,8 +76,9 @@ export const shortWorkspaceName = (name: string | undefined) => cut(name, MAX_NA
 export const railWorkspaceName = (name: string | undefined) => cut(name, MAX_RAIL_NAME);
 
 export function WorkspacePage() {
-  const { workspaces, activeId, stats, team, load, switchTo, create, rename, remove, setShared, importShared, error } =
+  const { workspaces, activeId, stats, team, load, switchTo, create, rename, remove, setShared, importShared, copyToMine, error } =
     useWorkspaceStore();
+  const canEditCollections = useWorkspaceEditable('collections');
   const active = workspaces.find(w => w.id === activeId);
   const readOnly = isReadOnly(active);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -136,6 +138,8 @@ export function WorkspacePage() {
           if (copy) switchTo(copy.id); else importShared(ownerId, wsId);
           setMenuOpen(false);
         }}
+        onCopyShared={(ownerId, wsId) => { copyToMine({ ownerId, workspaceId: wsId }); setMenuOpen(false); }}
+        onCopyActive={() => { if (active) copyToMine({ id: active.id }); }}
         menuOpen={menuOpen}
         menuRef={menuRef}
         renaming={renaming}
@@ -213,19 +217,15 @@ export function WorkspacePage() {
                 menu already uses for import and export — blue in, amber out.
                 A third pair of colours for the same two verbs is one more thing
                 to learn for nothing. */}
-            {!readOnly && (
-              <Action tone="imp" icon={<FolderImportIcon size={12} />} label="Import"
-                onClick={() => setImporting(true)} />
-            )}
+            <Action tone="imp" icon={<FolderImportIcon size={12} />} label="Import"
+              disabled={!canEditCollections} onClick={() => setImporting(true)} />
             <Action tone="exp" icon={<FolderExportIcon size={12} />} label="Export"
               onClick={() => postMsg({ type: 'exportWorkspace' })} />
             {/* Both of these open the panel's own dialog rather than a second
                 create flow of their own — one flow, so they cannot disagree
                 about what a collection or an environment needs. */}
-            {!readOnly && (
-              <Action tone="new" icon={<PlusIcon size={12} />} label="New collection"
-                onClick={() => { setSub('collections'); setCreateColl(n => n + 1); }} />
-            )}
+            <Action tone="new" icon={<PlusIcon size={12} />} label="New collection"
+              disabled={!canEditCollections} onClick={() => { setSub('collections'); setCreateColl(n => n + 1); }} />
             <Action tone="env" icon={<GlobeIcon size={12} />} label="New environment"
               onClick={() => { setSub('environments'); setCreateEnv(n => n + 1); }} />
           </div>
@@ -273,7 +273,7 @@ export function WorkspacePage() {
 // ── Header ───────────────────────────────────────────────────────────────────
 
 function WorkspaceHeader({
-  active, workspaces, team, onImportShared, menuOpen, menuRef, renaming, docsOpen, onShowDocs,
+  active, workspaces, team, onImportShared, onCopyShared, onCopyActive, menuOpen, menuRef, renaming, docsOpen, onShowDocs,
   onToggleMenu, onPick, onCreate, onOpen, onImport, onExport,
   onRenameStart, onRenameDone, onDelete, onToggleShared,
 }: {
@@ -282,6 +282,9 @@ function WorkspaceHeader({
   /** Teammates' shared workspaces, offered under Import shared. */
   team: SharingTeammate[];
   onImportShared: (ownerId: string, workspaceId: string) => void;
+  /** An editable copy, same name, in your own workspaces. */
+  onCopyShared: (ownerId: string, workspaceId: string) => void;
+  onCopyActive: () => void;
   /** Whether the documentation panel is showing — see `onShowDocs`. */
   docsOpen: boolean;
   onShowDocs: () => void;
@@ -389,9 +392,15 @@ function WorkspaceHeader({
           {readOnly ? (
             /* A copy is yours to drop. Nothing brings it back on its own —
                you import it again if you want it. */
-            <button type="button" className="ws-menu-item ws-menu-item--danger" onClick={() => { setOverflow(false); onDelete(); }}>
-              <TrashIcon size={12} /> Remove from my workspaces
-            </button>
+            <>
+              <button type="button" className="ws-menu-item" onClick={() => { setOverflow(false); onCopyActive(); }}
+                      title="Make an editable copy in your own workspaces. It no longer follows the teammate's changes.">
+                <CopyIcon size={12} /> Copy to my workspaces
+              </button>
+              <button type="button" className="ws-menu-item ws-menu-item--danger" onClick={() => { setOverflow(false); onDelete(); }}>
+                <TrashIcon size={12} /> Remove from my workspaces
+              </button>
+            </>
           ) : <>
             <button type="button" className="ws-menu-item" onClick={() => { setOverflow(false); onToggleShared(); }}
                     title="Teammates on the same Git Sync repo can import a read-only copy. History is never shared.">
@@ -440,14 +449,23 @@ function WorkspaceHeader({
                       <UsersIcon size={10} /> {member.name}
                     </div>
                     {member.shared.map(ws => (
-                      <button key={ws.id} type="button" className="ws-menu-item"
-                              title={ws.imported ? 'Already in your workspaces — open it' : 'Import a read-only copy'}
-                              onClick={() => onImportShared(member.id, ws.id)}>
-                        <LockIcon size={11} />
-                        <span className="ws-menu-label">{ws.name}</span>
-                        <span className="ws-menu-owner">Read Only</span>
-                        {ws.imported && <CheckIcon size={11} className="ws-menu-tick" />}
-                      </button>
+                      <div key={ws.id} className="ws-menu-shared-row">
+                        <button type="button" className="ws-menu-item"
+                                title={ws.imported ? 'Already in your workspaces — open it' : 'Import a read-only copy that follows their changes'}
+                                onClick={() => onImportShared(member.id, ws.id)}>
+                          <LockIcon size={11} />
+                          <span className="ws-menu-label">{ws.name}</span>
+                          <span className="ws-menu-owner">Read Only</span>
+                          {ws.imported && <CheckIcon size={11} className="ws-menu-tick" />}
+                        </button>
+                        {/* The other way in: yours to change, and no longer
+                            following theirs. */}
+                        <button type="button" className="ws-menu-copy"
+                                title={`Copy "${ws.name}" into your own workspaces, editable`}
+                                onClick={() => onCopyShared(member.id, ws.id)}>
+                          <CopyIcon size={11} /> Copy
+                        </button>
+                      </div>
                     ))}
                   </div>
                 ))}
@@ -491,11 +509,12 @@ function Stat({ n, label, tone }: { n: number; label: string; tone: string }) {
   );
 }
 
-function Action({ tone, icon, label, onClick }: {
-  tone: string; icon: React.ReactNode; label: string; onClick: () => void;
+function Action({ tone, icon, label, onClick, disabled = false }: {
+  tone: string; icon: React.ReactNode; label: string; onClick: () => void; disabled?: boolean;
 }) {
   return (
-    <button type="button" className={`ws-act ws-act--${tone}`} onClick={onClick}>
+    <button type="button" className={`ws-act ws-act--${tone}`} onClick={onClick}
+            disabled={disabled} title={disabled ? READ_ONLY_REASON : undefined}>
       {icon}{label}
     </button>
   );

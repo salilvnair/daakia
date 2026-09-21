@@ -18,6 +18,8 @@
  * half-finished sentence into what the whole team reads is worse than pressing
  * something.
  */
+import { useWorkspaceEditable } from '../../store/workspace-store';
+import { READ_ONLY_REASON } from '../../services/workspace/editable';
 import { useEffect, useState } from 'react';
 import { useWorkspaceStore, type Workspace } from '../../store/workspace-store';
 import { MarkdownEditorView } from '@salilvnair/dui';
@@ -37,6 +39,8 @@ export function WorkspaceDocs({ workspace, onOpenChange }: {
   onOpenChange?: (open: boolean) => void;
 }) {
   const saveDocs = useWorkspaceStore(s => s.saveDocs);
+  /* A teammate's shared workspace: their docs, readable, not writable here. */
+  const canEdit = useWorkspaceEditable('overview');
   const [open, setOpen] = useState(true);
   const [view, setView] = useState<View>('rich');
   const [draft, setDraft] = useState('');
@@ -86,6 +90,7 @@ export function WorkspaceDocs({ workspace, onOpenChange }: {
         {!editing && !hasContent ? (
           <DocsEmpty
             generating={generating}
+            canEdit={canEdit}
             onWrite={() => setEditing(true)}
             onGenerate={() => runGenerate({ setGenerating, setProposal, setDraft, setEditing, setDirty, setView, hasContent })}
           />
@@ -97,6 +102,7 @@ export function WorkspaceDocs({ workspace, onOpenChange }: {
             onModeChange={setView}
             accentColor="var(--color-workspace)"
             placeholder="What this project is, how to set it up, and the workflows that matter."
+            readOnly={!canEdit}
           />
         )}
       </div>
@@ -113,8 +119,8 @@ export function WorkspaceDocs({ workspace, onOpenChange }: {
           <button
             type="button"
             className="ws-docs-ai"
-            disabled={generating}
-            title="Draft from what is in this workspace"
+            disabled={generating || !canEdit}
+            title={canEdit ? 'Draft from what is in this workspace' : READ_ONLY_REASON}
             onClick={() => runGenerate({ setGenerating, setProposal, setDraft, setEditing, setDirty, setView, hasContent })}
           >
             {generating ? <SpinnerIcon size={11} /> : <SparkleIcon size={11} />}
@@ -123,7 +129,7 @@ export function WorkspaceDocs({ workspace, onOpenChange }: {
           <button
             type="button"
             className="ws-docs-save"
-            disabled={!dirty || !workspace}
+            disabled={!dirty || !workspace || !canEdit}
             onClick={() => { if (workspace) { saveDocs(workspace.id, draft); setDirty(false); setEditing(false); } }}
           >
             Save
@@ -134,8 +140,8 @@ export function WorkspaceDocs({ workspace, onOpenChange }: {
   );
 }
 
-function DocsEmpty({ onWrite, onGenerate, generating }: {
-  onWrite: () => void; onGenerate: () => void; generating: boolean;
+function DocsEmpty({ onWrite, onGenerate, generating, canEdit }: {
+  onWrite: () => void; onGenerate: () => void; generating: boolean; canEdit: boolean;
 }) {
   return (
     <div className="ws-docs-empty">
@@ -148,10 +154,12 @@ function DocsEmpty({ onWrite, onGenerate, generating }: {
         <li>Resources &amp; FAQs</li>
       </ul>
       <div className="ws-docs-btns">
-        <button type="button" className="ws-docs-btn ws-docs-btn--primary" onClick={onWrite}>
+        <button type="button" className="ws-docs-btn ws-docs-btn--primary" onClick={onWrite}
+                disabled={!canEdit} title={canEdit ? undefined : READ_ONLY_REASON}>
           <PlusIcon size={11} /> Add documentation
         </button>
-        <button type="button" className="ws-docs-btn ws-docs-btn--ai" onClick={onGenerate} disabled={generating}>
+        <button type="button" className="ws-docs-btn ws-docs-btn--ai" onClick={onGenerate}
+                disabled={generating || !canEdit} title={canEdit ? undefined : READ_ONLY_REASON}>
           {generating ? <SpinnerIcon size={11} /> : <SparkleIcon size={11} />}
           {generating ? 'Drafting' : 'Generate with AI'}
         </button>
