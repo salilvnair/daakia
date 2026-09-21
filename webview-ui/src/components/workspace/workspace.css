@@ -136,23 +136,33 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ws-menu-shared-row { display: flex; align-items: center; gap: 2px; }
-.ws-menu-shared-row .ws-menu-item { flex: 1; min-width: 0; }
-.ws-menu-copy {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 24px;
-  padding: 0 8px;
-  border: none;
-  border-radius: 6px;
-  background: none;
-  cursor: pointer;
-  font-size: 11px;
-  color: var(--color-workspace);
+/* Import shared dialog. */
+.ws-imp { display: flex; flex-direction: column; gap: 12px; }
+.ws-imp-label { font-size: 11px; color: var(--color-text-muted); margin-bottom: -6px; }
+.ws-imp-sub { display: inline-flex; align-items: center; gap: 5px; }
+.ws-imp-sec { display: flex; flex-direction: column; gap: 6px; }
+.ws-imp-sec-head { display: flex; align-items: center; justify-content: space-between; }
+.ws-imp-sec-title {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--color-text-secondary);
 }
-.ws-menu-copy:hover { background: color-mix(in srgb, var(--color-workspace) 14%, transparent); }
+.ws-imp-all { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--color-text-muted); cursor: pointer; }
+.ws-imp-list {
+  display: flex; flex-direction: column;
+  max-height: 180px; overflow-y: auto;
+  border: 1px solid var(--color-surface-border); border-radius: 8px; padding: 4px;
+}
+.ws-imp-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 12px;
+}
+.ws-imp-row:hover { background: color-mix(in srgb, var(--color-text-primary) 6%, transparent); }
+.ws-imp-proto { font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; flex-shrink: 0; }
+.ws-imp-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-primary); }
+.ws-imp-meta { flex-shrink: 0; font-size: 11px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.ws-imp-note { font-size: 11px; line-height: 1.5; color: var(--color-text-muted); margin: 0; }
+.ws-imp-error { font-size: 12px; color: var(--color-error); margin: 0; }
 .ws-act:disabled, .ws-docs-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .ws-menu-empty {
   padding: 8px 9px;

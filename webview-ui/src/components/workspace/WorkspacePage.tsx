@@ -11,6 +11,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { ImportModal } from './ImportModal';
+import { ImportSharedModal } from './ImportSharedModal';
 import { useWorkspaceStore, isReadOnly, useWorkspaceEditable, type Workspace, type SharingTeammate } from '../../store/workspace-store';
 import { READ_ONLY_REASON } from '../../services/workspace/editable';
 import { useTabsStore } from '../../store/tabs-store';
@@ -22,7 +23,7 @@ import {
   LayoutGridIcon, ChevronDownIcon, CheckIcon, PlusIcon, FolderIcon, FolderOpenIcon,
   DownloadIcon, GlobeIcon, SettingsIcon, PencilIcon, TrashIcon, CloseIcon,
   UploadIcon, DocumentIcon, CollectionsFolderIcon, ClockIcon,
-  FolderImportIcon, FolderExportIcon, UsersIcon, LockIcon, ChevronRightIcon, CopyIcon,
+  FolderImportIcon, FolderExportIcon, UsersIcon, LockIcon, ChevronRightIcon,
 } from '../../icons';
 import { WorkspaceDocs } from './WorkspaceDocs';
 import {
@@ -76,7 +77,7 @@ export const shortWorkspaceName = (name: string | undefined) => cut(name, MAX_NA
 export const railWorkspaceName = (name: string | undefined) => cut(name, MAX_RAIL_NAME);
 
 export function WorkspacePage() {
-  const { workspaces, activeId, stats, team, load, switchTo, create, rename, remove, setShared, importShared, copyToMine, error } =
+  const { workspaces, activeId, stats, team, load, switchTo, create, rename, remove, setShared, error } =
     useWorkspaceStore();
   const canEditCollections = useWorkspaceEditable('collections');
   const active = workspaces.find(w => w.id === activeId);
@@ -101,6 +102,8 @@ export function WorkspacePage() {
   const setDocsOpen = (v: boolean) => setPref('workspace.docsOpen', v ? 'open' : 'closed');
 
   const [importing, setImporting] = useState(false);
+  /** The teammate workspace picked under Import shared, while its dialog is open. */
+  const [importShared, setImportShared] = useState<{ ownerId: string; workspaceId: string } | null>(null);
   const [createColl, setCreateColl] = useState(0);
   const [createEnv, setCreateEnv] = useState(0);
   const [naming, setNaming] = useState(false);
@@ -132,14 +135,7 @@ export function WorkspacePage() {
         active={active}
         workspaces={workspaces}
         team={team}
-        onImportShared={(ownerId, wsId) => {
-          /* Already imported: that is just a switch to your copy. */
-          const copy = workspaces.find(w => w.id === `shared-${ownerId}-${wsId}`);
-          if (copy) switchTo(copy.id); else importShared(ownerId, wsId);
-          setMenuOpen(false);
-        }}
-        onCopyShared={(ownerId, wsId) => { copyToMine({ ownerId, workspaceId: wsId }); setMenuOpen(false); }}
-        onCopyActive={() => { if (active) copyToMine({ id: active.id }); }}
+        onImportShared={(ownerId, workspaceId) => { setImportShared({ ownerId, workspaceId }); setMenuOpen(false); }}
         menuOpen={menuOpen}
         menuRef={menuRef}
         renaming={renaming}
@@ -239,6 +235,10 @@ export function WorkspacePage() {
       )}
 
       {importing && <ImportModal onClose={() => setImporting(false)} />}
+      {importShared && (
+        <ImportSharedModal ownerId={importShared.ownerId} workspaceId={importShared.workspaceId}
+                           onClose={() => setImportShared(null)} />
+      )}
 
       {/* The app's own dialogs, not the browser's. A VS Code webview has no
           `allow-modals` in its sandbox, so window.prompt returns null and
@@ -255,13 +255,11 @@ export function WorkspacePage() {
 
       <AlertDialogView
         open={confirmingDelete}
-        title={readOnly
-          ? `Remove "${active?.name ?? 'this workspace'}"?`
-          : `Delete "${active?.name ?? 'this workspace'}"?`}
+        title={`Delete "${active?.name ?? 'this workspace'}"?`}
         message={readOnly
-          ? `Your copy and the history you sent from it go. ${active?.owner_name ?? 'The owner'} still has theirs, and you can import it again from Import shared.`
+          ? `Your copy and the history you sent from it go. ${active?.owner_name ?? 'The owner'} still has theirs.`
           : 'Its collections, environments and history go with it. This cannot be undone.'}
-        confirmLabel={readOnly ? 'Remove' : 'Delete'}
+        confirmLabel="Delete"
         danger
         onConfirm={() => { if (active) remove(active.id); setConfirmingDelete(false); }}
         onCancel={() => setConfirmingDelete(false)}
@@ -273,7 +271,7 @@ export function WorkspacePage() {
 // ── Header ───────────────────────────────────────────────────────────────────
 
 function WorkspaceHeader({
-  active, workspaces, team, onImportShared, onCopyShared, onCopyActive, menuOpen, menuRef, renaming, docsOpen, onShowDocs,
+  active, workspaces, team, onImportShared, menuOpen, menuRef, renaming, docsOpen, onShowDocs,
   onToggleMenu, onPick, onCreate, onOpen, onImport, onExport,
   onRenameStart, onRenameDone, onDelete, onToggleShared,
 }: {
@@ -281,10 +279,8 @@ function WorkspaceHeader({
   workspaces: Workspace[];
   /** Teammates' shared workspaces, offered under Import shared. */
   team: SharingTeammate[];
+  /** Opens the import dialog for one of them. */
   onImportShared: (ownerId: string, workspaceId: string) => void;
-  /** An editable copy, same name, in your own workspaces. */
-  onCopyShared: (ownerId: string, workspaceId: string) => void;
-  onCopyActive: () => void;
   /** Whether the documentation panel is showing — see `onShowDocs`. */
   docsOpen: boolean;
   onShowDocs: () => void;
@@ -392,15 +388,11 @@ function WorkspaceHeader({
           {readOnly ? (
             /* A copy is yours to drop. Nothing brings it back on its own —
                you import it again if you want it. */
-            <>
-              <button type="button" className="ws-menu-item" onClick={() => { setOverflow(false); onCopyActive(); }}
-                      title="Make an editable copy in your own workspaces. It no longer follows the teammate's changes.">
-                <CopyIcon size={12} /> Copy to my workspaces
-              </button>
-              <button type="button" className="ws-menu-item ws-menu-item--danger" onClick={() => { setOverflow(false); onDelete(); }}>
-                <TrashIcon size={12} /> Remove from my workspaces
-              </button>
-            </>
+            /* Only a read-only copy from before Import shared made editable
+               workspaces can get here; deleting it is all there is to do. */
+            <button type="button" className="ws-menu-item ws-menu-item--danger" onClick={() => { setOverflow(false); onDelete(); }}>
+              <TrashIcon size={12} /> Delete
+            </button>
           ) : <>
             <button type="button" className="ws-menu-item" onClick={() => { setOverflow(false); onToggleShared(); }}
                     title="Teammates on the same Git Sync repo can import a read-only copy. History is never shared.">
@@ -449,23 +441,12 @@ function WorkspaceHeader({
                       <UsersIcon size={10} /> {member.name}
                     </div>
                     {member.shared.map(ws => (
-                      <div key={ws.id} className="ws-menu-shared-row">
-                        <button type="button" className="ws-menu-item"
-                                title={ws.imported ? 'Already in your workspaces — open it' : 'Import a read-only copy that follows their changes'}
-                                onClick={() => onImportShared(member.id, ws.id)}>
-                          <LockIcon size={11} />
-                          <span className="ws-menu-label">{ws.name}</span>
-                          <span className="ws-menu-owner">Read Only</span>
-                          {ws.imported && <CheckIcon size={11} className="ws-menu-tick" />}
-                        </button>
-                        {/* The other way in: yours to change, and no longer
-                            following theirs. */}
-                        <button type="button" className="ws-menu-copy"
-                                title={`Copy "${ws.name}" into your own workspaces, editable`}
-                                onClick={() => onCopyShared(member.id, ws.id)}>
-                          <CopyIcon size={11} /> Copy
-                        </button>
-                      </div>
+                      <button key={ws.id} type="button" className="ws-menu-item"
+                              title={`Choose what to import from ${ws.name}`}
+                              onClick={() => onImportShared(member.id, ws.id)}>
+                        <LayoutGridIcon size={11} />
+                        <span className="ws-menu-label">{ws.name}</span>
+                      </button>
                     ))}
                   </div>
                 ))}

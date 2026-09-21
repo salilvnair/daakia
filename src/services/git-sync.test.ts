@@ -25,7 +25,7 @@ import {
 import { refuseIfReadOnly } from '../panel/main/handlers/workspace-handler';
 import {
   ensureGitRepo, gitSyncNow, getSyncIdentity, getSyncFolder, saveGitSyncSettings,
-  sharedWorkspaceLocalId, USERS_DIR, listTeam, importSharedWorkspaceFromTeam, copyWorkspaceToMine,
+  sharedWorkspaceLocalId, USERS_DIR, listTeam, importSharedWorkspaceFromTeam, copyWorkspaceToMine, previewSharedWorkspace,
 } from './git-sync';
 
 /*
@@ -199,6 +199,27 @@ describe('Git Sync between two people', () => {
     // A sync neither removes nor refreshes the copies — they are Bob's.
     expect((await gitSyncNow()).ok).toBe(true);
     expect(listWorkspaces().filter(w => w.name === 'Payments' && !w.owner_id)).toHaveLength(2);
+  }, 60_000);
+
+  it('imports only what the dialog left ticked, under the name it was given', async () => {
+    await become('bob');
+    const preview = previewSharedWorkspace(ALICE, paymentsId)!;
+    expect(preview.name).toBe('Payments');
+    expect(preview.collections).toEqual([{ id: 'col-pay', name: 'Payments API', protocol: 'rest', requests: 1 }]);
+    expect(preview.environments).toEqual([{ id: 'env-pay', name: 'Staging', variables: 2, secrets: 1 }]);
+
+    // Environments only, renamed.
+    const imported = copyWorkspaceToMine(
+      { ownerId: ALICE, workspaceId: paymentsId },
+      { name: 'Payments (by alice)', collectionIds: [], environmentIds: ['env-pay'] },
+    );
+    expect(imported.ok, imported.message).toBe(true);
+    const ws = listWorkspaces().find(w => w.id === imported.id)!;
+    expect(ws.name).toBe('Payments (by alice)');
+    withWorkspace(ws.id, () => {
+      expect(getCollectionTree('rest')).toEqual([]);
+      expect(getAllEnvironments().map(e => e.name)).toEqual(['Staging']);
+    });
   }, 60_000);
 
   it('does not bring back a copy you removed', async () => {

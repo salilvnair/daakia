@@ -14,7 +14,9 @@ import {
   setWorkspaceDocs, setActiveWorkspaceId, getActiveWorkspaceId, getWorkspaceStats,
   setWorkspaceShared, isReadOnlyWorkspace,
 } from '../../../storage/workspaces';
-import { COLLECTION_MUTATION_TYPES, listTeam, importSharedWorkspaceFromTeam, copyWorkspaceToMine } from '../../../services/git-sync';
+import {
+  COLLECTION_MUTATION_TYPES, listTeam, importSharedWorkspaceFromTeam, copyWorkspaceToMine, previewSharedWorkspace,
+} from '../../../services/git-sync';
 import { getAllCollectionTrees, getAllEnvironments } from '../../../storage/db';
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -48,12 +50,31 @@ export function handleImportSharedWorkspace(msg: Record<string, unknown>, post: 
   post({ type: 'workspaceChanged', ...snapshot(), toast: result.message });
 }
 
-/** An editable copy of a workspace (or of a teammate's share) in your own, and go to it. */
+/** What a teammate shares, for the Import shared dialog. */
+export function handleGetSharedWorkspacePreview(msg: Record<string, unknown>, post: PostMessage) {
+  const preview = previewSharedWorkspace(String(msg.ownerId ?? ''), String(msg.workspaceId ?? ''));
+  post(preview
+    ? { type: 'sharedWorkspacePreview', preview }
+    : { type: 'sharedWorkspacePreview', error: 'That workspace is no longer shared. Run Git Sync to refresh the list.' });
+}
+
+const ids = (v: unknown): string[] | undefined =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : undefined;
+
+/**
+ * An editable copy of a workspace in your own, and go to it — from a
+ * workspace here, or from a teammate's share through the Import shared
+ * dialog, which also sends the name and what to bring.
+ */
 export function handleCopyWorkspaceToMine(msg: Record<string, unknown>, post: PostMessage) {
   const result = copyWorkspaceToMine({
     id: typeof msg.id === 'string' ? msg.id : undefined,
     ownerId: typeof msg.ownerId === 'string' ? msg.ownerId : undefined,
     workspaceId: typeof msg.workspaceId === 'string' ? msg.workspaceId : undefined,
+  }, {
+    name: typeof msg.name === 'string' ? msg.name : undefined,
+    collectionIds: ids(msg.collectionIds),
+    environmentIds: ids(msg.environmentIds),
   });
   if (!result.ok || !result.id) {
     post({ type: 'workspaceError', message: result.message });

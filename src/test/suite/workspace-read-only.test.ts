@@ -226,6 +226,26 @@ suite('Workspaces — a teammate\'s shared workspace is read-only', () => {
     assert.deepStrictEqual(tree[0].requests?.map(r => r.name), ['List orders']);
   });
 
+  test('the Import shared dialog shows what is shared, and imports what was ticked under its name', async function () {
+    this.timeout(30_000);
+    const preview = await send({ type: 'getSharedWorkspacePreview', ownerId: TEAMMATE, workspaceId: WS }, 'sharedWorkspacePreview');
+    const p = preview?.preview as { name: string; ownerName: string; collections: { name: string }[]; environments: { name: string }[] };
+    assert.strictEqual(p.name, 'Orders Team');
+    assert.strictEqual(p.ownerName, 'Priya');
+    assert.deepStrictEqual(p.collections.map(c => c.name), ['Orders API']);
+    assert.deepStrictEqual(p.environments.map(env => env.name), ['Orders Staging']);
+
+    const changed = await send({
+      type: 'copyWorkspaceToMine', ownerId: TEAMMATE, workspaceId: WS,
+      name: 'Orders (by Priya)', collectionIds: ['col-orders'], environmentIds: [],
+    }, 'workspaceChanged');
+    const ws = (changed?.workspaces as { id: string; name: string; owner_id: string | null }[]).find(w => w.id === changed?.activeId);
+    assert.strictEqual(ws?.name, 'Orders (by Priya)');
+    assert.strictEqual(ws?.owner_id, null);
+    assert.deepStrictEqual((await restCollections()).map(c => c.name), ['Orders API']);
+    await send({ type: 'switchWorkspace', id: LOCAL_ID }, 'workspaceChanged');
+  });
+
   test('Copy to my workspaces gives an editable workspace', async function () {
     this.timeout(60_000);
     const changed = await send({ type: 'copyWorkspaceToMine', id: LOCAL_ID }, 'workspaceChanged');

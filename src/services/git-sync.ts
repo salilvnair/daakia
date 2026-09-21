@@ -824,11 +824,23 @@ export function countSharedAvailable(): number {
  * is yours, it does not follow their changes, and nothing you do to it can
  * land on their rows or on the read-only copy's.
  */
-export function copyWorkspaceToMine(source: { id?: string; ownerId?: string; workspaceId?: string }): { ok: boolean; id?: string; message: string } {
+export interface CopyOptions {
+  /** The new workspace's name. Defaults to the source's. */
+  name?: string;
+  /** Top-level collection ids to bring. Omitted: all of them. */
+  collectionIds?: string[];
+  /** Environment ids to bring. Omitted: all of them. */
+  environmentIds?: string[];
+}
+
+export function copyWorkspaceToMine(
+  source: { id?: string; ownerId?: string; workspaceId?: string },
+  options: CopyOptions = {},
+): { ok: boolean; id?: string; message: string } {
   let name = '';
   let docs: string | null = null;
   let collections: Record<string, CollectionTreeNode[]> = {};
-  let environments: { name: string; isActive: boolean; variables: SyncEnvVariable[] }[] = [];
+  let environments: { id: string; name: string; isActive: boolean; variables: SyncEnvVariable[] }[] = [];
 
   if (source.id) {
     const ws = getWorkspace(source.id);
@@ -843,7 +855,7 @@ export function copyWorkspaceToMine(source: { id?: string; ownerId?: string; wor
       environments = getAllEnvironments().map(r => {
         let variables: SyncEnvVariable[] = [];
         try { variables = JSON.parse(r.variables || '[]'); } catch { /* malformed row: no variables */ }
-        return { name: r.name, isActive: r.is_active === 1, variables };
+        return { id: r.id, name: r.name, isActive: r.is_active === 1, variables };
       });
     });
   } else {
@@ -854,13 +866,24 @@ export function copyWorkspaceToMine(source: { id?: string; ownerId?: string; wor
     collections = found.doc.collections ?? {};
     /* Their secrets arrive redacted; a copy starts them blank for you to fill. */
     environments = (found.doc.environments ?? []).map(e => ({
+      id: e.id,
       name: e.name,
       isActive: e.isActive,
       variables: e.variables.map(v => v.isSecret && v.initialValue === REDACTED ? { ...v, initialValue: '', currentValue: '' } : v),
     }));
   }
 
-  const created = createWorkspace(name || 'Copied workspace');
+  /* What the import dialog left ticked. */
+  if (options.collectionIds) {
+    const keep = new Set(options.collectionIds);
+    collections = Object.fromEntries(Object.entries(collections).map(([p, tree]) => [p, tree.filter(c => keep.has(c.id))]));
+  }
+  if (options.environmentIds) {
+    const keep = new Set(options.environmentIds);
+    environments = environments.filter(e => keep.has(e.id));
+  }
+
+  const created = createWorkspace(options.name?.trim() || name || 'Copied workspace');
   if (!created) return { ok: false, message: 'Could not create the workspace.' };
   const fresh = new Map<string, string>();
   const idOf = (id: string) => {
@@ -879,7 +902,38 @@ export function copyWorkspaceToMine(source: { id?: string; ownerId?: string; wor
   });
   if (docs) setWorkspaceDocs(created.id, docs);
 
-  return { ok: true, id: created.id, message: `Copied "${created.name}" into your workspaces. It is yours to change.` };
+  return { ok: true, id: created.id, message: `Imported "${created.name}" into your workspaces. It is yours to change.` };
+}
+
+export interface SharedWorkspacePreview {
+  ownerId: string;
+  ownerName: string;
+  workspaceId: string;
+  name: string;
+  collections: { id: string; name: string; protocol: string; requests: number }[];
+  environments: { id: string; name: string; variables: number; secrets: number }[];
+}
+
+/** What a teammate's shared workspace holds, for the import dialog to choose from. */
+export function previewSharedWorkspace(ownerId: string, wsId: string): SharedWorkspacePreview | undefined {
+  const found = readSharedDoc(ownerId, wsId);
+  if (!found) return undefined;
+  const count = (node: CollectionTreeNode): number =>
+    (node.requests?.length ?? 0) + (node.children ?? []).reduce((n, c) => n + count(c), 0);
+  return {
+    ownerId,
+    ownerName: found.ownerName,
+    workspaceId: wsId,
+    name: found.doc.workspace.name,
+    collections: Object.entries(found.doc.collections ?? {}).flatMap(([protocol, tree]) =>
+      (Array.isArray(tree) ? tree : []).map(c => ({ id: c.id, name: c.name, protocol, requests: count(c) }))),
+    environments: (found.doc.environments ?? []).map(e => ({
+      id: e.id,
+      name: e.name,
+      variables: e.variables.length,
+      secrets: e.variables.filter(v => v.isSecret).length,
+    })),
+  };
 }
 
 export function importSharedWorkspaceFromTeam(ownerId: string, wsId: string): { ok: boolean; id?: string; message: string } {
