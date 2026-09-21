@@ -46,7 +46,7 @@ import {
 } from '../../../services/history-filter/ai-suggest';
 import {
   HAS_LABELS, HAS_VALUES, STATUS_VALUES, WHEN_VALUES,
-  activeCount, allRows, describeStructure, except, formatQuery, isEmpty, isUsable, only,
+  activeCount, allRows, clearConditions, describeStructure, except, formatQuery, isEmpty, isUsable, only,
   prettyPhrase, toggleValue,
   type ConditionField, type FilterState, type TermField,
 } from '../../../services/history-filter/filter-model';
@@ -687,7 +687,7 @@ export function HistoryFilterPopup({
           of control, when both are just "undo what is on screen".
         */}
         {!isEmpty(props.state) && (
-          <button type="button" onClick={() => props.onChange({ ...props.state, terms: [], groups: [] })}
+          <button type="button" onClick={() => props.onChange(clearConditions(props.state))}
                   title="Remove every condition"
                   className="dui_modal__close-btn flex items-center gap-1 text-[10px] cursor-pointer px-1.5 rounded"
                   style={{ color: 'var(--color-error)', fontWeight: 600,

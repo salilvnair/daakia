@@ -1,20 +1,33 @@
 import { describe, it, expect } from 'vitest';
 import {
-  EMPTY, activeCount, addCondition, addToGroup, allRows, chipsOf, describeCondition,
-  describeStructure, dropCondition, dropField, except, formatQuery, isEmpty, isUsable,
-  liveGroups, newCondition, newGroup, only, parseQuery, setGroupOp, statusBucket,
-  toggleValue,
-  type Condition, type FilterState,
+  EMPTY, ROOT_ID, activeCount, addCondition, addToGroup, allRows, chipsOf, describeCondition,
+  describeStructure, dropCondition, dropField, except, flipGap, formatQuery, isEmpty, isGroup,
+  isUsable, liveTree, newCondition, newGroup, only, parseQuery, setGroupOp, statusBucket,
+  toggleValue, wrapWith,
+  type Condition, type ConditionGroup, type FilterState,
 } from './filter-model';
 
 function cond(patch: Partial<Condition>): Condition {
   return { ...newCondition(), ...patch };
 }
 
-/** A state holding one box per argument, each box being a list of rows. */
-function withGroups(groups: { op?: 'and' | 'or'; rows: Condition[] }[], groupOp: 'and' | 'or' = 'and'): FilterState {
-  return { ...EMPTY, groupOp, groups: groups.map(g => newGroup(g.rows, g.op ?? 'or')) };
+/**
+ * A state holding one top-level box per argument. A box of one row is stored
+ * as the bare row, which is how the model keeps it.
+ */
+function withGroups(groups: { op?: 'and' | 'or'; rows: Condition[] }[], rootOp: 'and' | 'or' = 'and'): FilterState {
+  return {
+    ...EMPTY,
+    root: {
+      id: ROOT_ID,
+      op: rootOp,
+      children: groups.map(g => (g.rows.length === 1 ? g.rows[0] : newGroup(g.rows, g.op ?? 'or'))),
+    },
+  };
 }
+
+/** The top level of a state, for the tests that look at its boxes. */
+const top = (s: FilterState) => s.root.children;
 
 function body(value: string): Condition {
   return cond({ field: 'body', key: 'text', op: 'contains', value });
@@ -76,15 +89,8 @@ describe('the filter state', () => {
   });
 });
 
-describe('two levels: rows in a box, boxes with each other', () => {
-  it('is the arrangement the flat model could not hold', () => {
-    /*
-      `(A and B) or (C or D)`. The old model stored a join per row and derived
-      brackets from the sequence, which can say `A and (B or C)` and cannot say
-      this — an OR between an AND-group and anything else is a nesting, and
-      there was nowhere to put it. The panel drew it anyway, so the picture and
-      the meaning had come apart.
-    */
+describe('the tree: brackets inside brackets', () => {
+  it('says (A and B) or (C or D)', () => {
     const state = withGroups([
       { op: 'and', rows: [body('a'), body('b')] },
       { op: 'or', rows: [body('c'), body('d')] },
@@ -97,59 +103,111 @@ describe('two levels: rows in a box, boxes with each other', () => {
     expect(describeStructure(state)).toBe('1 and 2');
   });
 
-  it('names a box of one without brackets', () => {
-    const state = withGroups([{ op: 'or', rows: [body('a'), body('b')] }, { rows: [body('c')] }]);
-    expect(describeStructure(state)).toBe('(1 or 2) and 3');
-  });
-
-  it('drops a box whose rows are all half-typed', () => {
+  it('drops a row that is still being typed, and any bracket left empty', () => {
     /*
-      It matches nothing yet, and under `groupOp: 'or'` leaving it in would be
-      an alternative that is trivially satisfied — the filter would quietly
-      match the whole table.
+      It matches nothing yet, and under `or` an empty alternative would be
+      trivially satisfied — the filter would quietly match the whole table.
     */
     const state = withGroups([{ rows: [body('a')] }, { rows: [body('')] }], 'or');
-    expect(liveGroups(state)).toHaveLength(1);
     expect(describeStructure(state)).toBe('1');
+    expect(liveTree(state)).toEqual(allRows(state)[0]);
   });
 
   it('counts and empties on live rows only', () => {
     expect(isEmpty(withGroups([{ rows: [body('')] }]))).toBe(true);
-    expect(activeCount(withGroups([{ rows: [body('a'), body('b')] }]))).toBe(2);
+    expect(activeCount(withGroups([{ op: 'and', rows: [body('a'), body('b')] }]))).toBe(2);
   });
 });
 
-describe('editing groups', () => {
-  it('puts a brand-new row in a box of its own', () => {
-    const one = addCondition(EMPTY, 'header');
-    const two = addCondition(one, 'body');
-    expect(two.groups).toHaveLength(2);
+describe('flipping one gap', () => {
+  /** An ALL OF box of `n` rows as the only top-level thing, and its id. */
+  const allOf = (...values: string[]) => {
+    const state = withGroups([{ op: 'and', rows: values.map(body) }]);
+    const box = top(state)[0] as ConditionGroup;
+    return { state, box, ids: box.children.map(c => c.id) };
+  };
+
+  it('turns 1 and 2 and 3 into 1 and (2 or 3) — the case that failed', () => {
+    /*
+      The two-level model could only flip the whole box, so this became
+      `1 or 2 or 3`. Only the gap that was clicked may change.
+    */
+    const { state, box, ids } = allOf('a', 'b', 'c');
+    const next = flipGap(state, box.id, ids[1], ids[2]);
+    expect(describeStructure(next)).toBe('1 and (2 or 3)');
+  });
+
+  it('undoes itself: the chip inside the new bracket puts it back', () => {
+    const { state, box, ids } = allOf('a', 'b', 'c');
+    const once = flipGap(state, box.id, ids[1], ids[2]);
+    const inner = (top(once)[0] as ConditionGroup).children[1] as ConditionGroup;
+    const back = flipGap(once, inner.id, inner.children[0].id, inner.children[1].id);
+    expect(describeStructure(back)).toBe('1 and 2 and 3');
+  });
+
+  it('extends a bracket rather than nesting one in another', () => {
+    // `1 and (2 or 3) and 4`, gap between the bracket and 4 → `1 and (2 or 3 or 4)`.
+    const { state, box, ids } = allOf('a', 'b', 'c', 'd');
+    const once = flipGap(state, box.id, ids[1], ids[2]);
+    const outer = top(once)[0] as ConditionGroup;
+    const twice = flipGap(once, outer.id, outer.children[1].id, outer.children[2].id);
+    expect(describeStructure(twice)).toBe('1 and (2 or 3 or 4)');
+  });
+
+  it('flips the box when the two neighbours are all it holds', () => {
+    // Then the gap *is* the box's relationship; there is nothing to bracket.
+    const { state, box, ids } = allOf('a', 'b');
+    expect(describeStructure(flipGap(state, box.id, ids[0], ids[1]))).toBe('1 or 2');
+  });
+
+  it('does the same between top-level boxes', () => {
+    const state = withGroups([{ rows: [body('a')] }, { rows: [body('b')] }, { rows: [body('c')] }]);
+    const ids = top(state).map(c => c.id);
+    expect(describeStructure(flipGap(state, ROOT_ID, ids[0], ids[1]))).toBe('(1 or 2) and 3');
+  });
+});
+
+describe('editing the tree', () => {
+  it('puts a brand-new row at the top level on its own', () => {
+    const two = addCondition(addCondition(EMPTY, 'header'), 'body');
+    expect(top(two)).toHaveLength(2);
     expect(allRows(two).map(c => c.field)).toEqual(['header', 'body']);
   });
 
-  it('adds into an existing box, and the op comes along', () => {
+  it('turns a lone row into a box of two with the word chosen', () => {
     const one = addCondition(EMPTY, 'body');
-    const two = addToGroup(one, one.groups[0].id, 'body', 'and');
-    expect(two.groups).toHaveLength(1);
-    expect(two.groups[0].op).toBe('and');
-    expect(two.groups[0].rows).toHaveLength(2);
+    const two = wrapWith(one, top(one)[0].id, 'body', 'and');
+    expect(top(two)).toHaveLength(1);
+    const box = top(two)[0] as ConditionGroup;
+    expect(isGroup(box) && box.op).toBe('and');
+    expect(box.children).toHaveLength(2);
   });
 
-  it('flips one box without touching the others', () => {
-    const state = withGroups([
-      { op: 'or', rows: [body('a'), body('b')] },
-      { op: 'or', rows: [body('c')] },
-    ]);
-    const flipped = setGroupOp(state, state.groups[0].id, 'and');
-    expect(flipped.groups.map(g => g.op)).toEqual(['and', 'or']);
+  it('adds into an existing box', () => {
+    const state = withGroups([{ op: 'or', rows: [body('a'), body('b')] }]);
+    const box = top(state)[0] as ConditionGroup;
+    const next = addToGroup(state, box.id, 'body');
+    expect((top(next)[0] as ConditionGroup).children).toHaveLength(3);
   });
 
-  it('takes the box away with its last row', () => {
-    // An empty box constrains nothing and has no bin of its own.
-    const state = withGroups([{ rows: [body('a')] }, { rows: [body('b')] }]);
-    const after = dropCondition(state, state.groups[0].rows[0].id);
-    expect(after.groups).toHaveLength(1);
-    expect(allRows(after).map(c => c.value)).toEqual(['b']);
+  it('keeps a top-level box that agrees with the word between boxes', () => {
+    /*
+      A box you built should not vanish because it happens to match the
+      top-level word — only brackets inside a box dissolve like that.
+    */
+    const state = withGroups([{ op: 'or', rows: [body('a'), body('b')] }, { rows: [body('c')] }]);
+    const box = top(state)[0] as ConditionGroup;
+    const flipped = setGroupOp(state, box.id, 'and');
+    expect(top(flipped)).toHaveLength(2);
+    expect((top(flipped)[0] as ConditionGroup).op).toBe('and');
+  });
+
+  it('takes a bracket away when its last row goes, and unwraps one left with a single row', () => {
+    const state = withGroups([{ op: 'or', rows: [body('a'), body('b')] }, { rows: [body('c')] }]);
+    const box = top(state)[0] as ConditionGroup;
+    const after = dropCondition(state, box.children[0].id);
+    expect(top(after).every(c => !isGroup(c))).toBe(true);
+    expect(allRows(after).map(c => c.value)).toEqual(['b', 'c']);
   });
 });
 
@@ -210,7 +268,7 @@ describe('the query string', () => {
   it('uses a different separator for an ALL OF box, and says so on the way back', () => {
     const state = withGroups([{ op: 'and', rows: [body('x'), body('y')] }]);
     expect(formatQuery(state)).toBe('body:text:contains:x&body:text:contains:y');
-    expect(parseQuery(formatQuery(state)).groups[0].op).toBe('and');
+    expect((top(parseQuery(formatQuery(state)))[0] as ConditionGroup).op).toBe('and');
   });
 
   it('writes the top-level operator only when it is not the default', () => {
@@ -218,13 +276,28 @@ describe('the query string', () => {
     const or = withGroups([{ rows: [body('x')] }, { rows: [body('y')] }], 'or');
     expect(formatQuery(and)).not.toContain('match:');
     expect(formatQuery(or).startsWith('match:any')).toBe(true);
-    expect(parseQuery(formatQuery(or)).groupOp).toBe('or');
-    expect(parseQuery(formatQuery(and)).groupOp).toBe('and');
+    expect(parseQuery(formatQuery(or)).root.op).toBe('or');
+    expect(parseQuery(formatQuery(and)).root.op).toBe('and');
+  });
+
+  it('writes a bracket inside a box with parentheses, and reads it back', () => {
+    const state = withGroups([{ op: 'and', rows: [body('a'), body('b'), body('c')] }]);
+    const box = top(state)[0] as ConditionGroup;
+    const nested = flipGap(state, box.id, box.children[1].id, box.children[2].id);
+    const text = formatQuery(nested);
+    expect(text).toBe('body:text:contains:a&(body:text:contains:b|body:text:contains:c)');
+    expect(describeStructure(parseQuery(text))).toBe('1 and (2 or 3)');
+  });
+
+  it('refuses to guess a precedence for & and | mixed without brackets', () => {
+    // The formatter never writes it; reading it as anything would be a guess.
+    const parsed = parseQuery('body:text:contains:a&body:text:contains:b|body:text:contains:c');
+    expect(allRows(parsed)).toEqual([]);
   });
 
   it('quotes a value containing either separator', () => {
     // Otherwise one condition would come back as two.
-    for (const value of ['a|b', 'a&b']) {
+    for (const value of ['a|b', 'a&b', 'f(x)']) {
       const state = withGroups([{ rows: [cond({ field: 'url', key: 'text', op: 'regex', value })] }]);
       const back = parseQuery(formatQuery(state));
       expect(allRows(back)).toHaveLength(1);
@@ -239,7 +312,7 @@ describe('the query string', () => {
   });
 
   it('drops a condition whose operator needs a value and has none', () => {
-    expect(parseQuery('header:authorization:contains').groups).toEqual([]);
+    expect(top(parseQuery('header:authorization:contains'))).toEqual([]);
   });
 });
 

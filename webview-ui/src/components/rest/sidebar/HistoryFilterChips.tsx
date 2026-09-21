@@ -17,7 +17,7 @@
  */
 import { CloseIcon } from '../../../icons';
 import {
-  chipsOf, dropCondition, dropField, isEmpty,
+  chipsOf, clearConditions, dropCondition, dropField, isEmpty,
   type FilterState,
 } from '../../../services/history-filter/filter-model';
 
@@ -67,7 +67,7 @@ export function HistoryFilterChips({ state, onChange }: {
           type="button"
           className="text-[10px] px-1 border-none bg-transparent cursor-pointer"
           style={{ color: 'var(--color-text-muted)' }}
-          onClick={() => onChange({ ...state, terms: [], groups: [] })}
+          onClick={() => onChange(clearConditions(state))}
         >
           clear all
         </button>

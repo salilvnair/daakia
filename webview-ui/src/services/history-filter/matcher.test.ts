@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   EMPTY, HAS_VALUES, STATUS_VALUES, WHEN_VALUES, newCondition, newGroup, parseQuery,
-  type Condition, type FilterState,
+  type Condition, type ConditionNode, type FilterState,
 } from './filter-model';
 import { applyFilter, buildFacet, contextOf, matchesRow } from './matcher';
 import { factsOf, type HistoryRowLike } from './history-facts';
@@ -35,11 +35,12 @@ function cond(patch: Partial<Condition>): Condition {
   ANDed rows: each becomes its own box, which is what a list of separate
   conditions means. Tests about boxes build `groups` directly.
 */
-function state(patch: Partial<FilterState> & { conditions?: Condition[] }): FilterState {
-  const { conditions, ...rest } = patch;
+function state(patch: Partial<FilterState> & { conditions?: Condition[]; groups?: ConditionNode[] }): FilterState {
+  const { conditions, groups, ...rest } = patch;
+  const children: ConditionNode[] = [...(conditions ?? []), ...(groups ?? [])];
   return {
     ...EMPTY,
-    ...(conditions ? { groups: conditions.map(c => newGroup([c], 'or')) } : {}),
+    ...(children.length ? { root: { ...EMPTY.root, children } } : {}),
     ...rest,
   };
 }
@@ -223,6 +224,15 @@ describe('conditions', () => {
     expect(matchesRow(row({ method: 'POST', request: { body: 'beta' } }), s, ctx)).toBe(true);
     expect(matchesRow(row({ method: 'POST', request: { body: 'gamma' } }), s, ctx)).toBe(false);
     expect(matchesRow(row({ method: 'GET', request: { body: 'alpha' } }), s, ctx)).toBe(false);
+  });
+
+  it('matches 1 and (2 or 3) the way it reads', () => {
+    const s = parseQuery(
+      'body:text:contains:alpha&(body:text:contains:beta|body:text:contains:gamma)');
+    expect(matchesRow(row({ request: { body: 'alpha beta' } }), s, ctx)).toBe(true);
+    expect(matchesRow(row({ request: { body: 'alpha gamma' } }), s, ctx)).toBe(true);
+    expect(matchesRow(row({ request: { body: 'alpha' } }), s, ctx)).toBe(false);
+    expect(matchesRow(row({ request: { body: 'beta gamma' } }), s, ctx)).toBe(false);
   });
 
   it('ANDs a negated row sitting in its own bracket', () => {

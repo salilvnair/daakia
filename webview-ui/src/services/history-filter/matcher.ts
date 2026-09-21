@@ -21,7 +21,7 @@
  */
 import {
   type Condition, type FilterState, type Operator, type Term, type TermField,
-  NULLARY, liveGroups, statusBucket, withinRange,
+  NULLARY, isGroup, liveTree, statusBucket, withinRange, type ConditionNode,
 } from './filter-model';
 import { factsOf, type HistoryFacts, type HistoryRowLike, type HeaderPair } from './history-facts';
 import { parsePath, queryPath, asText } from './json-path';
@@ -226,27 +226,30 @@ export function matchesFacts(f: HistoryFacts, state: FilterState, ctx: MatchCont
   for (const term of state.terms) if (!matchesTerm(f, term, ctx)) return false;
 
   /*
-    Rows combine inside a box with the box's operator; boxes combine with each
-    other using `groupOp`.
+    The conditions are a tree of brackets: a group is `and` or `or` over its
+    children, and a child is a row or another group.
 
-    Sorting happens inside a box rather than across all of them, because the
-    cost ordering is an optimisation and moving a row between boxes would
-    change the answer. Within a box the cheap rows run first for the same
-    reason they do everywhere else — an `or` satisfied by a header never opens
-    a response body, and an `and` that fails on one never opens it either.
+    Within each group the rows run cheapest first and nested groups run last,
+    for the same reason as everywhere else — an `or` satisfied by a header
+    never opens a response body, and an `and` that fails on one never opens it
+    either. Reordering inside a group cannot change its answer; moving
+    something between groups would, so nothing does.
   */
-  const groups = liveGroups(state);
-  if (groups.length) {
-    const hit = (g: { op: 'and' | 'or'; rows: Condition[] }) => {
-      const ordered = [...g.rows].sort(byCost);
-      return g.op === 'and'
-        ? ordered.every(c => matchesCondition(f, c))
-        : ordered.some(c => matchesCondition(f, c));
-    };
-    const ok = state.groupOp === 'and' ? groups.every(hit) : groups.some(hit);
-    if (!ok) return false;
-  }
+  const tree = liveTree(state);
+  if (tree && !matchesNode(f, tree)) return false;
   return matchesText(f, state.text);
+}
+
+function costOf(node: ConditionNode): number {
+  return isGroup(node) ? 100 : COST[node.field];
+}
+
+function matchesNode(f: HistoryFacts, node: ConditionNode): boolean {
+  if (!isGroup(node)) return matchesCondition(f, node);
+  const ordered = [...node.children].sort((a, b) => costOf(a) - costOf(b));
+  return node.op === 'and'
+    ? ordered.every(c => matchesNode(f, c))
+    : ordered.some(c => matchesNode(f, c));
 }
 
 export function matchesRow(row: HistoryRowLike, state: FilterState, ctx: MatchContext): boolean {

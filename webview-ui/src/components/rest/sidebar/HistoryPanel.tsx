@@ -19,7 +19,7 @@ import { MoreVerticalIcon, ClockIcon, ChevronRightIcon, ExternalLinkIcon, PlusSq
 import { logUiEvent } from '../../../store/ui-audit-store';
 import { FilterIcon } from '../../../icons';
 import { useEnvStore } from '../../../store/env-store';
-import { EMPTY, activeCount } from '../../../services/history-filter/filter-model';
+import { EMPTY, activeCount, emptyRoot } from '../../../services/history-filter/filter-model';
 import { applyFilter, contextOf } from '../../../services/history-filter/matcher';
 import { buildSavedIndex } from '../../../services/history-filter/saved-index';
 import { HistoryFilterPopup } from './HistoryFilterPopup';
@@ -145,8 +145,7 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
     setSearch('');
     setFilter({
       terms: [{ field: 'ids', values: rowIds.map(String) }],
-      groups: [],
-      groupOp: 'and',
+      root: emptyRoot(),
       text: '',
     });
   };

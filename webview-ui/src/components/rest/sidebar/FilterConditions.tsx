@@ -15,22 +15,21 @@
  * in the heading is a caption for something already visible rather than the
  * only place it exists.
  *
- * ── Two levels, and the operator lives on the box ──
+ * ── Every chip changes exactly the gap it sits in ──
  *
- * A box has one operator and it applies to every row in it: **ANY OF** means
- * any row may match, **ALL OF** means all must. The chips between the rows and
- * the heading above them are the same control said twice — both flip the box —
- * because the operator belongs to the box rather than to a particular gap.
+ * The chip between two neighbours flips *that* relationship and nothing else.
+ * In `1 and 2 and 3`, the chip between 2 and 3 gives `1 and (2 or 3)`, drawn
+ * as an ANY OF box inside the ALL OF box; clicking the chip inside that inner
+ * box gives `1 and 2 and 3` back. Two neighbours that are the only children of
+ * a box *are* the box's relationship, so there the chip flips the box.
  *
- * Between boxes there is one more operator, `groupOp`, and the chip between any
- * two boxes flips it. That is why every between-box chip reads the same word:
- * there is only one of them.
+ * Earlier versions let the chip answer about a bigger unit than the one it sat
+ * in — the whole box, or the whole run — and each time somebody pointed at one
+ * gap and watched a different one change. The model is a tree now for exactly
+ * this reason; see `flipGap`.
  *
- * An earlier attempt let each *gap* carry its own operator and derived the
- * boxes from the sequence. It could not express an ALL OF box ORed with an ANY
- * OF one — flipping the operator between two boxes collapsed them into one —
- * and while it looked like it could, the picture and the meaning had come
- * apart. See `filter-model` for why two levels is where this stops.
+ * The heading on a box (ANY OF / ALL OF) flips every gap in it at once, for
+ * when that is what you mean.
  *
  * ── Uniform control heights ──
  *
@@ -44,8 +43,10 @@ import { useRef, useState } from 'react';
 import { ContextMenuView, SelectInputView } from '@salilvnair/dui';
 import { PlusIcon, TrashIcon } from '../../../icons';
 import {
-  NULLARY, OPERATORS, addCondition, addToGroup, dropCondition, setCondition, setGroupOp,
-  type Condition, type ConditionField, type ConditionGroup, type FilterState, type Operator,
+  NULLARY, OPERATORS, addCondition, addToGroup, dropCondition, flipGap, isGroup,
+  setCondition, setGroupOp, wrapWith,
+  type Condition, type ConditionField, type ConditionGroup, type ConditionNode,
+  type FilterState, type Op, type Operator,
 } from '../../../services/history-filter/filter-model';
 import { CONDITION_LOOK } from './filter-icons';
 
@@ -304,38 +305,41 @@ export function FilterConditions({ state, onChange, fields, hint, addLabel }: {
   hint: string;
   addLabel: string;
 }) {
-  const visible = (c: Condition) => fields.includes(c.field);
-  /*
-    Runs are built from what has been typed *and* what has not: `bracket` drops
-    rows with nothing in them because they match nothing, which is right for
-    the matcher and wrong here — a fresh row would be drawn outside any box and
-    so without the box's add button, at exactly the moment somebody wants it.
-
-    Filtered to this tab's fields first, so a run whose rows all live on
-    another tab simply does not appear here.
-  */
   const patch = (next: Condition) => onChange(setCondition(state, next));
   const remove = (id: string) => onChange(dropCondition(state, id));
 
-  const groups = state.groups
-    .map(g => ({ ...g, rows: g.rows.filter(visible) }))
-    .filter(g => g.rows.length > 0);
+  /*
+    What this tab can see: the real tree with other tabs' rows cut out, and any
+    bracket left empty by that dropped. Half-typed rows stay — the panel has to
+    keep drawing the row somebody is typing into.
 
-  const tone = (op: 'and' | 'or') => (op === 'or'
+    The chips still act on the real tree by id, so a gap between two rows that
+    look adjacent here but are not adjacent there falls back to flipping their
+    group, which is the only honest reading of it (see `flipGap`).
+  */
+  const visible = (node: ConditionNode): ConditionNode | undefined => {
+    if (!isGroup(node)) return fields.includes(node.field) ? node : undefined;
+    const children = node.children.map(visible).filter((c): c is ConditionNode => !!c);
+    return children.length ? { ...node, children } : undefined;
+  };
+  const shown = visible(state.root);
+  const top: ConditionNode[] = shown && isGroup(shown) ? shown.children : [];
+
+  /*
+    Each word has its own colour, so the two kinds of box read apart at a
+    glance: `or` the teal accent, `and` the indigo slate the save-suggestion
+    card is drawn in. `and` used to be plain grey, which made an ALL OF box
+    look like no box at all next to a tinted ANY OF one.
+  */
+  const tone = (op: Op) => (op === 'or'
     ? 'var(--color-accent, var(--color-primary))'
-    : 'var(--color-text-muted)');
+    : 'var(--color-primary)');
 
-  /**
-   * The chip that shows an operator and flips it.
-   *
-   * Drawn the same between two rows of one box and between two boxes, because
-   * it is the same kind of statement in both places — the only difference is
-   * which operator it is bound to.
-   */
-  const OpChip = ({ op, onFlip, title }: {
-    op: 'and' | 'or'; onFlip: () => void; title: string;
+  /** The chip in a gap. Same look everywhere, because it is the same verb. */
+  const OpChip = ({ op, onFlip, title, indent }: {
+    op: Op; onFlip: () => void; title: string; indent: number;
   }) => (
-    <div className="flex items-center gap-1.5" style={{ padding: '3px 0', marginLeft: FIELD_INDENT }}>
+    <div className="flex items-center gap-1.5" style={{ padding: '3px 0', marginLeft: indent }}>
       <button
         type="button"
         onClick={onFlip}
@@ -345,24 +349,25 @@ export function FilterConditions({ state, onChange, fields, hint, addLabel }: {
           color: tone(op),
           fontWeight: 700,
           lineHeight: '15px',
-          border: `1px solid color-mix(in srgb, ${tone(op)} ${op === 'or' ? 45 : 28}%, transparent)`,
-          background: op === 'or' ? `color-mix(in srgb, ${tone(op)} 14%, transparent)` : 'transparent',
+          border: `1px solid color-mix(in srgb, ${tone(op)} 45%, transparent)`,
+          background: `color-mix(in srgb, ${tone(op)} 14%, transparent)`,
         }}
       >
         {op}
       </button>
       <span style={{ flex: 1, height: 1,
-                     background: op === 'or'
-                       ? `color-mix(in srgb, ${tone(op)} 25%, transparent)`
-                       : 'var(--color-surface-border)' }} />
+                     background: `color-mix(in srgb, ${tone(op)} 25%, transparent)` }} />
     </div>
   );
 
-  /** `+ and` / `+ or`, adding a row into an existing box. */
-  const AddRow = ({ group, op }: { group: ConditionGroup; op: 'and' | 'or' }) => (
+  const gapTitle = (op: Op) => (op === 'or'
+    ? 'Either side may match — click to require both (only these two)'
+    : 'Both sides must match — click to accept either (only these two)');
+
+  const AddButton = ({ op, onAdd }: { op: Op; onAdd: () => void }) => (
     <button
       type="button"
-      onClick={() => onChange(addToGroup(state, group.id, group.rows[group.rows.length - 1]?.field, op))}
+      onClick={onAdd}
       title={op === 'or'
         ? 'Add a row this box will accept as an alternative'
         : 'Add a row this box will also require'}
@@ -377,98 +382,103 @@ export function FilterConditions({ state, onChange, fields, hint, addLabel }: {
     </button>
   );
 
+  const boxStyle = (op: Op | undefined, nested: boolean): React.CSSProperties => ({
+    border: op
+      ? `1px solid color-mix(in srgb, ${tone(op)} 30%, transparent)`
+      : '1px solid var(--color-surface-border)',
+    background: op
+      ? `color-mix(in srgb, ${tone(op)} ${nested ? 9 : 7}%, var(--color-surface))`
+      : 'transparent',
+    borderRadius: 6,
+    padding: BLOCK_PAD,
+  });
+
+  /**
+   * One box: a group's heading, its children with a chip in every gap, and
+   * its add buttons. Nested groups are boxes inside it, drawn by the same
+   * function, so a bracket three levels down looks and behaves like one at
+   * the top.
+   */
+  const renderGroup = (group: ConditionGroup, nested: boolean): React.ReactNode => {
+    const last = group.children[group.children.length - 1];
+    const lastField = last && !isGroup(last) ? last.field : fields[0];
+    return (
+      <div style={boxStyle(group.op, nested)}>
+        <button
+          type="button"
+          onClick={() => onChange(setGroupOp(state, group.id, group.op === 'or' ? 'and' : 'or'))}
+          title={group.op === 'or'
+            ? 'Any of these may match — click to require all of them'
+            : 'All of these must match — click to accept any of them'}
+          className="text-[9px] uppercase tracking-wider pb-0.5 cursor-pointer border-none bg-transparent block text-left"
+          style={{ color: tone(group.op), fontWeight: 700 }}
+        >
+          {group.op === 'or' ? 'any of' : 'all of'}
+        </button>
+
+        {group.children.map((child, i) => (
+          <div key={child.id}>
+            {i > 0 && (
+              <OpChip
+                op={group.op}
+                indent={FIELD_INDENT}
+                title={gapTitle(group.op)}
+                onFlip={() => onChange(flipGap(state, group.id, group.children[i - 1].id, child.id))}
+              />
+            )}
+            {isGroup(child)
+              ? <div style={{ marginLeft: FIELD_INDENT }}>{renderGroup(child, true)}</div>
+              : <ConditionRow c={child} onChange={patch} onRemove={() => remove(child.id)} />}
+          </div>
+        ))}
+
+        <div className="pt-1 flex gap-1" style={{ paddingLeft: FIELD_INDENT }}>
+          <AddButton op={group.op}
+                     onAdd={() => onChange(addToGroup(state, group.id, lastField, group.op))} />
+        </div>
+      </div>
+    );
+  };
+
+  /**
+   * A lone row at the top level, drawn as a box of one. It has no operator to
+   * name yet, so it offers both — the choice decides what kind of box it
+   * becomes.
+   */
+  const renderLone = (c: Condition) => (
+    <div style={boxStyle(undefined, false)}>
+      <ConditionRow c={c} onChange={patch} onRemove={() => remove(c.id)} />
+      <div className="pt-1 flex gap-1" style={{ paddingLeft: FIELD_INDENT }}>
+        <AddButton op="and" onAdd={() => onChange(wrapWith(state, c.id, c.field, 'and'))} />
+        <AddButton op="or" onAdd={() => onChange(wrapWith(state, c.id, c.field, 'or'))} />
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex flex-col" style={{ padding: '2px 10px 0' }}>
-      {!groups.length && (
+      {!top.length && (
         <span className="py-1 text-[11px] leading-snug block"
               style={{ color: 'var(--color-text-muted)' }}>
           {hint}
         </span>
       )}
 
-      {groups.map((group, i) => {
-        const multi = group.rows.length > 1;
-        const boxed = multi && group.op === 'or';
-        return (
-          <div key={group.id}>
-            {/*
-              The one operator between boxes. Every chip here shows the same
-              word and flips the same thing, because in a two-level model there
-              is exactly one operator at this level.
-            */}
-            {i > 0 && (
-              <OpChip
-                op={state.groupOp}
-                title={state.groupOp === 'or'
-                  ? 'Any box may match — click to require every box'
-                  : 'Every box must match — click to accept any one of them'}
-                onFlip={() => onChange({
-                  ...state, groupOp: state.groupOp === 'or' ? 'and' : 'or',
-                })}
-              />
-            )}
-
-            <div style={{
-              border: boxed
-                ? `1px solid color-mix(in srgb, ${tone('or')} 30%, transparent)`
-                : '1px solid var(--color-surface-border)',
-              background: boxed
-                ? `color-mix(in srgb, ${tone('or')} 5%, transparent)`
-                : 'transparent',
-              borderRadius: 6,
-              padding: BLOCK_PAD,
-            }}>
-              {/* The heading names the box and flips it. A box of one relates
-                  to nothing, so there is nothing for a label to say. */}
-              {multi && (
-                <button
-                  type="button"
-                  onClick={() => onChange(setGroupOp(state, group.id, group.op === 'or' ? 'and' : 'or'))}
-                  title={group.op === 'or'
-                    ? 'Any of these may match — click to require all of them'
-                    : 'All of these must match — click to accept any of them'}
-                  className="text-[9px] uppercase tracking-wider pb-0.5 cursor-pointer border-none bg-transparent block text-left"
-                  style={{ color: tone(group.op), fontWeight: 700 }}
-                >
-                  {group.op === 'or' ? 'any of' : 'all of'}
-                </button>
-              )}
-
-              {group.rows.map((c, j) => (
-                <div key={c.id}>
-                  {j > 0 && (
-                    <OpChip
-                      op={group.op}
-                      title={group.op === 'or'
-                        ? 'Any row in this box may match — click to require all of them'
-                        : 'Every row in this box must match — click to accept any of them'}
-                      onFlip={() => onChange(setGroupOp(state, group.id, group.op === 'or' ? 'and' : 'or'))}
-                    />
-                  )}
-                  <ConditionRow c={c} onChange={patch} onRemove={() => remove(c.id)} />
-                </div>
-              ))}
-
-              {/*
-                A box of one has not committed to an operator yet, so it offers
-                both and the choice decides what kind of box it becomes. Once
-                it has two rows the operator is settled and shown, and there is
-                only one sensible thing to add.
-              */}
-              <div className="pt-1 flex gap-1" style={{ paddingLeft: FIELD_INDENT }}>
-                {multi ? (
-                  <AddRow group={group} op={group.op} />
-                ) : (
-                  <>
-                    <AddRow group={group} op="and" />
-                    <AddRow group={group} op="or" />
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })}
+      {top.map((node, i) => (
+        <div key={node.id}>
+          {/* The gap between two top-level boxes — the same chip, with the
+              same rule, acting on the root. */}
+          {i > 0 && (
+            <OpChip
+              op={state.root.op}
+              indent={0}
+              title={gapTitle(state.root.op)}
+              onFlip={() => onChange(flipGap(state, state.root.id, top[i - 1].id, node.id))}
+            />
+          )}
+          {isGroup(node) ? renderGroup(node, false) : renderLone(node)}
+        </div>
+      ))}
 
       <div className="pt-2">
         <AddCondition
@@ -480,4 +490,3 @@ export function FilterConditions({ state, onChange, fields, hint, addLabel }: {
     </div>
   );
 }
-

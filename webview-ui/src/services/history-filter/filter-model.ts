@@ -153,98 +153,179 @@ export function isUsable(c: Condition): boolean {
 // ── Groups ──────────────────────────────────────────────────────────────────
 
 /**
- * A box of rows that share one operator.
+ * The conditions, as a tree of brackets.
  *
- * ── Why the model has two levels, and why one was not enough ──
+ * ── Why a tree, after two attempts that were not ──
  *
- * The first design stored a join on each row and derived the structure from the
- * sequence of joins. That is a *flat* model: a list of OR-brackets, ANDed. It
- * can say `A and (B or C)`. It cannot say `(A and B) or C`, because an OR
- * between an AND-group and anything else is a nesting, and there was no nesting
- * to hold it.
+ * The first design stored a join on every row. That is flat: a list of
+ * OR-brackets, ANDed. It could not say `(A and B) or C`.
  *
- * The panel, meanwhile, drew boxes — and boxes imply exactly that nesting. So
- * an ALL OF box with an `OR` above an ANY OF box *looked* like `(A and B) or
- * (C or D)` and actually evaluated as `A and (B or C or D)`. The picture and
- * the meaning had come apart, and the giveaway was that flipping the operator
- * between two boxes collapsed one into the other — the model was re-deriving
- * boxes it could not really represent.
+ * The second had two fixed levels: rows in a box shared one operator, and
+ * boxes shared another. It could say `(A and B) or (C or D)`. It could not say
+ * `A and (B or C)` *inside one box*, because a box had exactly one operator, so
+ * the chip between B and C could only flip the whole box. Asking for `1 and
+ * (2 or 3)` turned `1 and 2 and 3` into `1 or 2 or 3`.
  *
- * Two levels fix it and stop there. Rows combine inside a group with the
- * group's operator; groups combine with each other using `groupOp`. That is
- * unambiguous with no precedence rules to learn, it is exactly the shape the
- * panel already drew, and it covers every arrangement anybody has asked for.
- * Arbitrary nesting would buy expressions nobody can read off a sidebar.
+ * Both failures had the same shape: the reader pointed at one gap and the model
+ * could only answer about a bigger unit. So the unit is now the gap. A group
+ * holds conditions *and other groups*, and the chip between two neighbours
+ * changes those two neighbours and nothing else (see `flipGap`). How deep it
+ * goes is decided by what people click, not by a limit in here.
  */
+export type Op = 'and' | 'or';
+
 export interface ConditionGroup {
   /** Stable across edits, so React boxes keep their identity. */
   id: string;
-  /** How the rows inside this box combine. */
-  op: 'and' | 'or';
-  rows: Condition[];
+  /** How the children of this group combine. */
+  op: Op;
+  children: ConditionNode[];
+}
+
+export type ConditionNode = Condition | ConditionGroup;
+
+export function isGroup(node: ConditionNode): node is ConditionGroup {
+  return 'children' in node;
 }
 
 let nextGroupId = 0;
 
-export function newGroup(rows: Condition[] = [], op: 'and' | 'or' = 'or'): ConditionGroup {
-  return { id: `g${++nextGroupId}`, op, rows };
+export function newGroup(children: ConditionNode[] = [], op: Op = 'and'): ConditionGroup {
+  return { id: `g${++nextGroupId}`, op, children };
 }
+
+const flip = (op: Op): Op => (op === 'and' ? 'or' : 'and');
 
 // ── The whole state ─────────────────────────────────────────────────────────
 
 export interface FilterState {
   terms: Term[];
-  groups: ConditionGroup[];
-  /** How the groups combine with each other. */
-  groupOp: 'and' | 'or';
+  /**
+   * The top bracket. Its children are what the panel draws as separate boxes,
+   * and its `op` is the word between those boxes.
+   */
+  root: ConditionGroup;
   /** The free-text box. Searches method, URL, and both bodies. */
   text: string;
 }
 
-export const EMPTY: FilterState = { terms: [], groups: [], groupOp: 'and', text: '' };
+export const ROOT_ID = 'root';
+
+export function emptyRoot(op: Op = 'and'): ConditionGroup {
+  return { id: ROOT_ID, op, children: [] };
+}
+
+export const EMPTY: FilterState = { terms: [], root: emptyRoot(), text: '' };
 
 /** Every row in the filter, in reading order. */
 export function allRows(state: FilterState): Condition[] {
-  return state.groups.flatMap(g => g.rows);
+  const out: Condition[] = [];
+  const walk = (n: ConditionNode) => { if (isGroup(n)) n.children.forEach(walk); else out.push(n); };
+  walk(state.root);
+  return out;
 }
 
 /**
- * The groups that actually constrain anything.
+ * The part of the tree that actually constrains anything.
  *
- * A group whose rows are all half-typed matches nothing yet, so it is dropped
- * rather than counted — which matters most under `groupOp: 'or'`, where an
- * empty group left in would be an alternative that is trivially satisfied and
- * would quietly match the whole table.
+ * Half-typed rows match nothing yet, so they are cut, and a bracket left with
+ * nothing in it goes with them — which matters most under `or`, where an empty
+ * alternative would be trivially satisfied and quietly match the whole table.
+ * A bracket left holding one thing is that thing: the parentheses round a
+ * single clause say nothing.
  */
-export function liveGroups(state: FilterState): { op: 'and' | 'or'; rows: Condition[] }[] {
-  return state.groups
-    .map(g => ({ op: g.op, rows: g.rows.filter(isUsable) }))
-    .filter(g => g.rows.length > 0);
+export function prune(node: ConditionNode): ConditionNode | undefined {
+  if (!isGroup(node)) return isUsable(node) ? node : undefined;
+  const children = node.children.map(prune).filter((c): c is ConditionNode => !!c);
+  if (!children.length) return undefined;
+  if (children.length === 1) return children[0];
+  return { ...node, children };
+}
+
+export function liveTree(state: FilterState): ConditionNode | undefined {
+  return prune(state.root);
 }
 
 export function isEmpty(state: FilterState): boolean {
-  return state.terms.length === 0
-    && liveGroups(state).length === 0
-    && state.text.trim() === '';
+  return state.terms.length === 0 && !liveTree(state) && state.text.trim() === '';
 }
 
 /** How many things a reader would say are switched on — the badge on the icon. */
 export function activeCount(state: FilterState): number {
   return state.terms.length
-    + liveGroups(state).reduce((n, g) => n + g.rows.length, 0)
+    + allRows(state).filter(isUsable).length
     + (state.text.trim() ? 1 : 0);
 }
 
-/** How the filter reads out loud: `(1 and 2) or (3 or 4)`. */
+/** How the filter reads out loud: `1 and (2 or 3)`. */
 export function describeStructure(state: FilterState): string {
-  const groups = liveGroups(state);
-  if (!groups.length) return '';
+  const tree = liveTree(state);
+  if (!tree) return '';
   let n = 0;
-  const parts = groups.map(g => {
-    const nums = g.rows.map(() => `${++n}`);
-    return nums.length > 1 ? `(${nums.join(` ${g.op} `)})` : nums[0];
-  });
-  return parts.join(` ${state.groupOp} `);
+  const say = (node: ConditionNode, top: boolean): string => {
+    if (!isGroup(node)) return `${++n}`;
+    const inner = node.children.map(c => say(c, false)).join(` ${node.op} `);
+    return top ? inner : `(${inner})`;
+  };
+  return say(tree, true);
+}
+
+// ── Walking the tree ────────────────────────────────────────────────────────
+
+function mapGroups(node: ConditionGroup, fn: (g: ConditionGroup) => ConditionGroup): ConditionGroup {
+  const children = node.children.map(c => (isGroup(c) ? mapGroups(c, fn) : c));
+  return fn({ ...node, children });
+}
+
+/** The group directly holding `id`, and where in it. */
+function parentOf(root: ConditionGroup, id: string): { parent: ConditionGroup; index: number } | undefined {
+  const i = root.children.findIndex(c => c.id === id);
+  if (i >= 0) return { parent: root, index: i };
+  for (const c of root.children) {
+    if (isGroup(c)) {
+      const hit = parentOf(c, id);
+      if (hit) return hit;
+    }
+  }
+  return undefined;
+}
+
+function findGroup(root: ConditionGroup, id: string): ConditionGroup | undefined {
+  if (root.id === id) return root;
+  for (const c of root.children) {
+    if (isGroup(c)) {
+      const hit = findGroup(c, id);
+      if (hit) return hit;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Tidy the tree after a change: drop empty brackets, and replace any bracket
+ * holding a single thing with that thing. The root is never replaced, only
+ * emptied.
+ *
+ * Unlike `prune` this keeps half-typed rows — the panel has to keep drawing
+ * a row somebody is still typing into.
+ */
+function normalise(root: ConditionGroup): ConditionGroup {
+  const tidy = (node: ConditionGroup): ConditionNode[] => {
+    const children: ConditionNode[] = [];
+    for (const c of node.children) {
+      if (!isGroup(c)) { children.push(c); continue; }
+      const inner = tidy(c);
+      if (inner.length === 0) continue;
+      if (inner.length === 1) { children.push(inner[0]); continue; }
+      children.push({ ...c, children: inner });
+    }
+    return children;
+  };
+  return { ...root, children: tidy(root) };
+}
+
+function withRoot(state: FilterState, root: ConditionGroup): FilterState {
+  return { ...state, root: normalise(root) };
 }
 
 // ── Changing it ─────────────────────────────────────────────────────────────
@@ -289,52 +370,119 @@ export function dropField(state: FilterState, field: TermField): FilterState {
 }
 
 export function setCondition(state: FilterState, next: Condition): FilterState {
-  return {
-    ...state,
-    groups: state.groups.map(g => ({
-      ...g,
-      rows: g.rows.map(c => (c.id === next.id ? next : c)),
-    })),
-  };
+  const swap = (g: ConditionGroup) => ({
+    ...g, children: g.children.map(c => (!isGroup(c) && c.id === next.id ? next : c)),
+  });
+  return { ...state, root: mapGroups(state.root, swap) };
 }
 
-/** A new row in a box of its own — what the main add button makes. */
+/** A new row of its own at the top level — what the main add button makes. */
 export function addCondition(state: FilterState, field?: ConditionField): FilterState {
-  return { ...state, groups: [...state.groups, newGroup([newCondition(field)])] };
+  return { ...state, root: { ...state.root, children: [...state.root.children, newCondition(field)] } };
 }
 
-/** A new row inside an existing box, beside the ones already there. */
+/** A new row at the end of an existing group, which takes `op` if given. */
 export function addToGroup(
-  state: FilterState, groupId: string, field?: ConditionField, op?: 'and' | 'or',
+  state: FilterState, groupId: string, field?: ConditionField, op?: Op,
 ): FilterState {
-  return {
-    ...state,
-    groups: state.groups.map(g => (g.id === groupId
-      ? { ...g, op: op ?? g.op, rows: [...g.rows, newCondition(field)] }
-      : g)),
-  };
-}
-
-export function setGroupOp(state: FilterState, groupId: string, op: 'and' | 'or'): FilterState {
-  return {
-    ...state,
-    groups: state.groups.map(g => (g.id === groupId ? { ...g, op } : g)),
-  };
+  const add = (g: ConditionGroup) => (g.id === groupId
+    ? { ...g, op: op ?? g.op, children: [...g.children, newCondition(field)] }
+    : g);
+  return { ...state, root: mapGroups(state.root, add) };
 }
 
 /**
- * Remove one row, and the box with it if that was the last one in it.
+ * A new row joined to one row that has no box of its own yet.
  *
- * An empty box left behind is a control that constrains nothing and cannot be
- * got rid of — the bin is on the rows, not on the box.
+ * A lone row at the top level is drawn as a box of one, and its `+ and` /
+ * `+ or` buttons mean "make this a box of two". So the row and its new
+ * neighbour are wrapped together, rather than the new row landing at the top
+ * level under whatever the top-level word happens to be.
  */
+export function wrapWith(state: FilterState, conditionId: string, field: ConditionField, op: Op): FilterState {
+  const at = parentOf(state.root, conditionId);
+  if (!at) return state;
+  const target = at.parent.children[at.index];
+  const box = newGroup([target, newCondition(field)], op);
+  const wrap = (g: ConditionGroup) => (g.id === at.parent.id
+    ? { ...g, children: g.children.map((c, i) => (i === at.index ? box : c)) }
+    : g);
+  return withRoot(state, mapGroups(state.root, wrap));
+}
+
+/**
+ * Set a group's operator.
+ *
+ * A bracket nested *inside* a box that ends up with the same word as the box
+ * around it is dissolved into it: `1 and (2 and 3)` is `1 and 2 and 3`, and
+ * leaving the inner brackets on screen would suggest they mean something. That
+ * is what makes clicking the chip inside a bracket an undo. Top-level boxes
+ * are left alone — they are yours, and a box you built should not vanish
+ * because it happens to agree with the word between the boxes.
+ */
+export function setGroupOp(state: FilterState, groupId: string, op: Op): FilterState {
+  let root = mapGroups(state.root, g => (g.id === groupId ? { ...g, op } : g));
+  const at = parentOf(root, groupId);
+  if (at && at.parent.id !== ROOT_ID && at.parent.op === op) {
+    const inner = findGroup(root, groupId)!;
+    root = mapGroups(root, g => (g.id === at.parent.id
+      ? { ...g, children: g.children.flatMap((c, i) => (i === at.index ? inner.children : [c])) }
+      : g));
+  }
+  return withRoot(state, root);
+}
+
+/**
+ * Flip the gap between two neighbours — and only that gap.
+ *
+ * - If the group holds exactly those two, the gap *is* the group's operator,
+ *   so the group flips.
+ * - Otherwise the two are pulled into a bracket of their own with the other
+ *   word: `1 and 2 and 3`, gap 2–3 → `1 and (2 or 3)`.
+ * - If one side is already a bracket with that word, the other joins it rather
+ *   than nesting a bracket in a bracket: `1 and (2 or 3) and 4`, gap
+ *   (2 or 3)–4 → `1 and (2 or 3 or 4)`.
+ *
+ * If the two are not adjacent in the real tree — which happens when a tab
+ * hides some rows — the only honest reading is the group's operator, so that
+ * flips instead.
+ */
+export function flipGap(state: FilterState, groupId: string, leftId: string, rightId: string): FilterState {
+  const group = findGroup(state.root, groupId);
+  if (!group) return state;
+  const i = group.children.findIndex(c => c.id === leftId);
+  const j = group.children.findIndex(c => c.id === rightId);
+  if (i < 0 || j !== i + 1 || group.children.length === 2) {
+    return setGroupOp(state, groupId, flip(group.op));
+  }
+
+  const target = flip(group.op);
+  const left = group.children[i];
+  const right = group.children[j];
+  let merged: ConditionNode[];
+  if (isGroup(left) && left.op === target) {
+    merged = [{ ...left, children: [...left.children, right] }];
+  } else if (isGroup(right) && right.op === target) {
+    merged = [{ ...right, children: [left, ...right.children] }];
+  } else {
+    merged = [newGroup([left, right], target)];
+  }
+
+  const next = (g: ConditionGroup) => (g.id === groupId
+    ? { ...g, children: [...g.children.slice(0, i), ...merged, ...g.children.slice(j + 1)] }
+    : g);
+  return withRoot(state, mapGroups(state.root, next));
+}
+
+/** Remove one row; brackets it leaves empty or single go with it. */
 export function dropCondition(state: FilterState, id: string): FilterState {
-  return {
-    ...state,
-    groups: state.groups
-      .map(g => ({ ...g, rows: g.rows.filter(c => c.id !== id) }))
-      .filter(g => g.rows.length > 0),
-  };
+  const drop = (g: ConditionGroup) => ({ ...g, children: g.children.filter(c => c.id !== id) });
+  return withRoot(state, mapGroups(state.root, drop));
+}
+
+/** Everything off, but the free text and the top-level word kept. */
+export function clearConditions(state: FilterState): FilterState {
+  return { ...state, terms: [], root: emptyRoot(state.root.op) };
 }
 
 function low(s: string) { return s.trim().toLowerCase(); }
@@ -358,14 +506,20 @@ export function formatQuery(state: FilterState): string {
     parts.push(`${t.negated ? '-' : ''}${t.field}:${t.values.join(',')}`);
   }
   /*
-    One token per box, its rows joined by the box's operator — `|` for or, `&`
-    for and. Boxes are separate tokens, which the parser ANDs by default; a
-    filter whose boxes are ORed says so with a leading `match:any`, because the
-    default has to stay the one nobody has to write down.
+    The conditions as expressions: `&` for and, `|` for or, brackets for
+    nesting. Each top-level box is its own space-separated token, and the
+    parser ANDs tokens by default — so a filter whose boxes are ORed says so
+    with a leading `match:any`, because the default has to stay the one nobody
+    has to write down.
   */
-  if (state.groupOp === 'or' && liveGroups(state).length > 1) parts.push('match:any');
-  for (const group of liveGroups(state)) {
-    parts.push(group.rows.map(oneCondition).join(group.op === 'or' ? '|' : '&'));
+  const tree = liveTree(state);
+  if (tree) {
+    const top = isGroup(tree) ? tree : undefined;
+    if (top && top.op === 'or' && top.id === ROOT_ID) parts.push('match:any');
+    const tokens = top && top.id === ROOT_ID
+      ? top.children.map(c => expression(c, false))
+      : [expression(tree, false)];
+    parts.push(...tokens);
   }
   const text = state.text.trim();
   if (text) parts.push(/\s/.test(text) ? `"${text}"` : text);
@@ -378,15 +532,22 @@ export function formatQuery(state: FilterState): string {
   "INR"` is the single most likely thing to go in a body condition, and naive
   quoting turned it into an empty string followed by rubbish.
 */
+function expression(node: ConditionNode, nested: boolean): string {
+  if (!isGroup(node)) return oneCondition(node);
+  const inner = node.children.map(c => expression(c, true)).join(node.op === 'and' ? '&' : '|');
+  return nested ? `(${inner})` : inner;
+}
+
 function oneCondition(c: Condition): string {
   const head = `${c.negated ? '-' : ''}${c.field}:${c.key}:${c.op}`;
   return NULLARY.has(c.op) ? head : `${head}:${quote(c.value)}`;
 }
 
 function quote(v: string): string {
-  /* `|` and `&` join the rows of a box, so a value holding either has to be
-     quoted or the string would split one condition into two. */
-  if (!/[\s"\\|&]/.test(v)) return v;
+  /* `|`, `&` and brackets are the grammar between conditions, so a value
+     holding any of them has to be quoted or one condition would come back as
+     several. */
+  if (!/[\s"\\|&()]/.test(v)) return v;
   return `"${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
@@ -404,34 +565,106 @@ function unquote(v: string): string {
  */
 export function parseQuery(input: string): FilterState {
   const terms: Term[] = [];
-  const groups: ConditionGroup[] = [];
+  const children: ConditionNode[] = [];
   const words: string[] = [];
-  let groupOp: 'and' | 'or' = 'and';
+  let rootOp: Op = 'and';
 
   for (const token of tokenise(input)) {
-    if (token === 'match:any') { groupOp = 'or'; continue; }
-    if (token === 'match:all') { groupOp = 'and'; continue; }
+    if (token === 'match:any') { rootOp = 'or'; continue; }
+    if (token === 'match:all') { rootOp = 'and'; continue; }
 
-    /* Which separator a token uses tells us the box's operator. A token with
-       neither is a box of one, whose operator is unobservable — `or`, so that
-       the box's add button offers the alternative people reach for most. */
-    const op: 'and' | 'or' = splitMembers(token, '&').length > 1 ? 'and' : 'or';
-    const members = splitMembers(token, op === 'and' ? '&' : '|');
+    /*
+      The expression reader goes first. `parseToken` would happily read
+      `body:text:contains:x|body:text:contains:y` as one condition whose value
+      is everything after the third colon, separators included — so a bracket
+      has to be recognised before anything tries to read the token whole.
+    */
+    const node = parseExpression(token);
+    if (node) { children.push(node); continue; }
 
-    const parsedMembers = members.map(parseToken);
-    if (members.length > 1 && parsedMembers.every(m => m && 'op' in m)) {
-      groups.push(newGroup(parsedMembers as Condition[], op));
-      continue;
-    }
-    const parsed = members.length === 1 ? parsedMembers[0] : undefined;
-    if (!parsed) { words.push(unquote(token)); continue; }
-    if ('op' in parsed) groups.push(newGroup([parsed], 'or'));
-    else terms.push(parsed);
+    /* A token with a bare `&`, `|` or bracket that did not parse as an
+       expression is malformed, not one condition with punctuation in its
+       value — reading it that way would be the silent misreading the refusal
+       above exists to prevent. It stays visible as search text instead. */
+    const single = hasBareGrammar(token) ? undefined : parseToken(token);
+    if (single && !('op' in single)) { terms.push(single); continue; }
+    if (single) { children.push(single); continue; }
+    words.push(unquote(token));
   }
 
-  return { terms, groups, groupOp, text: words.join(' ') };
+  return { terms, root: normalise({ id: ROOT_ID, op: rootOp, children }), text: words.join(' ') };
 }
 
+/** Does the token hold `&`, `|` or a bracket outside quotes? */
+function hasBareGrammar(token: string): boolean {
+  let quoted = false;
+  for (let i = 0; i < token.length; i++) {
+    const ch = token[i];
+    if (quoted && ch === '\\') { i++; continue; }
+    if (ch === '"') { quoted = !quoted; continue; }
+    if (!quoted && '&|()'.includes(ch)) return true;
+  }
+  return false;
+}
+
+/**
+ * One token of `&`, `|` and brackets, back into a tree.
+ *
+ * Mixing `&` and `|` at one level without brackets is refused rather than
+ * given a precedence: the formatter never writes it, and a guessed precedence
+ * is exactly the kind of silent misreading this string exists to avoid.
+ */
+function parseExpression(src: string): ConditionNode | undefined {
+  let i = 0;
+
+  const atom = (): string => {
+    let out = '';
+    let quoted = false;
+    while (i < src.length) {
+      const ch = src[i];
+      if (quoted && ch === '\\' && i + 1 < src.length) { out += ch + src[i + 1]; i += 2; continue; }
+      if (ch === '"') { quoted = !quoted; out += ch; i++; continue; }
+      if (!quoted && (ch === '&' || ch === '|' || ch === '(' || ch === ')')) break;
+      out += ch;
+      i++;
+    }
+    return out;
+  };
+
+  const sequence = (): ConditionNode | undefined => {
+    const items: ConditionNode[] = [];
+    let op: Op | undefined;
+    for (;;) {
+      let node: ConditionNode | undefined;
+      if (src[i] === '(') {
+        i++;
+        node = sequence();
+        if (src[i] !== ')') return undefined;
+        i++;
+      } else {
+        const text = atom();
+        const parsed = text ? parseToken(text) : undefined;
+        if (!parsed || !('op' in parsed)) return undefined;
+        node = parsed;
+      }
+      if (!node) return undefined;
+      items.push(node);
+      const ch = src[i];
+      if (ch === '&' || ch === '|') {
+        const next: Op = ch === '&' ? 'and' : 'or';
+        if (op && op !== next) return undefined;
+        op = next;
+        i++;
+        continue;
+      }
+      break;
+    }
+    return items.length === 1 ? items[0] : newGroup(items, op ?? 'and');
+  };
+
+  const node = sequence();
+  return node && i === src.length ? node : undefined;
+}
 function parseToken(token: string): Term | Condition | undefined {
   const m = token.match(/^(-?)([a-z]+):(.+)$/i);
   if (!m) return undefined;
@@ -474,29 +707,6 @@ function isConditionField(s: string): s is ConditionField {
 
 function isOperator(s: string): s is Operator {
   return (OPERATORS as readonly string[]).includes(s);
-}
-
-/**
- * Split a token on the separator that joins a box's rows, ignoring any inside
- * quotes.
- *
- * Written as a scan rather than a regex because the thing being skipped is a
- * quoted span with escapes in it, and a regex that got that subtly wrong would
- * fail on exactly the values people quote: the ones with punctuation.
- */
-function splitMembers(token: string, sep: string): string[] {
-  const out: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  for (let i = 0; i < token.length; i++) {
-    const ch = token[i];
-    if (inQuotes && ch === '\\' && i + 1 < token.length) { current += ch + token[++i]; continue; }
-    if (ch === '"') { inQuotes = !inQuotes; current += ch; continue; }
-    if (ch === sep && !inQuotes) { out.push(current); current = ''; continue; }
-    current += ch;
-  }
-  out.push(current);
-  return out.filter(Boolean);
 }
 
 /** Split on spaces, but not inside quotes — and an escaped quote is not a quote. */
