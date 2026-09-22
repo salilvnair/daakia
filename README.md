@@ -157,6 +157,16 @@ a redirect cap, whether `Authorization` survives a cross-origin redirect, SSL
 verification, encoding, and a proxy — each inheriting from the collection and
 then the global default unless you pin it here.
 
+**The proxy holds inside VS Code.** VS Code patches Node's networking for
+extensions and, under its default `http.proxySupport: override`, replaces the
+connection a request brings with its own — which, with no `http.proxy` of its
+own, goes direct, and an office firewall answers "proxy required" while
+`curl -x` works. Daakia opens the CONNECT tunnel itself, underneath that patch,
+for REST, GraphQL, SOAP and SSE, and applies the request's SSL setting to the
+TLS session inside the tunnel, so a firewall that re-signs HTTPS works with
+verification off. A 407 says whether the proxy wants credentials or refused
+them.
+
 ### GraphQL
 
 ![A GraphQL query against a live schema, with the Schema panel open](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/graphql.gif)
@@ -265,6 +275,11 @@ the converted script rather than pattern-matching it.
 **The debugger** sets breakpoints in the gutter, with conditional breakpoints,
 step over/into/out, a variables pane, and hover-to-inspect while paused.
 
+**One pipeline for every protocol.** REST, GraphQL, SOAP and gRPC run their
+scripts the same way — breakpoints included — and a variable a pre-request
+script sets reaches the same send: `dk.env.set('token', …)` followed by
+`{{token}}` in the Auth tab works on the first run, not the second.
+
 ---
 
 ## Collections, environments, variables, history
@@ -287,9 +302,37 @@ a delay, and a pass/fail report per assertion.
 switcher in the header. Values can be marked secret and stored in the Vault.
 Precedence runs request → collection → environment → global.
 
-**History** is every request the app has run, SQLite-backed, searchable, grouped
-by time, and re-openable into a tab. How many entries to keep and whether to
-store response bodies are both settings.
+**`{{` suggests everything, in every field.** Typing `{{` offers your collection
+and environment variables first (a secret shows the word *secret*, never its
+value), then the `{{$dynamic}}` values — `{{$randomUUID}}`,
+`{{$isoTimestamp}}` and the rest — then the template helpers with their
+signatures, such as `{{jsonPath request.body '$.orderId'}}`, evaluated against
+the request you are sending. Every value field draws them as coloured tokens — URL bars,
+headers, params, auth fields and Monaco bodies alike — a template in a JSON body
+is not flagged as a JSON error, and **Prettify** formats around it. The wiki has
+a page listing all of them, and the Scripts snippets carry them too.
+
+**History** is every request the app has run, SQLite-backed, grouped by time,
+and re-openable into a tab. It keeps 2,000 entries by default.
+
+- **Filter by anything in the request.** A panel laid out like the request
+  editor — Request, Headers, Body, Auth, Scripts — with facets that count live
+  (method, status, protocol, auth type, whether it is in a collection, when)
+  and conditions for the rest: `header authorization contains Bearer`,
+  `json $.orderId equals A-17`. Conditions group into **ALL OF** / **ANY OF**
+  boxes nested as deep as you need — `1 and (2 or 3)` — and every gap between
+  two rows is one AND/OR switch. Response bodies are always searched. The
+  filter round-trips as a query string you can paste.
+- **Save what you keep sending.** A request sent five times that is in no
+  collection gets a card offering to save it, with a name read off the path.
+- **Secret sweep.** A value you hold as a secret, found where secrets do not
+  belong — a query string, a response body, an ordinary header. A string
+  comparison, no model, and the card names the variable, never the value.
+- **First failing run.** For an endpoint still failing, the last good run and
+  the first bad one, diffed.
+- **Deleting says what it deletes** — the request or protocol, the workspace, and
+  that it goes to the [Bin](#git-sync-vault-bin) — and the tab counts follow the
+  data rather than the last workspace switch.
 
 ---
 
@@ -298,7 +341,25 @@ store response bodies are both settings.
 A workspace owns its collections, environments and history across every
 protocol, so two projects stop sharing one drawer. Open, import and export them;
 the rail says which one you are in; what you collapsed stays collapsed between
-sessions.
+sessions. Switching reloads every protocol's collections and history, not only
+REST's.
+
+**Share one with your team** through [Git Sync](#git-sync-vault-bin): ⚙ →
+**Share with team** publishes its collections and environments, secrets
+redacted and history never. In a teammate's switcher it appears under your
+name:
+
+- **Open it read-only.** Click it under your name and it opens as a copy that
+  follows your changes on every sync. Its collections and overview cannot be
+  changed — the controls are there but disabled, and the host refuses the edit
+  anyway — while sending its requests works and fills their own history, and
+  environments stay editable so they can fill in the secrets that arrive blank.
+  Stop sharing and it leaves their switcher on their next sync.
+- **Import shared** instead makes an editable workspace of their own: a dialog
+  shows its collections and environments, all ticked, and a name defaulting to
+  *Orders (by Priya)*.
+
+Settings → Git Sync has a switch to hide teammates' workspaces from the menu.
 
 ---
 
@@ -497,7 +558,8 @@ A registered chat participant, with `/request`, `/mock`, `/test`, `/curl` and
 - **Compare with clipboard** — right-click anything holding data.
 - **Response Visualization** — tables, images and PDFs rendered inline.
 - **Client Certificates**, **Cookie Manager**, **Proxy Settings** including the
-  operating system's proxy and PAC files.
+  operating system's proxy and PAC files — honoured inside VS Code too (see
+  [REST](#rest)).
 
 ---
 
@@ -533,15 +595,30 @@ node cli/daakia-run.mjs collection.json \
 
 ## Git Sync, Vault, Bin
 
-**Git Sync** commits your collections, environments, mock servers, history and
-AI config to a repository on an interval, each category individually switchable,
-with serialized sync cycles and a status card that says what actually happened.
+**Git Sync** commits your collections, environments, mock servers, history,
+themes and AI config to a repository — on an interval or on demand — each
+category individually switchable, with a status card that says what happened.
+
+- **A folder per person.** Each install has a sync id and a name — git's global
+  `user.name`, or your OS user — and writes only `users/<id>/`. Two people
+  syncing at the same time never touch the same file, so there is nothing for
+  git to conflict on; a sync fetches, writes your folder and pushes, retrying if
+  someone pushed first.
+- **Private by default.** Everything in your folder is imported only by you — on
+  your other machines, linked by pasting the same sync id. Private means private
+  from the app, not from `git clone`, so history leaves with credentials
+  redacted (auth headers, cookies, auth-tab values, secret variables,
+  `?api_key=`) and environments with secret values redacted.
+- **Sharing** is per workspace — see [Workspaces](#workspaces).
+- **Settings live in Daakia's database**, not VS Code's workspace settings, so
+  sync is configured once for every window and for the browser build.
 
 **Vault** encrypts secret environment values with AES-256-GCM, the passphrase
 held in the OS keychain. Secrets stay redacted across every export format.
 
 **Bin** is a 30-day soft delete for history, collections, mock servers and
-environments — deleting is recoverable.
+environments — deleting is recoverable, and a restore goes back to the workspace
+it was deleted from.
 
 ---
 
@@ -567,7 +644,10 @@ database explorer, a debug snapshot, and the request and session audit trails.
 
 Sixteen sections, searchable:
 
-**General** · **Theme** · **Keymap** — appearance, and the keyboard map.
+**General** · **Theme** · **Keymap** — appearance, and the keyboard map. Theme
+has custom palettes the way the terminal does: build one from thirteen colours
+with a live preview and contrast check, start from a file, copy one, drag to
+reorder. Palettes live in the database, so Git Sync carries them.
 
 **Mock Server** · **Git Sync** · **Vault** · **Bin** — the server side.
 
@@ -582,9 +662,10 @@ check.
 
 **Developer Tools** · **Power Features**.
 
-Fourteen settings are also exposed to VS Code's own `settings.json` under
-`daakia.*`, including `dbPath`, `requestTimeout`, `followRedirects`,
-`sslVerification`, `maxHistoryEntries` and the `gitSync.*` family.
+Six settings are also exposed to VS Code's own `settings.json` under
+`daakia.*`: `dbPath`, `requestTimeout`, `followRedirects`, `sslVerification`,
+`maxHistoryEntries` and `saveResponseInHistory`. Git Sync's moved into the
+database in 3.2.0 and are carried over on first run.
 
 ---
 
@@ -611,7 +692,7 @@ Database Location**, **Rebuild SQLite**, and the two Git Sync directions.
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │  VS Code extension host  (Node)                              │
-│  src/ — 337 files                                            │
+│  src/ — 444 files                                            │
 │                                                              │
 │  protocol clients · mock servers · SQLite · kubeconfig       │
 │  gh CLI · heap/thread/JFR analysers · importers/exporters    │
@@ -619,7 +700,7 @@ Database Location**, **Rebuild SQLite**, and the two Git Sync directions.
                             │  postMessage
 ┌───────────────────────────┴──────────────────────────────────┐
 │  Webview  (React 19 + TypeScript + Vite)                     │
-│  webview-ui/ — 742 files                                     │
+│  webview-ui/ — 895 files                                     │
 │                                                              │
 │  tabs · panels · Monaco · zustand stores · @salilvnair/dui   │
 └──────────────────────────────────────────────────────────────┘
@@ -638,10 +719,16 @@ Every interactive component takes a `testId`, which is what makes the whole app
 drivable by Playwright.
 
 **Storage** is SQLite (`sql.js`) at a path you can change, holding history,
-collections, environments, mock configs and audit trails. Secrets are the
-exception: those go to `SecretStorage`.
+collections, environments, themes, mock configs and audit trails. Secrets are
+the exception: those go to `SecretStorage`. The extension and the browser build
+can open the same file: saves are atomic (write, then rename), a process that
+sees another write reloads rather than saving its stale copy over it, and a
+change it has to set aside is kept beside the database as
+`daakia.db.conflict-<time>` rather than dropped.
 
-**Tests** — 165 test files across the extension host, the webview and the CLI.
+**Tests** — 261 test files across the extension host, the webview and the CLI,
+including VS Code end-to-end suites for read-only shared workspaces and for the
+proxy under VS Code's own proxy handling.
 
 ---
 

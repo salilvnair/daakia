@@ -4,6 +4,144 @@ All notable changes to the Daakia API Client extension are documented here.
 
 ---
 
+## [3.2.0] — 2026-09-22
+
+Working with other people: a Git Sync that cannot conflict, workspaces you can
+share, a proxy that holds inside VS Code, and a database two Daakias can open at
+once.
+
+Forty-six changes. Most of them are about what happens when there is more than
+one of something — two people syncing to one repository, two windows on one
+database, a teammate's workspace next to yours, a proxy between you and
+everything — and about History finally answering the questions people have of
+it.
+
+### Added — Sharing
+
+- **Git Sync gives each person a folder.** Every install has a sync id and a
+  name — git's global `user.name`, or the OS user — and writes only
+  `users/<id>/`. Two people syncing at the same moment never edit the same file,
+  so there is nothing for git to conflict on. The old layout failed the first
+  time two people sent requests between syncs, and then failed identically on
+  every retry.
+- **Private by default.** Only you import your own folder (on your other
+  machines, linked by pasting the same sync id). Because anyone who can clone
+  the repository can read it, history leaves with credentials redacted —
+  Authorization and cookie headers, auth-tab values, secret variables,
+  `?api_key=` — and environments with secret values redacted.
+- **Share a workspace with your team.** ⚙ → Share with team publishes its
+  collections and environments; history never goes. Teammates see it in their
+  switcher under your name.
+- **Open a teammate's workspace read-only.** It follows their changes on every
+  sync. You can send its requests — they fill your history — and fill in the
+  secrets that arrive blank; you cannot change its collections or overview.
+  When they stop sharing, it leaves your switcher.
+- **Import shared** makes an editable workspace of your own instead: a dialog
+  lists the collections and environments, all ticked, with a name defaulting to
+  "<name> (by <who>)".
+- **One editable flag per area** — overview, collections, environments,
+  history — decides what a workspace lets you change. Edit controls are
+  disabled with the reason, never hidden, and the host refuses the edit anyway.
+- **A switch to hide teammates' workspaces** from the menu, in Settings → Git
+  Sync, alongside who you are, your sync id, and who else is in the repository.
+
+### Added — History
+
+- **Filter history by anything in the request.** A panel laid out like the
+  request editor, with live facets (method, status, protocol, auth type, in a
+  collection, when) and conditions for everything else — headers, JSON paths,
+  body text, scripts, response bodies (always searched). Conditions group into
+  ALL OF / ANY OF boxes as deep as needed, `1 and (2 or 3)`, with one AND/OR
+  switch on every gap. The filter round-trips as a query string.
+- **Save what you keep sending.** Five sends, in no collection: a card offers to
+  save it, with a name read off the path.
+- **Secret sweep.** A secret found in a query string, a response body or an
+  ordinary header. String comparison, no model; the card names the variable,
+  never the value.
+- **First failing run.** For an endpoint that is still failing, the last good
+  run and the first bad one, diffed.
+
+### Added — Requests and variables
+
+- **`{{` suggests everything, in every field** — your variables first, then
+  `{{$dynamic}}` values, then template helpers with signatures — and every value
+  field draws them as coloured tokens, Monaco bodies included.
+- **Dynamic values and helpers work on requests you send**, not only in mocks:
+  `{{$randomUUID}}` in a header is a UUID on the wire, and
+  `{{jsonPath request.body '$.orderId'}}` reads the outgoing request.
+- **A wiki page and a Scripts snippet category** for dynamic values, generated
+  from the lists the app uses.
+
+### Added — Themes
+
+- **Custom app palettes**, the way the terminal already had them: thirteen seed
+  colours, the rest derived.
+- **One builder** for app and terminal palettes, with a preview and a contrast
+  check; start from the current theme, from a file, or copy a card.
+- **Drag to reorder palettes.**
+- **Palettes live in the database**, so Git Sync carries them.
+
+### Changed
+
+- **Git Sync's settings live in Daakia's database** instead of VS Code's
+  workspace settings. They were tied to whichever folder was open — with none
+  open, saving failed — and the browser build could not read them. Existing
+  values are carried over on first run; the nine `daakia.gitSync.*` entries are
+  gone from `settings.json`.
+- **A sync no longer rebases.** It fetches, resets Daakia's own clone to the
+  remote, writes your folder and pushes, retrying if someone pushed first.
+- **History keeps 2,000 entries by default.** Anyone who had saved any setting
+  was still on the old 500; that stored default is raised once.
+- **Deleting history goes to the Bin in the browser build too**, as it always
+  did in VS Code.
+- **Scripts: one pipeline for REST, GraphQL, SOAP and gRPC**, breakpoints
+  included.
+- **dk8s asks the cluster once.** Opening a pod fired 51 kubectl calls. Lookups
+  several features need are now made once and shared, nothing runs inside the
+  container just to read a log (the ten `kubectl exec` probes wait for the
+  screen that needs them), and the pod list is fetched with a template about
+  fifty times smaller than `-o json`. The cluster settings moved to the Cluster
+  page.
+- **dui 1.0.14 → 1.0.15:** URL suggestions that work mid-edit, and a colour
+  picker whose swatch fills its square.
+
+### Fixed
+
+- **A proxy set in Daakia was ignored inside VS Code.** VS Code's
+  `http.proxySupport: override` replaced Daakia's tunnel with its own
+  connection, which went direct; firewalls answered "proxy required" while
+  `curl -x` worked. Daakia now opens the tunnel itself for REST, GraphQL, SOAP
+  and SSE. A proxied request also honours SSL verification off, and a 407 says
+  whether the proxy wants credentials or refused them.
+- **The database could be overwritten with a stale or half-written copy.**
+  Saves wrote in place (the file was caught at 0 bytes mid-save), and the
+  extension and the browser build each wrote their own in-memory copy over the
+  other's. Saves are atomic now; a process that sees another write reloads; a
+  change it must set aside is kept as `daakia.db.conflict-<time>`. The dev
+  server saves before it restarts.
+- **Restoring from the Bin put things in whichever workspace was open.** It now
+  restores to the workspace they came from.
+- **Workspace tab counts went stale** after deleting, sending or saving; they
+  follow the data now. Delete dialogs say what they delete, which workspace, and
+  that it goes to the Bin — they claimed "permanently" and "all history".
+- **Switching workspace left other protocols' history and collections on
+  screen.** Only REST's were reloaded; AI's 110 entries showed in every
+  workspace.
+- **Git Sync's first sync failed** on a machine with no global git identity, and
+  against an empty remote; environments and themes did not refresh after a
+  sync; the browser build had no Git Sync at all.
+- **A variable a pre-request script sets reaches the same request** — the first
+  run sent `{{token}}` unresolved.
+- **SOAP and gRPC scripts never ran.** Both offered a Scripts tab and saved it;
+  neither handler called it.
+- **Prettify did nothing** for a JSON body in raw mode, and now formats around
+  `{{templates}}`. A template in a JSON body is no longer flagged as an error.
+- **Clicking a `{{` suggestion did nothing** — only Enter worked.
+- **The History filter closed itself** when you used its own dropdowns.
+- **The Token field** grew to three times the width of the select beside it.
+
+---
+
 ## [3.1.1] — 2026-09-17
 
 dk8s stops guessing: it says what it ran, finds what a pod still holds, and
