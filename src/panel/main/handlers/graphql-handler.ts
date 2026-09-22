@@ -1,6 +1,7 @@
 /**
  * GraphQL execution + introspection + subscription handler.
  */
+import { tunnelledAxiosOptions } from '../../../http/proxy-tunnel';
 import axios from 'axios';
 import https from 'https';
 import { type ProxyConfig } from '../../../services/proxy-config';
@@ -27,6 +28,11 @@ function graphqlProxy(url: string, resolved?: ResolvedSettings) {
  * so `sslVerification: false` and the trusted-host list applied to REST and
  * were ignored here.
  */
+/** Whether an agent from graphqlAgent verifies certificates — the tunnel needs the same answer. */
+function verifies(agent: https.Agent | undefined): boolean {
+  return (agent as unknown as { options?: { rejectUnauthorized?: boolean } } | undefined)?.options?.rejectUnauthorized !== false;
+}
+
 function graphqlAgent(url: string, resolved?: ResolvedSettings): https.Agent | undefined {
   let hostname: string;
   try {
@@ -143,7 +149,12 @@ export async function handleGraphQLConnect(
     const res = await axios.post(
       endpoint,
       { query: INTROSPECTION_QUERY },
-      { headers: reqHeaders, timeout: ((getSetting<Record<string, unknown>>('general') ?? {}).timeout as number | undefined) ?? 0, validateStatus: () => true, proxy: introspectionProxy.axiosProxy, httpsAgent: graphqlAgent(endpoint) },
+      {
+        headers: reqHeaders, timeout: ((getSetting<Record<string, unknown>>('general') ?? {}).timeout as number | undefined) ?? 0, validateStatus: () => true,
+        proxy: introspectionProxy.axiosProxy, httpsAgent: graphqlAgent(endpoint),
+        /* Through Daakia's own tunnel when a proxy applies — see http/proxy-tunnel.ts. */
+        ...tunnelledAxiosOptions(endpoint, introspectionProxy, { rejectUnauthorized: verifies(graphqlAgent(endpoint)), maxRedirects: 5 }),
+      },
     );
 
     if (res.status >= 400) {
@@ -375,6 +386,11 @@ export async function handleExecuteGraphQL(
         signal: controller.signal,
         proxy: gqlProxy.axiosProxy,
         httpsAgent: graphqlAgent(endpoint, resolved),
+        ...tunnelledAxiosOptions(endpoint, gqlProxy, {
+          rejectUnauthorized: verifies(graphqlAgent(endpoint, resolved)),
+          timeout: resolved.timeout,
+          maxRedirects: resolved.followRedirects ? 10 : 0,
+        }),
       },
     );
 

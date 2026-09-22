@@ -16,6 +16,16 @@ import net from 'net';
 import tls from 'tls';
 import type { ResolvedProxy } from './proxy-config';
 import { sniFor } from './tls-policy';
+import { createTunnelAgent } from '../http/proxy-tunnel';
+
+/*
+  Marks options that go through a proxy Daakia chose. transportFor() sends
+  those through http.ClientRequest directly: inside VS Code the http/https
+  module functions are patched (`http.proxySupport`, default "override") and
+  replace the request's agent with VS Code's own, which ignored this proxy and
+  went direct. See http/proxy-tunnel.ts.
+*/
+const VIA_DAAKIA_PROXY = Symbol('daakia.viaProxy');
 
 export interface TransportOptions {
   /** Routing decision from the shared resolver. */
@@ -66,49 +76,33 @@ export function requestOptions(
     if (viaProxy.auth) {
       (options.headers as Record<string, string>)['Proxy-Authorization'] = basicAuth(viaProxy.auth);
     }
+    (options as Record<symbol, boolean>)[VIA_DAAKIA_PROXY] = true;
     return options;
   }
 
   // An HTTPS target cannot be given to the proxy in the clear: the proxy opens
   // a raw tunnel with CONNECT and TLS is negotiated end-to-end through it, so
-  // the proxy never sees the request.
-  options.createConnection = ((_o: unknown, cb: (err: Error | null, sock?: net.Socket) => void) => {
-    const connect = http.request({
-      host: viaProxy.host,
-      port: viaProxy.port,
-      method: 'CONNECT',
-      path: `${url.hostname}:${targetPort}`,
-      headers: {
-        host: `${url.hostname}:${targetPort}`,
-        ...(viaProxy.auth ? { 'proxy-authorization': basicAuth(viaProxy.auth) } : {}),
-      },
-      ...(timeout !== undefined ? { timeout } : {}),
-    });
-    connect.on('connect', (res, socket) => {
-      if (res.statusCode !== 200) {
-        socket.destroy();
-        cb(new Error(`Proxy refused the CONNECT tunnel: ${res.statusCode} ${res.statusMessage ?? ''}`.trim()));
-        return;
-      }
-      cb(null, tls.connect({ socket, servername: sniFor(url.hostname), rejectUnauthorized: verifyCert }));
-    });
-    connect.on('error', (err) => cb(err));
-    connect.on('timeout', () => {
-      connect.destroy();
-      cb(new Error(`Proxy did not answer CONNECT within ${Math.round((timeout ?? 0) / 1000)}s`));
-    });
-    connect.end();
-    return undefined as unknown as net.Socket;   // the socket arrives via cb
-  }) as unknown as https.RequestOptions['createConnection'];
-
+  // the proxy never sees the request. The tunnel is an agent now rather than a
+  // createConnection hook — VS Code's patch substitutes its own agent, and an
+  // agent always wins over createConnection, so the hook was never reached.
+  options.agent = createTunnelAgent(viaProxy, { rejectUnauthorized: verifyCert, timeout });
+  (options as Record<symbol, boolean>)[VIA_DAAKIA_PROXY] = true;
   return options;
 }
 
 /** The transport to call `.request()` on, which is chosen by the TARGET's scheme. */
-export function transportFor(url: URL): typeof http | typeof https {
+export function transportFor(url: URL): {
+  request: (options: https.RequestOptions, cb?: (res: http.IncomingMessage) => void) => http.ClientRequest;
+} {
   // Note this is the target scheme, not the proxy's: a CONNECT tunnel carries
   // TLS end to end, so an https target stays https even via a plain proxy.
-  return url.protocol === 'https:' ? https : http;
+  const native = url.protocol === 'https:' ? https : http;
+  return {
+    request: (options, cb) => ((options as Record<symbol, boolean>)[VIA_DAAKIA_PROXY]
+      /* Not through the patched module function: see VIA_DAAKIA_PROXY. */
+      ? new http.ClientRequest({ ...options, protocol: url.protocol }, cb)
+      : native.request(options, cb)),
+  };
 }
 
 function basicAuth(auth: { username: string; password: string }): string {

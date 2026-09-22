@@ -5,6 +5,7 @@
 import axios, { AxiosRequestConfig, AxiosError } from 'axios';
 import { type ProxyConfig, type ResolvedProxy } from '../services/proxy-config';
 import { resolveProxyFor } from '../services/proxy-resolve';
+import { tunnelledAxiosOptions } from './proxy-tunnel';
 import { applyQueryEncoding, type QueryEncoding } from '../services/execution-settings';
 import * as fs from 'fs';
 import {
@@ -299,6 +300,23 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
       ? { httpsAgent: timedAgent.agent }
       : { httpAgent: timedAgent.agent }),
   };
+
+    /*
+      An HTTPS request through a proxy Daakia chose: tunnel it ourselves.
+
+      Handed to axios as `proxy`, the tunnel was built by axios and then — in
+      VS Code, under `http.proxySupport: override` — replaced by VS Code's
+      own agent, which went direct. See http/proxy-tunnel.ts. Plain HTTP stays
+      on axios's forward-proxy path: that request is addressed to the proxy
+      itself, which VS Code's patch leaves alone.
+    */
+    const tunnelled = tunnelledAxiosOptions(requestUrl, resolvedProxy, {
+      rejectUnauthorized,
+      timeout: params.timeout,
+      maxRedirects: config.maxRedirects ?? 5,
+      beforeRedirect: config.beforeRedirect as never,
+    });
+    if (tunnelled) Object.assign(config, tunnelled);
 
     const res = await axios(config);
     // Mark TTFB + download end for timing
