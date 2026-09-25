@@ -23,8 +23,9 @@
  * to the cluster is hidden by `isSnapshot`. What is left works on lines, and
  * works the same either way.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { IconSize, ModalView, ButtonView, CheckboxView } from '@salilvnair/dui';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { IconSize, ModalView, ButtonView, CheckboxView, ContextMenuView, type ContextMenuItem } from '@salilvnair/dui';
+import type { PodGroup } from '../../store/dk8s-search-store';
 import {
   TimeWindowPicker, windowError, windowOptions, type TimeWindow,
 } from './TimeWindow';
@@ -449,6 +450,75 @@ function DownloadModal({ lines, name, onClose }: {
  * search over six pods and a mode that holds three is a decision about which
  * three, and it should not be a surprise.
  */
+/**
+ * "Open logs": a searched pod's whole log, downloaded, in a new tab.
+ *
+ * A result holds each hit and a few lines around it — never the whole story of
+ * one thread or one request. This opens the pod's full log (live, and its
+ * archive where one is configured) in the Logs tab's own view, landed on the
+ * pod's first hit, where the filter runs over the whole download. Pods with
+ * hits come first; one pod opens straight away.
+ */
+function OpenFullLogs({ searched, groups }: { searched: SearchedPod[]; groups: PodGroup[] }) {
+  const [menu, setMenu] = useState(false);
+  const anchor = useRef<HTMLSpanElement>(null);
+  const openTab = useTabsStore(st => st.openDk8sLogFileTab);
+  const livePods = useK8sStore(st => st.pods);
+
+  const pods = useMemo(() => {
+    const firstHit = (t: SearchedPod) => groups
+      .find(g => g.result.pod === t.pod && g.result.namespace === t.namespace && g.result.context === t.context && g.matches.length)
+      ?.matches[0];
+    return searched
+      .map(t => ({ t, hit: firstHit(t), hits: groups.filter(g => g.result.pod === t.pod).reduce((n, g) => n + g.matches.length, 0) }))
+      .sort((a, b) => b.hits - a.hits);
+  }, [searched, groups]);
+
+  const open = (t: SearchedPod, hit?: { ts?: number; text: string }) => {
+    setMenu(false);
+    const live = livePods.find(p => p.name === t.pod && p.namespace === t.namespace && (p.context ?? '') === t.context);
+    logUiEvent('dk8s.results_open_full_log', { hit: !!hit });
+    openTab({
+      context: t.context, namespace: t.namespace, pod: t.pod,
+      container: t.containers.length === 1 ? t.containers[0] : undefined,
+      workload: live?.workload?.name,
+      focus: hit ? { ts: hit.ts, text: hit.text } : undefined,
+    });
+  };
+
+  if (!pods.length) return null;
+  const items: ContextMenuItem[] = pods.map(({ t, hit, hits }) => ({
+    id: `${t.context}/${t.namespace}/${t.pod}`,
+    label: t.pod,
+    description: hits ? `${hits.toLocaleString()} hit${hits === 1 ? '' : 's'} — opens at the first` : `no hits · ${t.namespace}`,
+    onClick: () => open(t, hit),
+  }));
+
+  return (
+    <span ref={anchor}>
+      <ButtonView
+        variant="secondary"
+        size="sm"
+        accentColor={ACCENT}
+        color={ACCENT}
+        title="Download a pod's whole log to a temporary file and open it in a new tab — deleted when you close the tab"
+        onClick={() => (pods.length === 1 ? open(pods[0].t, pods[0].hit) : setMenu(m => !m))}
+      >
+        Open logs{pods.length > 1 ? ' ▾' : ''}
+      </ButtonView>
+      <ContextMenuView
+        testId="dk8s-open-full-logs"
+        items={items}
+        anchorEl={anchor.current}
+        open={menu}
+        onClose={() => setMenu(false)}
+        align="right"
+        width="lg"
+      />
+    </span>
+  );
+}
+
 function SplitOpenResults({ searched }: { searched: SearchedPod[] }) {
   const [menu, setMenu] = useState(false);
   const openSplit = useSplitStore(s => s.open);
@@ -751,6 +821,7 @@ export function SearchResultsPage() {
         {/* No Shell: a shell goes into one pod, and this is a result from
             several. Following them all at once, though, is exactly what a
             result over several pods leads to — so that is offered here. */}
+        <OpenFullLogs searched={searched} groups={groups} />
         <SplitOpenResults searched={searched} />
 
         <button

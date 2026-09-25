@@ -18,6 +18,7 @@
  * Then open the webview-ui Vite dev server as usual — vscode.ts auto-detects
  * this server via WS handshake and routes all postMessage traffic through it.
  */
+import { cleanCaptures } from '../src/services/k8s/log-capture';
 import * as http from 'http';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -57,6 +58,9 @@ function loadRepoEnv(): void {
 
 async function main() {
   loadRepoEnv();
+  /* Downloaded logs are temporary — empty the folder on start and on exit. */
+  cleanCaptures();
+  process.on('exit', () => cleanCaptures());
   await initDb(EXTENSION_PATH);
   initMockServerManager(EXTENSION_PATH);
 

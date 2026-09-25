@@ -78,6 +78,30 @@ export type LogSource = Pick<K8sStore,
    * start and end and the burst lines up across the split.
    */
   sharedRange?: { from: number; to: number };
+  /**
+   * These lines are one window onto a longer list — a downloaded log of
+   * millions of lines the view could never hold at once.
+   *
+   * `first` is where `logs[0]` sits in the whole list and `total` how long it
+   * is. Scrolling near either edge asks for the next window, and the line at
+   * the top of the screen stays put while lines arrive above it or are dropped.
+   */
+  paging?: {
+    first: number;
+    total: number;
+    /** The list is still growing (a download or a filter still running). */
+    partial?: boolean;
+    loading?: 'earlier' | 'later';
+    loadEarlier: () => void;
+    loadLater: () => void;
+  };
+  /** A line to bring on screen and mark, for a source with no pod link to carry it. */
+  focusSeq?: number;
+  /**
+   * Told when the reader picks "±N lines around" — a paged source filters on
+   * the host, and has to bring those surrounding lines back with the hits.
+   */
+  onFindContext?: (n: number) => void;
 };
 
 const Ctx = createContext<LogSource | null>(null);

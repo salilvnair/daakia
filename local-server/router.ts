@@ -81,6 +81,7 @@ import {
   handleDk8sCollect, handleDk8sAnalyze, handleDk8sRevealArtifacts,
   handleDk8sLoadPv, handleDk8sSavePv, handleDk8sOpenLogFile, handleDk8sSetLogLineNumbers,
   handleDk8sScanLoggers,
+  handleDk8sCaptureStart, handleDk8sCaptureRead, handleDk8sCaptureFilter, handleDk8sCaptureLocate, handleDk8sCaptureClose,
 } from '../src/panel/main/handlers/k8s-handler';
 import {
   handleDk8sPodMounts, handleDk8sPvList, handleDk8sPvSearch, handleDk8sPodPicker,
@@ -521,6 +522,21 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
        without a path is a scan that cannot be run — say so rather than hang. */
     case 'dk8s:scanLoggers':
       void handleDk8sScanLoggers(msg, post);
+      break;
+    case 'dk8s:captureStart':
+      void handleDk8sCaptureStart(msg, post);
+      break;
+    case 'dk8s:captureRead':
+      handleDk8sCaptureRead(msg, post);
+      break;
+    case 'dk8s:captureFilter':
+      void handleDk8sCaptureFilter(msg, post);
+      break;
+    case 'dk8s:captureLocate':
+      handleDk8sCaptureLocate(msg, post);
+      break;
+    case 'dk8s:captureClose':
+      handleDk8sCaptureClose(msg);
       break;
     case 'dk8s:deleteArtifact':
       handleDk8sDeleteArtifact(msg, post);

@@ -15,7 +15,7 @@
  *   - Stack traces fold to one row. An unfolded Java exception costs a screen
  *     and a half, so three of them mean you never see the fourth.
  */
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   FilterInputView, SelectInputView, SegmentedControlView, CheckboxView, ButtonView,
   BadgeChipView, IconSize, SplitPanelView, DateTimeInputView } from '@salilvnair/dui';
@@ -670,6 +670,7 @@ export function LogViewer() {
        closes ITS view, and reaching past the source for either would act on
        whichever pod happened to be open behind it. */
     clearFieldFilters, closeDetail, isSnapshot, contextCap, sharedRange,
+    paging, focusSeq, onFindContext,
   } = useLogSource();
 
   /* Every "how many lines" ladder in this view, from Settings → DK8S → Logs. */
@@ -920,7 +921,7 @@ export function LogViewer() {
   const linkedLine = useK8sStore(s => s.linkedLine);
   const pendingLink = useK8sStore(s => s.pendingLink);
   const clearLinkedLine = useK8sStore(s => s.clearLinkedLine);
-  const linkedSeq = isSnapshot ? undefined : linkedLine?.seq;
+  const linkedSeq = focusSeq ?? (isSnapshot ? undefined : linkedLine?.seq);
 
 
   const chooseFold = useCallback((on: boolean) => {
@@ -975,6 +976,7 @@ export function LogViewer() {
     Starts at 0 — the old behaviour — so nobody's filter changes under them.
   */
   const [findContext, setFindContext] = useState(0);
+  useEffect(() => { onFindContext?.(findContext); }, [findContext, onFindContext]);
 
   /*
     Which widths this buffer can actually honour — see the note on the
@@ -1002,6 +1004,9 @@ export function LogViewer() {
 
   // Fold, then expand the ones the user opened. Expansion is keyed on the
   // heading line's seq so it survives new lines arriving above it.
+  const rowsRef = useRef<{ line: MatchedLine; folded?: MatchedLine[]; isFrame?: boolean }[]>([]);
+  const offsetsRef = useRef<Float64Array>(new Float64Array(1));
+  const rowAtRef = useRef<(y: number) => number>(() => 0);
   const rows = useMemo(() => {
     const folded = foldStackTraces(visible, foldTraces);
     const out: { line: MatchedLine; folded?: MatchedLine[]; isFrame?: boolean }[] = [];
@@ -1055,6 +1060,9 @@ export function LogViewer() {
   }, [rows, measuredAt]);
 
   const contentHeight = offsets[rows.length] || 0;
+  /* Read by onScroll, which is declared before these and must not re-create on every row change. */
+  rowsRef.current = rows;
+  offsetsRef.current = offsets;
 
   /** Binary search rather than a divide: heights are no longer uniform. */
   const rowAt = useCallback((y: number) => {
@@ -1067,6 +1075,7 @@ export function LogViewer() {
     return Math.min(lo, Math.max(0, rows.length - 1));
   }, [offsets, rows.length]);
 
+  rowAtRef.current = rowAt;
   const first = Math.max(0, rowAt(scrollTop) - OVERSCAN);
   const last = Math.min(total, rowAt(scrollTop + viewportH) + 1 + OVERSCAN);
   const slice = rows.slice(first, last);
@@ -1222,17 +1231,48 @@ export function LogViewer() {
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [total, logFollow]);
 
+  /*
+    A paged source: where the top of the screen is, as a line and an offset
+    into it — so when lines arrive above (the previous window) or are dropped
+    (the far end of a long scroll), the same line stays in the same place.
+  */
+  const anchorRef = useRef<{ seq: number; delta: number } | undefined>(undefined);
+  const PAGE_EDGE_PX = 1200;
+
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
     setScrollTop(el.scrollTop);
+    if (paging) {
+      const i = rowAtRef.current(el.scrollTop);
+      const row = rowsRef.current[i];
+      if (row) anchorRef.current = { seq: row.line.seq, delta: el.scrollTop - offsetsRef.current[i] };
+      if (!paging.loading) {
+        if (el.scrollTop < PAGE_EDGE_PX && paging.first > 0) paging.loadEarlier();
+        else if (el.scrollHeight - el.scrollTop - el.clientHeight < PAGE_EDGE_PX
+          && paging.first + logs.length < paging.total) paging.loadLater();
+      }
+      return;
+    }
     // While the ribbon is being dragged, the scroll position is an OUTPUT of
     // the gesture. Feeding it back into the follow decision makes the two
     // fight each other, which is what the flicker was.
     if (draggingRef.current) return;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
     if (atBottom !== logFollow) setLogFollow(atBottom);
-  }, [logFollow, setLogFollow]);
+  }, [logFollow, setLogFollow, paging, logs.length]);
+
+  /* After the window moves, put the anchored line back where it was. */
+  useLayoutEffect(() => {
+    if (!paging) return;
+    const el = scrollRef.current;
+    const a = anchorRef.current;
+    if (!el || !a) return;
+    const i = rows.findIndex(r => r.line.seq === a.seq || r.folded?.some(f => f.seq === a.seq));
+    if (i < 0) return;
+    const want = offsets[i] + a.delta;
+    if (Math.abs(el.scrollTop - want) > 1) el.scrollTop = want;
+  }, [rows, offsets, paging]);
 
   /**
    * Jump to a band.
@@ -2357,9 +2397,11 @@ export function LogViewer() {
           about a result that simply is what it is.
         */}
         <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-          {isSnapshot
-            ? `${logs.length.toLocaleString()} line${logs.length === 1 ? '' : 's'}`
-            : `${logs.length.toLocaleString()} of the last ${logTail.toLocaleString()} lines`}
+          {paging
+            ? `lines ${(paging.first + 1).toLocaleString()}–${(paging.first + logs.length).toLocaleString()} of ${paging.total.toLocaleString()}${paging.partial ? '…' : ''}`
+            : isSnapshot
+              ? `${logs.length.toLocaleString()} line${logs.length === 1 ? '' : 's'}`
+              : `${logs.length.toLocaleString()} of the last ${logTail.toLocaleString()} lines`}
           {!isSnapshot && logs.length >= logTail && ' · at the limit'}
           {logs.length > 0 && ` · ${(bufferBytes(logs) / 1024 / 1024).toFixed(1)} MB`}
           {oldest !== undefined && ` · oldest ${formatLogTime(oldest)}`}

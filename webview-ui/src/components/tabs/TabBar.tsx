@@ -460,10 +460,12 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
           /* A search result wears dk8s's colour and a magnifier: it belongs to
              dk8s, and it is not the pods. */
           const isDk8sResults = tab.type === 'dk8s-results';
+          /* A downloaded pod log: dk8s's colour, and a page icon — it is a document. */
+          const isDk8sLogFile = tab.type === 'dk8s-logfile';
           const isDkgh = tab.type === 'dkgh';
           const isWorkspace = tab.type === 'workspace';
           const SM_ACCENT = 'var(--color-sm-tab, #f59e0b)';
-          const tabAccent = isSettings ? 'var(--color-settings)' : isMockServer ? 'var(--color-mock-server)' : isDaakiaAi ? 'var(--color-protocol-ai)' : isStateMachine ? SM_ACCENT : isWiki ? 'var(--color-wiki)' : isDk8s || isDk8sResults ? 'var(--color-dk8s)' : isDkgh ? 'var(--color-dkgh)' : isWorkspace ? 'var(--color-workspace)' : (tab.protocol ? getProtocolAccent(tab.protocol) : requestAccentColor);
+          const tabAccent = isSettings ? 'var(--color-settings)' : isMockServer ? 'var(--color-mock-server)' : isDaakiaAi ? 'var(--color-protocol-ai)' : isStateMachine ? SM_ACCENT : isWiki ? 'var(--color-wiki)' : isDk8s || isDk8sResults || isDk8sLogFile ? 'var(--color-dk8s)' : isDkgh ? 'var(--color-dkgh)' : isWorkspace ? 'var(--color-workspace)' : (tab.protocol ? getProtocolAccent(tab.protocol) : requestAccentColor);
           const isDragOver = dragOverIdx === idx && dragIdx !== idx;
           return (
             <div
@@ -505,6 +507,8 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
                 <Dk8sIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />
               ) : isDk8sResults ? (
                 <SearchIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />
+              ) : isDk8sLogFile ? (
+                <Dk8sIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />
               ) : isDkgh ? (
                 <IssueOpenedIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dkgh)' }} />
               ) : isWorkspace ? (

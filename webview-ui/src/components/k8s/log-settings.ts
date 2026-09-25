@@ -25,6 +25,9 @@
 
 export const LOG_TAIL_LADDER_KEY = 'dk8s.logs.tailLadder';
 export const LOG_TAIL_DEFAULT_KEY = 'dk8s.logs.tailDefault';
+/** The most a downloaded pod log may take on disk, in MB. */
+export const LOG_DOWNLOAD_MAX_KEY = 'dk8s.logs.downloadMaxMb';
+export const DEFAULT_DOWNLOAD_MAX_MB = 1024;
 export const LOG_CONTEXT_LADDER_KEY = 'dk8s.logs.contextLadder';
 export const LOG_CONTEXT_DEFAULT_KEY = 'dk8s.logs.contextDefault';
 export const LOG_ARCHIVE_LADDER_KEY = 'dk8s.logs.archiveLadder';
@@ -99,6 +102,12 @@ export function defaultOf(
   );
 }
 
+/** A size in MB from the stored text: whole, at least 1, at most 100 GB; the default otherwise. */
+export function downloadMaxMb(stored: string | undefined): number {
+  const n = Math.round(Number(stored));
+  return Number.isFinite(n) && n >= 1 ? Math.min(n, 100 * 1024) : DEFAULT_DOWNLOAD_MAX_MB;
+}
+
 /** Snap a value onto the ladder, for state stored before the ladder changed. */
 export function onLadder(value: number, rungs: readonly number[], fallback: number): number {
   return rungs.includes(value) ? value : defaultOf(undefined, rungs, fallback);
@@ -110,6 +119,8 @@ export interface LogLineSettings {
   contextLadder: number[];
   contextDefault: number;
   archiveLadder: number[];
+  /** Settings → DK8S → Logs → Downloaded logs. */
+  downloadMaxMb: number;
 }
 
 export function logLineSettings(prefs: Record<string, string>): LogLineSettings {
@@ -121,6 +132,7 @@ export function logLineSettings(prefs: Record<string, string>): LogLineSettings 
     contextLadder,
     contextDefault: defaultOf(prefs[LOG_CONTEXT_DEFAULT_KEY], contextLadder, DEFAULT_CONTEXT),
     archiveLadder: ladder(prefs[LOG_ARCHIVE_LADDER_KEY], DEFAULT_ARCHIVE_LADDER),
+    downloadMaxMb: downloadMaxMb(prefs[LOG_DOWNLOAD_MAX_KEY]),
   };
 }
 

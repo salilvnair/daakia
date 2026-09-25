@@ -18,7 +18,9 @@ import {
   DEFAULT_TAIL_LADDER, DEFAULT_CONTEXT_LADDER, DEFAULT_ARCHIVE_LADDER,
   DEFAULT_TAIL, DEFAULT_CONTEXT, MAX_LINES,
   ladder, ladderText, defaultOf, contextLabel, tailLabel,
+  LOG_DOWNLOAD_MAX_KEY, DEFAULT_DOWNLOAD_MAX_MB, downloadMaxMb,
 } from '../../components/k8s/log-settings';
+import { TextInputView } from '@salilvnair/dui';
 import { LayersIcon, SearchIcon, ClockIcon } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
 import { LogFormatSettings } from './LogFormatSettings';
@@ -225,6 +227,11 @@ export function Dk8sLogSettings() {
         />
       </div>
 
+      <div className="flex flex-col gap-3">
+        <SectionRule label="downloaded logs" />
+        <DownloadLimit />
+      </div>
+
       {/*
         The three that used to sit on Cluster. They are not about how dk8s
         behaves against a cluster — they are about how it reads what a pod
@@ -271,5 +278,58 @@ function Toggle({ on, onChange, label, description }: {
         </span>
       </span>
     </label>
+  );
+}
+
+/**
+ * How big a downloaded pod log may get — "Open logs" on a search result.
+ *
+ * A download is a temporary file, deleted when its tab closes; this only
+ * bounds how much disk one can take while it is open. Stored as text like the
+ * ladders above, and resolved the same way the download resolves it, so what
+ * this says is what the next download will use.
+ */
+function DownloadLimit() {
+  const stored = useUiStateStore(s => s.prefs[LOG_DOWNLOAD_MAX_KEY]) ?? '';
+  const setPref = useUiStateStore(s => s.setPref);
+  const [text, setText] = useState(stored);
+  useEffect(() => { setText(stored); }, [stored]);
+  const resolved = downloadMaxMb(text);
+  const shown = resolved >= 1024 ? `${(resolved / 1024).toFixed(resolved % 1024 ? 2 : 0)} GB` : `${resolved} MB`;
+  return (
+    <div className="flex flex-col gap-3 px-4 py-3.5 rounded-lg" style={cardStyle}>
+      <div className="flex items-start gap-3">
+        <span style={{ color: ACCENT, marginTop: 2, flexShrink: 0, display: 'inline-flex' }}><ClockIcon size={15} /></span>
+        <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+          <span className="text-[13px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
+            The most one downloaded log may take
+          </span>
+          <span className="text-[11.5px] leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+            <em>Open logs</em> on a search result downloads the pod&rsquo;s whole log &mdash; live, and its archived files
+            where an archive path covers it &mdash; into <code>~/.salilvnair/daakia-vsce/temp/logs</code>, and opens it
+            in a tab. The file is deleted when you close that tab, or when Daakia closes. This caps how big one download
+            may grow; when it is reached the tab says what was left out.
+          </span>
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <TextInputView
+          size="sm"
+          width="sm"
+          inputMode="numeric"
+          value={text}
+          placeholder={String(DEFAULT_DOWNLOAD_MAX_MB)}
+          aria-label="Maximum size of a downloaded log, in MB"
+          suffixIcon={<span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>MB</span>}
+          accentColor={ACCENT}
+          onChange={e => { setText(e.target.value); setPref(LOG_DOWNLOAD_MAX_KEY, e.target.value); }}
+        />
+        <span className="text-[11.5px]" style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+          {text.trim() && downloadMaxMb(text) === DEFAULT_DOWNLOAD_MAX_MB && Number(text) !== DEFAULT_DOWNLOAD_MAX_MB
+            ? `Not a size — using the default, ${shown}.`
+            : `Downloads stop at ${shown}.`}
+        </span>
+      </div>
+    </div>
   );
 }

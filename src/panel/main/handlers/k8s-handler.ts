@@ -13,10 +13,14 @@ import { probeEnvironment, setKubectlPath } from '../../../services/k8s/kubectl'
 import { connEvidence } from '../../../services/k8s/conn-summary';
 import { probeAccess, forbiddenReason } from '../../../services/k8s/k8s-access';
 import {
-  clearPvCache, mountsOf, type PvLogConfig,
+  clearPvCache, mountsOf, appOf, type PvLogConfig,
 } from '../../../services/k8s/pv-logs';
 import { type PvMatch } from '../../../services/k8s/pv-search';
-import { searchPvInPod } from '../../../services/k8s/pv-search-in-pod';
+import { searchPvInPod, rootsFor } from '../../../services/k8s/pv-search-in-pod';
+import {
+  startCapture, readPage as readCapturePage, filterCapture, locate as locateInCapture, closeCapture,
+} from '../../../services/k8s/log-capture';
+import type { HostFilterSpec } from '../../../services/k8s/log-filter';
 import { fetchFromPod } from '../../../services/k8s/pv-in-pod';
 import * as path from 'path';
 import { promises as fs } from 'fs';
@@ -2670,6 +2674,74 @@ export function handleDk8sRefreshPods(postMessage: PostMessage): void {
  * webview's job, through the same parser a pasted call goes through: one set
  * of rules for what `{}` means, in one place.
  */
+// ── Downloaded logs: a pod's whole log in a temporary file ──────────────────
+
+/**
+ * Download a pod's whole log — live and, where an archive path covers the pod,
+ * its rotated files — to a temporary file, for the log tab to page through.
+ * See services/k8s/log-capture.ts.
+ */
+export async function handleDk8sCaptureStart(msg: Record<string, unknown>, postMessage: PostMessage): Promise<void> {
+  const id = String(msg.id ?? '');
+  const context = String(msg.context ?? '');
+  const namespace = String(msg.namespace ?? '');
+  const pod = String(msg.pod ?? '');
+  if (!id || !context || !namespace || !pod) {
+    postMessage({ type: 'dk8s:captureError', id, error: 'Which pod? The request named no context, namespace or pod.' });
+    return;
+  }
+  const container = typeof msg.container === 'string' && msg.container ? msg.container : undefined;
+  const capMb = Number(msg.capMb);
+  const pv = pvConfig();
+  const ref = { namespace, pod, context, container, workload: typeof msg.workload === 'string' ? msg.workload : undefined };
+  const roots = pv?.enabled && msg.archive !== false ? rootsFor(pv, ref) : [];
+  await startCapture({
+    id, target: { context, namespace, pod, container },
+    capBytes: Number.isFinite(capMb) && capMb > 0 ? capMb * 1024 * 1024 : undefined,
+    archiveRoots: roots,
+    app: pv ? appOf(pv, ref) : undefined,
+  }, {
+    onProgress: p => postMessage({ type: 'dk8s:captureProgress', id, ...p }),
+    onReady: info => postMessage({ type: 'dk8s:captureReady', id, info, archiveRoots: roots }),
+    onError: error => postMessage({ type: 'dk8s:captureError', id, error }),
+    resolveFormat: async sample => (await resolveFormatFor(
+      context, namespace, pod, sample, typeof msg.formatId === 'string' ? msg.formatId : undefined,
+    )).format,
+  });
+}
+
+export function handleDk8sCaptureRead(msg: Record<string, unknown>, postMessage: PostMessage): void {
+  const id = String(msg.id ?? '');
+  const page = readCapturePage(id, Math.max(0, Number(msg.from) || 0), Math.min(5000, Math.max(1, Number(msg.count) || 1000)));
+  postMessage(page
+    ? { type: 'dk8s:capturePage', id, reqId: msg.reqId, ...page }
+    : { type: 'dk8s:captureGone', id, reqId: msg.reqId });
+}
+
+export async function handleDk8sCaptureFilter(msg: Record<string, unknown>, postMessage: PostMessage): Promise<void> {
+  const id = String(msg.id ?? '');
+  const spec = (msg.spec ?? {}) as HostFilterSpec;
+  await filterCapture(id, {
+    query: String(spec.query ?? ''),
+    levels: Array.isArray(spec.levels) ? spec.levels.map(String) : [],
+    fields: Array.isArray(spec.fields) ? spec.fields : [],
+    contextLines: Number(spec.contextLines) || 0,
+  }, p => postMessage({ type: 'dk8s:captureFilterProgress', id, ...p }));
+}
+
+export function handleDk8sCaptureLocate(msg: Record<string, unknown>, postMessage: PostMessage): void {
+  const id = String(msg.id ?? '');
+  const index = locateInCapture(id, {
+    ts: typeof msg.ts === 'number' ? msg.ts : undefined,
+    text: typeof msg.text === 'string' ? msg.text : undefined,
+  });
+  postMessage({ type: 'dk8s:captureLocated', id, reqId: msg.reqId, index });
+}
+
+export function handleDk8sCaptureClose(msg: Record<string, unknown>): void {
+  closeCapture(String(msg.id ?? ''));
+}
+
 export async function handleDk8sScanLoggers(
   msg: Record<string, unknown>, postMessage: PostMessage,
 ): Promise<void> {

@@ -13,7 +13,7 @@ import {
   DEFAULT_TAIL, DEFAULT_CONTEXT, MAX_LINES,
   LOG_TAIL_LADDER_KEY, LOG_TAIL_DEFAULT_KEY,
   LOG_CONTEXT_LADDER_KEY, LOG_CONTEXT_DEFAULT_KEY, LOG_ARCHIVE_LADDER_KEY,
-  ALL_LINES, searchDepthLabel, readsEverything,
+  ALL_LINES, searchDepthLabel, readsEverything, LOG_DOWNLOAD_MAX_KEY, DEFAULT_DOWNLOAD_MAX_MB, downloadMaxMb,
 } from './log-settings';
 
 describe('a stored ladder', () => {
@@ -89,6 +89,7 @@ describe('everything together', () => {
       contextLadder: [...DEFAULT_CONTEXT_LADDER],
       contextDefault: DEFAULT_CONTEXT,
       archiveLadder: [...DEFAULT_ARCHIVE_LADDER],
+      downloadMaxMb: DEFAULT_DOWNLOAD_MAX_MB,
     });
   });
 
@@ -105,11 +106,22 @@ describe('everything together', () => {
       [LOG_CONTEXT_LADDER_KEY]: '0,3',
       [LOG_CONTEXT_DEFAULT_KEY]: '3',
       [LOG_ARCHIVE_LADDER_KEY]: '2000',
+      [LOG_DOWNLOAD_MAX_KEY]: '200',
     })).toEqual({
       tailLadder: [50, 100], tailDefault: 100,
       contextLadder: [0, 3], contextDefault: 3,
       archiveLadder: [2000],
+      downloadMaxMb: 200,
     });
+  });
+
+  it('keeps a downloaded log to 1 GB unless told otherwise, and ignores a size that is not one', () => {
+    expect(DEFAULT_DOWNLOAD_MAX_MB).toBe(1024);
+    expect(downloadMaxMb(undefined)).toBe(1024);
+    expect(downloadMaxMb('abc')).toBe(1024);
+    expect(downloadMaxMb('0')).toBe(1024);
+    expect(downloadMaxMb(' 512 ')).toBe(512);
+    expect(downloadMaxMb('999999999')).toBe(100 * 1024);
   });
 
   it('keeps the default on the ladder even when both were set badly', () => {

@@ -54,7 +54,18 @@ export type BodyMode = 'none' | 'json' | 'raw' | 'form-data' | 'x-www-form-urlen
 
 export type AuthType = 'none' | 'bearer' | 'basic' | 'api-key' | 'oauth2';
 
-export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki' | 'dk8s' | 'dk8s-results' | 'dkgh' | 'workspace';
+export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki' | 'dk8s' | 'dk8s-results' | 'dk8s-logfile' | 'dkgh' | 'workspace';
+
+/** A pod whose whole log a `dk8s-logfile` tab downloads and shows. */
+export interface LogFileTarget {
+  context: string;
+  namespace: string;
+  pod: string;
+  container?: string;
+  workload?: string;
+  /** Bring this line on screen once the download is ready. */
+  focus?: { ts?: number; text?: string };
+}
 
 export type Protocol = 'rest' | 'graphql' | 'websocket' | 'grpc' | 'soap' | 'ai' | 'mcp';
 
@@ -62,6 +73,8 @@ export interface RequestTab {
   id: string;
   type: TabType;
   protocol: Protocol;
+  /** `dk8s-logfile` only: which pod's log. The download itself lives in a temp file named after the tab. */
+  logFile?: LogFileTarget;
   name: string;
   method: HttpMethod;
   url: string;
@@ -557,6 +570,12 @@ interface TabsState {
   /** Open (or reuse) the page a search result is read on. */
   openDk8sResultsTab: (name: string) => void;
   /**
+   * A tab with a pod's whole log, downloaded to a temporary file on the host.
+   * One tab per download — a document, not a place — and closing it deletes
+   * the file.
+   */
+  openDk8sLogFileTab: (target: LogFileTarget) => void;
+  /**
    * Bring an existing search-result tab back to the front, if there is one.
    *
    * Unlike `openDk8sResultsTab` it never creates one and never renames it:
@@ -695,6 +714,13 @@ export const useTabsStore = create<TabsState>((set, get) => {
       if (!existing) return false;
       set({ activeTabId: existing.id, previousTabId: activeTabId });
       return true;
+    },
+
+    openDk8sLogFileTab: (target) => {
+      const { activeTabId } = get();
+      const tab = createDefaultTab({ type: 'dk8s-logfile', name: `log · ${target.pod}` });
+      tab.logFile = target;
+      set(s => ({ tabs: [...s.tabs, tab], activeTabId: tab.id, previousTabId: activeTabId }));
     },
 
     openDk8sResultsTab: (name) => {
