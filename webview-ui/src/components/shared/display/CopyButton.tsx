@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { CopyIcon, CheckIcon } from '../../../icons';
+import { copyText } from '../../../utils/clipboard';
 
 interface CopyButtonProps {
   text: string;
@@ -14,9 +15,9 @@ interface CopyButtonProps {
 export function CopyButton({ text, size = 14, title = 'Copy', className = '' }: CopyButtonProps) {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = (e: React.MouseEvent) => {
+  const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(text);
+    if (!(await copyText(text))) return;
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };

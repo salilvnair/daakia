@@ -21,17 +21,38 @@
  * a header value — because they are all either a native field, a
  * contenteditable, or Monaco, and all three take an insert.
  *
- * ── Why it always preventDefaults ──
+ * ── Why it waits instead of cancelling the keystroke ──
  *
- * Doing it only when the native path fails would mean waiting to find out,
- * and by then the keystroke is spent. Handling it unconditionally is also
- * correct where the native path DOES work — in a browser, running against the
- * local server — because `readClipboard` falls back to the browser API there
- * and inserts exactly what the native paste would have. What it must never do
- * is both, which is why the default is stopped in every branch.
+ * It used to `preventDefault()` the keydown in every branch, on the theory that
+ * cancelling the key cancels the paste it would have caused. That holds in a
+ * plain page. It does not hold in the VS Code webview: the host delivers a
+ * `paste` event of its own regardless, so the bridge's insert landed on top of
+ * one that had already happened and every Ctrl+V arrived twice —
+ *
+ *     ledger-svc  ->  ledger-svcledger-svc
+ *
+ * reported from the dk8s pod search box, which is simply where doubling is
+ * easiest to see. So the browser goes first now: the bridge arms itself, gives
+ * the native path a few milliseconds to deliver, and inserts only if nothing
+ * did. Where the native paste works it is the one that wins, and the bridge
+ * stays out of it; where the clipboard is denied nothing fires and the bridge
+ * is the only one that acts. Exactly one insert either way.
  */
 import { readClipboard } from '../compare/read-clipboard';
 import { getMonacoEditorInstance } from '../editor/monaco-instance';
+
+/**
+ * How long to let the native paste answer.
+ *
+ * The `paste` event is the key's own default action, so when it comes at all it
+ * comes in the same turn of the event loop. This is a wide margin around that,
+ * not a guess at how fast a clipboard is: the read that follows takes far
+ * longer than the wait ever does.
+ */
+const NATIVE_GRACE_MS = 40;
+
+/** When the page last saw a real `paste` event, from any source. */
+let lastNativePaste = 0;
 
 function isPasteCombo(e: KeyboardEvent): boolean {
   if (e.key !== 'v' && e.key !== 'V') return false;
@@ -57,6 +78,13 @@ function editableTarget(target: EventTarget | null): HTMLElement | null {
   return el.closest('[contenteditable="true"]') as HTMLElement | null;
 }
 
+/** Resolves true when a real `paste` event arrived while we waited. */
+function nativePasteWins(armedAt: number): Promise<boolean> {
+  return new Promise(resolve => {
+    setTimeout(() => resolve(lastNativePaste >= armedAt), NATIVE_GRACE_MS);
+  });
+}
+
 async function paste(e: KeyboardEvent): Promise<void> {
   const target = e.target as HTMLElement | null;
 
@@ -69,8 +97,17 @@ async function paste(e: KeyboardEvent): Promise<void> {
     ? getMonacoEditorInstance(target)
     : undefined;
 
+  /* Nothing to insert into: leave the keystroke entirely alone. */
+  const field = editor ? null : editableTarget(target);
+  if (!editor && !field) return;
+
+  /*
+    Armed before the wait, compared after it. A `paste` that arrives in this
+    window is the browser doing the job, and the bridge has nothing to add.
+  */
+  if (await nativePasteWins(Date.now())) return;
+
   if (editor) {
-    e.preventDefault();
     const { text } = await readClipboard();
     const selection = editor.getSelection();
     if (text && selection) {
@@ -79,12 +116,8 @@ async function paste(e: KeyboardEvent): Promise<void> {
     return;
   }
 
-  const field = editableTarget(target);
-  if (!field) return;
-
-  e.preventDefault();
   const { text } = await readClipboard();
-  if (!text) return;
+  if (!text || !field) return;
 
   /*
     `insertText` rather than setting `.value`: it replaces the selection,
@@ -108,14 +141,20 @@ export function installPasteBridge(): () => void {
     void paste(e);
   };
 
+  /* Every real paste, wherever it came from — the browser's own, the host's,
+     or the context menu's — is what tells the bridge to stand down. */
+  const onPaste = () => { lastNativePaste = Date.now(); };
+
   /*
     Capture, for the same reason the context menu listens that way: Monaco
     binds Ctrl+V itself and would otherwise consume it first — and what
     Monaco does with it is the thing that does not work here.
   */
   window.addEventListener('keydown', onKeyDown, true);
+  window.addEventListener('paste', onPaste, true);
   return () => {
     window.removeEventListener('keydown', onKeyDown, true);
+    window.removeEventListener('paste', onPaste, true);
     installed = false;
   };
 }

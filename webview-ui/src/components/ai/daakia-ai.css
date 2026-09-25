@@ -1,0 +1,137 @@
+/*
+ * The Daakia AI tab.
+ *
+ * Surfaces and text come from the VS Code theme (the --color-* tokens every
+ * Daakia screen uses), so light and dark themes both read. Only the accent is
+ * the tab's own — Claude's clay orange — and it is the one colour here that
+ * means "you can act on this". Red stays for a failure line, the dk8s cyan
+ * only for its small glyph.
+ */
+.dai {
+  --dai-accent: var(--color-ai-accent, #D97757);
+  --dai-accent-hi: color-mix(in srgb, var(--dai-accent) 82%, white);
+  --dai-accent-tint: color-mix(in srgb, var(--dai-accent) 14%, transparent);
+  --dai-accent-line: color-mix(in srgb, var(--dai-accent) 40%, transparent);
+  --dai-on-accent: color-mix(in srgb, var(--dai-accent) 12%, black);
+  --dai-surface: color-mix(in srgb, var(--color-text-primary) 4%, var(--color-panel));
+  --dai-surface2: color-mix(in srgb, var(--color-text-primary) 8%, var(--color-panel));
+  --dai-line: var(--color-surface-border);
+  --dai-muted: var(--color-text-muted);
+  --dai-dk8s: var(--color-dk8s, #5FB8C9);
+  /* The log well in a result card: a step darker than the panel in dark,
+     a tint of the text colour in light — black mixed into white is mud. */
+  --dai-well: color-mix(in srgb, black 22%, var(--color-panel));
+  --dai-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --dai-mono: var(--vscode-editor-font-family, ui-monospace, Consolas, monospace);
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--color-panel);
+  color: var(--color-text-primary);
+}
+[data-theme="light"] .dai {
+  --dai-well: color-mix(in srgb, var(--color-text-primary) 5%, var(--color-panel));
+  /* On white the lighter orange washes out; text-weight orange goes darker instead. */
+  --dai-accent-hi: color-mix(in srgb, var(--dai-accent) 78%, black);
+}
+[data-theme="light"] .dai-rail { background: color-mix(in srgb, var(--color-text-primary) 3%, var(--color-panel)); }
+.dai button { font-family: inherit; }
+.dai button:focus-visible, .dai input:focus-visible, .dai select:focus-visible, .dai textarea:focus-visible {
+  outline: 2px solid var(--dai-accent); outline-offset: 1px;
+}
+
+/* ── History rail ─────────────────────────────────────────────────────── */
+.dai-rail {
+  width: 236px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px;
+  padding: 12px 10px; border-right: 1px solid var(--dai-line);
+  background: color-mix(in srgb, black 8%, var(--color-panel));
+  min-height: 0;
+}
+.dai-rail-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.dai-rail-list > * { width: 100% !important; border: none !important; }
+.dai-empty { padding: 10px; font-size: 12px; color: var(--dai-muted); line-height: 1.5; }
+
+/* ── Main column + header ─────────────────────────────────────────────── */
+.dai-main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+.dai-hdr {
+  height: 50px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 16px;
+  border-bottom: 1px solid var(--dai-line);
+}
+.dai-mark {
+  width: 28px; height: 28px; flex-shrink: 0; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--dai-surface2); border: 1px solid var(--dai-line);
+}
+.dai-title { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.dai-sub { font-size: 11.5px; color: var(--dai-muted); white-space: nowrap; }
+.dai-sp { flex: 1; }
+.dai-answered { font-size: 11px; color: var(--dai-muted); white-space: nowrap; }
+/* ── The chat, restyled ───────────────────────────────────────────────── */
+.dai-chat { flex: 1; min-height: 0; position: relative; }
+.dai .ce-fullscreen-header { display: none !important; }
+.dai .ce-landing > :not(.dai-landing-slot) { display: none !important; }
+.dai .ce-landing { justify-content: center; }
+.dai .ce-footer { position: relative; }
+.dai .ce-composer {
+  border-radius: 16px !important;
+  box-shadow: 0 8px 28px rgba(0,0,0,.22);
+}
+.dai .ce-composer:focus-within { border-color: var(--dai-accent-line) !important; }
+.dai .ce-bubble-reply-quote { display: none !important; }
+.dai .ce-composer-reply { --ce-reply-accent: var(--dai-dk8s); }
+.dai .ce-avatar--agent { background: var(--dai-surface2) !important; border: 1px solid var(--dai-line); }
+
+/* ── Landing ──────────────────────────────────────────────────────────── */
+.dai-landing { width: min(820px, calc(100% - 32px)); margin: 0 auto; display: flex; flex-direction: column; gap: 26px; padding: 24px 0; }
+.dai-hello h1 { margin: 0; font-family: var(--dai-serif); font-weight: 400; font-size: 34px; letter-spacing: -.01em; line-height: 1.15; }
+.dai-hello p { margin: 8px 0 0; font-size: 13.5px; line-height: 1.6; color: var(--dai-muted); max-width: 620px; }
+.dai-hello p strong { color: var(--color-text-secondary); font-weight: 500; }
+.dai-eyebrow { display: flex; align-items: center; gap: 8px; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--dai-muted); }
+.dai-starters { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.dai-starter {
+  display: flex; flex-direction: column; gap: 6px; padding: 13px 14px; min-height: 84px;
+  border: 1px solid var(--dai-line); border-radius: 12px; background: var(--dai-surface);
+  text-align: left; cursor: pointer; transition: border-color .12s, background .12s;
+}
+.dai-starter:hover { border-color: var(--dai-accent-line); background: var(--dai-surface2); }
+.dai-starter b { font-weight: 500; font-size: 13px; color: var(--color-text-primary); }
+.dai-starter span.d { font-size: 12px; line-height: 1.5; color: var(--dai-muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.dai-ph { padding: 0 5px; border-radius: 4px; background: var(--dai-accent-tint); color: var(--dai-accent-hi); font-family: var(--dai-mono); font-size: 11px; white-space: nowrap; }
+.dai-pills { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dai-pill {
+  height: 30px; padding: 0 12px; border: 1px solid var(--dai-line); border-radius: 999px; background: none;
+  color: var(--color-text-secondary); font-size: 12px; cursor: pointer;
+}
+.dai-pill:hover { border-color: var(--dai-accent-line); color: var(--color-text-primary); }
+.dai-kbd { padding: 1px 6px; border: 1px solid var(--dai-line); border-radius: 4px; font-family: var(--dai-mono); font-size: 11px; color: var(--color-text-secondary); }
+.dai-hint { font-size: 11.5px; color: var(--dai-muted); }
+
+/* ── The / palette ────────────────────────────────────────────────────── */
+.dai-pal {
+  position: absolute; left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%); z-index: 40;
+  width: min(820px, calc(100% - 32px)); display: grid; grid-template-columns: minmax(0, 1fr) 280px;
+  border: 1px solid var(--dai-line); border-radius: 14px; background: var(--color-panel);
+  box-shadow: 0 24px 60px rgba(0,0,0,.4); overflow: hidden;
+}
+.dai-pal-list { display: flex; flex-direction: column; padding: 6px; max-height: 380px; overflow-y: auto; }
+.dai-pal-q { display: flex; align-items: center; gap: 8px; padding: 6px 8px 9px; margin-bottom: 4px; border-bottom: 1px solid var(--dai-line); font-family: var(--dai-mono); font-size: 12.5px; }
+.dai-pal-q span { margin-left: auto; font-family: inherit; font-size: 11px; color: var(--dai-muted); }
+.dai-pal-g { display: flex; align-items: center; gap: 6px; padding: 8px 8px 3px; font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--dai-muted); }
+.dai-pal-i {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border: none; border-radius: 8px;
+  background: none; text-align: left; cursor: pointer; color: var(--color-text-secondary); font-size: 12.5px;
+}
+.dai-pal-i[aria-selected="true"] { background: var(--dai-accent-tint); color: var(--color-text-primary); }
+.dai-pal-i mark { background: none; color: var(--dai-accent-hi); font-weight: 600; }
+.dai-pal-i small { margin-left: auto; font-size: 11px; color: var(--dai-muted); white-space: nowrap; }
+.dai-pal-prev { border-left: 1px solid var(--dai-line); padding: 14px; display: flex; flex-direction: column; gap: 9px; background: var(--dai-surface); min-width: 0; }
+.dai-pal-prev h4 { margin: 0; font-size: 13px; font-weight: 600; }
+.dai-pal-prev p { margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.dai-keys { display: inline-flex; align-items: center; gap: 5px; }
+.dai-pal-foot { grid-column: 1 / -1; display: flex; gap: 14px; flex-wrap: wrap; padding: 7px 14px; border-top: 1px solid var(--dai-line); font-size: 11px; color: var(--dai-muted); }
+.dai-pal-none { padding: 14px 10px; font-size: 12px; color: var(--dai-muted); }
+
+@media (max-width: 900px) {
+  .dai-pal { grid-template-columns: 1fr; }
+  .dai-pal-prev { display: none; }
+}

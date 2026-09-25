@@ -22,7 +22,7 @@ import { PvCheckModal } from './PvCheckModal';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import {
   useFavoriteKeys, toggleFavorite, favoriteKey, favoritesFirst,
-  starredKeyOf,
+  starredKeyOf, starredHere,
 } from '../../store/dk8s-favorites-store';
 import { isScheduled } from '@daakia/k8s-workload';
 import { PodFilterPopup } from './PodFilterPopup';
@@ -1104,6 +1104,9 @@ export function PodGrid() {
     filterable.
   */
   const favKeys = useFavoriteKeys();
+  /* How many of them are on this context and namespace — the number the chip
+     shows, because the saved list spans every cluster. See `starredHere`. */
+  const starCount = useMemo(() => starredHere(pods, favKeys), [pods, favKeys]);
   /*
     Not persisted. Opening dk8s starts on starred, every time.
 
@@ -1115,7 +1118,9 @@ export function PodGrid() {
   */
   const favScope = useK8sStore(s => s.podScope);
   const setFavScope = useK8sStore(s => s.setPodScope);
-  const scope = favKeys.length === 0 ? 'all' : favScope;
+  /* Nothing starred in THIS namespace is the same dead end as nothing starred
+     at all, so the fallback to `all` follows the count that is on screen. */
+  const scope = starCount === 0 ? 'all' : favScope;
 
   /*
     Pods that stay up and runs of something are two different questions.
@@ -1381,12 +1386,12 @@ export function PodGrid() {
           nothing is a dead end, and there is no way to star from inside it.
         */}
 
-        {favKeys.length > 0 && (
+        {starCount > 0 && (
           <SegmentedControlView
             value={scope}
             onChange={v => setFavScope(v as 'fav' | 'all')}
             options={[
-              { value: 'fav', label: `★ ${favKeys.length}` },
+              { value: 'fav', label: `★ ${starCount}` },
               { value: 'all', label: 'all' },
             ]}
             size="md"

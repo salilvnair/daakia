@@ -14,6 +14,19 @@ import * as vscode from 'vscode';
 import { AI_PROVIDERS, getProvider } from '../../ai/ai-providers';
 import { getSetting } from '../../storage/db';
 import { retrieveApiKey, getAllKeyStatus } from '../secret-store';
+import { envKey, envBaseUrl, envModel } from './env-provider';
+
+/**
+ * The key for a provider: the keychain first, then the environment.
+ *
+ * Every lookup in this file goes through here, so a key exported in the shell
+ * or loaded from the dev server's `.env` counts as "has a key" everywhere the
+ * keychain's does — auth, and the scan that picks a provider when the one
+ * asked for has none.
+ */
+export async function keyFor(providerId: string): Promise<string | undefined> {
+  return (await retrieveApiKey(providerId)) || envKey(providerId);
+}
 import type { AiProviderId } from '../../ai/ai-types';
 
 // ─── Auth Data Builder ───
@@ -43,7 +56,7 @@ export async function resolveProviderAuth(
   }
 
   // Look up stored key from OS keychain
-  const storedToken = await retrieveApiKey(providerId) ?? '';
+  const storedToken = await keyFor(providerId) ?? '';
 
   switch (providerId) {
     case 'anthropic':
@@ -92,7 +105,7 @@ export function resolveProviderConfig(providerId: AiProviderId | string, overrid
   const userProviders = getSetting<Array<{ id: string; baseUrl: string }>>('aiProviders') ?? [];
   const userOverride = userProviders.find(p => p.id === providerId);
 
-  const baseUrl = overrideBaseUrl || userOverride?.baseUrl || def?.baseUrl || '';
+  const baseUrl = overrideBaseUrl || userOverride?.baseUrl || envBaseUrl(providerId) || def?.baseUrl || '';
   const chatEndpoint = def?.chatEndpoint || '/chat/completions';
 
   return {
@@ -165,9 +178,22 @@ export async function autoResolveProvider(
 
   // 2. Requested provider has a stored key → use it
   try {
-    const stored = await retrieveApiKey(requestedId);
+    const stored = await keyFor(requestedId);
     if (stored && stored.length > 0) {
-      const defaultModel = requestedModel
+      /*
+        A provider configured in the environment is configured as a unit.
+
+        When the key came from the environment rather than the keychain and a
+        model was set beside it, that model wins over the one the UI sent. The
+        UI does not know the environment's model — DeepSeek's built-in list has
+        no `deepseek-flash` — so what it sends is its own default, and a key
+        from one account paired with a model picked from a list is how a
+        working `.env` turns into a 400.
+      */
+      const fromEnv = !(await retrieveApiKey(requestedId)) && !!envKey(requestedId);
+      const defaultModel = (fromEnv ? envModel(requestedId) : undefined)
+        || requestedModel
+        || envModel(requestedId)
         || AI_PROVIDERS.find(p => p.id === requestedId)?.models[0]?.id
         || '';
       return {
@@ -197,10 +223,22 @@ export async function autoResolveProvider(
   for (const id of scanOrder) {
     if (id === requestedId) continue; // already tried above
     try {
-      const stored = await retrieveApiKey(id);
+      const stored = await keyFor(id);
       if (stored && stored.length > 0) {
-        const defaultModel = requestedModel
-          || AI_PROVIDERS.find(p => p.id === id)?.models[0]?.id
+        /*
+          This provider's OWN model, never the one that was asked for.
+
+          Reaching this loop means the requested provider had no key, so the
+          requested model belongs to a provider we are not calling: a Daakia AI
+          tab set to OpenAI's `gpt-4o` fell through to DeepSeek and asked
+          DeepSeek for `gpt-4o`, which it answers with a 400 that names a model
+          the user never chose for it. The requested model only counts if this
+          provider actually lists it.
+        */
+        const ownModels = AI_PROVIDERS.find(p => p.id === id)?.models.map(m => m.id) ?? [];
+        const defaultModel = (requestedModel && ownModels.includes(requestedModel) ? requestedModel : undefined)
+          || envModel(id)
+          || ownModels[0]
           || '';
         return {
           providerId: id,

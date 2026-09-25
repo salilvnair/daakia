@@ -35,6 +35,15 @@ import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { buildFacets, filterTermFor } from './log-facets';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { logLineSettings, onLadder, tailLabel, contextLabel } from './log-settings';
+import { findPayload, type LogPayload } from './log-payload';
+import { compileMarks, markOf, type MarkHit } from './logger-marks';
+import { LineFieldsView } from './LineFieldsView';
+import { determinantsIn } from './determinants';
+import { SummaryPanel } from './SummaryPanel';
+import { usePatternsFor, MARK_COLORS } from '../../store/dk8s-logger-store';
+import { scopeOf } from './LoggersTab';
+import { payloadPrefs } from './log-payload-prefs';
+import { LogPayloadView } from './LogPayloadView';
 import { FacetRail } from './FacetRail';
 import { LogSkeleton } from './LogSkeleton';
 import {
@@ -42,7 +51,8 @@ import {
   type FilterMenu, type FilterGroup,
 } from '../shared/menus/filter-provider';
 import {
-  filterLines, densityBuckets, describeBucket, levelCounts, levelColor,
+  filterLines, densityBuckets, describeBucket, levelCounts, levelColor, ribbonBands,
+  timeBuckets, ribbonTicks, COMPACT_RIBBON_PX,
   formatLogTime, selectionText, LEVEL_ORDER, foldStackTraces, bufferBytes,
   compactCount, grepTermFor, frameOrigin, type MatchedLine, type FieldFilter,
   displayText,
@@ -255,10 +265,19 @@ function FieldFilterStrip({ filters, onFlip, onRemove, onClearAll }: {
 
 // ── Density ribbon: vertical, on the right ──────────────────────────────────
 
+/** A band's smallest drawn height, and the gap under it. Both in px. */
+const BAND_MIN = 2;
+const BAND_GAP = 1;
+
 function DensityRibbon({
   lines, scrollTop, contentHeight, viewportHeight, onJump, onScrollTo, onDragStart, onDragEnd,
+  sharedRange, viewTimes,
 }: {
   lines: MatchedLine[];
+  /** One clock across a split: bands become equal slices of this span. */
+  sharedRange?: { from: number; to: number };
+  /** When the first and last rows on screen were logged — the marker, on a clock. */
+  viewTimes?: { from?: number; to?: number };
   /**
    * The marker is derived from the scroll position, NOT from the
    * virtualisation indices.
@@ -302,16 +321,31 @@ function DensityRibbon({
   useEffect(() => {
     if (!ref.current) return;
     const el = ref.current;
-    const ro = new ResizeObserver(() => setHeight(Math.max(60, el.clientHeight)));
+    /* The track's own height, whatever it is. The floor here used to be 60,
+       which is taller than the track gets in a short pane of a four-way split —
+       and a marker placed on a 60px scale inside a 44px track is off by a
+       quarter of the log. */
+    const measure = () => setHeight(Math.max(1, el.clientHeight));
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setHeight(Math.max(60, el.clientHeight));
+    measure();
     return () => ro.disconnect();
   }, []);
 
-  // One band per ~7px of height. Coarser than the horizontal version was,
-  // because a band has to be clickable and readable as a colour.
-  const bands = Math.max(8, Math.floor(height / 7));
-  const buckets = useMemo(() => densityBuckets(lines, bands), [lines, bands]);
+  // Never more bands than this track can hold — see `ribbonBands`.
+  const bands = ribbonBands(height, BAND_MIN, BAND_GAP);
+  /* Too short for density to mean anything: marks instead of bands. */
+  const compact = height < COMPACT_RIBBON_PX;
+  const buckets = useMemo(
+    () => (compact ? [] : sharedRange
+      ? timeBuckets(lines, bands, sharedRange)
+      : densityBuckets(lines, bands)),
+    [lines, bands, compact, sharedRange],
+  );
+  const ticks = useMemo(
+    () => (compact ? ribbonTicks(lines, height, 4, sharedRange) : []),
+    [compact, lines, height, sharedRange],
+  );
 
   // Exactly what the scrollbar shows: how much of the content is visible, and
   // how far down it we are.
@@ -321,10 +355,31 @@ function DensityRibbon({
     : 1;
   const scrolledFraction = scrollable > 0 ? Math.min(1, scrollTop / scrollable) : 0;
 
-  const viewH = Math.max(8, visibleFraction * height);
+  /*
+    On a shared clock the bands are drawn by TIME, so the marker and the drag
+    have to be as well. Left on scroll position, the box said "you are at 90%"
+    of a strip whose 90% meant a different instant — two scales on one ribbon,
+    each right about itself and wrong about the other.
+  */
+  const span = sharedRange ? Math.max(1, sharedRange.to - sharedRange.from) : 0;
+  const onClock = !!sharedRange && viewTimes?.from !== undefined && viewTimes.to !== undefined;
+  const clockTop = onClock
+    ? Math.min(1, Math.max(0, (viewTimes!.from! - sharedRange!.from) / span)) * height
+    : 0;
+  const clockBottom = onClock
+    ? Math.min(1, Math.max(0, (viewTimes!.to! - sharedRange!.from) / span)) * height
+    : 0;
+
+  // Never taller than the track: in a short pane a viewport that holds most of
+  // the buffer asked for a marker longer than the track it sits in.
+  const viewH = onClock
+    ? Math.min(height, Math.max(8, clockBottom - clockTop))
+    : Math.min(height, Math.max(8, visibleFraction * height));
   // Travel is the track minus the marker, so at scrollTop = max the marker's
   // BOTTOM lands on the track's bottom rather than its top overshooting it.
-  const viewTop = scrolledFraction * (height - viewH);
+  const viewTop = onClock
+    ? Math.min(Math.max(0, height - viewH), clockTop)
+    : Math.max(0, scrolledFraction * (height - viewH));
 
   /**
    * Drag like a scrollbar thumb.
@@ -332,16 +387,26 @@ function DensityRibbon({
    * The pointer grabs the CENTRE of the marker and the marker follows, which is
    * how every scrollbar behaves — anchoring the marker's top to the pointer
    * instead makes it jump downward by half its height the moment you touch it.
+   *
+   * On a clock the pointer names an instant, and the view goes to the first
+   * line at or after it.
    */
   const scrollToPointer = useCallback((clientY: number) => {
     const el = ref.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
+    if (sharedRange) {
+      const fraction = Math.min(1, Math.max(0, (clientY - rect.top) / Math.max(1, rect.height)));
+      const at = sharedRange.from + fraction * (sharedRange.to - sharedRange.from);
+      const index = lines.findIndex(l => l.ts !== undefined && l.ts >= at);
+      onJump(index === -1 ? Math.max(0, lines.length - 1) : index);
+      return;
+    }
     const travel = Math.max(1, rect.height - viewH);
     const y = clientY - rect.top - viewH / 2;
     const fraction = Math.min(1, Math.max(0, y / travel));
     onScrollTo(fraction * scrollable);
-  }, [viewH, scrollable, onScrollTo]);
+  }, [viewH, scrollable, onScrollTo, sharedRange, lines, onJump]);
 
   const onPointerDown = (e: React.PointerEvent) => {
     // Capture on the TRACK, not on whichever band was under the pointer, so
@@ -364,7 +429,16 @@ function DensityRibbon({
          style={{ width: RIBBON_W }}>
       <div
         ref={ref}
-        className="relative flex-1 flex flex-col gap-px mx-auto"
+        /* `min-h-0`: the track measures the pane it is in, never the bands it
+           holds. Without it a flex child stays as tall as its content and the
+           number this reads back is one no pane ever had.
+
+           NOT `overflow-hidden`, though it looks like it belongs with it. The
+           you-are-here box is drawn 4px wider than the track on each side and
+           glows past that; clipping the track cut its sides and its glow off
+           and left two floating lines. `ribbonBands` already guarantees the
+           bands fit, so there is nothing for a clip to catch. */
+        className="relative flex-1 min-h-0 flex flex-col gap-px mx-auto"
         style={{ width: RIBBON_BAND_W, cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
         onPointerDown={onPointerDown}
         onPointerMove={e => {
@@ -375,22 +449,47 @@ function DensityRibbon({
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
       >
-        {buckets.map(b => (
+        {buckets.map((b, i) => (
           <div
-            key={b.startIndex}
+            key={`${i}-${b.startIndex}`}
             // A click that did not turn into a drag jumps to the band — the
-            // precise gesture, kept alongside the coarse one.
-            onClick={() => { if (!movedRef.current) onJump(b.startIndex); }}
-            title={describeBucket(b)}
+            // precise gesture, kept alongside the coarse one. An empty slice
+            // of time has nowhere to jump to.
+            onClick={() => { if (!movedRef.current && b.startIndex >= 0) onJump(b.startIndex); }}
+            title={b.count ? describeBucket(b) : 'nothing logged in this slice'}
             className="transition-opacity hover:opacity-100"
             style={{
               flex: 1,
-              minHeight: 2,
+              minHeight: BAND_MIN,
               borderRadius: 2,
-              background: levelColor(b.worst),
+              /* On a shared clock an empty slice is drawn as a faint slot
+                 rather than skipped, so "silent here" stays visible. */
+              background: b.count ? levelColor(b.worst) : 'var(--color-surface-border)',
               // Errors at full strength, calm stretches receded to texture —
               // the ribbon exists to make trouble findable, not to be even.
-              opacity: b.worst === 'error' ? 0.95 : b.worst === 'warn' ? 0.72 : 0.3,
+              opacity: !b.count ? 0.25
+                : b.worst === 'error' ? 0.95 : b.worst === 'warn' ? 0.72 : 0.3,
+            }}
+          />
+        ))}
+
+        {/*
+          Compact: a pane too short for density — the small panes of a grid —
+          gets one tick per error or warning run, placed where it is in the
+          buffer. Density in 150px is a barcode; a tick is still a fact.
+        */}
+        {compact && ticks.map(t => (
+          <div
+            key={t.startIndex}
+            onClick={() => { if (!movedRef.current) onJump(t.startIndex); }}
+            title={`${t.count} ${t.level === 'error' ? 'error' : 'warning'}${t.count === 1 ? '' : 's'} here`}
+            className="absolute cursor-pointer"
+            style={{
+              left: -1, right: -1,
+              top: `calc(${(t.at * 100).toFixed(2)}% - 1.5px)`,
+              height: 3,
+              borderRadius: 2,
+              background: t.level === 'error' ? 'var(--color-error)' : 'var(--color-warning)',
             }}
           />
         ))}
@@ -570,12 +669,19 @@ export function LogViewer() {
     /* From the source, not the store: a results page clears ITS filters and
        closes ITS view, and reaching past the source for either would act on
        whichever pod happened to be open behind it. */
-    clearFieldFilters, closeDetail, isSnapshot, contextCap,
+    clearFieldFilters, closeDetail, isSnapshot, contextCap, sharedRange,
   } = useLogSource();
 
   /* Every "how many lines" ladder in this view, from Settings → DK8S → Logs. */
   const prefs = useUiStateStore(p => p.prefs);
   const lineSettings = useMemo(() => logLineSettings(prefs), [prefs]);
+  /* How a JSON, XML or key=value payload is drawn, from the same screen. */
+  const payloadOpts = useMemo(() => payloadPrefs(prefs), [prefs]);
+  /* The patterns catalogued for this workload — the marked ones highlight,
+     and the ones with a summary answer "what ran in this window". */
+  const catalogue = usePatternsFor(scopeOf(detail));
+  const determinants = useMemo(() => determinantsIn(catalogue), [catalogue]);
+  const [summaryOpen, setSummaryOpen] = useState(false);
   /*
     The first moment after asking, when an empty view means nothing yet.
 
@@ -812,6 +918,7 @@ export function LogViewer() {
     there.
   */
   const linkedLine = useK8sStore(s => s.linkedLine);
+  const pendingLink = useK8sStore(s => s.pendingLink);
   const clearLinkedLine = useK8sStore(s => s.clearLinkedLine);
   const linkedSeq = isSnapshot ? undefined : linkedLine?.seq;
 
@@ -963,6 +1070,74 @@ export function LogViewer() {
   const first = Math.max(0, rowAt(scrollTop) - OVERSCAN);
   const last = Math.min(total, rowAt(scrollTop + viewportH) + 1 + OVERSCAN);
   const slice = rows.slice(first, last);
+  /* The instants at the top and bottom of the screen, for a ribbon on a clock.
+     Taken past the overscan, so it is what is visible rather than what is
+     rendered around it. */
+  const viewTimes = useMemo(() => {
+    const top = rows[Math.min(rows.length - 1, first + OVERSCAN)]?.line.ts;
+    const bottom = rows[Math.max(0, last - 1 - OVERSCAN)]?.line.ts;
+    return { from: top, to: bottom };
+  }, [rows, first, last]);
+
+  /*
+    Which of the rows on screen carry a payload.
+
+    Over the SLICE, never over the buffer: parsing is cheap for one line and
+    ruinous for two hundred thousand, and a row nobody can see has no chip to
+    put a verdict on. The window moves as you scroll and this moves with it.
+  */
+  const payloads = useMemo(() => {
+    const found = new Map<number, LogPayload>();
+    if (!payloadOpts.shapes.length) return found;
+    for (const row of slice) {
+      if (row.isFrame) continue;
+      const p = findPayload(displayText(row.line), {
+        shapes: payloadOpts.shapes,
+        maxChars: payloadOpts.maxChars,
+      });
+      if (p) found.set(row.line.seq, p);
+    }
+    return found;
+    // `slice` is a new array every render; its identity is the window.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [first, last, rows, payloadOpts.shapes, payloadOpts.maxChars]);
+
+  /*
+    Marked patterns from the Loggers tab, matched over the same window.
+
+    A mark leaves the log intact and says where to look in it — so it paints
+    the row's edge rather than filtering anything, and it is computed here,
+    beside the payloads, because both are questions about what is on screen.
+  */
+  const marks = useMemo(() => compileMarks(catalogue), [catalogue]);
+  const markHits = useMemo(() => {
+    const found = new Map<number, MarkHit>();
+    if (!marks.length) return found;
+    for (const row of slice) {
+      const hit = markOf(displayText(row.line), marks);
+      if (hit) found.set(row.line.seq, hit);
+    }
+    return found;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [first, last, rows, marks]);
+
+  /* Opened by the reader, keyed on seq so new lines above do not shift it. */
+  const [openPayloads, setOpenPayloads] = useState<Set<number>>(new Set());
+  const [openFields, setOpenFields] = useState<Set<number>>(new Set());
+  const toggleFields = useCallback((seq: number) => {
+    setOpenFields(prev => {
+      const next = new Set(prev);
+      if (next.has(seq)) next.delete(seq); else next.add(seq);
+      return next;
+    });
+  }, []);
+  const togglePayload = useCallback((seq: number) => {
+    setOpenPayloads(prev => {
+      const next = new Set(prev);
+      if (next.has(seq)) next.delete(seq); else next.add(seq);
+      return next;
+    });
+  }, []);
 
   /*
     Put the linked line on screen, once.
@@ -974,13 +1149,33 @@ export function LogViewer() {
     be the view arguing.
   */
   const scrolledToLink = useRef<number | undefined>(undefined);
+  const jumpedToLink = useRef<number | undefined>(undefined);
   useEffect(() => {
     if (linkedSeq === undefined || scrolledToLink.current === linkedSeq) return;
     const el = document.querySelector(`[data-seq="${linkedSeq}"][data-linked="1"]`);
-    if (!el) return;
-    scrolledToLink.current = linkedSeq;
-    el.scrollIntoView({ block: 'center' });
-  }, [linkedSeq, slice]);
+    if (el) {
+      scrolledToLink.current = linkedSeq;
+      el.scrollIntoView({ block: 'center' });
+      return;
+    }
+    /*
+      Not drawn yet: the list only renders the rows near the viewport, and a
+      link into a window of thousands of lines lands far from the bottom
+      where the view opens. Move there first — the next render draws the row
+      and the branch above centres it.
+    */
+    /* Keeps trying while the log streams in, until the row is drawn and the
+       branch above centres it. Only the scroll repeats: turning follow off is
+       a store write, and one on every render of the list is a loop — React
+       stops it with "Maximum update depth exceeded" and the view goes blank.
+       So follow is turned off once per link, and only if it is on. */
+    const box = scrollRef.current;
+    const rowIndex = rows.findIndex(r => r.line.seq === linkedSeq || r.folded?.some(f => f.seq === linkedSeq));
+    if (!box || rowIndex === -1) return;
+    if (jumpedToLink.current !== linkedSeq && useK8sStore.getState().logFollow) setLogFollow(false);
+    jumpedToLink.current = linkedSeq;
+    box.scrollTop = Math.max(0, offsets[rowIndex] - box.clientHeight / 2);
+  }, [linkedSeq, slice, rows, offsets, setLogFollow]);
 
   /**
    * Record what a row actually measured.
@@ -1585,6 +1780,26 @@ export function LogViewer() {
           icon={<DownloadIcon size={IconSize.item} />}
         />
 
+        {/* Counted rather than asked: the summary is arithmetic over the
+            window, so it is offered beside Analyze and costs nothing. Only
+            where there is something to count. */}
+        {determinants.length > 0 && (
+          <ButtonView
+            label="Summary"
+            size={CTL_SIZE}
+            variant="secondary"
+            accentColor={ACCENT}
+            color={summaryOpen ? ACCENT : 'var(--color-text-secondary)'}
+            onClick={() => setSummaryOpen(v => !v)}
+            title={`What ran in this window, by ${determinants.length} pattern${determinants.length === 1 ? '' : 's'}`}
+            style={{
+              background: summaryOpen
+                ? `color-mix(in srgb, ${ACCENT} 16%, transparent)`
+                : 'transparent',
+            }}
+          />
+        )}
+
         <ButtonView
           label="Analyze"
           size={CTL_SIZE}
@@ -1736,6 +1951,8 @@ export function LogViewer() {
           }
           second={
             <div className="flex flex-col h-full min-w-0 min-h-0">
+          {summaryOpen && <SummaryPanel onClose={() => setSummaryOpen(false)} />}
+
           <FieldFilterStrip
             filters={logFieldFilters}
             onFlip={f => addFieldFilter(f)}
@@ -1761,7 +1978,12 @@ export function LogViewer() {
                 <span className="text-[12px] text-[var(--color-text-muted)]" style={{ fontFamily: 'inherit' }}>
                   {logs.length === 0
                     ? logStatus === 'streaming' ? 'Connected — waiting for the pod to say something.'
-                      : 'No output yet.'
+                      /* A link into a window the pod no longer holds: say why it is empty.
+                         kubectl serves only the current log file, and a busy pod's is
+                         rotated away within minutes. */
+                      : pendingLink && logDirection === 'between' && logStatus === 'ended'
+                        ? 'Nothing in this window — the pod has rotated its log since, and kubectl logs only has what came after. The archive search can still find the line.'
+                        : 'No output yet.'
                     : `No line matches. ${logs.length.toLocaleString()} hidden by the filter.`}
                 </span>
               </div>
@@ -1771,6 +1993,11 @@ export function LogViewer() {
                   {slice.map((row, i) => {
                     const line = row.line;
                     const isOpen = expanded.has(line.seq);
+                    const payload = row.isFrame ? undefined : payloads.get(line.seq);
+                    const payloadIsOpen = openPayloads.has(line.seq);
+                    const mark = row.isFrame ? undefined : markHits.get(line.seq);
+                    const markColor = mark ? MARK_COLORS[mark.color] : undefined;
+                    const fieldsAreOpen = openFields.has(line.seq);
                     // Position in what is on screen, so it reads 1..N and the
                     // last number is the count — the same thing an editor's
                     // gutter tells you at a glance.
@@ -1800,7 +2027,10 @@ export function LogViewer() {
                         */
                         data-log-ts={line.ts}
                         data-log-text={line.text}
-                        className="flex gap-2.5 items-start"
+                        /* A column, so a payload can be drawn under the line it
+                           came on. The row is what the virtualiser measures, so
+                           the card's height is accounted for by growing it. */
+                        className="flex flex-col"
                         style={{
                           minHeight: ROW_HEIGHT,
                           whiteSpace: logWrap ? 'pre-wrap' : 'pre',
@@ -1810,6 +2040,11 @@ export function LogViewer() {
                              warning on screen. */
                           background: line.seq === linkedSeq
                             ? `color-mix(in srgb, ${ACCENT} 22%, transparent)`
+                            /* A mark tints the row it claimed, under the level
+                               tint, so a marked INFO is findable without an
+                               error's weight. */
+                            : markColor
+                              ? `color-mix(in srgb, ${markColor} 10%, transparent)`
                             : line.level === 'error'
                               ? 'color-mix(in srgb, var(--color-error) 7%, transparent)'
                               : line.level === 'warn'
@@ -1817,13 +2052,16 @@ export function LogViewer() {
                                 : 'transparent',
                           borderLeft: `2px solid ${
                             line.seq === linkedSeq ? ACCENT
-                            : line.level === 'error' ? 'var(--color-error)'
-                            : line.level === 'warn' ? 'var(--color-warning)' : 'transparent'
+                            : markColor ?? (
+                              line.level === 'error' ? 'var(--color-error)'
+                              : line.level === 'warn' ? 'var(--color-warning)' : 'transparent'
+                            )
                           }`,
                           paddingLeft: row.isFrame ? 22 : 6,
                           opacity: row.isFrame ? 0.75 : 1,
                         }}
                       >
+                        <div className="flex gap-2.5 items-start">
                         {/* Off is a real preference: on a narrow panel the
                             gutter is width a long line needs more. */}
                         {logLineNumbers && (
@@ -1962,6 +2200,77 @@ export function LogViewer() {
                             <SparkleIcon size={IconSize.chip} /> Ask AI
                           </button>
                         )}
+
+                        {/*
+                          The machine half of the line, offered rather than
+                          drawn: one chip, and the payload stays where it was
+                          logged until somebody wants it. The same bargain the
+                          fold beside it makes, for the same reason — a body
+                          opened by default costs the screen the next ten lines
+                          were using.
+                        */}
+                        {payload && (
+                          <button
+                            type="button"
+                            onClick={() => togglePayload(line.seq)}
+                            title={payloadIsOpen
+                              ? 'Fold this payload back into the line'
+                              : `Draw this ${payload.shape.toUpperCase()} payload`}
+                            className="shrink-0 flex items-center gap-1 px-1.5 rounded cursor-pointer border-none self-center"
+                            style={{
+                              background: `color-mix(in srgb, ${ACCENT} 16%, transparent)`,
+                              color: ACCENT,
+                              fontSize: 10, lineHeight: '15px',
+                            }}
+                          >
+                            {payloadIsOpen
+                              ? <ChevronDownIcon size={IconSize.chip} />
+                              : <ChevronRightIcon size={IconSize.chip} />}
+                            {payload.shape.toUpperCase()} · {payload.summary}
+                          </button>
+                        )}
+
+                        {/*
+                          What the line names, offered rather than re-typed.
+
+                          On every row that names anything at all — which is
+                          the rows a format parsed, a pattern claimed, or a
+                          payload came on. A row that names nothing has no
+                          chip, because a chip that opens "nothing here" is a
+                          chip that teaches people not to press it.
+                        */}
+                        {!row.isFrame && (line.thread || line.logger || line.fields || payload || mark) && (
+                          <button
+                            type="button"
+                            onClick={() => toggleFields(line.seq)}
+                            title={fieldsAreOpen ? 'Hide the fields' : 'What this line names, and what to follow'}
+                            className="shrink-0 flex items-center gap-1 px-1.5 rounded cursor-pointer border-none self-center"
+                            style={{
+                              background: 'var(--color-surface-hover)',
+                              color: 'var(--color-text-muted)',
+                              fontSize: 10, lineHeight: '15px',
+                            }}
+                          >
+                            {fieldsAreOpen
+                              ? <ChevronDownIcon size={IconSize.chip} />
+                              : <ChevronRightIcon size={IconSize.chip} />}
+                            fields
+                          </button>
+                        )}
+                        </div>
+
+                        {fieldsAreOpen && (
+                          <LineFieldsView line={line} payload={payload} mark={mark} />
+                        )}
+
+                        {payload && payloadIsOpen && (
+                          <LogPayloadView
+                            payload={payload}
+                            mode={payloadOpts.mode}
+                            depth={payloadOpts.depth}
+                            hideSecrets={payloadOpts.hideSecrets}
+                          />
+                        )}
                       </div>
                     );
                   })}
@@ -1976,6 +2285,8 @@ export function LogViewer() {
 
         <DensityRibbon
           lines={visible}
+          sharedRange={sharedRange}
+          viewTimes={viewTimes}
           scrollTop={scrollTop}
           contentHeight={contentHeight}
           viewportHeight={viewportH}

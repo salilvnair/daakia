@@ -103,6 +103,41 @@ export const ALL_ACCESS: Access = {
  * decision that has to be finished, and choosing where to look is the rest of
  * it.
  */
+/**
+ * Is this message about what the reader is looking at NOW?
+ *
+ * Switching context or namespace does not un-send what is already in flight.
+ * A `kubectl get pods` against the old namespace was started before the click
+ * and lands after it, and the handlers below were happy to take it: the grid
+ * cleared, then refilled with the pods of the namespace somebody had just
+ * left, under a breadcrumb naming the new one. The same race put an old
+ * cluster's watch status and usage on a new cluster's screen.
+ *
+ * The host does stop the old watches — but it stops them when it hears about
+ * the new selection, which is necessarily after the answers already on their
+ * way. So the last word has to be here: anything naming a target that is not
+ * currently selected is thrown away, whatever asked for it and whenever it
+ * arrives.
+ *
+ * A message that names no target at all is not about one selection, and is
+ * kept.
+ */
+export function isCurrentTarget(
+  s: { targets: WatchTarget[]; context?: string; namespace?: string },
+  context?: string,
+  namespace?: string,
+): boolean {
+  if (!context && !namespace) return true;
+  if (s.targets.length) {
+    return s.targets.some(t =>
+      (!context || t.context === context) && (!namespace || t.namespace === namespace));
+  }
+  if (context && s.context && context !== s.context) return false;
+  if (namespace && s.namespace && namespace !== s.namespace) return false;
+  /* Nothing selected yet — the first answer after a fresh start is wanted. */
+  return true;
+}
+
 function leavingCluster() {
   /*
     Tell the host to let go of the old cluster.
@@ -339,7 +374,7 @@ export interface PodAction {
   mutatesPod?: boolean;
 }
 
-export type DetailTab = 'overview' | 'logs' | 'terminal' | 'doctor' | 'explorer' | 'yaml' | 'describe' | 'access';
+export type DetailTab = 'overview' | 'logs' | 'loggers' | 'terminal' | 'doctor' | 'explorer' | 'yaml' | 'describe' | 'access';
 
 export interface MemoryProfile {
   limitBytes?: number;
@@ -979,7 +1014,20 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     logUiEvent('dk8s.namespace_switch', {
       namespace: ns, pinned: !!pin, context: get().context, from: get().namespace,
     });
-    set({ namespace: ns, stage: 'ready', pods: [], usage: {}, usageHistory: {}, watchStatus: 'idle' });
+    /*
+      `targets` comes with it, because the host is about to watch exactly one.
+
+      Left as it was, a multi-namespace selection made earlier stayed in the
+      store while the host watched one namespace — and the guard that throws
+      away answers about namespaces nobody is looking at would have gone on
+      accepting all of them.
+    */
+    const ctx = get().context;
+    set({
+      namespace: ns, stage: 'ready', pods: [], usage: {}, usageHistory: {},
+      watchStatus: 'idle',
+      targets: ctx ? [{ context: ctx, namespace: ns }] : [],
+    });
     postMsg({ type: 'dk8s:setNamespace', namespace: ns, pin: !!pin });
   },
 
@@ -1457,6 +1505,33 @@ export const useK8sStore = create<K8sState>((set, get) => ({
 
     /* The log is being fetched. `apply` looks for the line when it lands. */
     set({ pendingLink: t });
+
+    /*
+      A link with a time asks for the log AROUND that time, not the newest N
+      lines. On a busy pod the last 200 lines are a few seconds old, so a line
+      from Daakia AI's answer five minutes ago was never in the buffer and the
+      link opened on the right pod with nothing highlighted. A window around it,
+      read forward from its start, holds the line and its
+      neighbours; the window is shown in the Fetch bar, so it can be widened.
+      Twenty seconds each side: a pod writing forty lines a second fills the
+      view's buffer in about a minute, and a wider window pushes the very
+      line it was opened for out of the front of it.
+    */
+    if (t.ts !== undefined) {
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const local = (ms: number) => {
+        const d = new Date(ms);
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+          + `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      };
+      set(s => ({
+        logDirection: 'between', logLive: false,
+        logFrom: local(t.ts! - 20_000), logTo: local(t.ts! + 20_000),
+        logTail: Math.max(s.logTail, 5000),
+        pendingLink: t,
+      }));
+      get().reloadLogs();
+    }
     return 'opened';
   },
 
@@ -1652,6 +1727,8 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         // the others as they arrive.
         const ctx = msg.context as string;
         const ns = msg.namespace as string;
+        /* A list that was already running when the selection changed. */
+        if (!isCurrentTarget(get(), ctx, ns)) break;
         const incoming = ((msg.pods as PodSummary[]) ?? []).map(p => ({ ...p, context: ctx }));
         set(s => ({
           pods: [...s.pods.filter(p => !(p.context === ctx && p.namespace === ns)), ...incoming],
@@ -1667,6 +1744,9 @@ export const useK8sStore = create<K8sState>((set, get) => ({
 
       case 'dk8s:podEvent': {
         const pod = { ...(msg.pod as PodSummary), context: msg.context as string };
+        /* An event from a watch that is being torn down. The pod is real and
+           belongs to a namespace nobody is looking at any more. */
+        if (!isCurrentTarget(get(), pod.context, pod.namespace)) break;
         const kind = msg.eventType as string;
         const at = Date.now();
         set(s => {
@@ -1685,6 +1765,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       case 'dk8s:watchStatus':
         // With several watches, the header shows the WORST state — one
         // reconnecting namespace matters more than three healthy ones.
+        if (!isCurrentTarget(get(), msg.context as string, msg.namespace as string)) break;
         set(s => {
           const rank: Record<string, number> = { reconnecting: 0, idle: 1, stopped: 2, connected: 3 };
           const incoming = msg.status as WatchStatus;
@@ -1807,6 +1888,8 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         break;
 
       case 'dk8s:podUsage': {
+        /* `top pods` against the namespace that was open a second ago. */
+        if (!isCurrentTarget(get(), msg.context as string, msg.namespace as string)) break;
         const available = !!msg.available;
         if (!available) { set({ metricsAvailable: false }); break; }
         const rows = (msg.usage as { name: string; cpuMilli: number; memBytes: number }[]) ?? [];
@@ -1827,7 +1910,17 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         // Ignore frames from a pod that is no longer open: closing the panel
         // and opening another races the in-flight batch, and without this the
         // new pod's view briefly shows the old pod's lines.
-        if (msg.pod !== get().detail?.name) break;
+        /*
+          The pod that is open, in the namespace it is open in.
+
+          A name alone is not an address: `api-0` exists in staging and in
+          prod, and switching between two pods of the same name let the first
+          one's lines keep arriving into the second one's view.
+        */
+        const open = get().detail;
+        if (!open || msg.pod !== open.name) break;
+        if (msg.namespace && open.namespace && msg.namespace !== open.namespace) break;
+        if (msg.context && open.context && msg.context !== open.context) break;
         const incoming = (msg.lines as LogLine[]) ?? [];
         if (!incoming.length) break;
         set(s => {
@@ -1847,7 +1940,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         {
           const want = get().pendingLink;
           if (want) {
-            const hit = findLinkedLine(get().logs, want);
+            const hit = findLinkedLine(get().logs, want, { streaming: true });
             if (hit) set({ linkedLine: { seq: hit.seq, text: hit.text }, pendingLink: undefined });
           }
         }
@@ -1857,6 +1950,11 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       case 'dk8s:logStatus':
         if (msg.pod !== get().detail?.name) break;
         set({ logStatus: msg.status as LogStatus, logDetail: msg.detail as string | undefined });
+        /* The log is all here: a link still waiting takes the nearest line by time. */
+        if (msg.status === 'ended' && get().pendingLink) {
+          const hit = findLinkedLine(get().logs, get().pendingLink!);
+          if (hit) set({ linkedLine: { seq: hit.seq, text: hit.text }, pendingLink: undefined });
+        }
         break;
 
       case 'dk8s:logDropped':

@@ -466,8 +466,19 @@ export function streamLogs(
     ...(opts.fromIso
       ? [`--since-time=${opts.fromIso}`]
       : opts.sinceSeconds ? [`--since=${opts.sinceSeconds}s`] : []),
-    // Asking for the head means asking for everything and stopping early.
-    opts.direction === 'first' ? '--tail=-1' : `--tail=${opts.tailLines ?? 200}`,
+    /*
+      Asking for the head means asking for everything and stopping early.
+
+      So does a bounded window. `--tail` counts back from NOW, not from the
+      end of the window: `--since-time=05:45 --tail=5000` on a pod writing
+      forty lines a second is the newest 5000 lines, every one of them after
+      the window closed, and the window came back empty. Reading forward from
+      the start and stopping at the first line past the end (see `past`) is
+      the only way kubectl can answer "what happened between".
+    */
+    opts.direction === 'first' || (opts.fromIso && opts.toMs !== undefined && !opts.follow)
+      ? '--tail=-1'
+      : `--tail=${opts.tailLines ?? 200}`,
   ];
 
   const headLimit = opts.direction === 'first' ? (opts.tailLines ?? 200) : undefined;
@@ -517,6 +528,16 @@ export function streamLogs(
     if (!pending.length) return;
     let batch = pending;
     pending = [];
+    /*
+      A fetch that is not following has an end, so nothing needs shedding to
+      keep up: send it all, in flush-sized pieces. Dropping here threw away
+      the front of a bounded window — the part a link into it is usually
+      pointing at — to protect against a flood that cannot happen.
+    */
+    if (batch.length > MAX_PER_FLUSH && !opts.follow) {
+      for (let i = 0; i < batch.length; i += MAX_PER_FLUSH) cb.onLines(batch.slice(i, i + MAX_PER_FLUSH));
+      return;
+    }
     if (batch.length > MAX_PER_FLUSH) {
       const dropped = batch.length - MAX_PER_FLUSH;
       // Keep the NEWEST: in a live tail the recent lines are the ones being

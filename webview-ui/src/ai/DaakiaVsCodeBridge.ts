@@ -16,6 +16,12 @@
  * through the Daakia protocol. The conversationId in ConvEngine = tabId in Daakia.
  */
 
+import { useK8sStore } from '../store/k8s-store';
+import { useAiPromptTemplatesStore } from '../store/prompt-template';
+import { useUiStateStore } from '../store/ui-state-store';
+import { DK8S_CHAT_SYSTEM, fillDk8sSystem, dk8sChatOn } from '../components/ai/dk8s-chat-prompts';
+import { useDk8sAiProgress } from '../store/dk8s-ai-progress-store';
+import { displayEnvelope, forModel } from '../components/ai/ai-display';
 import { getVsCodeApi } from '../vscode';
 import { useTabsStore } from '../store/tabs-store';
 import { useAiProvidersStore } from '../store/ai-providers-store';
@@ -59,6 +65,35 @@ class DaakiaEventSource {
         (this._listeners['VERBOSE'] ?? []).forEach(fn => fn(fakeEvt));
       }
 
+      /*
+        A dk8s search in progress is said in plain words first — what is being
+        searched and where — and then what it found, while the answer is
+        written. The card replaces both when the answer arrives.
+      */
+      /* A look in the manual — quick, but said, so the pause has a reason. */
+      if (msg.tabId === tabId && msg.type === 'ai:docsLookup') {
+        const fakeEvt = new MessageEvent('VERBOSE', { data: JSON.stringify({ verbose: { text: `Looking up “${String(msg.query ?? '')}” in the Daakia manual…` } }) });
+        (this._listeners['VERBOSE'] ?? []).forEach(fn => fn(fakeEvt));
+      }
+
+      /* A kubectl run, said in words while it runs — what it is running and why. */
+      if (msg.tabId === tabId && (msg.type === 'ai:kubectlRunStarted' || msg.type === 'ai:kubectlRunResult')) {
+        const text = msg.type === 'ai:kubectlRunStarted'
+          ? `Running kubectl ${String(msg.command ?? '').replace(/^kubectl\s+/, '')}${msg.why ? ` — ${String(msg.why)}` : ''}…`
+          : 'Read the output — writing the answer…';
+        const fakeEvt = new MessageEvent('VERBOSE', { data: JSON.stringify({ verbose: { text } }) });
+        (this._listeners['VERBOSE'] ?? []).forEach(fn => fn(fakeEvt));
+      }
+
+      if (msg.tabId === tabId && (msg.type === 'ai:dk8sSearchStarted' || msg.type === 'ai:dk8sSearchResult')) {
+        const text = msg.type === 'ai:dk8sSearchStarted'
+          ? `Searching ${msg.pods} pod${msg.pods === 1 ? '' : 's'} for ${String(msg.query)}`
+            + (msg.archive ? ' — live logs first, then the archive…' : '…')
+          : describeFound(msg.result as { groups?: { failures?: number }[]; scanned?: { pods?: number } });
+        const fakeEvt = new MessageEvent('VERBOSE', { data: JSON.stringify({ verbose: { text } }) });
+        (this._listeners['VERBOSE'] ?? []).forEach(fn => fn(fakeEvt));
+      }
+
       // ai:complete or ai:error → fire ENGINE_RETURN (clears progress)
       if ((msg.type === 'ai:complete' || msg.type === 'ai:error') && msg.tabId === tabId) {
         const fakeEvt = new MessageEvent('ENGINE_RETURN', {
@@ -89,6 +124,15 @@ class DaakiaEventSource {
   }
 }
 
+function describeFound(result: { groups?: { failures?: number }[]; scanned?: { pods?: number } } | undefined): string {
+  const groups = result?.groups ?? [];
+  if (!groups.length) return `Nothing matched in ${result?.scanned?.pods ?? 0} pods — saying so…`;
+  const failures = groups.reduce((n, g) => n + (g.failures ?? 0), 0);
+  return `Found ${groups.length} thread${groups.length === 1 ? '' : 's'}`
+    + (failures ? `, ${failures} failure${failures === 1 ? '' : 's'}` : '')
+    + ' — writing the answer…';
+}
+
 // ─── Pending request registry ────────────────────────────────────────────────
 
 interface PendingRequest {
@@ -96,9 +140,40 @@ interface PendingRequest {
   reject: (err: Error) => void;
   accumulated: string;
   tabId: string;
+  /** Fires when nothing has been heard for this request in QUIET_LIMIT_MS. */
+  watchdog?: ReturnType<typeof setTimeout>;
 }
 
 const pendingRequests = new Map<string, PendingRequest>();
+
+/*
+  How long an answer may go without a word from the host before it is given up.
+
+  The host sends something for every step — a chunk, a tool call, a search
+  phase — so silence this long means the request is gone, not slow: the host
+  restarted under it, or the message was lost. Without this the thinking row
+  spun forever, and the only way out was a new chat. Three minutes is past the
+  longest thinking-model round seen (about a minute) plus a full dk8s search.
+*/
+const QUIET_LIMIT_MS = 180_000;
+
+function armWatchdog(tabId: string): void {
+  const pending = pendingRequests.get(tabId);
+  if (!pending) return;
+  if (pending.watchdog) clearTimeout(pending.watchdog);
+  pending.watchdog = setTimeout(() => {
+    if (pendingRequests.get(tabId) !== pending) return;
+    pendingRequests.delete(tabId);
+    useTabsStore.getState().updateTab(tabId, { aiStreaming: false, loading: false });
+    /* Through the same message every other failure takes, so the thread,
+       the progress box and the audit all close it the usual way. */
+    window.postMessage({
+      type: 'ai:error', tabId,
+      message: 'No reply from Daakia for three minutes — the request was lost (Daakia may have restarted). Ask again.',
+    }, '*');
+    pending.reject(new Error('No reply from Daakia for three minutes — the request was lost. Ask again.'));
+  }, QUIET_LIMIT_MS);
+}
 
 // ─── Global message listener ─────────────────────────────────────────────────
 
@@ -111,6 +186,8 @@ function handleExtensionMessage(evt: MessageEvent) {
 
   const pending = pendingRequests.get(tabId);
   if (!pending) return;
+  /* Any word about this request resets the clock. */
+  if (typeof msg.type === 'string' && msg.type.startsWith('ai:')) armWatchdog(tabId);
 
   if (msg.type === 'ai:chunk') {
     // Accumulate streaming tokens — executor sends 'delta', bridge also accepts 'text' as fallback
@@ -119,6 +196,7 @@ function handleExtensionMessage(evt: MessageEvent) {
   }
 
   if (msg.type === 'ai:complete') {
+    if (pending.watchdog) clearTimeout(pending.watchdog);
     pendingRequests.delete(tabId);
 
     // Use accumulated streaming text if available, otherwise use message.content
@@ -132,17 +210,52 @@ function handleExtensionMessage(evt: MessageEvent) {
     // Wrap plain text in a JSON envelope so ConvEngineChat's tryParseJsonObject
     // succeeds → payload = { type: 'text', rawText: content }.
     // DaakiaMdRendererComponent reads payload.rawText to feed MdViewer.
-    const wrapped = JSON.stringify({ type: 'text', rawText: content });
+    /* An answer that ran a dk8s search carries the search's own result, so the
+       card can draw the lines themselves rather than trust the prose. */
+    const wrapped = displayEnvelope(content, msg.dk8s as unknown[] | undefined);
     pending.resolve({ payload: { value: wrapped } });
   }
 
   if (msg.type === 'ai:error') {
+    if (pending.watchdog) clearTimeout(pending.watchdog);
     pendingRequests.delete(tabId);
     useTabsStore.getState().updateTab(tabId, { aiStreaming: false, loading: false });
     const errorMsg = msg.message as string ?? 'AI request failed';
     pending.reject(new Error(errorMsg));
   }
 }
+
+/**
+ * The dk8s system prompt for this message and the pods it may search — or
+ * nothing when dk8s is off or nothing is on screen.
+ *
+ * The pods travel with the message: they are the ones the user is looking
+ * at, and the host searching its own idea of "watched" is how the prompt and
+ * the tool came apart — after a host restart the prompt described nine pods
+ * and the tool was not offered, so the model described a search instead of
+ * running one.
+ */
+function dk8sChatContext(): { prompt: string; targets: Dk8sTarget[] } | undefined {
+  if (!dk8sChatOn()) return undefined;
+  const k8s = useK8sStore.getState();
+  const shown = k8s.pods
+    .filter(p => (!k8s.context || p.context === k8s.context) && (!k8s.namespace || p.namespace === k8s.namespace));
+  if (!shown.length) return undefined;
+  const template = useAiPromptTemplatesStore.getState().templates['dk8s.chat.system'] || DK8S_CHAT_SYSTEM;
+  return {
+    prompt: fillDk8sSystem(template, {
+      context: k8s.context, namespace: k8s.namespace, pods: shown.map(p => p.name),
+      archive: useUiStateStore.getState().prefs['ai.dk8s.archive'] !== 'off',
+    }),
+    targets: shown.map(p => ({
+      context: p.context ?? k8s.context ?? '', namespace: p.namespace, pod: p.name,
+      containers: p.containers?.map(c => c.name).filter(Boolean),
+      workload: p.workload?.name,
+    })),
+  };
+}
+
+interface Dk8sTarget { context: string; namespace: string; pod: string; containers?: string[]; workload?: string }
 
 // ─── Bridge installation ─────────────────────────────────────────────────────
 
@@ -154,6 +267,14 @@ export function installDaakiaBridges() {
 
   // Listen for responses from the extension
   window.addEventListener('message', handleExtensionMessage);
+  /* The dk8s progress box follows the search whether or not a stream is open. */
+  window.addEventListener('message', (evt: MessageEvent) => {
+    const msg = evt.data as Record<string, unknown> | undefined;
+    if (msg && typeof msg.type === 'string' && (msg.type.startsWith('ai:dk8sSearch')
+        || msg.type === 'ai:complete' || msg.type === 'ai:error' || msg.type === 'ai:cancelled')) {
+      useDk8sAiProgress.getState().apply(msg);
+    }
+  });
 
   // Intercept fetch for ConvEngine API calls
   const originalFetch = window.fetch.bind(window);
@@ -223,6 +344,7 @@ export function installDaakiaBridges() {
         accumulated: '',
         tabId,
       });
+      armWatchdog(tabId);
 
       // Mark tab streaming
       useTabsStore.getState().updateTab(tabId, {
@@ -265,15 +387,21 @@ export function installDaakiaBridges() {
       // Send through the one AI client, so this call is named and audited like
       // every other. No authType/authData — the extension injects the real LLM
       // credentials from the OS keychain, and baseUrl is resolved there too.
+      /* With dk8s on and pods watched, the model is told where it is looking
+         and when (and when not) to search — the Prompt Library's
+         `dk8s.chat.system`, filled with the context, namespace and pods. */
+      const dk8s = dk8sChatContext();
       sendAiRequest({
         tabId,
         stage: 'ai.chat',
         screen: 'Daakia AI',
+        dk8s: !!dk8s,
+        dk8sTargets: dk8s?.targets,
         provider: resolvedProvider,
         model: resolvedModel,
-        systemPrompts: tab.aiSystemPrompts ?? [],
+        systemPrompts: [...(tab.aiSystemPrompts ?? []), ...(dk8s ? [dk8s.prompt] : [])],
         userPrompt: message,
-        conversation: currentHistory,  // history BEFORE the current message
+        conversation: forModel(currentHistory),  // history BEFORE the current message, without what only the screen needs
         tools: tab.aiTools ?? [],
         settings: tab.aiSettings ?? {},
         mcpServerConfigs: tab.mcpServerConfigs ?? [],

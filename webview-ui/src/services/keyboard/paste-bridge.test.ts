@@ -1,5 +1,12 @@
-import { describe, it, expect } from 'vitest';
-import { __test } from './paste-bridge';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { __test, installPasteBridge } from './paste-bridge';
+
+vi.mock('../compare/read-clipboard', () => ({
+  readClipboard: vi.fn(async () => ({ text: 'ledger-svc', source: 'host' as const })),
+}));
+vi.mock('../editor/monaco-instance', () => ({
+  getMonacoEditorInstance: () => undefined,
+}));
 
 const { isPasteCombo, editableTarget } = __test;
 
@@ -74,5 +81,76 @@ describe('where a paste can land', () => {
   it('refuses anything that is not a field', () => {
     expect(editableTarget(el('<div>plain</div>'))).toBeNull();
     expect(editableTarget(null)).toBeNull();
+  });
+});
+
+/*
+  The dk8s pod search box pasted everything twice: the VS Code webview delivered
+  its own `paste`, and the bridge inserted on top of it. Cancelling the keydown
+  did not stop the host, so the bridge now lets the native path go first and
+  only acts when nothing arrived.
+*/
+describe('one insert, never two', () => {
+  let uninstall = () => {};
+  const inserts: string[] = [];
+
+  afterEach(() => {
+    uninstall();
+    uninstall = () => {};
+    inserts.length = 0;
+  });
+
+  function armed() {
+    inserts.length = 0;
+    (document as unknown as { execCommand: unknown }).execCommand =
+      (name: string, _ui: boolean, value: string) => {
+        if (name === 'insertText') inserts.push(value);
+        return true;
+      };
+    const field = document.createElement('input');
+    document.body.appendChild(field);
+    field.focus();
+    uninstall = installPasteBridge();
+    return field;
+  }
+
+  /** Past the bridge's grace window and the clipboard read behind it. */
+  const settle = () => new Promise(r => setTimeout(r, 150));
+
+  function ctrlV(field: HTMLElement) {
+    field.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'v', ctrlKey: true, bubbles: true,
+    }));
+  }
+
+  it('inserts when the clipboard was denied and no paste fired', async () => {
+    const field = armed();
+    ctrlV(field);
+    await settle();
+
+    expect(inserts).toEqual(['ledger-svc']);
+    field.remove();
+  });
+
+  it('stands down when the host delivered a paste of its own', async () => {
+    const field = armed();
+    ctrlV(field);
+    // What the webview does a moment later, and what nobody could cancel.
+    field.dispatchEvent(new Event('paste', { bubbles: true }));
+    await settle();
+
+    expect(inserts).toEqual([]);
+    field.remove();
+  });
+
+  it('leaves a keystroke that lands nowhere editable alone', async () => {
+    armed();
+    const plain = document.createElement('div');
+    document.body.appendChild(plain);
+    ctrlV(plain);
+    await settle();
+
+    expect(inserts).toEqual([]);
+    plain.remove();
   });
 });

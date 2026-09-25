@@ -105,6 +105,7 @@ import {
   handleDk8sGetFormats, handleDk8sSaveFormat, handleDk8sDeleteFormat,
   handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat,
   handleDk8sListArtifacts, handleDk8sImportArtifact, handleDk8sDeleteArtifact,
+  handleDk8sScanLoggers,
   handleDk8sOpenArtifact, handleDk8sSetKubectlPath, handleDk8sSetCache,
   handleDk8sWatchPods, handleDk8sMetricsActive, handleDk8sPodUsageOnce, handleDk8sRefreshPods, handleDk8sStopWatch, disposeDk8s,
   handleDk8sPinNamespace, handleDk8sUnpinNamespace,
@@ -656,6 +657,9 @@ export class MainPanel {
         break;
       case 'dk8s:importArtifact':
         handleDk8sImportArtifact(this._post);
+        break;
+      case 'dk8s:scanLoggers':
+        void handleDk8sScanLoggers(msg, this._post);
         break;
       case 'dk8s:deleteArtifact':
         handleDk8sDeleteArtifact(msg, this._post);

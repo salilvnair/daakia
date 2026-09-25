@@ -365,8 +365,12 @@ export function densityBuckets(lines: LogLine[], columns: number): DensityBucket
     let toTs: number | undefined;
 
     for (const l of slice) {
-      if (l.level === 'error') errors++;
-      else if (l.level === 'warn') warns++;
+      /* Events only, the same rule the chips count by: a folded trace is one
+         error in the ribbon's tooltip too, however many frames it left here. */
+      if (!foldsInto(l)) {
+        if (l.level === 'error') errors++;
+        else if (l.level === 'warn') warns++;
+      }
       if (SEVERITY[l.level] < SEVERITY[worst]) worst = l.level;
       if (l.ts !== undefined) {
         if (fromTs === undefined) fromTs = l.ts;
@@ -393,6 +397,202 @@ export function densityBuckets(lines: LogLine[], columns: number): DensityBucket
   return buckets;
 }
 
+/**
+ * The same ribbon, drawn to a clock instead of to the line count.
+ *
+ * `densityBuckets` slices by line index on purpose — a quiet hour and a loud
+ * two seconds both get room, and the loud part is what you are looking for.
+ * That is the right scale for one log and the wrong one for a split: each pane
+ * scales to its own lines, so the same height means a different instant in
+ * each, and a burst that hit three pods at 14:02 is drawn at three different
+ * heights. Lining those up is the whole reason to put pods side by side.
+ *
+ * So this is the other scale, used only when the panes share a clock: bands
+ * are equal slices of TIME between `from` and `to`, a band with no lines in it
+ * is drawn empty rather than skipped, and every pane given the same range
+ * draws the same instant at the same height.
+ *
+ * Lines with no timestamp cannot be placed on a clock and are left out; the
+ * ribbon says nothing about them rather than guessing where they belong.
+ */
+export function timeBuckets(
+  lines: LogLine[],
+  columns: number,
+  range: { from: number; to: number },
+): DensityBucket[] {
+  if (columns < 1) return [];
+  const span = Math.max(1, range.to - range.from);
+  const width = span / columns;
+
+  const buckets: DensityBucket[] = Array.from({ length: columns }, (_, i) => ({
+    startIndex: -1,
+    count: 0,
+    height: 0,
+    worst: 'other' as LogLevel,
+    errors: 0,
+    warns: 0,
+    fromTs: range.from + i * width,
+    toTs: range.from + (i + 1) * width,
+  }));
+
+  lines.forEach((l, index) => {
+    if (l.ts === undefined || l.ts < range.from || l.ts > range.to) return;
+    const i = Math.min(columns - 1, Math.floor((l.ts - range.from) / width));
+    const b = buckets[i];
+    if (b.startIndex === -1) b.startIndex = index;
+    b.count++;
+    if (!foldsInto(l)) {
+      if (l.level === 'error') b.errors++;
+      else if (l.level === 'warn') b.warns++;
+    }
+    if (SEVERITY[l.level] < SEVERITY[b.worst]) b.worst = l.level;
+  });
+
+  const busiest = Math.max(1, ...buckets.map(b => b.count));
+  for (const b of buckets) {
+    /* An empty slice of time is information on a shared clock — "this pod
+       said nothing while the others were failing" — so it is drawn at zero
+       rather than given the floor a sparse bucket gets on the line scale. */
+    b.height = b.count === 0 ? 0 : Math.max(0.12, b.count / busiest);
+  }
+  return buckets;
+}
+
+/**
+ * The stretch of time EVERY pane has lines for — the span a shared clock uses.
+ *
+ * Not the union. The union was the first version, and a split of a chatty pod
+ * beside a quiet one showed why it is wrong: the chatty pod's 5,000 lines
+ * covered 75 seconds, the quiet pod's 200 covered an hour, and on an hour-long
+ * clock the chatty pod's whole buffer was drawn into the last sliver of its
+ * ribbon. The rest was empty slices — under a filter showing nothing but
+ * errors, a ribbon that said "errors only at the very end".
+ *
+ * Lining pods up is a question about the time they can ALL speak for, so the
+ * clock spans the overlap: the latest first line to the earliest last line.
+ * Returns `undefined` when there is no overlap worth drawing — the caller then
+ * falls back to each pane's own scale rather than draw a clock that is empty
+ * in every pane.
+ */
+export function sharedSpan(
+  logs: LogLine[][],
+  minSpanMs = 1000,
+): { from: number; to: number } | undefined {
+  let from = -Infinity;
+  let to = Infinity;
+  for (const lines of logs) {
+    const own = timeRange(lines);
+    /* A pane with no timestamps has no place on any clock; it cannot narrow
+       the span, and it draws on its own scale whatever the others do. */
+    if (!own) continue;
+    from = Math.max(from, own.from);
+    to = Math.min(to, own.to);
+  }
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return undefined;
+  return to - from >= minSpanMs ? { from, to } : undefined;
+}
+
+/** The earliest and latest timestamp in a set of logs, if any line has one. */
+export function timeRange(...logs: LogLine[][]): { from: number; to: number } | undefined {
+  let from = Infinity;
+  let to = -Infinity;
+  for (const lines of logs) {
+    for (const l of lines) {
+      if (l.ts === undefined) continue;
+      if (l.ts < from) from = l.ts;
+      if (l.ts > to) to = l.ts;
+    }
+  }
+  return from === Infinity ? undefined : { from, to };
+}
+
+/**
+ * Below this, the ribbon stops being a density plot.
+ *
+ * Density needs room to mean anything: forty 2px bands in a 150px track is a
+ * barcode. A pane this short — the small ones in a four-way grid — gets marks
+ * instead: one tick per error or warning run, which says the only thing a
+ * glance at a small pane is for.
+ */
+export const COMPACT_RIBBON_PX = 180;
+
+export interface RibbonTick {
+  /** Where in the track, 0..1. */
+  at: number;
+  level: 'error' | 'warn';
+  /** First line of the run, for scroll-to. */
+  startIndex: number;
+  /** How many events the tick stands for. */
+  count: number;
+}
+
+/**
+ * Errors and warnings as ticks, placed by their position in the buffer.
+ *
+ * Neighbours that would land on the same pixel merge into one tick that takes
+ * the worse level and the total count — two ticks drawn on top of each other
+ * is one tick that lies about how many it hides.
+ */
+export function ribbonTicks(
+  lines: LogLine[],
+  heightPx: number,
+  minGapPx = 4,
+  /**
+   * The split's shared clock, when there is one.
+   *
+   * Without it a tick sits where its line is in the buffer; with it, where its
+   * TIME is on the span every pane shares. The small panes of a grid are the
+   * ones that go compact, and they are exactly the panes a shared clock is for
+   * — placing their ticks by index would make the clock do nothing where it
+   * matters most.
+   */
+  range?: { from: number; to: number },
+): RibbonTick[] {
+  if (!lines.length || heightPx <= 0) return [];
+  const ticks: RibbonTick[] = [];
+  const gap = minGapPx / heightPx;
+  const span = range ? Math.max(1, range.to - range.from) : 0;
+
+  lines.forEach((l, index) => {
+    if (foldsInto(l)) return;
+    if (l.level !== 'error' && l.level !== 'warn') return;
+    let at: number;
+    if (range) {
+      /* No time, no place on a clock — left out rather than guessed. */
+      if (l.ts === undefined) return;
+      at = Math.min(1, Math.max(0, (l.ts - range.from) / span));
+    } else {
+      at = lines.length === 1 ? 0 : index / (lines.length - 1);
+    }
+    const last = ticks[ticks.length - 1];
+    /* `abs`: on a clock, a buffer merged from two sources can step back in
+       time, and a tick behind its neighbour still shares its pixel. */
+    if (last && Math.abs(at - last.at) < gap) {
+      last.count++;
+      if (l.level === 'error') last.level = 'error';
+      return;
+    }
+    ticks.push({ at, level: l.level, startIndex: index, count: 1 });
+  });
+  return ticks;
+}
+
+/**
+ * How many bands a ribbon that tall can actually draw.
+ *
+ * One per ~7px is the readable size — a band has to be clickable and legible as
+ * a colour. The second ceiling is the one a split pane needs: a band is at
+ * least `min` px with a `gap` under it, and asking a 150px track for 170px of
+ * bands does not shrink them, it makes the track overflow. A flex child whose
+ * min-height is `auto` then keeps the height its content demanded, and every
+ * measurement taken from it — the marker's position, the drag's scale — is
+ * against a track taller than the pane it is drawn in.
+ */
+export function ribbonBands(height: number, min = 2, gap = 1): number {
+  const fits = Math.floor((height + gap) / (min + gap));
+  return Math.max(4, Math.min(Math.floor(height / 7), fits));
+}
+
 /** Tooltip for a ribbon column. */
 export function describeBucket(b: DensityBucket): string {
   const parts = [`${b.count} line${b.count === 1 ? '' : 's'}`];
@@ -402,10 +602,17 @@ export function describeBucket(b: DensityBucket): string {
   return parts.join(' · ');
 }
 
-/** Per-level totals for the filter chips, so counts are visible before filtering. */
+/**
+ * Per-level totals for the filter chips, so counts are visible before filtering.
+ *
+ * Events, never frames. A stack frame carries the level of the exception it
+ * belongs to, so counting lines made one timeout with 34 frames read as 35
+ * errors — and the chip then disagreed with the rows on screen, where those 34
+ * are folded into one. The number has to mean what the eye can count.
+ */
 export function levelCounts(lines: LogLine[]): Record<LogLevel, number> {
   const counts: Record<LogLevel, number> = { error: 0, warn: 0, info: 0, debug: 0, other: 0 };
-  for (const l of lines) counts[l.level]++;
+  for (const l of lines) if (!foldsInto(l)) counts[l.level]++;
   return counts;
 }
 
@@ -468,7 +675,7 @@ export function isStackFrame(text: string): boolean {
  * continuations that `isStackFrame` calls events, so they stayed unfolded and
  * pushed the message that caused them off the screen.
  */
-function foldsInto(line: MatchedLine): boolean {
+function foldsInto(line: Pick<LogLine, 'continuation' | 'text'>): boolean {
   return line.continuation ?? isStackFrame(line.text);
 }
 

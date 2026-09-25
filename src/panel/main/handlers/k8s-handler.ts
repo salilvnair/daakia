@@ -45,6 +45,7 @@ import {
   type ArtifactKind, type CollectTarget,
 } from '../../../services/k8s/k8s-artifacts';
 import { readMemoryProfile, assessHeapDumpSafety } from '../../../services/k8s/k8s-memory';
+import { scanFolder } from '../../../services/k8s/logger-scan';
 import {
   searchLogs, DEFAULT_SEARCH,
   type SearchHandle, type SearchTarget, type SearchOptions,
@@ -2655,4 +2656,94 @@ export function handleDk8sRefreshPods(postMessage: PostMessage): void {
     return;
   }
   for (const w of live) w.handle.refresh();
+}
+
+/**
+ * Every logger call in a folder, offered for the catalogue.
+ *
+ * The folder is asked for rather than guessed. A guess would be the workspace
+ * root, which is right for somebody with the service open and wrong for
+ * everybody testing a service they do not build — and the wrong answer here
+ * reads a few thousand files before saying nothing useful.
+ *
+ * The calls go back as source text. Turning them into patterns is the
+ * webview's job, through the same parser a pasted call goes through: one set
+ * of rules for what `{}` means, in one place.
+ */
+export async function handleDk8sScanLoggers(
+  msg: Record<string, unknown>, postMessage: PostMessage,
+): Promise<void> {
+  let folder = typeof msg.folder === 'string' ? msg.folder.trim() : '';
+  if (!folder) {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      canSelectFolders: true,
+      canSelectFiles: false,
+      title: 'Scan a project for logger calls',
+      openLabel: 'Scan',
+    });
+    if (!picked?.length) {
+      postMessage({ type: 'dk8s:loggerScan', cancelled: true });
+      return;
+    }
+    folder = picked[0].fsPath;
+  }
+
+  try {
+    const result = await scanFolder(folder);
+    postMessage({ type: 'dk8s:loggerScan', folder, ...result });
+  } catch (err) {
+    postMessage({ type: 'dk8s:loggerScan', folder, error: (err as Error).message });
+  }
+}
+
+/**
+ * Every pod dk8s is watching right now, as search targets.
+ *
+ * The scope of an AI-run search, and deliberately nothing wider: the model can
+ * narrow it with a glob, but it cannot name a cluster or a namespace the user
+ * has not opened. What is on screen is what may be read.
+ *
+ * The watch key is `context/namespace`; split at the LAST slash, because a
+ * namespace cannot contain one and an EKS context name routinely does.
+ */
+export function watchedPodTargets(): SearchTarget[] {
+  const out: SearchTarget[] = [];
+  for (const [key, live] of watches) {
+    const cut = key.lastIndexOf('/');
+    if (cut <= 0) continue;
+    const context = key.slice(0, cut);
+    const namespace = key.slice(cut + 1);
+    for (const raw of live.pods as {
+      name?: string; containers?: ({ name?: string } | string)[]; workload?: { name?: string };
+    }[]) {
+      if (!raw?.name) continue;
+      const containers = (raw.containers ?? [])
+        .map(c => (typeof c === 'string' ? c : c?.name))
+        .filter((c): c is string => !!c);
+      out.push({
+        context, namespace, pod: raw.name,
+        containers: containers.length ? containers : undefined,
+        workload: raw.workload?.name,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * The archive half, for a caller that is not the search screen — or nothing,
+ * when no volume is configured, so "archive: true" from a model is a no-op
+ * rather than an error the user has to read.
+ */
+export function archiveSearcher():
+  ((t: SearchTarget, opts: SearchOptions, signal: { cancelled: boolean }) =>
+    ReturnType<typeof searchPvInPod>) | undefined {
+  const pv = pvConfig();
+  if (!pv?.enabled || !mountsOf(pv).length) return undefined;
+  return (t, opts, signal) => searchPvInPod(
+    pv,
+    { namespace: t.namespace, pod: t.pod, context: t.context, workload: t.workload },
+    opts, signal,
+  );
 }

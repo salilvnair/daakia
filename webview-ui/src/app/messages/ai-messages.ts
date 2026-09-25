@@ -6,6 +6,8 @@ import { useAiKeysStore } from '../../store/ai-keys-store';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 import { useAiHistoryStore } from '../../store/ai-history-store';
 import { useAiConversationStore } from '../../store/ai-conversation-store';
+import { displayEnvelope } from '../../components/ai/ai-display';
+import { useAiChatSessions } from '../../store/ai-chat-sessions-store';
 import { useAiPromptTemplatesStore, AI_PROMPT_TEMPLATE_DEFAULTS } from '../../store/prompt-template';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -65,7 +67,12 @@ export function handleAiMessages(msg: any): boolean {
 
           const tab = useTabsStore.getState().tabs.find(t => t.id === tabId);
           if (tab?.type === 'daakia-ai') {
-            useAiConversationStore.getState().finalizeAssistantMessage(aiMsg);
+            /* The card travels with the answer, so a reopened conversation draws it again. */
+            const dk8s = msg.dk8s as unknown[] | undefined;
+            useAiConversationStore.getState().finalizeAssistantMessage(
+              dk8s?.length ? { ...aiMsg, display: displayEnvelope(aiMsg.content || '', dk8s) } : aiMsg);
+            /* Every answer saves the open thread, so the history rail is never behind. */
+            useAiChatSessions.getState().save();
             useTabsStore.getState().updateTab(tabId, { aiStreaming: false, loading: false });
           } else if (tab) {
             const conv = [...(tab.aiConversation || [])];

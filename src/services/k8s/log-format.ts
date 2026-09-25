@@ -518,10 +518,24 @@ function parsePatternLine(text: string, fmt: LogFormat, re: RegExp): ParsedLine 
     logger: g.logger,
     thread: g.thread?.trim() || undefined,
     app: g.app?.trim() || undefined,
-    // The regex only saw the head, so take the message from the full line —
-    // otherwise anything past 256 chars would be silently truncated.
+    /*
+      The regex only saw the head, so take the message from the full line —
+      otherwise anything past 256 chars would be silently truncated.
+
+      From where the message STARTS, not from the end. This used to be
+      `text.slice(text.length - g.message.length)`: the last N characters of
+      the line, N being how much of the message fitted in the head. For a short
+      line those are the same thing. For a long one it is the message's tail
+      with its beginning missing — every JSON or SOAP body over 256 characters
+      began mid-word (`me":"Harbor Point Marina"…`), and the payload drawn from
+      it had lost its first keys.
+
+      The branch is only taken when the match runs to the end of the head, and
+      `(?<message>.*)` is greedy, so the message ends where the match does and
+      starts `g.message.length` before that.
+    */
     message: g.message !== undefined && m.index + m[0].length >= Math.min(text.length, HEAD)
-      ? text.slice(text.length - g.message.length)
+      ? text.slice(m.index + m[0].length - g.message.length)
       : (g.message ?? text),
   };
 }

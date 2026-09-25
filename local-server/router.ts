@@ -80,6 +80,7 @@ import {
   handleDk8sShell, handleDk8sProbePod, handleDk8sMarkRuntime, handleDk8sAsk,
   handleDk8sCollect, handleDk8sAnalyze, handleDk8sRevealArtifacts,
   handleDk8sLoadPv, handleDk8sSavePv, handleDk8sOpenLogFile, handleDk8sSetLogLineNumbers,
+  handleDk8sScanLoggers,
 } from '../src/panel/main/handlers/k8s-handler';
 import {
   handleDk8sPodMounts, handleDk8sPvList, handleDk8sPvSearch, handleDk8sPodPicker,
@@ -129,7 +130,10 @@ import {
   handleSmWorkflowSaveFolder, handleSmWorkflowDeleteFolder, handleSmWorkflowSaveTodos,
 } from '../src/panel/main/handlers/sm-workflow-handler';
 import { handleSaveUiState, handleGetUiState, handleSaveWorkspaceSnapshot, handleGetWorkspaceSnapshot } from '../src/panel/main/handlers/ui-state-handler';
-import { handleAiSend, handleAiCancel, handleAiChat, handleAiStream, handleAiStreamRequest } from '../src/panel/main/handlers/ai-handler';
+import {
+  handleAiSend, handleAiCancel, handleAiChat, handleAiStream, handleAiStreamRequest,
+  handleAiSaveConversation, handleAiLoadConversations, handleAiLoadConversation, handleAiDeleteConversation,
+} from '../src/panel/main/handlers/ai-handler';
 import { handleLoadStart, handleLoadStop } from '../src/panel/main/handlers/load-handler';
 import { handleBulkRun, handleBulkStop } from '../src/panel/main/handlers/bulk-handler';
 import { handleInterceptorStart, handleInterceptorStop } from '../src/panel/main/handlers/interceptor-handler';
@@ -512,6 +516,11 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dk8s:importArtifact':
       handleDk8sImportArtifact(post);
+      break;
+    /* In the browser there is no folder dialog to fall back to, so a scan
+       without a path is a scan that cannot be run — say so rather than hang. */
+    case 'dk8s:scanLoggers':
+      void handleDk8sScanLoggers(msg, post);
       break;
     case 'dk8s:deleteArtifact':
       handleDk8sDeleteArtifact(msg, post);
@@ -1237,6 +1246,20 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       if (templates && typeof templates === 'object') setAiPromptTemplates(templates);
       break;
     }
+
+    // ── Daakia AI conversation history (the rail) — the same handlers the extension routes ──
+    case 'ai:saveConversation':
+      handleAiSaveConversation(msg, post);
+      break;
+    case 'ai:loadConversations':
+      handleAiLoadConversations(msg, post);
+      break;
+    case 'ai:loadConversation':
+      handleAiLoadConversation(msg, post);
+      break;
+    case 'ai:deleteConversation':
+      handleAiDeleteConversation(msg, post);
+      break;
 
     // ── Daakia AI conversation ──
     case 'aiConversation:load':

@@ -403,3 +403,50 @@ describe('compileTemplate — conversion patterns', () => {
     expect(c.hasLevel).toBe(true);
   });
 });
+
+/*
+  A line longer than the 256-character head lost the START of its message.
+
+  The pattern only ever sees the head, so the full message has to be taken
+  from the whole line — and it was, from the wrong end: the LAST
+  `head-message.length` characters of the line rather than everything from
+  where the message begins. Every long Spring line in the Logs tab began
+  mid-word — `me":"Harbor Point Marina"…` for a line that says
+  `request payload {"requestDataId":9561,"customer":{"name":"Harbor…` — and the
+  payload detector, handed the tail, drew a two-key JSON where the pod wrote
+  a five-key one.
+*/
+describe('a message longer than the head', () => {
+  const prefix = '2026-09-24T04:50:26.783Z  INFO 1 --- [zp-backend] [nio-8104-exec-7] '
+    + 'c.z.backend.api.RequestPayloadLogger     : ';
+  const message = 'request payload {"requestDataId":9561,"customer":{"name":"Harbor Point Marina",'
+    + '"id":"CUST-90113"},"service":"SOFT_DISCONNECT","asOf":"2026-11-09",'
+    + '"card":{"last4":"2407","token":"tok_live_45323372"}}';
+
+  it('keeps the message whole, from its first character', () => {
+    const line = prefix + message;
+    expect(line.length).toBeGreaterThan(256);
+    const p = parse('builtin.spring', line)!;
+    expect(p.message).toBe(message);
+  });
+
+  it('still reads the fields off the head', () => {
+    const p = parse('builtin.spring', prefix + message)!;
+    expect(p.logger).toBe('c.z.backend.api.RequestPayloadLogger');
+    expect(p.thread).toBe('nio-8104-exec-7');
+    expect(p.level).toBe('info');
+  });
+
+  it('keeps an XML body whole too', () => {
+    const soap = 'provider said <soap:Envelope><soap:Body><soap:Fault><faultcode>soap:Server</faultcode>'
+      + '<faultstring>PRSU rejected order for 9487</faultstring></soap:Fault></soap:Body></soap:Envelope>';
+    const line = prefix.replace('RequestPayloadLogger', 'PrsuSoapClient      ') + soap;
+    expect(line.length).toBeGreaterThan(256);
+    expect(parse('builtin.spring', line)!.message).toBe(soap);
+  });
+
+  it('leaves a short line exactly as it was', () => {
+    const p = parse('builtin.spring', prefix + 'GET /api/v1/rules -> 200 in 25ms')!;
+    expect(p.message).toBe('GET /api/v1/rules -> 200 in 25ms');
+  });
+});

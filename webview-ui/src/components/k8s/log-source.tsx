@@ -68,6 +68,16 @@ export type LogSource = Pick<K8sStore,
    * Set it and the ladder stops where the lines do.
    */
   contextCap?: number;
+  /**
+   * One clock for every pane of a split, when the reader asks for it.
+   *
+   * Each ribbon otherwise scales to its own lines, which is right for one log
+   * and wrong for three side by side: the same height meant a different
+   * instant in each, so a burst that hit all three pods at 14:02 was drawn at
+   * three different heights. With this set, every pane's ribbon spans the same
+   * start and end and the burst lines up across the split.
+   */
+  sharedRange?: { from: number; to: number };
 };
 
 const Ctx = createContext<LogSource | null>(null);

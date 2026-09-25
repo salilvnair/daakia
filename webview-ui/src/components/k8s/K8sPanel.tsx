@@ -401,7 +401,9 @@ export function K8sPanel() {
           {seen.has('artifacts') && (
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden"
                  style={{ display: view === 'artifacts' ? 'flex' : 'none' }}>
-              <ArtifactsView />
+              {/* Kept mounted, so it has to be told when it is the one on
+                  screen: that is when it lists the folder again. */}
+              <ArtifactsView active={view === 'artifacts'} />
             </div>
           )}
           {view === 'pods' && (

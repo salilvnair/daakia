@@ -1,45 +1,45 @@
 /**
- * DaakiaAiPanel — Full-screen Daakia AI chat panel rendered as a dedicated tab.
+ * DaakiaAiPanel — the Daakia AI tab.
  *
- * Features:
- * - Colorful hero banner with "Daakia Assistant" branding
- * - Daakia-only system prompt (no off-topic questions)
- * - MdViewer-powered response rendering (markdown, code blocks, tables)
- * - ConvEngineChat fullscreen mode (no URL bar, no request config)
- * - AI Conversation Context (4.5.4): auto-injects current tab state into system prompt
+ * A history rail, a header, and ConvEngineChat in fullscreen mode with this
+ * tab's landing, `/` palette and dk8s progress drawn inside it. The accent is
+ * the tab's own orange (--color-ai-accent, falling back to Claude's clay);
+ * surfaces follow the VS Code theme. See daakia-ai.css.
  *
- * E6.71 — Daakia AI dedicated tab
- * E6.72 — Hero banner, Daakia-only persona, MdViewer renderer
+ * E6.71 — Daakia AI dedicated tab · 3.3 — the revamp on convengine-chat 1.7.0
  */
-import { useCallback, useMemo, useEffect, useState } from 'react';
+import { useCallback, useMemo, useEffect, useRef, useState } from 'react';
 import { ConvEngineChat } from '@salilvnair/convengine-chat';
+import type { RendererComponentProps } from '@salilvnair/convengine-chat';
 import { useTabsStore, DAAKIA_ASSISTANT_SYSTEM_PROMPT, type ResponseData } from '../../store/tabs-store';
-import { useAiProvidersStore } from '../../store/ai-providers-store';
 import { useEnvStore, GLOBAL_ENV_ID } from '../../store/env-store';
-import { GeneralAssistantIcon, SparkleIcon } from '../../icons';
-import { ButtonView } from '@salilvnair/dui';
+import { DaakiaMarkIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
+import { Dk8sSearchCard, isDk8sSearchPayload } from './Dk8sSearchCard';
 import { postMsg } from '../../vscode';
 import { AiPendingActions, parseDaakiaActions, type DaakiaAction } from './AiPendingActions';
 import { AiConversationToCollectionModal } from './AiConversationToCollectionModal';
 import { AiSessionExportModal } from './AiSessionExportModal';
-import { useAiFeaturesStore } from '../../store/ai-features-store';
-import { useAiPromptTemplatesStore, AI_PROMPT_TEMPLATE_LABELS, type AiPromptTemplateKey } from '../../store/prompt-template';
-import { insertIntoComposer } from './composer-insert';
-import { useToastStore } from '../../store/toast-store';
+import { useAiPromptTemplatesStore } from '../../store/prompt-template';
+import { useK8sStore } from '../../store/k8s-store';
+import { usePersistedPref } from '../../store/ui-state-store';
+import { useAiConversationStore } from '../../store/ai-conversation-store';
+import { useAiChatSessions } from '../../store/ai-chat-sessions-store';
+import { DK8S_CHAT_PREF } from './dk8s-chat-prompts';
+import { Dk8sSearchProgressPortal } from './Dk8sSearchProgress';
+import { AiHistoryRail } from './AiHistoryRail';
+import { AiChatHeader } from './AiChatHeader';
+import { AiLandingPortal } from './AiLanding';
+import { PromptPalette } from './PromptPalette';
+import { BUILD_PROMPTS, logPrompts } from './ai-prompts';
+import { chatActions } from './ai-chat-actions';
+import { toUiMessages } from './ai-display';
+import { copyText } from '../../utils/clipboard';
+import { useDocTheme } from './use-doc-theme';
+import { ButtonView, IconButtonView } from '@salilvnair/dui';
+import './daakia-ai.css';
 
-// ─── Suggestion chips ─────────────────────────────────────────────────────────
-
-const SUGGESTION_CHIPS = [
-  { chipText: 'Build a request', chatText: '/request GET all users from https://jsonplaceholder.typicode.com/users'},
-  { chipText: 'Create a mock', chatText: '/mock Create a mock POST /api/users that returns a created user'},
-  { chipText: 'Generate tests', chatText: '/test Write assertions for a 200 response with a users array'},
-  { chipText: 'Convert to cURL', chatText: '/curl curl -X POST https://api.example.com/data -H "Content-Type: application/json"-d \'{"name":"test"}\''},
-  { chipText: 'GraphQL query', chatText: '/graphql Write a GraphQL query to get all users with their id, name, and email'},
-  { chipText: 'SOAP envelope', chatText: '/soap Generate a SOAP 1.1 envelope for a GetUserById operation with userId parameter'},
-  { chipText: 'Security scan', chatText: '/security Scan this request for security issues: GET http://api.example.com/users?apiKey=sk-abc123'},
-  { chipText: 'Document endpoint', chatText: '/docs Document the POST /api/users endpoint that creates a new user with name and email'},
-];
+const ACCENT = 'var(--color-ai-accent, #D97757)';
 
 // ─── MdViewer renderer provider ───────────────────────────────────────────────
 
@@ -78,7 +78,27 @@ function DaakiaMdRendererComponent({ payload }: { payload: unknown }) {
   );
 }
 
+/**
+ * An answer that came with a dk8s search: the explanation, and the lines it
+ * cites drawn from the search's own result. `actions.submit` is how the card's
+ * ±20 / ±100 / ±500 asks again — the model re-runs the search wider, the same
+ * way it would if the user typed the request.
+ */
+function Dk8sRendererComponent({ payload, actions }: RendererComponentProps) {
+  if (!isDk8sSearchPayload(payload)) return <DaakiaMdRendererComponent payload={payload} />;
+  return <Dk8sSearchCard payload={payload} submit={actions ? (text) => actions.submit(text) : undefined} />;
+}
+
 const DAAKIA_RENDERER_PROVIDERS = [
+  {
+    key: 'daakia-dk8s-search',
+    /* Above the markdown catch-all, which matches everything. */
+    priority: 300,
+    match: (ctx: { payload?: unknown }) => isDk8sSearchPayload(ctx?.payload),
+    Component: Dk8sRendererComponent,
+    /* The card brings its own border and width; a speech bubble around it squeezed both. */
+    hideBubble: true,
+  },
   {
     key: 'daakia-md',
     priority: 200,          // built-in renderers are priority 100
@@ -197,23 +217,23 @@ function AiContextBar({
       className="flex items-center gap-2 px-3 py-1.5 border-b overflow-hidden flex-shrink-0"
       style={{
         borderColor: 'var(--color-surface-border)',
-        backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 5%, var(--color-panel))',
+        backgroundColor: 'color-mix(in srgb, var(--color-ai-accent, #D97757) 5%, var(--color-panel))',
       }}
     >
       {/* Context label */}
-      <span className="flex-shrink-0 text-[9.5px] font-semibold uppercase tracking-wider opacity-50" style={{ color: 'var(--color-protocol-ai)' }}>
+      <span className="flex-shrink-0 text-[9.5px] font-semibold uppercase tracking-wider opacity-50" style={{ color: 'var(--color-ai-accent, #D97757)' }}>
         Context
       </span>
 
       {/* Protocol badge + URL + optional detail */}
-      <span className="font-mono font-bold flex-shrink-0 text-[10px]" style={{ color: 'var(--color-protocol-ai)' }}>
+      <span className="font-mono font-bold flex-shrink-0 text-[10px]" style={{ color: 'var(--color-ai-accent, #D97757)' }}>
         {protoBadge}
       </span>
       <span className="truncate flex-1 font-mono text-[10px]" style={{ color: 'var(--color-text-secondary)' }}>
         {truncatedUrl}
       </span>
       {detail && (
-        <span className="flex-shrink-0 text-[9px] px-1.5 py-px rounded font-mono" style={{ backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 10%, transparent)', color: 'var(--color-protocol-ai)' }}>
+        <span className="flex-shrink-0 text-[9px] px-1.5 py-px rounded font-mono" style={{ backgroundColor: 'color-mix(in srgb, var(--color-ai-accent, #D97757) 10%, transparent)', color: 'var(--color-ai-accent, #D97757)' }}>
           {detail}
         </span>
       )}
@@ -223,7 +243,7 @@ function AiContextBar({
         </span>
       )}
       {envName && envName !== 'Global' && (
-        <span className="flex-shrink-0 px-1.5 py-px rounded text-[9px]" style={{ backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 12%, transparent)', color: 'var(--color-protocol-ai)' }}>
+        <span className="flex-shrink-0 px-1.5 py-px rounded text-[9px]" style={{ backgroundColor: 'color-mix(in srgb, var(--color-ai-accent, #D97757) 12%, transparent)', color: 'var(--color-ai-accent, #D97757)' }}>
           {envName}
         </span>
       )}
@@ -235,7 +255,7 @@ function AiContextBar({
           onClick={() => setActiveTab(tabId)}
           title="Switch to this request tab"
           className="h-[18px] px-1.5 text-[9.5px] font-medium rounded cursor-pointer transition-all hover:opacity-80 border"
-          style={{ color: 'var(--color-protocol-ai)', borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 30%, transparent)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)' }}
+          style={{ color: 'var(--color-ai-accent, #D97757)', borderColor: 'color-mix(in srgb, var(--color-ai-accent, #D97757) 30%, transparent)', backgroundColor: 'color-mix(in srgb, var(--color-ai-accent, #D97757) 8%, transparent)' }}
         >
           → Tab
         </button>
@@ -253,79 +273,30 @@ function AiContextBar({
   );
 }
 
-// ─── Hero banner ──────────────────────────────────────────────────────────────
-
-function DaakiaAiHero() {
-  return (
-    <div
-      className="flex-shrink-0 flex items-center justify-between px-5 py-3 border-b"
-      style={{
-        borderColor: 'var(--color-surface-border)',
-        background: `linear-gradient(135deg,
-          color-mix(in srgb, var(--color-protocol-ai) 18%, var(--color-panel)) 0%,
-          color-mix(in srgb, var(--color-protocol-ai) 6%, var(--color-panel)) 60%,
-          var(--color-panel) 100%)`,
-      }}
-    >
-      {/* Left: icon + title + tagline */}
-      <div className="flex items-center gap-3">
-        {/* Glow badge */}
-        <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-          style={{
-            background: 'var(--color-protocol-ai)',
-            boxShadow: '0 0 18px color-mix(in srgb, var(--color-protocol-ai) 50%, transparent)',
-          }}
-        >
-          <GeneralAssistantIcon size={18} className="text-white" />
-        </div>
-
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-[15px] font-semibold leading-tight" style={{ color: 'var(--color-text-primary)' }}>
-              Daakia Assistant
-            </h2>
-            <span
-              className="text-[9px] font-medium px-1.5 py-px rounded-full leading-none"
-              style={{
-                background: 'color-mix(in srgb, var(--color-protocol-ai) 20%, transparent)',
-                color: 'var(--color-protocol-ai)',
-                border: '1px solid color-mix(in srgb, var(--color-protocol-ai) 35%, transparent)',
-              }}
-            >
-              AI
-            </span>
-          </div>
-          <p className="text-[11px] mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-            REST · GraphQL · SOAP · gRPC · Mock · cURL · Test Scripts
-          </p>
-        </div>
-      </div>
-
-      {/* Right: sparkle accent */}
-      <div className="flex items-center gap-1 opacity-40">
-        <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)' }} />
-      </div>
-    </div>
-  );
-}
 
 // ─── Panel ────────────────────────────────────────────────────────────────────
 
+/** Where an AI agent's avatar goes: Daakia's own mark. */
+function DaakiaAvatar() {
+  return <DaakiaMarkIcon size={16} />;
+}
+
 /**
- * DaakiaAiPanel — standalone AI assistant tab, no request-config chrome.
- * The DaakiaVsCodeBridge (installed in App.tsx) intercepts all ConvEngine
- * HTTP/SSE calls and routes them through the Daakia extension protocol.
+ * DaakiaAiPanel — the Daakia AI tab.
  *
- * System prompt is injected via tab.aiSystemPrompts (set in openDaakiaAiTab).
- * If the tab somehow lost its prompts (e.g. persisted state), we re-inject here.
+ * ConvEngineChat is the conversation; everything around it is this tab's: a
+ * history rail, a quiet header, the landing and the `/` palette drawn inside
+ * the chat's own slots, and the dk8s context pinned in the composer as a
+ * reply pill (`replyContext`, persisted) rather than a banner.
+ *
+ * The DaakiaVsCodeBridge (installed in App.tsx) intercepts ConvEngine's
+ * HTTP/SSE calls and routes them through the Daakia extension protocol.
+ * System prompts are injected via tab.aiSystemPrompts; the dk8s one is added
+ * by the bridge at send time.
  */
 export function DaakiaAiPanel() {
-  const addToast = useToastStore(s => s.addToast);
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
   const updateTab = useTabsStore(s => s.updateTab);
-  const defaultProviderId = useAiProvidersStore(s => s.defaultProviderId);
-  const defaultModelId = useAiProvidersStore(s => s.defaultModelId);
 
   // ── AI Conversation Context (4.5.4) ──────────────────────────────────────
   // Use the tab that was active when "Ask AI" was clicked (previousTabId),
@@ -333,28 +304,19 @@ export function DaakiaAiPanel() {
   const allTabs = useTabsStore(s => s.tabs);
   const previousTabId = useTabsStore(s => s.previousTabId);
   const contextTab = useMemo(() => {
-    // Prefer the tab the user explicitly came from — no URL requirement.
-    // A gRPC/SOAP/GQL tab with no URL yet should still be the context tab.
-    // showContextBar and buildContextBlock handle the empty-URL case downstream.
     const prev = previousTabId ? allTabs.find(t => t.id === previousTabId) : null;
     if (prev && prev.type !== 'daakia-ai') return prev;
-    // Fallback: last non-AI tab with a URL (when previousTabId is stale/missing)
     return allTabs.filter(t => t.type !== 'daakia-ai' && t.url?.trim()).at(-1) ?? null;
   }, [allTabs, previousTabId]);
 
   const environments = useEnvStore(s => s.environments);
   const activeEnvId = useEnvStore(s => s.activeEnvId);
-
-  // Resolve env for the context tab (fall back to global active env)
   const contextEnv = useMemo(() => {
     const envId = contextTab?.envId ?? activeEnvId;
-    if (!envId || envId === GLOBAL_ENV_ID) {
-      return environments.find(e => e.isGlobal) ?? null;
-    }
+    if (!envId || envId === GLOBAL_ENV_ID) return environments.find(e => e.isGlobal) ?? null;
     return environments.find(e => e.id === envId) ?? null;
   }, [contextTab, environments, activeEnvId]);
 
-  // Context bar is shown whenever there's a valid non-AI tab with a URL
   const showContextBar = !!contextTab?.url;
 
   // Guard: re-inject system prompts if the tab was loaded from persisted state
@@ -362,112 +324,173 @@ export function DaakiaAiPanel() {
   // Also inject context block as second system prompt.
   useEffect(() => {
     if (!activeTab || activeTab.type !== 'daakia-ai') return;
-
     const basePrompt = DAAKIA_ASSISTANT_SYSTEM_PROMPT;
     const contextBlock = showContextBar && contextTab
-      ? buildContextBlock(
-          contextTab,
-          contextEnv?.name ?? null,
-          contextEnv?.variables?.length ?? 0,
-        )
+      ? buildContextBlock(contextTab, contextEnv?.name ?? null, contextEnv?.variables?.length ?? 0)
       : '';
-
-    const newPrompts = contextBlock
-      ? [basePrompt, contextBlock]
-      : [basePrompt];
-
+    const newPrompts = contextBlock ? [basePrompt, contextBlock] : [basePrompt];
     const currentPrompts = activeTab.aiSystemPrompts ?? [];
     const needsUpdate =
       currentPrompts.length !== newPrompts.length ||
       currentPrompts[0] !== newPrompts[0] ||
       currentPrompts[1] !== newPrompts[1];
-
-    if (needsUpdate) {
-      updateTab(activeTab.id, { aiSystemPrompts: newPrompts });
-    }
+    if (needsUpdate) updateTab(activeTab.id, { aiSystemPrompts: newPrompts });
   }, [activeTab?.id, showContextBar, contextTab?.url, contextTab?.response?.status, contextEnv?.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Sprint 10.7-10.9 panel actions ───────────────────────────────────────
   const [showCollectionModal, setShowCollectionModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
-  const [showPromptPicker, setShowPromptPicker] = useState(false);
   const templates = useAiPromptTemplatesStore(s => s.templates);
-  // ── Sprint 10.10-10.17 platform tools ────────────────────────────────────
-  // ── Sprint 14 platform tools ──────────────────────────────────────────────
-  const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
+
+  // ── The rail, and which conversation is open ─────────────────────────────
+  const [railPref, setRailPref] = usePersistedPref('ai.chat.rail', 'open', ['open', 'closed'] as const);
+  const epoch = useAiChatSessions(s => s.epoch);
+  const seed = useAiChatSessions(s => s.seed);
+  const conversations = useAiChatSessions(s => s.conversations);
+  const activeId = useAiChatSessions(s => s.activeId);
+  const modelMessages = useAiConversationStore(s => s.messages);
+  const modelLoaded = useAiConversationStore(s => s.loaded);
+
+  /*
+    The thread that was open when Daakia closed comes back on screen.
+
+    The model's history of it is restored from the database on start
+    (aiConversation:load); until now the chat itself started empty beside it,
+    so the model remembered a conversation the screen did not show.
+  */
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || !modelLoaded) return;
+    restored.current = true;
+    if (epoch === 0 && seed.length === 0 && modelMessages.length > 0) {
+      useAiChatSessions.setState(s => ({ seed: modelMessages, epoch: s.epoch + 1 }));
+    }
+  }, [modelLoaded, modelMessages, epoch, seed.length]);
+
+  const title = useMemo(() => {
+    const row = conversations.find(c => c.id === activeId);
+    if (row) return row.title;
+    const firstUser = modelMessages.find(m => m.role === 'user')?.content.trim();
+    return firstUser ? firstUser.slice(0, 60) + (firstUser.length > 60 ? '…' : '') : 'New conversation';
+  }, [conversations, activeId, modelMessages]);
+
+  // ── dk8s: may the assistant search the watched pods? ─────────────────────
+  const [dk8sPref, setDk8sPref] = usePersistedPref(DK8S_CHAT_PREF, 'on', ['on', 'off'] as const);
+  const k8sContext = useK8sStore(s => s.context);
+  const k8sNamespace = useK8sStore(s => s.namespace);
+  const watchedPods = useK8sStore(s => s.pods.filter(p =>
+    (!s.context || p.context === s.context) && (!s.namespace || p.namespace === s.namespace)).length);
+  const dk8sActive = dk8sPref === 'on' && watchedPods > 0;
+  const where = [k8sContext, k8sNamespace].filter(Boolean).join(' / ');
+
+  /*
+    The dk8s context, pinned in the composer.
+
+    A reply pill that persists across sends — the library's own affordance for
+    "this is what the next message is about". ✕ on it turns dk8s search off
+    for the tab; the header offers to turn it back on. The pods themselves are
+    sent by the bridge, from what dk8s shows at the moment of sending.
+  */
+  const replyContext = useMemo(() => dk8sActive ? {
+    label: 'dk8s',
+    text: `${where} · ${watchedPods} pod${watchedPods === 1 ? '' : 's'}`,
+    persist: true,
+    clearable: true,
+    title: `Questions can search the logs of the ${watchedPods} pods you are watching. ✕ stops that for this tab.`,
+    onClear: () => setDk8sPref('off'),
+  } : null, [dk8sActive, where, watchedPods]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const logPromptList = useMemo(() => logPrompts(templates), [templates]);
+  const palettePrompts = useMemo(
+    () => [...(dk8sActive ? logPromptList : []), ...BUILD_PROMPTS],
+    [dk8sActive, logPromptList],
+  );
+
+  const [chatRoot, setChatRoot] = useState<HTMLDivElement | null>(null);
+
+  /*
+    The chat's own dark/light mode follows Daakia's. It is only read when the
+    chat mounts, so a change remounts it — seeded with the thread as it stands,
+    so switching theme mid-conversation loses nothing.
+  */
+  const docTheme = useDocTheme();
+  const lastTheme = useRef(docTheme);
+  useEffect(() => {
+    if (lastTheme.current === docTheme) return;
+    lastTheme.current = docTheme;
+    useAiChatSessions.setState(s => ({ seed: useAiConversationStore.getState().messages, epoch: s.epoch + 1 }));
+  }, [docTheme]);
 
   // ── AI Suggestion Chips (4.5.5) ──────────────────────────────────────────
   const [showChips, setShowChips] = useState(false);
-
   // ── AI Actions from Chat (4.5.6) ─────────────────────────────────────────
   const [pendingActions, setPendingActions] = useState<DaakiaAction[]>([]);
 
   const handleMessage = useCallback((_text: string) => {
-    // Hide chips + clear pending actions while waiting for next AI response
     setShowChips(false);
     setPendingActions([]);
   }, []);
 
   const handleResponse = useCallback((text: string) => {
-    // Parse action commands embedded in the AI response
     const actions = parseDaakiaActions(text);
-    if (actions.length > 0) {
-      setPendingActions(actions);
-    }
-    // Show action chips after each AI response
+    if (actions.length > 0) setPendingActions(actions);
     setShowChips(true);
   }, []);
 
   const handleDismissAction = useCallback((index: number) => {
     setPendingActions(prev => prev.filter((_, i) => i !== index));
   }, []);
+  const handleDismissAllActions = useCallback(() => setPendingActions([]), []);
 
-  const handleDismissAllActions = useCallback(() => {
-    setPendingActions([]);
-  }, []);
-
-  // Use a stable conversationId so closing/reopening the Daakia AI tab preserves the
-  // conversation. Only the "New Chat" button (showNewChat: true) should reset it.
-  // Using per-tab IDs was wrong: each tab open created a fresh session.
+  // A stable conversationId: the bridge resolves 'daakia-ai-panel' to this tab.
+  // Switching threads remounts the chat (key = epoch) instead.
   const conversationId = 'daakia-ai-panel';
+  const initialMessages = useMemo(() => toUiMessages(seed), [seed]);
+  const icons = useMemo(() => ({ AgentIcon: DaakiaAvatar }), []);
 
   const chatConfig = useMemo(() => ({
     apiHost: '',
     conversationId,
     title: '',
     subtitle: '',
-    placeholder: 'Ask anything about APIs, REST, GraphQL, mocks, cURL, tests…',
+    placeholder: dk8sActive
+      ? 'Ask about a failure, a request id, a thread… or an API. Type / for prompts'
+      : 'Ask anything about APIs, REST, GraphQL, mocks, cURL, tests… Type / for prompts',
     showFeedback: false,
     showAudit: false,
-    showNewChat: true,
+    showNewChat: false,
     showLayoutPicker: false,
     showMaximize: false,
     showMinimize: false,
     showEngineStatus: false,
     showHeaderDot: false,
-    defaultDark: true,
-    /* Rectangular, like every other box you type into in this app — the
-       capsule was the library's default, not a choice. */
+    showLandingAvatar: false,
+    showLandingSubtitle: false,
+    defaultDark: docTheme === 'dark',
     composerShape: 'rect' as const,
-    landingChips: SUGGESTION_CHIPS,
+    landingChips: [],
+    initialMessages,
+    replyContext,
+    icons,
     stream: { enabled: true, transport: 'sse' as const },
     renderers: DAAKIA_RENDERER_PROVIDERS,
     onMessage: handleMessage,
     onResponse: handleResponse,
-  }), [conversationId, handleMessage, handleResponse]);
+  }), [handleMessage, handleResponse, dk8sActive, initialMessages, replyContext, icons, docTheme]);
 
   const chatTheme = useMemo(() => ({
-    'color-accent': 'var(--color-protocol-ai)',
+    'color-accent': 'var(--color-ai-accent, #D97757)',
     'bg-panel': 'var(--color-panel)',
-    'bg-header': 'transparent',       // hide CE's own header — we have our own hero
+    'bg-header': 'transparent',
     'border-color': 'var(--color-surface-border)',
     'shadow-panel': 'none',
     'bg-composer': 'var(--color-panel)',
-    'bg-composer-surface': 'transparent',
+    'bg-composer-surface': 'color-mix(in srgb, var(--color-text-primary) 4%, var(--color-panel))',
     'text-primary': 'var(--color-text-primary)',
     'text-secondary': 'var(--color-text-muted)',
     'text-placeholder': 'var(--color-text-muted)',
-    'bg-bubble-agent': 'color-mix(in srgb, var(--color-surface-border) 60%, var(--color-panel))',
+    'bg-bubble-user': 'color-mix(in srgb, var(--color-text-primary) 9%, var(--color-panel))',
+    'text-bubble-user': 'var(--color-text-primary)',
+    'bg-bubble-agent': 'transparent',
     'text-bubble-agent': 'var(--color-text-primary)',
   }), []);
 
@@ -497,7 +520,7 @@ export function DaakiaAiPanel() {
         postMsg({ type: 'openSaveAs', tabId: contextTab.id });
         break;
       case 'copy-url':
-        navigator.clipboard.writeText(contextTab.url).catch(() => {});
+        void copyText(contextTab.url);
         break;
       case 'switch-tab':
         useTabsStore.getState().setActiveTab(contextTab.id);
@@ -506,185 +529,68 @@ export function DaakiaAiPanel() {
   }, [contextTab]);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden" style={{ minHeight: 0 }}>
-      {/* Colorful hero banner */}
-      <DaakiaAiHero />
+    <div className="dai">
+      {railPref === 'open' && <AiHistoryRail />}
 
-      {/* AI Panel action bar */}
-      <div className="flex items-center gap-1 px-3 py-1 border-b flex-shrink-0 overflow-x-auto [scrollbar-gutter:stable]" style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 3%, var(--color-panel))' }}>
-        <ButtonView
-          variant="secondary"
-          size="xs"
-          borderRadius={9999}
-          iconLeft={<SparkleIcon size={8} />}
-          accentColor="var(--color-protocol-ai)"
-          color="var(--color-protocol-ai)"
-          title="Convert AI conversation to collection"
-          onClick={() => setShowCollectionModal(true)}
-        >
-          → Collection
-        </ButtonView>
-        <ButtonView
-          variant="ghost"
-          size="xs"
-          borderRadius={9999}
-          onClick={() => setShowExportModal(true)}
-          title="Export session as markdown"
-        >
-          Export ✦
-        </ButtonView>
-        <ButtonView
-          variant={showPromptPicker ? 'secondary' : 'ghost'}
-          size="xs"
-          borderRadius={9999}
-          accentColor={showPromptPicker ? 'var(--color-protocol-ai)' : undefined}
-          color={showPromptPicker ? 'var(--color-protocol-ai)' : undefined}
-          onClick={() => setShowPromptPicker(p => !p)}
-          title="@ Prompt Library quick-insert"
-        >
-          @ Prompts
-        </ButtonView>
-        {/*
-          The ten platform tools used to live here as chips.
-
-          They are standalone tools that happen to use a model — Schema Diff,
-          the Webhook Debugger, the Chaos Planner have nothing to do with the
-          conversation underneath them — and twelve chips in a row is where a
-          feature goes to be un-findable. They are cards in Settings → Power
-          Features → AI tools now, beside Response Diff, which is the tool they
-          most resemble.
-
-          What is left on this strip acts on the conversation itself: turn it
-          into a collection, export it, insert a prompt.
-        */}
-      </div>
-
-      {/* 10.9: Prompt Library quick-picker */}
-      {showPromptPicker && (
-        <div className="flex-shrink-0 border-b max-h-[160px] overflow-y-auto [scrollbar-gutter:stable]" style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}>
-          <div className="px-3 pt-1.5 pb-0.5">
-            <p className="text-[9.5px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>Prompt Library · click to insert</p>
-          </div>
-          <div className="flex flex-wrap gap-1.5 px-3 py-1.5">
-            {(Object.keys(templates) as AiPromptTemplateKey[]).slice(0, 20).map(key => (
-              <ButtonView
-                key={key}
-                variant="secondary"
-                size="xs"
-                borderRadius={9999}
-                onClick={() => {
-                  // Said "click to insert" but only ever copied to the clipboard and closed —
-                  // so clicking a prompt looked like it did nothing at all. Now it really
-                  // inserts, appending so a half-typed question isn't clobbered, and falls
-                  // back to the clipboard only if the composer isn't mounted yet.
-                  const text = templates[key];
-                  if (!text) return;
-                  if (!insertIntoComposer(text, 'append')) {
-                    navigator.clipboard?.writeText(text);
-                    addToast({ type: 'info', message: 'Prompt copied — paste it into the chat box.' });
-                  }
-                  setShowPromptPicker(false);
-                }}
-                title={AI_PROMPT_TEMPLATE_LABELS[key]?.description || key}
-              >
-                {AI_PROMPT_TEMPLATE_LABELS[key]?.label || key}
-              </ButtonView>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Context bar — shows current tab context */}
-      {showContextBar && contextTab && (
-        <AiContextBar
-          tab={contextTab}
-          envName={contextEnv?.name ?? null}
-          tabId={contextTab.id}
-        />
-      )}
-
-      {/* Pending AI actions — applied directly to the context tab or environment */}
-      {pendingActions.length > 0 && (
-        <AiPendingActions
-          actions={pendingActions}
-          contextTab={contextTab}
-          onDismiss={handleDismissAction}
-          onDismissAll={handleDismissAllActions}
-        />
-      )}
-
-      {/* Full-screen chat — fills remaining height */}
-      <div className="flex-1 min-h-0 overflow-hidden relative">
-        <ConvEngineChat
-          mode="fullscreen"
-          config={chatConfig}
-          theme={chatTheme}
+      <div className="dai-main">
+        <AiChatHeader
+          title={title}
+          dk8s={watchedPods > 0 ? { on: dk8sPref === 'on', toggle: () => setDk8sPref(dk8sPref === 'on' ? 'off' : 'on'), where } : undefined}
+          railOpen={railPref === 'open'}
+          onToggleRail={() => setRailPref(railPref === 'open' ? 'closed' : 'open')}
+          onCollection={() => setShowCollectionModal(true)}
+          onExport={() => setShowExportModal(true)}
         />
 
-        {/*
-          Suggestion chips — float above the composer after each response.
-
-          Only when there is something to suggest. Every chip in this row acts
-          on the tab the conversation is about, so with no such tab the row
-          rendered anyway and the only thing left in it was its own dismiss
-          button: a bare ✕ in a circle, floating over the composer, attached to
-          nothing and explaining nothing.
-        */}
-        {showChips && contextTab?.url && (
-          <div
-            className="absolute bottom-[72px] left-0 right-0 flex items-center gap-1.5 px-3 py-1.5 flex-wrap pointer-events-none"
-            style={{ zIndex: 10 }}
-          >
-            {(
-              <>
-                <button
-                  type="button"
-                  onClick={() => handleChipAction('run')}
-                  className="pointer-events-auto h-[24px] px-2.5 text-[10.5px] font-medium rounded-full border cursor-pointer hover:opacity-90 transition-opacity whitespace-nowrap"
-                  style={{ borderColor: 'var(--color-protocol-ai)', color: 'var(--color-protocol-ai)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 10%, var(--color-panel))' }}
-                >
-                  Run request
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleChipAction('save')}
-                  className="pointer-events-auto h-[24px] px-2.5 text-[10.5px] font-medium rounded-full border cursor-pointer hover:opacity-90 transition-opacity whitespace-nowrap"
-                  style={{ borderColor: 'var(--color-protocol-ai)', color: 'var(--color-protocol-ai)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 10%, var(--color-panel))' }}
-                >
- Save to collection
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleChipAction('copy-url')}
-                  className="pointer-events-auto h-[24px] px-2.5 text-[10.5px] font-medium rounded-full border cursor-pointer hover:opacity-90 transition-opacity whitespace-nowrap"
-                  style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)', backgroundColor: 'var(--color-panel)' }}
-                >
- Copy URL
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleChipAction('switch-tab')}
-                  className="pointer-events-auto h-[24px] px-2.5 text-[10.5px] font-medium rounded-full border cursor-pointer hover:opacity-90 transition-opacity whitespace-nowrap"
-                  style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)', backgroundColor: 'var(--color-panel)' }}
-                >
- Switch to tab
-                </button>
-              </>
-            )}
-            <button
-              type="button"
-              onClick={() => setShowChips(false)}
-              className="pointer-events-auto h-[24px] w-[24px] flex items-center justify-center rounded-full border cursor-pointer hover:opacity-70 transition-opacity ml-auto"
-              style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-muted)', backgroundColor: 'var(--color-panel)' }}
-              title="Dismiss"
-            >
-              ×
-            </button>
-          </div>
+        {showContextBar && contextTab && (
+          <AiContextBar tab={contextTab} envName={contextEnv?.name ?? null} tabId={contextTab.id} />
         )}
+
+        {pendingActions.length > 0 && (
+          <AiPendingActions
+            actions={pendingActions}
+            contextTab={contextTab}
+            onDismiss={handleDismissAction}
+            onDismissAll={handleDismissAllActions}
+          />
+        )}
+
+        <div ref={setChatRoot} className="dai-chat">
+          <ConvEngineChat
+            key={`${activeId}:${epoch}`}
+            mode="fullscreen"
+            config={chatConfig}
+            theme={chatTheme}
+            actionsRef={chatActions}
+          />
+          <AiLandingPortal
+            root={chatRoot}
+            dk8s={dk8sActive ? { pods: watchedPods, namespace: k8sNamespace } : undefined}
+            logPrompts={logPromptList}
+            buildPrompts={BUILD_PROMPTS}
+          />
+          <PromptPalette root={chatRoot} prompts={palettePrompts} />
+          <Dk8sSearchProgressPortal root={chatRoot} />
+
+          {/*
+            Suggestion chips — float above the composer after each response,
+            only when there is a request tab for them to act on.
+          */}
+          {showChips && contextTab?.url && (
+            <div className="absolute bottom-[96px] left-0 right-0 flex items-center justify-center gap-1.5 px-3 py-1.5 flex-wrap pointer-events-none" style={{ zIndex: 10 }}>
+              <span className="pointer-events-auto flex flex-wrap gap-1.5">
+                <ButtonView variant="secondary" size="sm" rounded accentColor={ACCENT} onClick={() => handleChipAction('run')}>Run request</ButtonView>
+                <ButtonView variant="ghost" size="sm" rounded onClick={() => handleChipAction('save')}>Save to collection</ButtonView>
+                <ButtonView variant="ghost" size="sm" rounded onClick={() => handleChipAction('copy-url')}>Copy URL</ButtonView>
+                <ButtonView variant="ghost" size="sm" rounded onClick={() => handleChipAction('switch-tab')}>Switch to tab</ButtonView>
+                <IconButtonView size="sm" rounded tooltip="Dismiss suggestions" aria-label="Dismiss suggestions" onClick={() => setShowChips(false)}
+                  icon={<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>} />
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* 10.7: Save conversation to collection */}
       {showCollectionModal && (
         <AiConversationToCollectionModal
           // The chat is about contextTab — so its protocol decides which collection list
@@ -693,10 +599,7 @@ export function DaakiaAiPanel() {
           onClose={() => setShowCollectionModal(false)}
         />
       )}
-      {/* 10.8: Export session as markdown */}
       {showExportModal && <AiSessionExportModal onClose={() => setShowExportModal(false)} />}
-      {/* 10.10-10.17: Platform tools */}
-      {/* Sprint 14: Cross-protocol & advanced platform tools */}
     </div>
   );
 }

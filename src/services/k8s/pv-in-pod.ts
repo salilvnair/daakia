@@ -226,6 +226,16 @@ export interface PvSearchOptions {
   regex?: boolean;
   maxLines?: number;
   globs?: string[];
+  /**
+   * Only files written to since this moment (epoch ms).
+   *
+   * grep cannot read a timestamp, so a window used to be applied after the
+   * fact — and a busy pattern over sixty rotated files filled the line cap
+   * with the oldest files before it reached the one the window was in, and
+   * the window came back empty. A file last written before the window began
+   * cannot hold a line from it, so it is not read at all.
+   */
+  sinceMs?: number;
 }
 
 /**
@@ -243,6 +253,29 @@ export function grepScript(
 ): string {
   const ctx = Math.max(0, Math.round(o.contextLines ?? 0));
   const limit = Math.max(1, Math.min(o.maxLines ?? MAX_MATCH_LINES, MAX_MATCH_LINES));
+  if (o.sinceMs !== undefined) {
+    /*
+      Oldest file first, so the output runs in time order and the cap cuts
+      what came AFTER the window rather than the window itself — find lists
+      files in directory order, which put the newest first and let their
+      lines use up the cap. busybox and GNU both have find -mmin, ls -1tr and
+      read -r; -H keeps the file name on every line, as -r does, so the
+      output parses the same.
+    */
+    const minutes = Math.max(1, Math.ceil((Date.now() - o.sinceMs) / 60_000) + 1);
+    return [
+      'find', shellQuote(root), '-type', 'f', '-mmin', `-${minutes}`,
+      '-exec', 'ls', '-1tr', '{}', '+', '2>/dev/null',
+      '|', 'while', 'IFS=', 'read', '-r', 'f;', 'do',
+      'grep', '-nH',
+      o.caseSensitive ? '-E' : '-Ei',
+      ...(ctx > 0 ? ['-C', String(ctx)] : []),
+      '-e', shellQuote(o.regex ? pattern : escapeRegex(pattern)),
+      '"$f";', 'done',
+      '2>/dev/null',
+      '|', 'head', '-n', String(limit),
+    ].join(' ');
+  }
   return [
     'grep', '-rn',
     o.caseSensitive ? '-E' : '-Ei',

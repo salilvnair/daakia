@@ -98,6 +98,28 @@ export function starredKeyOf(pod: {
   return favoriteChoices(pod).map(c => c.key).find(k => keys.includes(k));
 }
 
+/**
+ * How many favourites are among THESE pods.
+ *
+ * The saved list spans every cluster and namespace, so its length is not a
+ * number about the screen: a namespace holding two of your fourteen stars still
+ * read "★ 14", and one holding none offered a scope that shows nothing.
+ *
+ * Counted over distinct keys, the way starring counts — three replicas of one
+ * starred Deployment are one favourite, not three.
+ */
+export function starredHere(pods: {
+  name: string; namespace: string; context?: string;
+  workload?: { kind: string; name: string };
+}[], keys: string[]): number {
+  const here = new Set<string>();
+  for (const p of pods) {
+    const key = starredKeyOf(p, keys);
+    if (key) here.add(key);
+  }
+  return here.size;
+}
+
 function parse(raw: string | undefined): string[] {
   if (!raw) return [];
   try {

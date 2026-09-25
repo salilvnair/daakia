@@ -8,8 +8,9 @@
 import { useCallback, useEffect } from 'react';
 import {
   CloseIcon, TerminalIcon, FileTextIcon, CodeIcon, StethoscopeIcon,
-  SparkleIcon, ChevronLeftIcon, LayersIcon, LockIcon, FolderOpenIcon,
+  SparkleIcon, ChevronLeftIcon, LayersIcon, LockIcon, FolderOpenIcon, BracesIcon,
 } from '../../icons';
+import { LoggersTab } from './LoggersTab';
 import { CopyButtonView, IconSize, TableSkeletonView } from '@salilvnair/dui';
 import { useK8sStore, type DetailTab } from '../../store/k8s-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
@@ -48,6 +49,15 @@ const TABS: {
 }[] = [
   { id: 'overview', label: 'Overview', Icon: LayersIcon },
   { id: 'logs', label: 'Logs', Icon: FileTextIcon, needs: 'logs' },
+  /*
+    Beside Logs, and gated on nothing.
+
+    The catalogue is written down rather than read off the cluster — a pasted
+    logger call needs no permission at all — and it is most wanted exactly when
+    the log is unreadable, which includes the case where this account cannot
+    read the log yet.
+  */
+  { id: 'loggers', label: 'Loggers', Icon: BracesIcon },
   { id: 'terminal', label: 'Terminal', Icon: TerminalIcon, needs: 'exec' },
   { id: 'doctor', label: 'Doctor', Icon: StethoscopeIcon, needs: 'exec' },
   // Everything the explorer does is one exec, so it gates on exactly the same
@@ -407,6 +417,7 @@ export function PodDetail() {
             ) : (
               <>
                 {detailTab === 'logs' && <LogViewer />}
+                {detailTab === 'loggers' && <LoggersTab />}
                 {detailTab === 'terminal' && <PodTerminal />}
                 {detailTab === 'describe' && <DescribePane text={describeText} busy={describeBusy} />}
                 {detailTab === 'yaml' && <YamlPane text={yamlText} busy={describeBusy} />}

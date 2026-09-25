@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { type AiMessage } from '../../store/tabs-store';
 import { McpToolIcon, CopyIcon, ChevronDownIcon, ChevronRightIcon } from '../../icons';
 import { JsonTreeViewer } from '../shared/display/JsonTreeViewer';
+import { copyText } from '../../utils/clipboard';
 
 interface Props {
   message: AiMessage;
@@ -151,11 +152,11 @@ function MarkdownTable({ lines }: { lines: string[] }) {
 }
 
 function CopyCodeButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = () => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const handleCopy = async () => {
+    const ok = await copyText(text);
+    setState(ok ? 'copied' : 'failed');
+    setTimeout(() => setState('idle'), 1500);
   };
   return (
     <button
@@ -166,7 +167,7 @@ function CopyCodeButton({ text }: { text: string }) {
       title="Copy code"
     >
       <CopyIcon size={10} />
-      {copied ? 'Copied!' : 'Copy'}
+      {state === 'copied' ? 'Copied!' : state === 'failed' ? "Couldn't copy" : 'Copy'}
     </button>
   );
 }
@@ -223,8 +224,8 @@ export function AiMessageBubble({ message }: Props) {
   const isAssistant = message.role === 'assistant';
   const isTool = message.role === 'tool';
 
-  const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(message.content);
+  const handleCopy = useCallback(async () => {
+    if (!(await copyText(message.content))) return;
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }, [message.content]);
@@ -334,8 +335,8 @@ function ToolResponseContent({ content }: { content: string }) {
     try { return JSON.parse(content); } catch { return null; }
   }, [content]);
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(content);
+  const handleCopy = async () => {
+    if (!(await copyText(content))) return;
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };

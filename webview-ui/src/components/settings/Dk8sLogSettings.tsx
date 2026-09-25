@@ -22,6 +22,7 @@ import {
 import { LayersIcon, SearchIcon, ClockIcon } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
 import { LogFormatSettings } from './LogFormatSettings';
+import { LogPayloadSettings } from './LogPayloadSettings';
 import { PvLogSettings } from './PvLogSettings';
 import { PvPodCheck } from './PvPodCheck';
 
@@ -241,6 +242,8 @@ export function Dk8sLogSettings() {
           }
         />
       </div>
+
+      <LogPayloadSettings />
 
       <LogFormatSettings />
       <PvLogSettings />

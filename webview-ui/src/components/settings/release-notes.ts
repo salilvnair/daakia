@@ -49,6 +49,29 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '3.2.0',
+    date: '2026-09-22',
+    headline: 'Working with other people: a Git Sync that cannot conflict, workspaces you can share, a proxy that holds inside VS Code, and a database two Daakias can open at once.',
+    lines: [
+      // ── Sharing ──
+      { kind: 'feature', area: 'Git Sync', text: 'Every install has a sync id and a name, and writes only its own folder. Two people syncing at the same moment never touch the same file, so there is nothing for git to conflict on.' },
+      { kind: 'feature', area: 'Git Sync', text: 'Private by default. Only you import your own folder, and because anyone who can clone the repository can read it, history leaves with credentials redacted — Authorization and cookie headers, auth-tab values, secret variables, api keys in a query.' },
+      { kind: 'feature', area: 'Workspaces', text: 'Share a workspace with your team: its collections and environments are published, history never is, and teammates see it in their switcher under your name.' },
+      { kind: 'feature', area: 'Workspaces', text: 'A teammate\'s workspace opens read-only and follows their changes on every sync. You can send its requests and fill in the secrets that arrive blank; the controls that would change it are disabled rather than hidden, so you can see what it is you cannot do.' },
+      { kind: 'feature', area: 'Workspaces', text: 'Import shared makes an editable workspace of your own instead — a dialog lists the collections and environments to take, with a name that says who it came from.' },
+
+      // ── The database ──
+      { kind: 'fix', area: 'Storage', text: 'Two Daakias can have the database open at once. Every write lands through a temporary file and a rename, so a kill mid-save can no longer leave a half-written database, and a second window that saved meanwhile is noticed rather than overwritten.' },
+      { kind: 'fix', area: 'History', text: 'The Bin restores a request to the workspace it was deleted from, not to whichever one happens to be open.' },
+      { kind: 'fix', area: 'History', text: 'Delete dialogs say what they will actually delete, and the counts beside them follow the data rather than the last time the panel was opened.' },
+      { kind: 'fix', area: 'AI', text: 'The Workspace page\'s History sub-tab is workspace-scoped like the rest of it: another workspace\'s AI conversations no longer show up in this one\'s group.' },
+
+      // ── The network ──
+      { kind: 'fix', area: 'Proxy', text: 'Daakia\'s proxy is honoured inside VS Code for every protocol that uses it. VS Code replaces an extension\'s HTTP agent with its own, which silently dropped the proxy — requests now tunnel through it explicitly, and a 407 says it needs credentials instead of failing as a timeout.' },
+      { kind: 'change', area: 'UI', text: 'dui 1.0.15: the colour picker\'s swatch fills its square.' },
+    ],
+  },
+  {
     version: '3.1.1',
     date: '2026-09-17',
     headline: 'dk8s stops guessing: it says what it ran, finds what a pod still holds, and notices when it has been talking to nobody.',

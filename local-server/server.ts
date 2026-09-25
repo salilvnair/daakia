@@ -20,6 +20,8 @@
  */
 import * as http from 'http';
 import * as path from 'path';
+import * as fs from 'fs';
+import { loadDotEnv } from '../src/services/llm/env-provider';
 import express from 'express';
 import cors from 'cors';
 import { WebSocketServer, type WebSocket } from 'ws';
@@ -35,7 +37,26 @@ const PORT = Number(process.env.LOCAL_SERVER_PORT) || 7890;
 // two levels up reaches the repo root, not one.
 const EXTENSION_PATH = path.resolve(__dirname, '..', '..');
 
+/*
+  The repo's `.env`, for the dev server only.
+
+  Provider keys a developer keeps there — DEEPSEEK_API_KEY and friends — are
+  what the AI features call with when no key has been saved in Settings; see
+  `src/services/llm/env-provider.ts`. Only the NAMES are logged: this server
+  prints to a terminal that gets pasted into bug reports.
+
+  The packaged extension never reads a `.env`: it has no repo root to find one
+  in, and a key belongs in the keychain there.
+*/
+function loadRepoEnv(): void {
+  const file = path.join(EXTENSION_PATH, '.env');
+  if (!fs.existsSync(file)) return;
+  const loaded = loadDotEnv(fs.readFileSync(file, 'utf8'));
+  if (loaded.length) console.log(`[local-server] .env: ${loaded.join(', ')}`);
+}
+
 async function main() {
+  loadRepoEnv();
   await initDb(EXTENSION_PATH);
   initMockServerManager(EXTENSION_PATH);
 

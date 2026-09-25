@@ -23,8 +23,10 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { IconSize, SplitPanelView, type SplitDirection } from '@salilvnair/dui';
 import {
-  CloseIcon, ChevronLeftIcon, ColumnsIcon, RowsIcon, LayoutGridIcon,
+  CloseIcon, ChevronLeftIcon, ColumnsIcon, RowsIcon, LayoutGridIcon, ClockIcon,
 } from '../../icons';
+import { usePersistedPref } from '../../store/ui-state-store';
+import { sharedSpan } from './log-view';
 import { LogViewer } from './LogViewer';
 import { LogSourceProvider, type LogSource } from './log-source';
 import {
@@ -61,7 +63,12 @@ export const SPLIT_MODES: { id: SplitMode; label: string; Icon: typeof ColumnsIc
  * screen — so it carries the pod, its health, and the way out, and nothing
  * else.
  */
-function Pane({ pane, focused }: { pane: SplitPane; focused: boolean }) {
+function Pane({ pane, focused, sharedRange }: {
+  pane: SplitPane;
+  focused: boolean;
+  /** Set when the split shares one clock — see `timeBuckets`. */
+  sharedRange?: { from: number; to: number };
+}) {
   const { patch, refetch, closePane, focus, panes } = useSplitStore();
   const logLineNumbers = useK8sStore(s => s.logLineNumbers);
   const pod = useK8sStore(s => s.pods.find(
@@ -92,6 +99,7 @@ function Pane({ pane, focused }: { pane: SplitPane; focused: boolean }) {
   } as PodSummary), [pod, pane]);
 
   const source = useMemo(() => ({
+    sharedRange,
     logs: pane.logs,
     logStatus: pane.status,
     logDetail: pane.detail,
@@ -146,7 +154,7 @@ function Pane({ pane, focused }: { pane: SplitPane; focused: boolean }) {
     closeLogExport: () => {},
     /* The view's own "back" closes this pane rather than the whole split. */
     closeDetail: () => closePane(pane.id),
-  } as unknown as LogSource), [pane, asPod, logLineNumbers, patch, refetch, closePane]);
+  } as unknown as LogSource), [pane, asPod, logLineNumbers, patch, refetch, closePane, sharedRange]);
 
   return (
     <div
@@ -333,6 +341,26 @@ export function SplitLogs() {
     return () => window.removeEventListener('message', handler);
   }, [apply]);
 
+  /*
+    One clock, when asked for.
+
+    Off by default: each ribbon scaled to its own lines is the better view of
+    one log, and most splits are read one pane at a time. On, every ribbon
+    spans the earliest to the latest line across ALL panes, so a burst that hit
+    three pods at 14:02 sits at the same height in each of them.
+
+    Remembered, because somebody who lines pods up once will want it the next
+    time they open a split for the same reason.
+  */
+  const [clock, setClock] = usePersistedPref<'own' | 'shared'>(
+    'dk8s.split.clock', 'own', ['own', 'shared']);
+  /* The overlap, not the union — see `sharedSpan`. No overlap, no clock: each
+     pane falls back to its own scale rather than a clock empty in all of them. */
+  const sharedRange = useMemo(
+    () => (clock === 'shared' && panes.length > 1 ? sharedSpan(panes.map(p => p.logs)) : undefined),
+    [clock, panes],
+  );
+
   if (!panes.length) return null;
 
   return (
@@ -367,6 +395,32 @@ export function SplitLogs() {
 
         <span className="flex-1" />
 
+        {panes.length > 1 && (
+          <button
+            type="button"
+            onClick={() => setClock(clock === 'shared' ? 'own' : 'shared')}
+            title={clock === 'shared'
+              ? sharedRange
+                ? 'Every ribbon spans the time all the panes have lines for, so the same height is the same instant in each. Lines outside that stretch are not on the clock.'
+                : 'On, but these panes have no stretch of time in common — each ribbon is on its own scale until they do.'
+              : 'Each ribbon is scaled to its own lines. Share a clock to line a burst up across the panes.'}
+            className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] cursor-pointer"
+            style={{
+              color: clock === 'shared' ? ACCENT : 'var(--color-text-secondary)',
+              background: clock === 'shared'
+                ? `color-mix(in srgb, ${ACCENT} 14%, transparent)`
+                : 'transparent',
+              border: `1px solid ${clock === 'shared'
+                ? `color-mix(in srgb, ${ACCENT} 40%, transparent)`
+                : 'var(--color-surface-border)'}`,
+              fontWeight: clock === 'shared' ? 600 : 400,
+            }}
+          >
+            <ClockIcon size={IconSize.action} color={clock === 'shared' ? ACCENT : 'var(--color-text-muted)'} />
+            One clock
+          </button>
+        )}
+
         {/* The layout, changeable without reopening. Which arrangement reads
             best depends on the log — long lines want rows, short ones want
             columns — and that is not knowable until they are on screen. */}
@@ -397,7 +451,7 @@ export function SplitLogs() {
         <Arrangement
           mode={mode}
           nodes={panes.map(pane => (
-            <Pane key={pane.id} pane={pane} focused={pane.id === focused} />
+            <Pane key={pane.id} pane={pane} focused={pane.id === focused} sharedRange={sharedRange} />
           ))}
         />
       </div>

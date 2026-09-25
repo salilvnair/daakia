@@ -17,6 +17,12 @@ import {
   deleteAiConversation, clearAiConversations,
 } from '../../../storage/db';
 import { getAiMcpTools, callAiMcpTool } from './ai-mcp-handler';
+import { DK8S_SEARCH_TOOL, runDk8sSearch, toModelText, type Dk8sSearchArgs, type Dk8sSearchResult } from '../../../ai/tools/dk8s-search';
+import { KUBECTL_RUN_TOOL, runKubectlTool, kubectlToModelText, type KubectlRunResult } from '../../../ai/tools/kubectl-run';
+import { run as runKubectl } from '../../../services/k8s/kubectl';
+import { DAAKIA_DOCS_TOOL, runDaakiaDocs, type DocsResult } from '../../../ai/tools/daakia-docs';
+import { watchedPodTargets, archiveSearcher } from './k8s-handler';
+import { searchLogs, type SearchTarget } from '../../../services/k8s/k8s-log-search';
 import { resolveProviderAuth, autoResolveProvider, resolveProviderConfig } from '../../../services/llm/llm-provider-service';
 
 type PostMessage = (msg: unknown) => void;
@@ -83,6 +89,14 @@ export async function handleAiSend(
     return;
   }
 
+  /*
+    Who will actually answer. The screen shows the model it asked for, and the
+    two differ more often than they look: a provider with no key falls through
+    to the next that has one, and a key from the environment brings its own
+    model. Said before the call, so the header is right while it thinks.
+  */
+  postMessage({ type: 'ai:resolved', tabId, provider: providerId, model: effectiveModel });
+
   // Logical stage name — callers may pass a templateKey (e.g. "mock.websocket.generate")
   // or an agent label (e.g. "REST Agent"). Defaults to 'DAAKIA_AI' for general AI chat.
   const auditStage = (msg.stage as string | undefined) || 'DAAKIA_AI';
@@ -97,7 +111,35 @@ export async function handleAiSend(
   // 6D.22 — multimodal image attachments
   const images = (msg.images as Array<{ id: string; type: 'url' | 'base64'; url?: string; base64?: string; mimeType?: string }>) || [];
 
-  const settings: AiSettings = { ...DEFAULT_AI_SETTINGS, ...rawSettings };
+  /*
+    The Daakia AI conversation can search the pods dk8s is watching.
+
+    Offered only from that screen and only when something is being watched:
+    a tool the model can call but that has nothing to search is a tool it will
+    call and then apologise for. Non-streaming when it is offered, because the
+    executor drops tool calls from a stream — and the Daakia AI screen shows
+    the answer whole anyway, so nothing a reader sees is lost.
+  */
+  const dk8sTargets = targetsFrom(msg.dk8sTargets);
+  const offersDk8s = (msg.screen === 'Daakia AI' || msg.stage === 'ai.chat')
+    && msg.dk8s !== false            // the header chip, turned off
+    && dk8sTargets.length > 0;
+  if (offersDk8s) dk8sTargetsByTab.set(tabId, dk8sTargets);
+  /* The manual is offered to every Daakia AI conversation, dk8s or not: "how
+     do I … in Daakia" is answered from it instead of from a feature list. */
+  const offersDocs = msg.screen === 'Daakia AI' || msg.stage === 'ai.chat';
+  const offersTools = offersDk8s || offersDocs;
+  const settings: AiSettings = {
+    ...DEFAULT_AI_SETTINGS, ...rawSettings,
+    ...(offersTools ? { stream: false } : {}),
+  };
+  /*
+    Room for a thinking model to think AND answer. DeepSeek's reasoning counts
+    against max_tokens, so at the chat's 1024 an answer over a search result
+    came back cut mid-sentence (finish_reason "length") — or, when the
+    reasoning took it all, empty, and the card showed with no answer above it.
+  */
+  if (offersTools) settings.maxTokens = Math.max(settings.maxTokens || 0, 8192);
 
   // Construct full message array: system prompts + conversation history
   const messages: AiMessage[] = [];
@@ -142,7 +184,11 @@ export async function handleAiSend(
 
   // Merge user-defined tools with connected MCP server tools
   const mcpTools = getAiMcpTools(tabId);
-  const allTools = [...tools, ...mcpTools];
+  const allTools = [
+    ...tools, ...mcpTools,
+    ...(offersDk8s ? [DK8S_SEARCH_TOOL, KUBECTL_RUN_TOOL] : []),
+    ...(offersDocs ? [DAAKIA_DOCS_TOOL] : []),
+  ];
 
   // Resolve auth: always inject from OS keychain (webview never sends LLM credentials)
   const resolvedAuth = await resolveProviderAuth(
@@ -277,7 +323,7 @@ export async function handleAiSend(
     onComplete: async (result) => {
       clearTimeout(timeoutId);
       // Check if the AI response contains tool_calls that need MCP execution
-      if (result.message.toolCalls?.length && mcpTools.length > 0) {
+      if (result.message.toolCalls?.length && (mcpTools.length > 0 || offersTools)) {
         // Execute MCP tool calls and continue the conversation
         await handleMcpToolCallLoop(tabId, payload, result, postMessage, auditStage);
         return;
@@ -410,7 +456,13 @@ async function handleMcpToolCallLoop(
     // Notify webview that tool is being executed
     postMessage({ type: 'ai:toolExecuting', tabId, toolCallId: tc.id, toolName: tc.function.name });
 
-    const callResult = await callAiMcpTool(tabId, tc.function.name, args);
+    const callResult = tc.function.name === DK8S_SEARCH_TOOL.function.name
+      ? await runDk8sForConversation(tabId, tc.id, args as unknown as Dk8sSearchArgs, postMessage)
+      : tc.function.name === KUBECTL_RUN_TOOL.function.name
+      ? await runKubectlForConversation(tabId, tc.id, args as { command?: string; why?: string }, postMessage)
+      : tc.function.name === DAAKIA_DOCS_TOOL.function.name
+      ? runDocsForConversation(tabId, tc.id, String((args as { query?: unknown }).query ?? ''), postMessage)
+      : await callAiMcpTool(tabId, tc.function.name, args);
 
     const toolMsg: AiMessage = {
       id: crypto.randomUUID(),
@@ -451,10 +503,11 @@ async function handleMcpToolCallLoop(
         return;
       }
       cleanupAiRequest(tabId);
-      postMessage({ type: 'ai:complete', ...followUpResult });
+      postMessage({ type: 'ai:complete', ...followUpResult, dk8s: takeDk8sResults(tabId) });
     },
     onError: (error) => {
       cleanupAiRequest(tabId);
+      dk8sResults.delete(tabId);
       console.error('[AI MCP Follow-up Error]', tabId, error.message, error.code);
       if (error.diagnostics) {
         console.error('[AI MCP Follow-up Diagnostics]', JSON.stringify(error.diagnostics, null, 2));
@@ -465,6 +518,135 @@ async function handleMcpToolCallLoop(
         postMessage({ type: 'ai:error', stage: auditStage, ...error, tabId });
     },
   });
+}
+
+/*
+  Structured results of the searches a conversation ran, until its answer
+  lands. The model gets text it can cite; the card the user sees is drawn from
+  these, so nothing the model writes can put a line on screen that the search
+  did not find.
+*/
+/** What each answer's tools returned, in order — searches and kubectl runs — for the cards. */
+const dk8sResults = new Map<string, (Dk8sSearchResult | KubectlRunResult | DocsResult)[]>();
+/** The pods each conversation's request may search, for the tool loop to use. */
+const dk8sTargetsByTab = new Map<string, SearchTarget[]>();
+
+/**
+ * The pods the webview says are on screen, else the ones this host watches.
+ *
+ * Only well-formed names get through: these become `kubectl logs` arguments.
+ * spawn passes them as separate argv entries, so nothing here is a shell
+ * string — the check is to turn a malformed message into "no pods" rather
+ * than into a kubectl error the model then has to explain.
+ */
+function targetsFrom(raw: unknown): SearchTarget[] {
+  const NAME = /^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,252}$/;
+  if (Array.isArray(raw) && raw.length) {
+    const out: SearchTarget[] = [];
+    for (const t of raw as Record<string, unknown>[]) {
+      const context = String(t?.context ?? ''), namespace = String(t?.namespace ?? ''), pod = String(t?.pod ?? '');
+      if (!NAME.test(context) || !NAME.test(namespace) || !NAME.test(pod)) continue;
+      const containers = Array.isArray(t.containers)
+        ? (t.containers as unknown[]).map(String).filter(c => NAME.test(c)) : undefined;
+      out.push({
+        context, namespace, pod,
+        containers: containers?.length ? containers : undefined,
+        workload: typeof t.workload === 'string' && NAME.test(t.workload) ? t.workload : undefined,
+      });
+    }
+    if (out.length) return out.slice(0, 200);
+  }
+  return watchedPodTargets();
+}
+
+function takeDk8sResults(tabId: string): (Dk8sSearchResult | KubectlRunResult | DocsResult)[] | undefined {
+  const results = dk8sResults.get(tabId);
+  dk8sResults.delete(tabId);
+  return results?.length ? results : undefined;
+}
+
+/** One look in the Daakia manual; the sections it used go under the answer as its sources. */
+function runDocsForConversation(
+  tabId: string,
+  toolCallId: string,
+  query: string,
+  postMessage: PostMessage,
+): { success: boolean; result?: string; error?: string } {
+  postMessage({ type: 'ai:docsLookup', tabId, toolCallId, query });
+  const { result, text } = runDaakiaDocs(query);
+  dk8sResults.set(tabId, [...(dk8sResults.get(tabId) ?? []), result]);
+  return { success: true, result: text };
+}
+
+/**
+ * One `kubectl_run` for a conversation: pinned to the context and namespace
+ * the user is watching, recorded in the Commands audit like every dk8s call,
+ * and kept for the answer's card.
+ */
+async function runKubectlForConversation(
+  tabId: string,
+  toolCallId: string,
+  args: { command?: string; why?: string },
+  postMessage: PostMessage,
+): Promise<{ success: boolean; result?: string; error?: string }> {
+  const targets = dk8sTargetsByTab.get(tabId) ?? watchedPodTargets();
+  if (!targets.length) return { success: false, error: 'No pods are being watched in dk8s, so there is no cluster to ask.' };
+  /* The namespace most of the watched pods are in — the one on screen. */
+  const counts = new Map<string, number>();
+  for (const t of targets) counts.set(t.namespace, (counts.get(t.namespace) ?? 0) + 1);
+  const namespace = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  const context = targets.find(t => t.namespace === namespace)!.context;
+  postMessage({ type: 'ai:kubectlRunStarted', tabId, toolCallId, command: args.command ?? '', why: args.why });
+  try {
+    const result = await runKubectlTool(args, {
+      scope: { context, namespace, pods: targets.filter(t => t.namespace === namespace).map(t => t.pod) },
+      run: (a, o) => runKubectl(a, o),
+    });
+    dk8sResults.set(tabId, [...(dk8sResults.get(tabId) ?? []), result]);
+    postMessage({ type: 'ai:kubectlRunResult', tabId, toolCallId, result });
+    return { success: true, result: kubectlToModelText(result) };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  }
+}
+
+async function runDk8sForConversation(
+  tabId: string,
+  toolCallId: string,
+  args: Dk8sSearchArgs,
+  postMessage: PostMessage,
+): Promise<{ success: boolean; result?: string; error?: string }> {
+  /* The plain-text first beat: what is being searched, before any of it is
+     back. The screen shows this until the answer and its card replace it. */
+  const targets = dk8sTargetsByTab.get(tabId) ?? watchedPodTargets();
+  const archive = archiveSearcher();
+  postMessage({
+    type: 'ai:dk8sSearchStarted', tabId, toolCallId,
+    query: args.query, pods: targets.length, archive: !!archive && args.archive !== false,
+    around: Math.max(1, Math.min(500, Math.round(args.around ?? 20))),
+    namespaces: [...new Set(targets.map(t => t.namespace))],
+  });
+  try {
+    const result = await runDk8sSearch(args, {
+      targets, searchLogs, searchArchive: archive,
+      onPhase: phase => postMessage({ type: 'ai:dk8sSearchPhase', tabId, toolCallId, ...phase }),
+    });
+    /*
+      Citations continue across the searches of one answer. Each search numbers
+      its own lines from [1], so an answer drawn from two searches had two
+      [1]s — the model could not say which it meant, and neither could the
+      reader. The second search starts after the first one's last number.
+    */
+    const prior = dk8sResults.get(tabId) ?? [];
+    const offset = prior.reduce((top, r) => 'groups' in r
+      ? Math.max(top, ...r.groups.flatMap(g => g.lines.map(l => l.n ?? 0))) : top, 0);
+    if (offset) for (const g of result.groups) for (const l of g.lines) if (l.n) l.n += offset;
+    dk8sResults.set(tabId, [...prior, result]);
+    postMessage({ type: 'ai:dk8sSearchResult', tabId, toolCallId, result });
+    return { success: true, result: toModelText(result) };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  }
 }
 
 /**

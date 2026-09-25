@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  favoriteKey, favoritesFirst, favoriteChoices, starredKeyOf,
+  favoriteKey, favoritesFirst, favoriteChoices, starredKeyOf, starredHere,
 } from './dk8s-favorites-store';
 import type { PodSummary } from './k8s-store';
 
@@ -135,5 +135,48 @@ describe('what a star can be attached to', () => {
       ['kind-dk8s/prod/Pod/api-7bb88bcc45-27sqb'],
     );
     expect((sorted[0] as typeof pod).name).toBe('api-7bb88bcc45-27sqb');
+  });
+});
+
+/*
+  The chip beside the star counted the SAVED list, which spans every cluster and
+  namespace: fourteen stars across a fleet read "14" over a namespace holding
+  two of them, and over one holding none it still offered a scope that shows
+  nothing at all.
+*/
+describe('starredHere', () => {
+  const here = (name: string, workload?: string) => pod({
+    name, namespace: 'payments', context: 'prod', uid: name,
+    ...(workload ? { workload: { kind: 'Deployment', name: workload } } : {}),
+  } as Partial<PodSummary>);
+
+  const keys = [
+    'prod/payments/Deployment/ledger',
+    'prod/billing/Deployment/invoices',
+    'dev/payments/Deployment/ledger',
+  ];
+
+  it('counts only the stars that belong to these pods', () => {
+    expect(starredHere([here('ledger-1', 'ledger'), here('cart-1', 'cart')], keys)).toBe(1);
+  });
+
+  it('counts a starred workload once, not once per replica', () => {
+    const replicas = [here('ledger-1', 'ledger'), here('ledger-2', 'ledger'), here('ledger-3', 'ledger')];
+    expect(starredHere(replicas, keys)).toBe(1);
+  });
+
+  it('is zero in a namespace whose pods are none of them', () => {
+    // What made the scope a dead end: the control offered a filter that hid
+    // everything, because the count it was drawn from was about elsewhere.
+    expect(starredHere([here('cart-1', 'cart')], keys)).toBe(0);
+  });
+
+  it('sees a pod-scoped star too, for a pod nothing owns', () => {
+    expect(starredHere([here('debug-shell')], ['prod/payments/Pod/debug-shell'])).toBe(1);
+  });
+
+  it('is zero for an empty list either way', () => {
+    expect(starredHere([], keys)).toBe(0);
+    expect(starredHere([here('ledger-1', 'ledger')], [])).toBe(0);
   });
 });

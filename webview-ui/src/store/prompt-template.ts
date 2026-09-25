@@ -11,6 +11,10 @@
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
 import { DK8S_PROMPTS, DK8S_USER_PROMPTS, DK8S_USER_VARIABLES } from '@daakia/dk8s-prompts';
+import {
+  DK8S_CHAT_DEFAULTS, DK8S_CHAT_LABELS, DK8S_CHAT_VARIABLES, DK8S_CHAT_COLORS, DK8S_CHAT_KEYS,
+  type Dk8sChatKey,
+} from '../components/ai/dk8s-chat-prompts';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SECTION 1 — Agent Prompts
@@ -401,7 +405,9 @@ export type AiPromptTemplateKey =
   | 'dk8s.format.detect'
   | 'dk8s.format.detect.system'
   | 'dk8s.terminal.theme'
-  | 'dk8s.terminal.theme.system';
+  | 'dk8s.terminal.theme.system'
+  // ── dk8s · asking Daakia AI about the watched pods ──
+  | Dk8sChatKey;
 
 // ─── Default templates ────────────────────────────────────────────────────────
 
@@ -492,6 +498,7 @@ What the reporter wrote:
 `;
 
 export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = {
+  ...(DK8S_CHAT_DEFAULTS as Record<Dk8sChatKey, string>),
   'dkgh.compose': DKGH_COMPOSE_USER,
   'dkgh.compose.system': DKGH_COMPOSE_SYSTEM,
   'dk8s.log.askWhy': DK8S_USER['dk8s.log.askWhy'] ?? '',
@@ -978,6 +985,7 @@ Return ONLY a JSON array of stub objects — no explanation, no markdown fences.
 // ─── Labels for UI ────────────────────────────────────────────────────────────
 
 export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: string; description: string }> = {
+  ...(DK8S_CHAT_LABELS as Record<Dk8sChatKey, { label: string; description: string }>),
   'dkgh.compose': { label: 'Generate with AI (dkgh)',
     description: 'A description and the repository\u2019s own form fields \u2014 which of them it '
       + 'already answers, and which it does not' },
@@ -1181,6 +1189,7 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
 // ─── Variables available per template ────────────────────────────────────────
 
 export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]> = {
+  ...(DK8S_CHAT_VARIABLES as Record<Dk8sChatKey, string[]>),
   // The user halves interpolate; the system halves are instructions and take
   // no variables, the same as every other `.system` entry here.
   'dkgh.compose': ['repo', 'template', 'fields', 'description'],
@@ -1477,6 +1486,12 @@ export const AI_TEMPLATE_CATEGORIES: {
     keys: ['dkgh.compose'],
   },
   {
+    id: 'dk8s-chat',
+    label: 'dk8s · Ask the logs',
+    kind: 'mock',
+    keys: [...DK8S_CHAT_KEYS] as AiPromptTemplateKey[],
+  },
+  {
     id: 'dk8s',
     label: 'dk8s',
     kind: 'mock',
@@ -1515,6 +1530,7 @@ export const AI_TEMPLATE_CATEGORIES: {
 ];
 
 export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
+  ...(DK8S_CHAT_COLORS as Record<Dk8sChatKey, string>),
   'history.filter.parse': '#7dd3fc',
   'history.filter.parse.system': '#7dd3fc',
   'dkgh.compose': '#de7356',

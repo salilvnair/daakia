@@ -3,7 +3,8 @@ import {
   buildMatcher, filterLines, densityBuckets, levelCounts,
   formatLogTime, selectionText, describeBucket,
   foldStackTraces, isStackFrame, compactCount, placeSelectionToolbar, grepTermFor,
-  matchesFieldFilters, frameOrigin, displayText,
+  matchesFieldFilters, frameOrigin, displayText, ribbonBands,
+  timeBuckets, timeRange, ribbonTicks, COMPACT_RIBBON_PX, sharedSpan,
 } from './log-view';
 import type { LogLine } from '../../store/k8s-store';
 
@@ -137,6 +138,52 @@ describe('levelCounts', () => {
   it('counts every level, including the ones at zero', () => {
     const counts = levelCounts([line(0, 'error', 'a'), line(1, 'error', 'b'), line(2, 'info', 'c')]);
     expect(counts).toEqual({ error: 2, warn: 0, info: 1, debug: 0, other: 0 });
+  });
+
+  /*
+    The chip read ERROR 35 over a screen holding one folded exception. A frame
+    carries the level of the event it belongs to, and counting lines counted
+    all 34 of them.
+  */
+  it('counts an exception once, however many frames it dragged in', () => {
+    const trace: LogLine[] = [
+      line(0, 'error', 'read timed out after 30000ms'),
+      { ...line(1, 'error', '\tat java.net.SocketInputStream.socketRead0(Native Method)'), continuation: true },
+      { ...line(2, 'error', '\tat com.acme.Ledger.call(Ledger.java:88)'), continuation: true },
+      { ...line(3, 'error', '\t... 34 more'), continuation: true },
+    ];
+    expect(levelCounts(trace).error).toBe(1);
+  });
+
+  it('folds a frame the host said nothing about, on the text alone', () => {
+    // No format configured: `continuation` is absent and the shape is all there is.
+    const counts = levelCounts([
+      line(0, 'error', 'boom'),
+      line(1, 'error', '    at com.acme.Foo.run(Foo.java:1)'),
+    ]);
+    expect(counts.error).toBe(1);
+  });
+
+  it('leaves an event that merely starts with spaces alone', () => {
+    // Indentation is not a stack frame; `at` has to be there.
+    const counts = levelCounts([line(0, 'warn', '   waiting for the pool')]);
+    expect(counts.warn).toBe(1);
+  });
+});
+
+describe('densityBuckets — errors in the tooltip', () => {
+  it('counts events, so a folded trace is one error in the ribbon too', () => {
+    const [bucket] = densityBuckets([
+      line(0, 'error', 'read timed out'),
+      { ...line(1, 'error', '\tat com.acme.Foo.run(Foo.java:1)'), continuation: true },
+      { ...line(2, 'error', '\tat com.acme.Bar.go(Bar.java:2)'), continuation: true },
+      line(3, 'info', 'carrying on'),
+    ], 1);
+    expect(bucket.errors).toBe(1);
+    // The column is still as tall as the lines it holds: density is density.
+    expect(bucket.count).toBe(4);
+    // And the colour still says error, because one happened here.
+    expect(bucket.worst).toBe('error');
   });
 });
 
@@ -737,5 +784,193 @@ describe('keeping what is around a hit', () => {
     ];
     const out = filterLines(mixed, { query: 'boom', levels: ['error'], contextLines: 2 });
     expect(out.map(l => l.seq)).toEqual([1, 3]);
+  });
+});
+
+/*
+  A ribbon in a small pane of a split was drawn to a scale no pane had: it asked
+  for more bands than fitted, the track kept the height its bands demanded, and
+  every measurement taken from it was of that taller box.
+*/
+describe('ribbonBands', () => {
+  const fits = (h: number, min = 2, gap = 1) =>
+    ribbonBands(h, min, gap) * min + (ribbonBands(h, min, gap) - 1) * gap;
+
+  it('takes one band per ~7px when there is room', () => {
+    expect(ribbonBands(700)).toBe(100);
+  });
+
+  it('never asks for more than the track can draw', () => {
+    for (const h of [20, 44, 80, 150, 210, 400]) {
+      expect(fits(h)).toBeLessThanOrEqual(h);
+    }
+  });
+
+  it('still draws something in a pane too short for either rule', () => {
+    // Four bands is a severity strip rather than a density plot, which is the
+    // honest thing to show at this size — but an empty track says nothing.
+    expect(ribbonBands(8)).toBe(4);
+  });
+
+  it('lets the fit ceiling win when the bands are chunky', () => {
+    // 150px would take 21 bands by the readable rule; at 12px apiece only 11
+    // of them fit, and the number the track can draw is the one that counts.
+    expect(ribbonBands(150, 12, 1)).toBe(11);
+  });
+});
+
+/*
+  A split of three pods, each ribbon scaled to its own lines, drew a burst that
+  hit all three at 14:02 at three different heights. On a shared clock the same
+  height is the same instant in every pane.
+*/
+describe('timeBuckets — one clock for a split', () => {
+  const t = (s: number) => Date.UTC(2026, 0, 1, 14, 2, s);
+  const range = { from: t(0), to: t(40) };
+
+  it('slices time, not lines', () => {
+    const lines = [line(0, 'info', 'a', t(1)), line(1, 'info', 'b', t(2)), line(2, 'error', 'c', t(35))];
+    const buckets = timeBuckets(lines, 4, range);
+    expect(buckets.map(b => b.count)).toEqual([2, 0, 0, 1]);
+    expect(buckets[3].worst).toBe('error');
+  });
+
+  it('draws an empty stretch as empty, because silence is the finding', () => {
+    // "This pod said nothing while the others failed" only reads if the gap
+    // is drawn at zero rather than given a sparse bucket's floor.
+    const buckets = timeBuckets([line(0, 'info', 'a', t(1))], 4, range);
+    expect(buckets.slice(1).every(b => b.height === 0)).toBe(true);
+    expect(buckets[0].height).toBeGreaterThan(0);
+  });
+
+  it('puts the same instant at the same height in two panes', () => {
+    const range2 = { from: t(0), to: t(40) };
+    const a = timeBuckets([line(0, 'error', 'x', t(21))], 8, range2);
+    const b = timeBuckets([line(0, 'info', 'q', t(3)), line(1, 'error', 'y', t(21))], 8, range2);
+    expect(a.findIndex(x => x.errors)).toBe(b.findIndex(x => x.errors));
+  });
+
+  it('leaves out a line with no timestamp rather than guessing where it goes', () => {
+    const buckets = timeBuckets([line(0, 'info', 'no time')], 4, range);
+    expect(buckets.reduce((n, b) => n + b.count, 0)).toBe(0);
+  });
+
+  it('keeps the first line of each slice for scroll-to', () => {
+    const lines = [line(0, 'info', 'a', t(1)), line(1, 'info', 'b', t(30))];
+    const buckets = timeBuckets(lines, 4, range);
+    expect(buckets[0].startIndex).toBe(0);
+    expect(buckets[3].startIndex).toBe(1);
+  });
+
+  it('counts events not frames here too', () => {
+    const lines = [
+      line(0, 'error', 'boom', t(1)),
+      { ...line(1, 'error', '	at com.acme.X.y(X.java:1)', t(1)), continuation: true },
+    ];
+    expect(timeBuckets(lines, 2, range)[0].errors).toBe(1);
+  });
+});
+
+describe('timeRange', () => {
+  it('spans every log it is given', () => {
+    const a = [line(0, 'info', 'a', 50), line(1, 'info', 'b', 90)];
+    const b = [line(0, 'info', 'c', 10), line(1, 'info', 'd', 70)];
+    expect(timeRange(a, b)).toEqual({ from: 10, to: 90 });
+  });
+
+  it('is undefined when nothing has a time', () => {
+    expect(timeRange([line(0, 'info', 'x')])).toBeUndefined();
+  });
+});
+
+describe('ribbonTicks — a ribbon too short for density', () => {
+  it('is only errors and warnings', () => {
+    const lines = [line(0, 'info', 'a'), line(1, 'error', 'b'), line(2, 'info', 'c'), line(3, 'warn', 'd')];
+    const ticks = ribbonTicks(lines, 400);
+    expect(ticks.map(t => t.level)).toEqual(['error', 'warn']);
+  });
+
+  it('merges ticks that would sit on one pixel, keeping the worse level and the count', () => {
+    const lines = Array.from({ length: 200 }, (_, i) =>
+      line(i, i === 100 ? 'error' : i === 101 ? 'warn' : 'info', `l${i}`));
+    const ticks = ribbonTicks(lines, 60);
+    expect(ticks).toHaveLength(1);
+    expect(ticks[0]).toMatchObject({ level: 'error', count: 2 });
+  });
+
+  it('does not tick a stack frame', () => {
+    const lines = [
+      line(0, 'error', 'boom'),
+      { ...line(1, 'error', '	at com.acme.X.y(X.java:1)'), continuation: true },
+    ];
+    expect(ribbonTicks(lines, 400)).toHaveLength(1);
+  });
+
+  it('switches on below the threshold, not above it', () => {
+    expect(COMPACT_RIBBON_PX).toBe(180);
+  });
+});
+
+describe('ribbonTicks on a shared clock', () => {
+  const t = (s: number) => Date.UTC(2026, 0, 1, 14, 2, s);
+  const range = { from: t(0), to: t(100) };
+
+  it('places a tick by its time, not its position in the buffer', () => {
+    // One line in, but 75% of the way through the shared span.
+    const lines = [line(0, 'error', 'boom', t(75)), line(1, 'info', 'ok', t(80))];
+    expect(ribbonTicks(lines, 400, 4, range)[0].at).toBeCloseTo(0.75, 5);
+    // Without the clock the same error sits at the top of its own buffer.
+    expect(ribbonTicks(lines, 400)[0].at).toBe(0);
+  });
+
+  it('puts the same instant at the same height in two panes', () => {
+    const a = ribbonTicks([line(0, 'error', 'x', t(40))], 400, 4, range);
+    const b = ribbonTicks([line(0, 'info', 'q', t(1)), line(1, 'error', 'y', t(40))], 400, 4, range);
+    expect(a[0].at).toBe(b[0].at);
+  });
+
+  it('leaves out an error with no time rather than guessing where it goes', () => {
+    expect(ribbonTicks([line(0, 'error', 'no time')], 400, 4, range)).toEqual([]);
+  });
+});
+
+/*
+  The screenshot that found this: zp-backend-big-one filtered to errors, every
+  row red, and a ribbon empty from top to bottom but for a sliver of red at the
+  end. Its 5,000 lines covered 75 seconds; the pane beside it held an hour. On
+  a clock spanning the UNION, 75 seconds of an hour is the last two percent.
+*/
+describe('sharedSpan — the time every pane can speak for', () => {
+  const at = (h: number, m: number, s = 0) => Date.UTC(2026, 8, 24, h, m, s);
+  const quietHour = [line(0, 'info', 'a', at(22, 57)), line(1, 'info', 'b', at(23, 52, 43))];
+  const chatty75s = [line(0, 'error', 'x', at(23, 51, 29)), line(1, 'error', 'y', at(23, 52, 43))];
+
+  it('is the overlap, not the union', () => {
+    expect(sharedSpan([quietHour, chatty75s])).toEqual({ from: at(23, 51, 29), to: at(23, 52, 43) });
+  });
+
+  it('gives the busy pane its whole ribbon back', () => {
+    const range = sharedSpan([quietHour, chatty75s])!;
+    const buckets = timeBuckets(chatty75s, 10, range);
+    // Its first and last lines sit at the two ends, not both in the last slice.
+    expect(buckets[0].count).toBe(1);
+    expect(buckets[9].count).toBe(1);
+  });
+
+  it('is undefined when the panes share no time at all', () => {
+    const morning = [line(0, 'info', 'm', at(9, 0)), line(1, 'info', 'n', at(9, 5))];
+    const evening = [line(0, 'info', 'e', at(21, 0)), line(1, 'info', 'f', at(21, 5))];
+    expect(sharedSpan([morning, evening])).toBeUndefined();
+  });
+
+  it('is undefined for an overlap too short to draw', () => {
+    const a = [line(0, 'info', 'a', 1000), line(1, 'info', 'b', 5000)];
+    const b = [line(0, 'info', 'c', 4800), line(1, 'info', 'd', 9000)];
+    expect(sharedSpan([a, b])).toBeUndefined();
+  });
+
+  it('ignores a pane with no timestamps, which has no place on any clock', () => {
+    expect(sharedSpan([chatty75s, [line(0, 'info', 'plain')]]))
+      .toEqual({ from: at(23, 51, 29), to: at(23, 52, 43) });
   });
 });
