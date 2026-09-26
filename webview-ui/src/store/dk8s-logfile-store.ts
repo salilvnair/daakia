@@ -61,6 +61,8 @@ export interface LogFileView {
   context: number;
   wrap: boolean;
   filterRun?: { scanned: number; total: number; matched: number; done: boolean };
+  /** From a filter change until its first matches (or its end) are on screen. */
+  searching?: boolean;
   focusSeq?: number;
 }
 
@@ -82,12 +84,14 @@ interface State {
 
 let reqSeq = 0;
 /** The request each tab is waiting on — a page that is not the latest is dropped. */
-const pending = new Map<string, { reqId: number; mode: 'replace' | 'prepend' | 'append'; focus?: number }>();
+const pending = new Map<string, { reqId: number; mode: 'replace' | 'prepend' | 'append'; focus?: number; search?: boolean }>();
 const filterTimers = new Map<string, ReturnType<typeof setTimeout>>();
+/** Tabs whose new filter has gone to the host: only its progress may end the search. */
+const filterSent = new Set<string>();
 
-function read(id: string, from: number, count: number, mode: 'replace' | 'prepend' | 'append', focus?: number) {
+function read(id: string, from: number, count: number, mode: 'replace' | 'prepend' | 'append', focus?: number, search?: boolean) {
   const reqId = ++reqSeq;
-  pending.set(id, { reqId, mode, focus });
+  pending.set(id, { reqId, mode, focus, search });
   postMsg({ type: 'dk8s:captureRead', id, from, count, reqId });
 }
 
@@ -99,6 +103,7 @@ function sendFilter(id: string) {
   filterTimers.set(id, setTimeout(() => {
     const cur = useLogFiles.getState().views[id];
     if (!cur) return;
+    filterSent.add(id);
     postMsg({
       type: 'dk8s:captureFilter', id,
       spec: { query: cur.filter, levels: cur.levels, fields: cur.fields, contextLines: cur.context },
@@ -110,7 +115,13 @@ export const useLogFiles = create<State>((set, get) => {
   const patch = (id: string, p: Partial<LogFileView>) => set(s => (
     s.views[id] ? { views: { ...s.views, [id]: { ...s.views[id], ...p } } } : s
   ));
-  const refilter = (id: string, p: Partial<LogFileView>) => { patch(id, p); sendFilter(id); };
+  const refilter = (id: string, p: Partial<LogFileView>) => {
+    /* A page still on its way belongs to the old filter. */
+    pending.delete(id);
+    filterSent.delete(id);
+    patch(id, { ...p, searching: get().views[id]?.status === 'ready', loading: undefined });
+    sendFilter(id);
+  };
 
   return {
     views: {},
@@ -135,7 +146,7 @@ export const useLogFiles = create<State>((set, get) => {
 
     loadEarlier: (id) => {
       const v = get().views[id];
-      if (!v || v.loading || v.first <= 0) return;
+      if (!v || v.loading || v.searching || v.first <= 0) return;
       patch(id, { loading: 'earlier' });
       const from = Math.max(0, v.first - PAGE);
       read(id, from, v.first - from, 'prepend');
@@ -143,7 +154,7 @@ export const useLogFiles = create<State>((set, get) => {
 
     loadLater: (id) => {
       const v = get().views[id];
-      if (!v || v.loading || v.first + v.lines.length >= v.total) return;
+      if (!v || v.loading || v.searching || v.first + v.lines.length >= v.total) return;
       patch(id, { loading: 'later' });
       read(id, v.first + v.lines.length, PAGE, 'append');
     },
@@ -186,6 +197,7 @@ export const useLogFiles = create<State>((set, get) => {
     close: (id) => {
       postMsg({ type: 'dk8s:captureClose', id });
       pending.delete(id);
+      filterSent.delete(id);
       clearTimeout(filterTimers.get(id));
       set(s => {
         const { [id]: _gone, ...rest } = s.views;
@@ -232,8 +244,12 @@ if (typeof window !== 'undefined') {
         /* The first matches arrive while the scan runs: show them straight away, and again when it ends. */
         const cur = useLogFiles.getState().views[id];
         if (!cur) break;
-        if (run.done || cur.lines.length === 0 || cur.first + cur.lines.length >= cur.total) {
-          read(id, 0, PAGE, 'replace');
+        /* Progress from before this filter was sent is the old scan winding down. */
+        const mine = filterSent.has(id);
+        if (cur.searching && !mine) break;
+        if (cur.searching ? run.done || (run.matched > 0 && pending.get(id)?.search !== true)
+          : run.done || cur.lines.length === 0 || cur.first + cur.lines.length >= cur.total) {
+          read(id, 0, PAGE, 'replace', undefined, cur.searching);
         }
         break;
       }
@@ -255,7 +271,7 @@ if (typeof window !== 'undefined') {
         };
         if (p.mode === 'replace') {
           const focusLine = p.focus !== undefined ? lines[p.focus - from] : undefined;
-          set({ ...base, lines, first: from, focusSeq: focusLine?.seq });
+          set({ ...base, lines, first: from, focusSeq: focusLine?.seq, ...(p.search ? { searching: false } : {}) });
         } else if (p.mode === 'prepend') {
           const merged = [...lines, ...v.lines];
           set({ ...base, lines: merged.slice(0, WINDOW), first: from });

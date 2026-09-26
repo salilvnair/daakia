@@ -18,11 +18,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   FilterInputView, SelectInputView, SegmentedControlView, CheckboxView, ButtonView,
-  BadgeChipView, IconSize, SplitPanelView, DateTimeInputView } from '@salilvnair/dui';
+  BadgeChipView, IconSize, SplitPanelView, DateTimeInputView, ProgressBarView } from '@salilvnair/dui';
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
   WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon, CloseIcon,
-  ChevronLeftIcon, SidebarLeftIcon,
+  ChevronLeftIcon, SidebarLeftIcon, SearchIcon,
 } from '../../icons';
 import { useK8sStore, type LogLevel } from '../../store/k8s-store';
 import { useLogSource } from './log-source';
@@ -2013,7 +2013,9 @@ export function LogViewer() {
             className="flex-1 overflow-auto pl-4 pr-1 py-2 font-mono min-h-0 dk8s-no-scrollbar"
             style={{ fontSize: 11.5, lineHeight: `${ROW_HEIGHT}px` }}
           >
-            {total === 0 ? (
+            {paging?.searching ? (
+              <SearchingState {...paging.searching} />
+            ) : total === 0 ? (
               <div className="flex items-center justify-center h-full">
                 <span className="text-[12px] text-[var(--color-text-muted)]" style={{ fontFamily: 'inherit' }}>
                   {logs.length === 0
@@ -2459,5 +2461,44 @@ function ContainerChip({ name }: { name: string }) {
       accentColor={ACCENT}
       onClick={() => setLogContainer(on ? undefined : name)}
     />
+  );
+}
+/**
+ * A whole-file filter on its way: the subject of the pane until it answers.
+ *
+ * The same moment as the search dialog's "Scanning", drawn at the size of the
+ * pane it fills — a big glass with a ring running round it, what is being
+ * looked for, and how far through the file the host has read.
+ */
+function SearchingState({ query, scanned, total, matched }: { query: string; scanned: number; total: number; matched: number }) {
+  const accent = 'var(--color-dk8s)';
+  const pct = total ? Math.min(100, (scanned / total) * 100) : 0;
+  return (
+    <div data-testid="log-searching" className="flex flex-col items-center justify-center h-full gap-4 px-8 text-center"
+         style={{ fontFamily: 'var(--font-sans, system-ui, sans-serif)', lineHeight: 1.4 }}>
+      <span className="relative grid place-items-center" style={{ width: 96, height: 96 }}>
+        <span className="absolute inset-0 rounded-full"
+              style={{ background: `radial-gradient(circle, color-mix(in srgb, ${accent} 22%, transparent), color-mix(in srgb, ${accent} 6%, transparent) 70%)` }} />
+        <span className="absolute inset-0 rounded-full animate-spin"
+              style={{
+                border: `3px solid color-mix(in srgb, ${accent} 16%, transparent)`,
+                borderTopColor: accent, borderRightColor: accent, animationDuration: '0.9s',
+              }} />
+        <SearchIcon size={IconSize.hero} color={accent} />
+      </span>
+      <span className="flex flex-col gap-1 items-center">
+        <span className="text-[16px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>Searching</span>
+        <span className="text-[12px] max-w-[520px]" style={{ color: 'var(--color-text-secondary)' }}>
+          {query ? <>Looking for <span className="font-mono" style={{ color: accent }}>{query}</span> in </> : 'Reading '}
+          all {total.toLocaleString()} lines of the download
+        </span>
+      </span>
+      <span className="flex flex-col gap-1.5 items-center" style={{ width: 300 }}>
+        <span className="w-full"><ProgressBarView value={scanned ? pct : undefined} color={accent} /></span>
+        <span className="text-[11px]" style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+          {scanned ? `${Math.round(pct)}% read · ${matched.toLocaleString()} match${matched === 1 ? '' : 'es'} so far` : 'Starting…'}
+        </span>
+      </span>
+    </div>
   );
 }

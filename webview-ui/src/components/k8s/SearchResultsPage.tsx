@@ -24,7 +24,9 @@
  * works the same either way.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { IconSize, ModalView, ButtonView, CheckboxView, ContextMenuView, type ContextMenuItem } from '@salilvnair/dui';
+import { IconSize, ModalView, ButtonView, CheckboxView, PopoverView, AvatarView, ChipView } from '@salilvnair/dui';
+import { DownloadIcon, ChevronDownIcon } from '../../icons';
+import { downloadMaxMb, LOG_DOWNLOAD_MAX_KEY } from './log-settings';
 import type { PodGroup } from '../../store/dk8s-search-store';
 import {
   TimeWindowPicker, windowError, windowOptions, type TimeWindow,
@@ -487,12 +489,6 @@ function OpenFullLogs({ searched, groups }: { searched: SearchedPod[]; groups: P
   };
 
   if (!pods.length) return null;
-  const items: ContextMenuItem[] = pods.map(({ t, hit, hits }) => ({
-    id: `${t.context}/${t.namespace}/${t.pod}`,
-    label: t.pod,
-    description: hits ? `${hits.toLocaleString()} hit${hits === 1 ? '' : 's'} — opens at the first` : `no hits · ${t.namespace}`,
-    onClick: () => open(t, hit),
-  }));
 
   return (
     <span ref={anchor}>
@@ -501,21 +497,120 @@ function OpenFullLogs({ searched, groups }: { searched: SearchedPod[]; groups: P
         size="sm"
         accentColor={ACCENT}
         color={ACCENT}
+        iconLeft={<FileTextIcon size={IconSize.action} />}
+        iconRight={pods.length > 1 ? <ChevronDownIcon size={IconSize.action} /> : undefined}
         title="Download a pod's whole log to a temporary file and open it in a new tab — deleted when you close the tab"
         onClick={() => (pods.length === 1 ? open(pods[0].t, pods[0].hit) : setMenu(m => !m))}
       >
-        Open logs{pods.length > 1 ? ' ▾' : ''}
+        Open logs
       </ButtonView>
-      <ContextMenuView
+      <PopoverView
         testId="dk8s-open-full-logs"
-        items={items}
-        anchorEl={anchor.current}
         open={menu}
         onClose={() => setMenu(false)}
-        align="right"
-        width="lg"
-      />
+        anchorEl={anchor.current}
+        placement="bottom"
+        borderRadius={12}
+      >
+        <OpenLogsMenu pods={pods} onOpen={open} />
+      </PopoverView>
     </span>
+  );
+}
+
+/*
+  A colour per app, from the theme: the same app's pods share one, so three
+  replicas read as a family, and it follows light and dark with everything else.
+*/
+const POD_HUES = [
+  'var(--color-dk8s)', 'var(--color-protocol-graphql)', 'var(--color-protocol-grpc)',
+  'var(--color-success)', 'var(--color-warning)', 'var(--color-info)', 'var(--color-accent)',
+];
+function podHue(pod: string): string {
+  const app = pod.replace(/(-[a-z0-9]{8,10})?-[a-z0-9]{5}$/, '');
+  let h = 0;
+  for (const ch of app) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return POD_HUES[h % POD_HUES.length];
+}
+function podInitials(pod: string): string {
+  const parts = pod.replace(/(-[a-z0-9]{8,10})?-[a-z0-9]{5}$/, '').split('-').filter(Boolean);
+  return ((parts[0]?.[0] ?? '?') + (parts[parts.length - 1]?.[0] ?? '')).toUpperCase();
+}
+
+/** The "Open logs" list: which pod, how much it matched, and what opening it does. */
+function OpenLogsMenu({ pods, onOpen }: {
+  pods: { t: SearchedPod; hit?: { ts?: number; text: string }; hits: number }[];
+  onOpen: (t: SearchedPod, hit?: { ts?: number; text: string }) => void;
+}) {
+  const capMb = downloadMaxMb(useUiStateStore(st => st.prefs[LOG_DOWNLOAD_MAX_KEY]));
+  const cap = capMb >= 1024 ? `${+(capMb / 1024).toFixed(2)} GB` : `${capMb} MB`;
+  const most = Math.max(1, ...pods.map(p => p.hits));
+  return (
+    <div className="flex flex-col" style={{ width: 380, maxWidth: '80vw', overflow: 'hidden', borderRadius: 12 }}>
+      <div className="flex items-center gap-2.5 px-3.5 py-3"
+           style={{
+             background: `linear-gradient(135deg, color-mix(in srgb, ${ACCENT} 22%, transparent), color-mix(in srgb, ${ACCENT} 4%, transparent))`,
+             borderBottom: `1px solid color-mix(in srgb, ${ACCENT} 25%, var(--color-surface-border))`,
+           }}>
+        <span className="inline-flex items-center justify-center rounded-lg"
+              style={{ width: 28, height: 28, background: `color-mix(in srgb, ${ACCENT} 24%, transparent)`, color: ACCENT }}>
+          <DownloadIcon size={15} />
+        </span>
+        <div className="flex flex-col min-w-0">
+          <span className="text-[12.5px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>Open a pod&rsquo;s whole log</span>
+          <span className="text-[10.5px]" style={{ color: 'var(--color-text-secondary)' }}>
+            live + archive, in a new tab · up to {cap}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex flex-col p-1.5 gap-0.5" style={{ maxHeight: 360, overflowY: 'auto' }}>
+        {pods.map(({ t, hit, hits }) => {
+          const hue = podHue(t.pod);
+          return (
+            <button
+              key={`${t.context}/${t.namespace}/${t.pod}`}
+              type="button"
+              onClick={() => onOpen(t, hit)}
+              className="dk8s-open-row flex items-center gap-2.5 w-full text-left rounded-lg cursor-pointer border-none"
+              style={{
+                padding: '8px 10px',
+                background: 'transparent',
+                opacity: hits ? 1 : 0.62,
+                ['--row-hue' as string]: hue,
+              }}
+            >
+              <AvatarView initials={podInitials(t.pod)} name={t.pod} size="sm" color={hue} />
+              <span className="flex flex-col min-w-0 flex-1 gap-1">
+                <span className="font-mono text-[12px] truncate" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>{t.pod}</span>
+                <span className="flex items-center gap-1.5 min-w-0">
+                  {/* How much of the result this pod holds, against the busiest. */}
+                  <span className="rounded-full overflow-hidden shrink-0" style={{ width: 54, height: 4, background: 'var(--color-surface-border)' }}>
+                    <span className="block h-full rounded-full" style={{ width: `${Math.round((hits / most) * 100)}%`, background: hue }} />
+                  </span>
+                  <span className="text-[10.5px] truncate" style={{ color: 'var(--color-text-muted)' }}>
+                    {hits ? 'opens at its first hit' : 'no hits — opens at the end'} · {t.namespace}
+                  </span>
+                </span>
+              </span>
+              <ChipView
+                size="xs"
+                rounded
+                label={hits ? `${hits.toLocaleString()} hit${hits === 1 ? '' : 's'}` : 'no hits'}
+                color={hits ? hue : 'var(--color-text-muted)'}
+              />
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="px-3.5 py-2 text-[10.5px]"
+           style={{ color: 'var(--color-text-muted)', borderTop: '1px solid var(--color-surface-border)' }}>
+        Saved to a temporary file and deleted when you close the tab.
+      </div>
+      <style>{`.dk8s-open-row:hover { background: color-mix(in srgb, var(--row-hue) 12%, transparent) !important; }
+.dk8s-open-row:focus-visible { outline: 2px solid var(--row-hue); outline-offset: -2px; }`}</style>
+    </div>
   );
 }
 
@@ -565,21 +660,18 @@ function SplitOpenResults({ searched }: { searched: SearchedPod[] }) {
 
   return (
     <div className="relative">
-      <button
-        type="button"
+      <ButtonView
+        variant="secondary"
+        size="sm"
+        accentColor={ACCENT}
+        color={ACCENT}
+        iconLeft={<ColumnsIcon size={IconSize.action} strokeWidth={2} />}
+        iconRight={<ChevronDownIcon size={IconSize.action} />}
         onClick={() => setMenu(v => !v)}
         title={`Follow these ${podsToOpen.length} pods side by side`}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] cursor-pointer"
-        style={{
-          background: `color-mix(in srgb, ${ACCENT} 16%, transparent)`,
-          border: `1px solid color-mix(in srgb, ${ACCENT} 45%, transparent)`,
-          color: ACCENT,
-          fontWeight: 600,
-        }}
       >
-        <ColumnsIcon size={IconSize.action} strokeWidth={2} />
         Split open
-      </button>
+      </ButtonView>
 
       {menu && (
         <div
@@ -824,21 +916,17 @@ export function SearchResultsPage() {
         <OpenFullLogs searched={searched} groups={groups} />
         <SplitOpenResults searched={searched} />
 
-        <button
-          type="button"
+        <ButtonView
+          variant={aiOpen ? 'accent' : 'secondary'}
+          size="sm"
+          accentColor={AI_ACCENT}
+          color={aiOpen ? undefined : 'var(--color-text-secondary)'}
+          iconLeft={<SparkleIcon size={IconSize.action} color={aiOpen ? undefined : AI_ACCENT} />}
           onClick={() => (aiOpen ? closeAi() : openAi())}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] cursor-pointer"
-          style={{
-            background: aiOpen ? `color-mix(in srgb, ${AI_ACCENT} 22%, transparent)` : 'transparent',
-            border: `1px solid ${aiOpen ? `color-mix(in srgb, ${AI_ACCENT} 55%, transparent)` : 'var(--color-surface-border)'}`,
-            color: aiOpen ? '#fff' : 'var(--color-text-secondary)',
-            fontWeight: aiOpen ? 600 : 400,
-          }}
           title={aiOpen ? 'Hide AI analysis' : 'Show AI analysis'}
         >
-          <SparkleIcon size={IconSize.action} color={AI_ACCENT} />
-          AI{answers.length > 0 && ` · ${answers.length}`}
-        </button>
+          AI{answers.length > 0 ? ` · ${answers.length}` : ''}
+        </ButtonView>
       </div>
 
       <AiSplit>

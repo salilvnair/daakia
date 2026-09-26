@@ -92,6 +92,14 @@ export type LogSource = Pick<K8sStore,
     /** The list is still growing (a download or a filter still running). */
     partial?: boolean;
     loading?: 'earlier' | 'later';
+    /**
+     * A filter the source is running and has not answered yet.
+     *
+     * The lines on hand are the unfiltered ones until then, so the view must
+     * not filter them itself and say "no line matches" a second before the
+     * matches arrive.
+     */
+    searching?: { query: string; scanned: number; total: number; matched: number };
     loadEarlier: () => void;
     loadLater: () => void;
   };

@@ -196,6 +196,14 @@ function Body({ id, view }: { id: string; view: LogFileView }) {
       total: view.total,
       partial: view.partial,
       loading: view.loading === 'jump' ? undefined : view.loading,
+      searching: view.searching ? {
+        query: [view.filter.trim() && `“${view.filter.trim()}”`, view.levels.length && view.levels.join(' / '),
+          view.fields.length && `${view.fields.length} field filter${view.fields.length === 1 ? '' : 's'}`]
+          .filter(Boolean).join(' · '),
+        scanned: view.filterRun?.scanned ?? 0,
+        total: view.info?.lines ?? view.total,
+        matched: view.filterRun?.matched ?? 0,
+      } : undefined,
       loadEarlier: () => s.loadEarlier(id),
       loadLater: () => s.loadLater(id),
     },
