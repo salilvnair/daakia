@@ -112,7 +112,7 @@ export function AiChatHeader({
         activeColor={ACCENT}
         onClick={onToggleRail}
       />
-      <span className="dai-mark"><DaakiaMarkIcon size={17} /></span>
+      <span className="dai-mark"><DaakiaMarkIcon size={17} tint={ACCENT} /></span>
       <span className="dai-title">{title}</span>
       <span className="dai-sp" />
 

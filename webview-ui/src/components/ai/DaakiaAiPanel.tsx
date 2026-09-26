@@ -294,9 +294,9 @@ function AiContextBar({
 
 // ─── Panel ────────────────────────────────────────────────────────────────────
 
-/** Where an AI agent's avatar goes: Daakia's own mark. */
+/** Where an AI agent's avatar goes: Daakia's own mark, in the tab's clay. */
 function DaakiaAvatar() {
-  return <DaakiaMarkIcon size={16} />;
+  return <DaakiaMarkIcon size={16} tint={ACCENT} />;
 }
 
 /**

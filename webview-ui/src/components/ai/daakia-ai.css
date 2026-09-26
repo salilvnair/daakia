@@ -80,9 +80,12 @@
   height: 50px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 16px;
   border-bottom: 1px solid var(--dai-line);
 }
+/* The mark and the answer avatar share a ground: a clay wash, a clay edge, a faint glow. */
 .dai-mark {
   width: 28px; height: 28px; flex-shrink: 0; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;
-  background: var(--dai-surface2); border: 1px solid var(--dai-line);
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--dai-accent) 26%, transparent), color-mix(in srgb, var(--dai-accent) 10%, var(--color-panel)));
+  border: 1px solid var(--dai-accent-line);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--dai-accent) 18%, transparent);
 }
 .dai-title { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .dai-sub { font-size: 11.5px; color: var(--dai-muted); white-space: nowrap; }
@@ -123,7 +126,11 @@
 .dai--streaming .ce-composer-send:not(.dai-stop) { visibility: hidden; }
 .dai .ce-composer-send.dai-stop { background: var(--dai-surface2); color: var(--color-text-primary); border: 1px solid var(--dai-line); box-shadow: none; }
 .dai .ce-composer-send.dai-stop:hover { background: var(--dai-accent-tint); border-color: var(--dai-accent-line); }
-.dai .ce-avatar--agent { background: var(--dai-surface2) !important; border: 1px solid var(--dai-line); }
+.dai .ce-avatar--agent {
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--dai-accent) 26%, transparent), color-mix(in srgb, var(--dai-accent) 10%, var(--color-panel))) !important;
+  border: 1px solid var(--dai-accent-line);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--dai-accent) 18%, transparent);
+}
 
 /* ── Landing ──────────────────────────────────────────────────────────── */
 .dai-landing { width: min(820px, calc(100% - 32px)); margin: 0 auto; display: flex; flex-direction: column; gap: 26px; padding: 24px 0; }

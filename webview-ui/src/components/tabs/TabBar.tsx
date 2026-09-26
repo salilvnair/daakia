@@ -500,7 +500,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
               ) : isStateMachine ? (
                 <StateMachineIcon size={13} className="flex-shrink-0" style={{ color: SM_ACCENT }} />
               ) : isDaakiaAi ? (
-                <span className="flex-shrink-0 inline-flex"><DaakiaMarkIcon size={13} /></span>
+                <span className="flex-shrink-0 inline-flex"><DaakiaMarkIcon size={13} tint={tabAccent} /></span>
               ) : isWiki ? (
                 <BookOpenIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-wiki)' }} />
               ) : isDk8s ? (
