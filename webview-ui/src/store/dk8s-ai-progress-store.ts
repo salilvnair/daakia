@@ -12,6 +12,11 @@ export interface Dk8sPhaseState {
   state: 'running' | 'done';
   hits: number;
   ms: number;
+  /** The archive, pod by pod: which one, where, and the files that held a hit so far. */
+  pod?: string;
+  podIndex?: number;
+  roots?: string[];
+  files?: number;
 }
 
 export interface Dk8sAiProgress {
@@ -47,7 +52,13 @@ export const useDk8sAiProgress = create<State>((set, get) => ({
         return;
       case 'ai:dk8sSearchPhase': {
         if (!cur || cur.tabId !== tabId) return;
-        const phase: Dk8sPhaseState = { state: msg.state === 'done' ? 'done' : 'running', hits: Number(msg.hits ?? 0), ms: Number(msg.ms ?? 0) };
+        const phase: Dk8sPhaseState = {
+          state: msg.state === 'done' ? 'done' : 'running', hits: Number(msg.hits ?? 0), ms: Number(msg.ms ?? 0),
+          ...(typeof msg.pod === 'string' ? { pod: msg.pod } : {}),
+          ...(typeof msg.podIndex === 'number' ? { podIndex: msg.podIndex } : {}),
+          ...(Array.isArray(msg.roots) ? { roots: msg.roots as string[] } : {}),
+          ...(typeof msg.files === 'number' ? { files: msg.files } : {}),
+        };
         set({ progress: msg.phase === 'archive' ? { ...cur, archivePhase: phase } : { ...cur, live: phase } });
         return;
       }

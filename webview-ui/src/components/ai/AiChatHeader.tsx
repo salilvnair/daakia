@@ -23,6 +23,10 @@ const ACCENT = 'var(--color-ai-accent, #D97757)';
 const RailIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M9 4v16" /></svg>
 );
+/* New chat: a pen on a page — the conversation starts blank. */
+const ComposeIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 4H6.5A2.5 2.5 0 0 0 4 6.5v11A2.5 2.5 0 0 0 6.5 20h11a2.5 2.5 0 0 0 2.5-2.5V12" /><path d="M17.6 3.6a1.9 1.9 0 0 1 2.8 2.8L12.5 14.3 9 15l.7-3.5Z" /></svg>
+);
 const MoreIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></svg>
 );
@@ -141,6 +145,16 @@ export function AiChatHeader({
         }}
       />
 
+      <IconButtonView
+        icon={<ComposeIcon />}
+        size="sm"
+        variant="filled"
+        accentColor={ACCENT}
+        color={ACCENT}
+        tooltip="New chat (Ctrl+N)"
+        aria-label="New chat"
+        onClick={() => newChat()}
+      />
       <span ref={moreRef}>
         <IconButtonView
           icon={<MoreIcon />}

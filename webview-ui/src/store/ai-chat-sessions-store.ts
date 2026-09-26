@@ -12,7 +12,7 @@ import { create } from 'zustand';
 import { postMsg } from '../vscode';
 import { useAiConversationStore } from './ai-conversation-store';
 import { useUiStateStore } from './ui-state-store';
-import type { AiMessage } from './tabs-store';
+import { useTabsStore, type AiMessage } from './tabs-store';
 
 export interface ConversationRow {
   id: string;
@@ -22,6 +22,8 @@ export interface ConversationRow {
   message_count: number;
   created_at: string;
   updated_at: string;
+  /** Whether any answer in it searched dk8s or ran kubectl — the rail marks those. */
+  dk8s?: number | boolean;
 }
 
 const ACTIVE_PREF = 'ai.chat.active';
@@ -69,6 +71,9 @@ export const useAiChatSessions = create<State>((set, get) => ({
   },
 
   newChat: () => {
+    /* An answer still on its way belongs to the thread being left: stop it rather than let it land in the new one. */
+    const running = useTabsStore.getState().tabs.find(t => t.type === 'daakia-ai' && t.aiStreaming);
+    if (running) postMsg({ type: 'ai:cancel', tabId: running.id });
     const activeId = newId();
     useAiConversationStore.getState().clearMessages();
     useUiStateStore.getState().setPref(ACTIVE_PREF, activeId);

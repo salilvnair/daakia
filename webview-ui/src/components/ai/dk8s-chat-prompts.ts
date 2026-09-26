@@ -181,8 +181,50 @@ export const DK8S_CHAT_COLORS: Record<string, string> = Object.fromEntries(
  * off; it still only searches when pods are being watched.
  */
 export const DK8S_CHAT_PREF = 'ai.dk8s';
-export function dk8sChatOn(): boolean {
-  return useUiStateStore.getState().prefs[DK8S_CHAT_PREF] !== 'off';
+/** The conversations whose pill was dismissed: dk8s stays off in those, and only those. */
+export const DK8S_OFF_CHATS_PREF = 'ai.dk8s.offChats';
+
+export function dk8sOffChats(raw: unknown): string[] {
+  try {
+    const v = JSON.parse(typeof raw === 'string' ? raw : '[]');
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch { return []; }
+}
+
+/** Whether the conversation `chatId` may search dk8s: on for the tab, and not dismissed in it. */
+export function dk8sChatOn(chatId?: string): boolean {
+  const prefs = useUiStateStore.getState().prefs;
+  if (prefs[DK8S_CHAT_PREF] === 'off') return false;
+  return !chatId || !dk8sOffChats(prefs[DK8S_OFF_CHATS_PREF]).includes(chatId);
+}
+
+/** The workloads (or, for a pod without one, the pods) left out of what a question searches. */
+export const DK8S_EXCLUDED_PREF = 'ai.dk8s.excluded';
+
+/** What a pod is picked by: its workload, which a rollout does not rename; else its own name. */
+export function dk8sScopeKey(p: { name: string; workload?: { name: string } }): string {
+  return p.workload?.name || p.name;
+}
+
+export function dk8sExcluded(raw: unknown): string[] {
+  return dk8sOffChats(raw);
+}
+
+export function setDk8sExcluded(keys: string[]): void {
+  useUiStateStore.getState().setPref(DK8S_EXCLUDED_PREF, JSON.stringify([...new Set(keys)]));
+}
+
+/** The pods a question may search: those on screen, less the ones left out. None is an answer: search nothing. */
+export function dk8sScoped<T extends { name: string; workload?: { name: string } }>(pods: T[], raw: unknown): T[] {
+  const out = dk8sExcluded(raw);
+  return pods.filter(p => !out.includes(dk8sScopeKey(p)));
+}
+
+/** Turn dk8s off, or back on, for one conversation. The list keeps the newest 200. */
+export function setDk8sForChat(chatId: string, on: boolean): void {
+  const ui = useUiStateStore.getState();
+  const list = dk8sOffChats(ui.prefs[DK8S_OFF_CHATS_PREF]).filter(id => id !== chatId);
+  ui.setPref(DK8S_OFF_CHATS_PREF, JSON.stringify(on ? list : [...list, chatId].slice(-200)));
 }
 
 /** The system prompt with where-you-are filled in. Unknown values say so. */

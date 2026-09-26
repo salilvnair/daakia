@@ -56,9 +56,7 @@ export function Dk8sSearchProgress({ progress }: { progress: Dk8sAiProgress }) {
         background: 'color-mix(in srgb, var(--color-text-primary) 3%, var(--color-panel))',
       }}>
         <PhaseRow label={`Live logs · ${progress.pods} pod${progress.pods === 1 ? '' : 's'}${scope}`} phase={progress.live ?? { state: 'running', hits: 0, ms: 0 }} />
-        {progress.archive && (
-          <PhaseRow label="Archive · the rotated files on the pods' volumes" phase={progress.archivePhase} waiting={!progress.archivePhase} />
-        )}
+        {progress.archive && <ArchiveRow progress={progress} />}
         {liveNothing && progress.archive && progress.archivePhase?.state !== 'done' && (
           <div style={{ fontSize: 11, color: 'var(--color-text-muted)', paddingLeft: 22, lineHeight: 1.5 }}>
             Nothing live — {progress.query} may be older than anything <span style={{ fontFamily: MONO }}>kubectl logs</span> still holds.
@@ -79,7 +77,25 @@ export function Dk8sSearchProgress({ progress }: { progress: Dk8sAiProgress }) {
   );
 }
 
-function PhaseRow({ label, phase, waiting }: { label: string; phase?: Dk8sPhaseState; waiting?: boolean }) {
+/*
+  The archive half, pod by pod: the path it is grepping and the pod it is in,
+  then how far through the pods it is and how many files have held a hit.
+*/
+function ArchiveRow({ progress }: { progress: Dk8sAiProgress }) {
+  const a = progress.archivePhase;
+  const where = a?.roots?.length ? a.roots.join(', ') : undefined;
+  const files = a?.files ? ` · ${a.files} file${a.files === 1 ? '' : 's'} with hits` : '';
+  const label = !a ? "Archive · the rotated files on the pods' volumes"
+    : a.state === 'done' ? `Archive · ${where ?? "the pods' volumes"} · ${progress.pods} pod${progress.pods === 1 ? '' : 's'}`
+    : a.pod ? `Archive · ${where ? `${where} on ` : ''}${a.pod}`
+    : "Archive · the rotated files on the pods' volumes";
+  const detail = a?.state === 'running' && a.podIndex
+    ? `pod ${a.podIndex} of ${progress.pods}${files}…`
+    : a?.state === 'done' ? `${a.hits} hit${a.hits === 1 ? '' : 's'} · ${(a.ms / 1000).toFixed(1)}s${files}` : undefined;
+  return <PhaseRow label={label} phase={a} waiting={!a} detail={detail} />;
+}
+
+function PhaseRow({ label, phase, waiting, detail }: { label: string; phase?: Dk8sPhaseState; waiting?: boolean; detail?: string }) {
   const done = phase?.state === 'done';
   return (
     <div className="flex items-center" style={{ gap: 9, fontSize: 12, color: waiting ? 'var(--color-text-muted)' : 'var(--color-text-primary)' }}>
@@ -87,9 +103,9 @@ function PhaseRow({ label, phase, waiting }: { label: string; phase?: Dk8sPhaseS
         ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--color-success, #10b981)" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><path d="m5 12 5 5 9-10" /></svg>
         : waiting ? <span style={{ width: 13, height: 13, borderRadius: '50%', border: '2px solid var(--color-surface-border)', boxSizing: 'border-box' }} />
           : <Spinner />}
-      <span className="flex-1">{label}</span>
-      <span style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums', fontSize: 11.5 }}>
-        {done ? `${phase!.hits} hit${phase!.hits === 1 ? '' : 's'} · ${(phase!.ms / 1000).toFixed(1)}s` : waiting ? 'next' : 'reading…'}
+      <span className="flex-1 min-w-0" style={{ overflowWrap: 'anywhere' }}>{label}</span>
+      <span style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums', fontSize: 11.5, flexShrink: 0 }}>
+        {detail ?? (done ? `${phase!.hits} hit${phase!.hits === 1 ? '' : 's'} · ${(phase!.ms / 1000).toFixed(1)}s` : waiting ? 'next' : 'reading…')}
       </span>
     </div>
   );

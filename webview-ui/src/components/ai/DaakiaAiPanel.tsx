@@ -9,6 +9,7 @@
  * E6.71 — Daakia AI dedicated tab · 3.3 — the revamp on convengine-chat 1.7.0
  */
 import { useCallback, useMemo, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ConvEngineChat } from '@salilvnair/convengine-chat';
 import type { RendererComponentProps } from '@salilvnair/convengine-chat';
 import { useTabsStore, DAAKIA_ASSISTANT_SYSTEM_PROMPT, type ResponseData } from '../../store/tabs-store';
@@ -16,16 +17,19 @@ import { useEnvStore, GLOBAL_ENV_ID } from '../../store/env-store';
 import { DaakiaMarkIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { Dk8sSearchCard, isDk8sSearchPayload } from './Dk8sSearchCard';
+import { AiNoticeCard, isAiNoticePayload } from './AiNoticeCard';
+import { useLibrarySlot } from './use-library-slot';
 import { postMsg } from '../../vscode';
 import { AiPendingActions, parseDaakiaActions, type DaakiaAction } from './AiPendingActions';
 import { AiConversationToCollectionModal } from './AiConversationToCollectionModal';
 import { AiSessionExportModal } from './AiSessionExportModal';
 import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { useK8sStore } from '../../store/k8s-store';
-import { usePersistedPref } from '../../store/ui-state-store';
+import { usePersistedPref, useUiStateStore } from '../../store/ui-state-store';
 import { useAiConversationStore } from '../../store/ai-conversation-store';
-import { useAiChatSessions } from '../../store/ai-chat-sessions-store';
-import { DK8S_CHAT_PREF } from './dk8s-chat-prompts';
+import { useAiChatSessions, currentId } from '../../store/ai-chat-sessions-store';
+import { DK8S_CHAT_PREF, DK8S_OFF_CHATS_PREF, DK8S_EXCLUDED_PREF, dk8sOffChats, setDk8sForChat, dk8sScoped } from './dk8s-chat-prompts';
+import { Dk8sPodPickerPortal } from './Dk8sPodPicker';
 import { Dk8sSearchProgressPortal } from './Dk8sSearchProgress';
 import { AiHistoryRail } from './AiHistoryRail';
 import { AiChatHeader } from './AiChatHeader';
@@ -36,10 +40,11 @@ import { chatActions } from './ai-chat-actions';
 import { toUiMessages } from './ai-display';
 import { copyText } from '../../utils/clipboard';
 import { useDocTheme } from './use-doc-theme';
-import { ButtonView, IconButtonView } from '@salilvnair/dui';
+import { ButtonView, IconButtonView, SplitPanelView } from '@salilvnair/dui';
 import './daakia-ai.css';
 
 const ACCENT = 'var(--color-ai-accent, #D97757)';
+const RAIL_SPLIT_PREF = 'ai.chat.railSplit';
 
 // ─── MdViewer renderer provider ───────────────────────────────────────────────
 
@@ -89,7 +94,20 @@ function Dk8sRendererComponent({ payload, actions }: RendererComponentProps) {
   return <Dk8sSearchCard payload={payload} submit={actions ? (text) => actions.submit(text) : undefined} />;
 }
 
+/** An answer that did not come — stopped or failed — with the question offered again. */
+function NoticeRendererComponent({ payload, actions }: RendererComponentProps) {
+  if (!isAiNoticePayload(payload)) return <DaakiaMdRendererComponent payload={payload} />;
+  return <AiNoticeCard payload={payload} submit={actions ? (text) => actions.submit(text) : undefined} />;
+}
+
 const DAAKIA_RENDERER_PROVIDERS = [
+  {
+    key: 'daakia-notice',
+    priority: 300,
+    match: (ctx: { payload?: unknown }) => isAiNoticePayload(ctx?.payload),
+    Component: NoticeRendererComponent,
+    hideBubble: true,
+  },
   {
     key: 'daakia-dk8s-search',
     /* Above the markdown catch-all, which matches everything. */
@@ -343,6 +361,9 @@ export function DaakiaAiPanel() {
 
   // ── The rail, and which conversation is open ─────────────────────────────
   const [railPref, setRailPref] = usePersistedPref('ai.chat.rail', 'open', ['open', 'closed'] as const);
+  /* The rail's width, as the split's percentage — dragged once, kept. */
+  const railSplitPref = Number(useUiStateStore(s => s.prefs[RAIL_SPLIT_PREF]));
+  const railSplit = railSplitPref > 0 && railSplitPref < 60 ? railSplitPref : 20;
   const epoch = useAiChatSessions(s => s.epoch);
   const seed = useAiChatSessions(s => s.seed);
   const conversations = useAiChatSessions(s => s.conversations);
@@ -375,11 +396,20 @@ export function DaakiaAiPanel() {
 
   // ── dk8s: may the assistant search the watched pods? ─────────────────────
   const [dk8sPref, setDk8sPref] = usePersistedPref(DK8S_CHAT_PREF, 'on', ['on', 'off'] as const);
+  /* ✕ on the pill is for this conversation; the header's switch is for the tab. */
+  const chatId = activeId || currentId();
+  const offHere = dk8sOffChats(useUiStateStore(s => s.prefs[DK8S_OFF_CHATS_PREF])).includes(chatId);
+  const dk8sOn = dk8sPref === 'on' && !offHere;
   const k8sContext = useK8sStore(s => s.context);
   const k8sNamespace = useK8sStore(s => s.namespace);
-  const watchedPods = useK8sStore(s => s.pods.filter(p =>
-    (!s.context || p.context === s.context) && (!s.namespace || p.namespace === s.namespace)).length);
-  const dk8sActive = dk8sPref === 'on' && watchedPods > 0;
+  const allPods = useK8sStore(s => s.pods);
+  const podsOnScreen = useMemo(() => allPods.filter(p =>
+    (!k8sContext || p.context === k8sContext) && (!k8sNamespace || p.namespace === k8sNamespace)), [allPods, k8sContext, k8sNamespace]);
+  const excludedRaw = useUiStateStore(s => s.prefs[DK8S_EXCLUDED_PREF]);
+  /* What a question will search: the pods on screen, less those the pill's picker leaves out. */
+  const searchedPods = useMemo(() => dk8sScoped(podsOnScreen, excludedRaw).length, [podsOnScreen, excludedRaw]);
+  const watchedPods = podsOnScreen.length;
+  const dk8sActive = dk8sOn && watchedPods > 0;
   const where = [k8sContext, k8sNamespace].filter(Boolean).join(' / ');
 
   /*
@@ -387,17 +417,46 @@ export function DaakiaAiPanel() {
 
     A reply pill that persists across sends — the library's own affordance for
     "this is what the next message is about". ✕ on it turns dk8s search off
-    for the tab; the header offers to turn it back on. The pods themselves are
-    sent by the bridge, from what dk8s shows at the moment of sending.
+    for this conversation only; the header offers to turn it back on. The pods
+    themselves are sent by the bridge, from what dk8s shows at the moment of
+    sending.
   */
   const replyContext = useMemo(() => dk8sActive ? {
     label: 'dk8s',
-    text: `${where} · ${watchedPods} pod${watchedPods === 1 ? '' : 's'}`,
+    text: `${where} · ${searchedPods === watchedPods ? `${watchedPods} pod${watchedPods === 1 ? '' : 's'}`
+      : searchedPods === 0 ? 'no pods ticked — not searching' : `${searchedPods} of ${watchedPods} pods`}`,
     persist: true,
     clearable: true,
-    title: `Questions can search the logs of the ${watchedPods} pods you are watching. ✕ stops that for this tab.`,
-    onClear: () => setDk8sPref('off'),
-  } : null, [dk8sActive, where, watchedPods]); // eslint-disable-line react-hooks/exhaustive-deps
+    title: `Questions can search the logs of ${searchedPods} of the ${watchedPods} pods you are watching — choose which beside the ✕. ✕ stops that in this conversation.`,
+    onClear: () => setDk8sForChat(chatId, false),
+  } : null, [dk8sActive, where, watchedPods, searchedPods, chatId]);
+
+  /* The header's switch: back on here if only this conversation had it off, else the tab's. */
+  const toggleDk8s = useCallback(() => {
+    if (offHere) {
+      setDk8sForChat(chatId, true);
+      if (dk8sPref === 'off') setDk8sPref('on');
+    } else setDk8sPref(dk8sPref === 'on' ? 'off' : 'on');
+  }, [offHere, chatId, dk8sPref]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── While an answer is on its way, Send is Stop ──────────────────────────
+  const aiTabId = useTabsStore(s => s.tabs.find(t => t.type === 'daakia-ai')?.id);
+  const streaming = useTabsStore(s => !!s.tabs.find(t => t.type === 'daakia-ai')?.aiStreaming);
+  const stop = useCallback(() => { if (aiTabId) postMsg({ type: 'ai:cancel', tabId: aiTabId }); }, [aiTabId]);
+
+  /* Ctrl N (⌘N) is New chat, as the button says — while this tab is the one on screen. */
+  const onScreen = activeTab?.type === 'daakia-ai';
+  useEffect(() => {
+    if (!onScreen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'n') return;
+      e.preventDefault();
+      e.stopPropagation();
+      useAiChatSessions.getState().newChat();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [onScreen]);
 
   const logPromptList = useMemo(() => logPrompts(templates), [templates]);
   const palettePrompts = useMemo(
@@ -406,6 +465,9 @@ export function DaakiaAiPanel() {
   );
 
   const [chatRoot, setChatRoot] = useState<HTMLDivElement | null>(null);
+  /* Beside the library's send button, drawn with its class so it sits exactly where Send was.
+     The selector skips our own button: with it, the slot matched itself and nested forever. */
+  const stopSlot = useLibrarySlot(chatRoot, ':has(> .ce-composer-send:not(.dai-stop))', 'dai-stop-slot', streaming);
 
   /*
     The chat's own dark/light mode follows Daakia's. It is only read when the
@@ -529,13 +591,27 @@ export function DaakiaAiPanel() {
   }, [contextTab]);
 
   return (
-    <div className="dai">
-      {railPref === 'open' && <AiHistoryRail />}
-
+    <div className={streaming ? 'dai dai--streaming' : 'dai'}>
+      {/*
+        The rail and the conversation, as a split somebody can drag. Hidden,
+        the rail collapses rather than unmounts, so its search and scroll stay.
+      */}
+      <SplitPanelView
+        direction="horizontal"
+        defaultSplit={railSplit}
+        minFirst={200}
+        minSecond={480}
+        collapsed={railPref !== 'open'}
+        collapsedSide="first"
+        accentColor={ACCENT}
+        onResizeEnd={v => useUiStateStore.getState().setPref(RAIL_SPLIT_PREF, String(Math.round(v * 10) / 10))}
+        style={{ flex: 1, minWidth: 0, minHeight: 0 }}
+        first={<AiHistoryRail />}
+        second={
       <div className="dai-main">
         <AiChatHeader
           title={title}
-          dk8s={watchedPods > 0 ? { on: dk8sPref === 'on', toggle: () => setDk8sPref(dk8sPref === 'on' ? 'off' : 'on'), where } : undefined}
+          dk8s={watchedPods > 0 ? { on: dk8sOn, toggle: toggleDk8s, where } : undefined}
           railOpen={railPref === 'open'}
           onToggleRail={() => setRailPref(railPref === 'open' ? 'closed' : 'open')}
           onCollection={() => setShowCollectionModal(true)}
@@ -565,12 +641,20 @@ export function DaakiaAiPanel() {
           />
           <AiLandingPortal
             root={chatRoot}
-            dk8s={dk8sActive ? { pods: watchedPods, namespace: k8sNamespace } : undefined}
+            dk8s={dk8sActive && searchedPods > 0 ? { pods: searchedPods, namespace: k8sNamespace } : undefined}
             logPrompts={logPromptList}
             buildPrompts={BUILD_PROMPTS}
           />
           <PromptPalette root={chatRoot} prompts={palettePrompts} />
           <Dk8sSearchProgressPortal root={chatRoot} />
+          {dk8sActive && <Dk8sPodPickerPortal root={chatRoot} pods={podsOnScreen} />}
+          {streaming && stopSlot && createPortal(
+            <button type="button" className="ce-composer-send dai-stop" onClick={stop}
+                    aria-label="Stop the answer" title="Stop the answer">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+            </button>,
+            stopSlot,
+          )}
 
           {/*
             Suggestion chips — float above the composer after each response,
@@ -590,6 +674,8 @@ export function DaakiaAiPanel() {
           )}
         </div>
       </div>
+        }
+      />
 
       {showCollectionModal && (
         <AiConversationToCollectionModal

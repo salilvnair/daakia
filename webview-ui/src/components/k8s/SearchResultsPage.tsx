@@ -26,6 +26,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IconSize, ModalView, ButtonView, CheckboxView, PopoverView, AvatarView, ChipView } from '@salilvnair/dui';
 import { DownloadIcon, ChevronDownIcon } from '../../icons';
+import { podHue, podInitials } from './pod-hue';
 import { downloadMaxMb, LOG_DOWNLOAD_MAX_KEY } from './log-settings';
 import type { PodGroup } from '../../store/dk8s-search-store';
 import {
@@ -516,25 +517,6 @@ function OpenFullLogs({ searched, groups }: { searched: SearchedPod[]; groups: P
       </PopoverView>
     </span>
   );
-}
-
-/*
-  A colour per app, from the theme: the same app's pods share one, so three
-  replicas read as a family, and it follows light and dark with everything else.
-*/
-const POD_HUES = [
-  'var(--color-dk8s)', 'var(--color-protocol-graphql)', 'var(--color-protocol-grpc)',
-  'var(--color-success)', 'var(--color-warning)', 'var(--color-info)', 'var(--color-accent)',
-];
-function podHue(pod: string): string {
-  const app = pod.replace(/(-[a-z0-9]{8,10})?-[a-z0-9]{5}$/, '');
-  let h = 0;
-  for (const ch of app) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return POD_HUES[h % POD_HUES.length];
-}
-function podInitials(pod: string): string {
-  const parts = pod.replace(/(-[a-z0-9]{8,10})?-[a-z0-9]{5}$/, '').split('-').filter(Boolean);
-  return ((parts[0]?.[0] ?? '?') + (parts[parts.length - 1]?.[0] ?? '')).toUpperCase();
 }
 
 /** The "Open logs" list: which pod, how much it matched, and what opening it does. */

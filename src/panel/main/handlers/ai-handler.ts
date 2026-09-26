@@ -220,6 +220,10 @@ export async function handleAiSend(
   };
 
   const signal = startAiRequest(tabId);
+  stoppedTabs.delete(tabId);
+  /* A new question starts clean: a search from a stopped answer that finished
+     late would otherwise be handed to this one's card as if it had run for it. */
+  dk8sResults.delete(tabId);
 
   // Hard timeout — fire ai:error if the request hangs with no response at all
   const REQUEST_TIMEOUT_MS = 60_000;
@@ -329,6 +333,7 @@ export async function handleAiSend(
         return;
       }
 
+      if (signal.aborted || stoppedTabs.has(tabId)) return;
       cleanupAiRequest(tabId);
       postMessage({ type: 'ai:complete', ...result });
 
@@ -426,6 +431,17 @@ export async function handleAiSend(
  * Handle MCP tool call loop — when AI returns tool_calls, execute them via MCP,
  * send results back to the model, and continue until no more tool calls.
  */
+/*
+  Tabs whose answer was stopped from the composer.
+
+  The tool loop outlives the first request: its follow-up calls went out with a
+  signal of their own, so Stop cancelled a request that had already finished
+  and the answer arrived anyway, after the thread had said "stopped". The loop
+  checks this before each tool, before each follow-up and before it answers.
+  A new send clears it.
+*/
+const stoppedTabs = new Set<string>();
+
 async function handleMcpToolCallLoop(
   tabId: string,
   payload: AiRequestPayload,
@@ -442,6 +458,7 @@ async function handleMcpToolCallLoop(
     return;
   }
 
+  if (stoppedTabs.has(tabId)) { dk8sResults.delete(tabId); return; }
   const toolCalls = result.message.toolCalls || [];
 
   // Send the assistant message with tool_calls to the webview for display
@@ -450,6 +467,7 @@ async function handleMcpToolCallLoop(
   // Execute each tool call via MCP
   const toolResults: AiMessage[] = [];
   for (const tc of toolCalls) {
+    if (stoppedTabs.has(tabId)) { dk8sResults.delete(tabId); return; }
     let args: Record<string, unknown> = {};
     try { args = JSON.parse(tc.function.arguments || '{}'); } catch { /* use empty */ }
 
@@ -477,6 +495,9 @@ async function handleMcpToolCallLoop(
     postMessage({ type: 'ai:toolResult', tabId, toolCallId: tc.id, message: toolMsg });
   }
 
+  /* Stopped while a tool ran: no follow-up, and its results go nowhere. */
+  if (stoppedTabs.has(tabId)) { dk8sResults.delete(tabId); return; }
+
   // Build new messages array: existing + assistant with tool_calls + tool results
   const updatedMessages = [
     ...payload.messages,
@@ -492,7 +513,8 @@ async function handleMcpToolCallLoop(
 
   executeAiRequest({
     payload: followUpPayload,
-    signal: new AbortController().signal, // tool loop follow-ups are not independently cancellable
+    /* Stopped from the composer: the follow-up is abandoned where it stands. */
+    signal: { get aborted() { return stoppedTabs.has(tabId); } },
     onChunk: (chunk) => {
       postMessage({ type: 'ai:chunk', ...chunk });
     },
@@ -502,6 +524,7 @@ async function handleMcpToolCallLoop(
         await handleMcpToolCallLoop(tabId, followUpPayload, followUpResult, postMessage, auditStage, depth + 1);
         return;
       }
+      if (stoppedTabs.has(tabId)) { dk8sResults.delete(tabId); return; }
       cleanupAiRequest(tabId);
       postMessage({ type: 'ai:complete', ...followUpResult, dk8s: takeDk8sResults(tabId) });
     },
@@ -655,6 +678,7 @@ async function runDk8sForConversation(
 export function handleAiCancel(msg: Record<string, unknown>, postMessage: PostMessage) {
   const tabId = msg.tabId as string;
   cancelAiRequest(tabId);
+  stoppedTabs.add(tabId);
   postMessage({ type: 'ai:cancelled', tabId });
 }
 

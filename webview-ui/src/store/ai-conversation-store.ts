@@ -28,7 +28,7 @@ interface AiConversationState {
   addUserMessage: (msg: AiMessage) => void;
 
   /** Push an error as an assistant message and save to DB */
-  addErrorMessage: (content: string) => void;
+  addErrorMessage: (content: string, display?: string) => void;
 
   /** Clear all messages — also clears DB */
   clearMessages: () => void;
@@ -83,8 +83,8 @@ export const useAiConversationStore = create<AiConversationState>((set, get) => 
     get().saveToDb();
   },
 
-  addErrorMessage: (content) => {
-    const errMsg: AiMessage = { id: crypto.randomUUID(), role: 'assistant', content, timestamp: Date.now() };
+  addErrorMessage: (content, display) => {
+    const errMsg: AiMessage = { id: crypto.randomUUID(), role: 'assistant', content, timestamp: Date.now(), ...(display ? { display } : {}) };
     set(s => ({ messages: [...s.messages, errMsg], streaming: false }));
     get().saveToDb();
   },

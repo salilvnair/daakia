@@ -263,15 +263,23 @@ export function grepScript(
       output parses the same.
     */
     const minutes = Math.max(1, Math.ceil((Date.now() - o.sinceMs) / 60_000) + 1);
+    /*
+      Each file's lines come under a line naming it, and grep prints only
+      `N:text` and `N-text`. With the name in front of every line, a context
+      line whose text holds a colon — every timestamp does — read as a hit in
+      a "file" called `app.log-3-2026-09-26T00`; and when `head` cut a file
+      off before its hit, nothing was left to tell the two apart.
+    */
     return [
       'find', shellQuote(root), '-type', 'f', '-mmin', `-${minutes}`,
       '-exec', 'ls', '-1tr', '{}', '+', '2>/dev/null',
       '|', 'while', 'IFS=', 'read', '-r', 'f;', 'do',
-      'grep', '-nH',
+      'o=$(grep', '-n',
       o.caseSensitive ? '-E' : '-Ei',
       ...(ctx > 0 ? ['-C', String(ctx)] : []),
       '-e', shellQuote(o.regex ? pattern : escapeRegex(pattern)),
-      '"$f";', 'done',
+      '"$f");',
+      '[', '-n', '"$o"', ']', '&&', 'printf', `'${FILE_MARK}%s\\n%s\\n'`, '"$f"', '"$o";', 'done',
       '2>/dev/null',
       '|', 'head', '-n', String(limit),
     ].join(' ');
@@ -288,6 +296,30 @@ export function grepScript(
   ].join(' ');
 }
 
+/** The line the windowed script prints before each file's matches. */
+export const FILE_MARK = '@@daakia-file@@';
+
+/**
+ * Output where each file's lines follow a `FILE_MARK` line naming it — so a
+ * line is `N:text` (a hit) or `N-text` (context), and never has to be split
+ * from a path. Lines before the first mark, and `--`, are nobody's.
+ */
+export function parseMarkedGrep(out: string[], root: string): PvMatch[] {
+  const matches: PvMatch[] = [];
+  let file: string | undefined;
+  for (const line of out) {
+    if (line.startsWith(FILE_MARK)) { file = line.slice(FILE_MARK.length); continue; }
+    if (!file || !line || line === '--') continue;
+    const m = /^(\d+)([:-])(.*)$/.exec(line);
+    if (!m) continue;
+    matches.push({
+      file, rel: relativeTo(root, file), line: Number(m[1]), text: m[3],
+      ...(m[2] === '-' ? { context: true } : {}),
+    });
+  }
+  return matches;
+}
+
 /** A literal search must not be read as a regex — `c.a.Service` is not a wildcard. */
 export function escapeRegex(s: string): string {
   return s.replace(/[.[\]{}()*+?^$|\\]/g, '\\$&');
@@ -302,18 +334,23 @@ export function escapeRegex(s: string): string {
  * `-09-` inside the date in `… archived day 2026-09-14`, and the file came
  * back as `archive/prodapp-2026-09-14.log-1-2026-09-14 INFO …`.
  *
- * So the file is not guessed. A hit carries a colon, which paths seldom do, so
- * hits parse on their own — and every context line belongs to a file that has
- * a hit, so `known` is matched as a prefix instead. Longest first, because one
- * path can be a prefix of another.
+ * So the file is not guessed. A hit carries a colon, which paths seldom do —
+ * but a log line does: the context line `app.log-3-2026-09-26T00:09:12 …`
+ * splits on the colons of its own timestamp into the "file"
+ * `app.log-3-2026-09-26T00`, line 9. So a colon split is only a candidate
+ * until `realFiles` has seen them all; given `known`, a candidate that is not
+ * one of them is read as context instead. Every context line belongs to a file
+ * that has a hit, so `known` is matched as a prefix. Longest first, because
+ * one path can be a prefix of another.
  */
 export function parseGrepLine(
   line: string, root: string, known?: Iterable<string>,
 ): PvMatch | undefined {
   if (!line || line === '--') return undefined;
 
+  const files = known ? [...known] : undefined;
   const hit = /^(.+?):(\d+):(.*)$/.exec(line);
-  if (hit && hit[1].startsWith('/')) {
+  if (hit && hit[1].startsWith('/') && (!files || files.includes(hit[1]))) {
     return {
       file: hit[1],
       rel: relativeTo(root, hit[1]),
@@ -322,7 +359,7 @@ export function parseGrepLine(
     };
   }
 
-  for (const file of [...(known ?? [])].sort((a, b) => b.length - a.length)) {
+  for (const file of [...(files ?? [])].sort((a, b) => b.length - a.length)) {
     if (!line.startsWith(file + '-')) continue;
     const rest = line.slice(file.length + 1);
     const m = /^(\d+)-(.*)$/.exec(rest);
@@ -337,6 +374,20 @@ export function parseGrepLine(
   }
 
   return undefined;
+}
+
+/**
+ * The files that really had a hit, out of every colon split's guess.
+ *
+ * A context line misread as a hit names a "file" that is a real one followed
+ * by `-<line>-` and the start of its text. Context is only printed around a
+ * hit in the same file, so the real file is among the candidates too — and
+ * that is what gives the fake one away.
+ */
+export function realFiles(candidates: Iterable<string>): Set<string> {
+  const all = [...candidates];
+  return new Set(all.filter(f => !all.some(g => g !== f
+    && f.startsWith(g + '-') && /^\d+-/.test(f.slice(g.length + 1)))));
 }
 
 /**
@@ -369,16 +420,22 @@ export async function searchInPod(
     prefix, which is exact where a regex over the punctuation is not.
   */
   const out = (r.stdout ?? '').split('\n');
-  const known = new Set<string>();
-  for (const line of out) {
-    const h = parseGrepLine(line, cleanRoot);
-    if (h && !h.context) known.add(h.file);
-  }
-
-  const matches: PvMatch[] = [];
-  for (const line of out) {
-    const m = parseGrepLine(line, cleanRoot, known);
-    if (m) matches.push(m);
+  let matches: PvMatch[];
+  if (o.sinceMs !== undefined) {
+    /* The windowed script names each file itself: nothing to guess. */
+    matches = parseMarkedGrep(out, cleanRoot);
+  } else {
+    const candidates = new Set<string>();
+    for (const line of out) {
+      const h = parseGrepLine(line, cleanRoot);
+      if (h && !h.context) candidates.add(h.file);
+    }
+    const known = realFiles(candidates);
+    matches = [];
+    for (const line of out) {
+      const m = parseGrepLine(line, cleanRoot, known);
+      if (m) matches.push(m);
+    }
   }
 
   /*

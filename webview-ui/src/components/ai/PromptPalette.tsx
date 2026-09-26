@@ -40,7 +40,7 @@ export function PromptPalette({ root, prompts }: { root: HTMLElement | null; pro
     const scored = prompts
       .map(p => ({ p, m: fuzzy(p.label, query) ?? (query && p.text.toLowerCase().includes(query.toLowerCase()) ? { score: 0, marks: [] } : undefined) }))
       .filter((x): x is { p: AiPrompt; m: { score: number; marks: number[] } } => !!x.m);
-    const order = ['Ask the logs', 'Build'];
+    const order = ['Ask the logs', 'REST', 'Mock', 'Tests'];
     return scored.sort((a, b) => (order.indexOf(a.p.group) - order.indexOf(b.p.group)) || (b.m.score - a.m.score));
   }, [prompts, query]);
 
@@ -154,10 +154,10 @@ export function PromptPalette({ root, prompts }: { root: HTMLElement | null; pro
         ) : <span className="dai-hint">Nothing to preview.</span>}
       </div>
       <div className="dai-pal-foot">
-        <span className="dai-keys"><KbdView keys={['↑', '↓']} size="xs" /> move</span>
-        <span className="dai-keys"><KbdView keys="Enter" size="xs" /> insert</span>
-        <span className="dai-keys"><KbdView keys="Tab" size="xs" /> next placeholder</span>
-        <span className="dai-keys"><KbdView keys="Esc" size="xs" /> close</span>
+        <span className="dai-keys"><KbdView keys={['↑', '↓']} size="md" /> move</span>
+        <span className="dai-keys"><KbdView keys="Enter" size="md" /> insert</span>
+        <span className="dai-keys"><KbdView keys="Tab" size="md" /> next placeholder</span>
+        <span className="dai-keys"><KbdView keys="Esc" size="md" /> close</span>
       </div>
     </div>,
     slot,

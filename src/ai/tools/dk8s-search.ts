@@ -171,6 +171,8 @@ export interface ThreadGroup {
   source: 'live' | 'archive';
   /** Absolute path inside the pod, for an archive hit. */
   file?: string;
+  /** The deployment (or other owner) the pod belonged to — how its replacement is found after a rollout. */
+  workload?: string;
   failures: number;
   lines: ResultLine[];
 }
@@ -179,7 +181,8 @@ export interface Dk8sSearchResult {
   query: string;
   around: number;
   groups: ThreadGroup[];
-  scanned: { pods: number; lines: number; archivePods: number };
+  /** `archiveFiles`: the rotated files that held a hit, across every pod. */
+  scanned: { pods: number; lines: number; archivePods: number; archiveFiles?: number };
   /** Pods that could not be read, and why — said, not dropped. */
   errors: { pod: string; error: string }[];
   truncated: boolean;
@@ -485,6 +488,12 @@ export interface Dk8sPhase {
   pods: number;
   hits: number;
   ms: number;
+  /** The archive half, pod by pod: which one it is reading, and where. */
+  pod?: string;
+  podIndex?: number;
+  roots?: string[];
+  /** Files that held a hit so far. */
+  files?: number;
 }
 
 function podGlob(glob: string | undefined): (pod: string) => boolean {
@@ -543,6 +552,7 @@ export async function runDk8sSearch(args: Dk8sSearchArgs, deps: Dk8sSearchDeps):
   const byPod = new Map(targets.map(t => [t.pod, t]));
   let scannedLines = 0;
   let archivePods = 0;
+  let archiveFiles = 0;
 
   const signal = { cancelled: false };
   const timeout = deps.timeoutMs ?? 60_000;
@@ -575,11 +585,19 @@ export async function runDk8sSearch(args: Dk8sSearchArgs, deps: Dk8sSearchDeps):
   const archiveStarted = Date.now();
   if (args.archive !== false && deps.searchArchive) {
     deps.onPhase?.({ phase: 'archive', state: 'running', pods: targets.length, hits: 0, ms: 0 });
-    for (const t of targets) {
+    /* The roots are the same for most pods of a workload: the last pod's are the best guess for the next. */
+    let roots: string[] | undefined;
+    for (const [i, t] of targets.entries()) {
       if (Date.now() - started > timeout) break;
+      deps.onPhase?.({
+        phase: 'archive', state: 'running', pods: targets.length, hits: matches.length - liveHits,
+        ms: Date.now() - archiveStarted, pod: t.pod, podIndex: i + 1, roots, files: archiveFiles,
+      });
       try {
         const { result, matches: m } = await deps.searchArchive(t, opts, signal);
+        if (result.roots?.length) roots = result.roots;
         if (result.files.length) archivePods++;
+        archiveFiles += result.files.length;
         if (result.error) errors.push({ pod: t.pod, error: result.error });
         for (const command of result.commands ?? []) {
           runs.push({
@@ -594,7 +612,7 @@ export async function runDk8sSearch(args: Dk8sSearchArgs, deps: Dk8sSearchDeps):
     }
     deps.onPhase?.({
       phase: 'archive', state: 'done', pods: targets.length,
-      hits: matches.length - liveHits, ms: Date.now() - archiveStarted,
+      hits: matches.length - liveHits, ms: Date.now() - archiveStarted, roots, files: archiveFiles,
     });
   }
 
@@ -608,10 +626,14 @@ export async function runDk8sSearch(args: Dk8sSearchArgs, deps: Dk8sSearchDeps):
   const { groups, truncated } = groupByThread(matches, {
     around, failure: failureMatcher(args.failure),
   });
+  for (const g of groups) {
+    const workload = byPod.get(g.pod)?.workload;
+    if (workload) g.workload = workload;
+  }
 
   return {
     query, around, groups, errors, truncated,
-    scanned: { pods: targets.length, lines: scannedLines, archivePods },
+    scanned: { pods: targets.length, lines: scannedLines, archivePods, archiveFiles },
     elapsedMs: Date.now() - started,
     runs, liveMs, archiveMs: Date.now() - archiveStarted,
     ...(windowed ? { window: { from: fromMs !== undefined ? new Date(fromMs).toISOString() : undefined,

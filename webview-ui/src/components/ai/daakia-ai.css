@@ -42,18 +42,40 @@
 }
 
 /* ── History rail ─────────────────────────────────────────────────────── */
+/* Fills the split's first pane; the split's own divider is its edge. Laid out like the History tab. */
 .dai-rail {
-  width: 236px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px;
-  padding: 12px 10px; border-right: 1px solid var(--dai-line);
+  width: 100%; height: 100%; box-sizing: border-box; display: flex; flex-direction: column;
   background: color-mix(in srgb, black 8%, var(--color-panel));
   min-height: 0;
 }
-.dai-rail-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
-.dai-rail-list > * { width: 100% !important; border: none !important; }
-.dai-empty { padding: 10px; font-size: 12px; color: var(--dai-muted); line-height: 1.5; }
+.dai-rail-search { padding: 10px 12px; border-bottom: 1px solid var(--dai-line); }
+.dai-rail-clear { border: none; background: transparent; cursor: pointer; padding: 0 2px; font-size: 12px; line-height: 1; color: var(--color-text-muted); }
+.dai-rail-total { font-size: 11px; font-weight: 600; color: var(--color-text-muted); padding: 1px 6px; border-radius: 4px; background: color-mix(in srgb, var(--color-text-primary) 7%, transparent); }
+.dai-rail-list { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding: 4px 0 8px; }
+.dai-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 40px 16px; text-align: center; font-size: 12px; color: var(--dai-muted); line-height: 1.5; }
+
+/* Group headers: the History tab's three levels. */
+.dai-grp { width: 100%; display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--color-text-muted); transition: background .12s; }
+.dai-grp:hover { background: color-mix(in srgb, var(--color-text-primary) 3%, transparent); }
+.dai-grp-0 { padding: 6px 12px; }
+.dai-grp-0 .dai-grp-label { font-size: 11px; font-weight: 600; }
+.dai-grp-1 { padding: 4px 12px 4px 24px; }
+.dai-grp-1 .dai-grp-label { font-size: 10px; font-weight: 500; opacity: .8; }
+.dai-grp-2 { padding: 2px 12px 2px 40px; }
+.dai-grp-2 .dai-grp-label { font-size: 9px; opacity: .7; }
+.dai-grp-count { font-size: 10px; opacity: .5; min-width: 14px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* A conversation: the History tab's row — chip, title, then when and by which model. */
+.dai-conv { padding: 6px 10px; margin: 2px 2px; border-radius: 6px; cursor: pointer; position: relative; }
+.dai-conv:hover { background: color-mix(in srgb, var(--color-text-primary) 4%, transparent); }
+.dai-conv[data-on] { background: var(--dai-accent-tint); }
+.dai-conv[data-on]::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px; border-radius: 2px; background: var(--dai-accent); }
+.dai-conv-chip { flex-shrink: 0; min-width: 38px; padding: 2px 6px; border-radius: 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; text-align: center; }
+.dai-conv-title { flex: 1; min-width: 0; font-size: 12px; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dai-conv-sub { display: flex; align-items: center; gap: 4px; margin-top: 2px; padding-left: 46px; font-size: 10px; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; }
 
 /* ── Main column + header ─────────────────────────────────────────────── */
-.dai-main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+.dai-main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; height: 100%; }
 .dai-hdr {
   height: 50px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 16px;
   border-bottom: 1px solid var(--dai-line);
@@ -79,6 +101,28 @@
 .dai .ce-composer:focus-within { border-color: var(--dai-accent-line) !important; }
 .dai .ce-bubble-reply-quote { display: none !important; }
 .dai .ce-composer-reply { --ce-reply-accent: var(--dai-dk8s); }
+/* The pod picker sits in the dk8s pill, between what it says and its ✕. */
+.dai .ce-composer-reply > .dai-pods-slot { order: 1; display: flex; align-items: center; }
+.dai .ce-composer-reply > .ce-composer-reply-x { order: 2; }
+
+/* ── The pod picker: a plain list — names, ticks, and a count where it helps. */
+.dai-pp { width: 320px; max-width: 86vw; display: flex; flex-direction: column; overflow: hidden; border-radius: 12px; }
+.dai-pp-head { display: flex; align-items: baseline; gap: 8px; padding: 12px 14px 4px; }
+.dai-pp-title { flex: 1; font-size: 12.5px; font-weight: 600; color: var(--color-text-primary); }
+.dai-pp-count { font-size: 11px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dai-pp-tools { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px 6px; border-bottom: 1px solid var(--color-surface-border); }
+/* The select-all box and every row's box share one column: 10px of panel + 6px of row, top and bottom alike. */
+.dai-pp-all { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px; }
+.dai-pp-list { display: flex; flex-direction: column; padding: 6px 10px; max-height: 300px; overflow-y: auto; }
+.dai-pp-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px; border-radius: 7px; }
+.dai-pp-row:hover { background: color-mix(in srgb, var(--dai-dk8s) 8%, transparent); }
+.dai-pp-row:not(.on) { opacity: .65; }
+.dai-pp-none { padding: 14px 10px; text-align: center; font-size: 12px; color: var(--color-text-muted); }
+.dai-pp-warn { padding: 8px 14px 10px; border-top: 1px solid var(--color-surface-border); font-size: 11px; color: var(--color-warning); }
+/* While an answer is on its way, Stop stands where Send was. */
+.dai--streaming .ce-composer-send:not(.dai-stop) { visibility: hidden; }
+.dai .ce-composer-send.dai-stop { background: var(--dai-surface2); color: var(--color-text-primary); border: 1px solid var(--dai-line); box-shadow: none; }
+.dai .ce-composer-send.dai-stop:hover { background: var(--dai-accent-tint); border-color: var(--dai-accent-line); }
 .dai .ce-avatar--agent { background: var(--dai-surface2) !important; border: 1px solid var(--dai-line); }
 
 /* ── Landing ──────────────────────────────────────────────────────────── */
@@ -114,7 +158,8 @@
   box-shadow: 0 24px 60px rgba(0,0,0,.4); overflow: hidden;
 }
 .dai-pal-list { display: flex; flex-direction: column; padding: 6px; max-height: 380px; overflow-y: auto; }
-.dai-pal-q { display: flex; align-items: center; gap: 8px; padding: 6px 8px 9px; margin-bottom: 4px; border-bottom: 1px solid var(--dai-line); font-family: var(--dai-mono); font-size: 12.5px; }
+/* Pinned: the query is what the list is answering, so it stays in view as the list scrolls. */
+.dai-pal-q { position: sticky; top: -6px; z-index: 1; background: var(--color-panel); display: flex; align-items: center; gap: 8px; padding: 9px 14px; margin: -6px -6px 4px; border-bottom: 1px solid var(--dai-line); font-family: var(--dai-mono); font-size: 12.5px; }
 .dai-pal-q span { margin-left: auto; font-family: inherit; font-size: 11px; color: var(--dai-muted); }
 .dai-pal-g { display: flex; align-items: center; gap: 6px; padding: 8px 8px 3px; font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--dai-muted); }
 .dai-pal-i {
@@ -127,8 +172,8 @@
 .dai-pal-prev { border-left: 1px solid var(--dai-line); padding: 14px; display: flex; flex-direction: column; gap: 9px; background: var(--dai-surface); min-width: 0; }
 .dai-pal-prev h4 { margin: 0; font-size: 13px; font-weight: 600; }
 .dai-pal-prev p { margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--color-text-secondary); overflow-wrap: anywhere; }
-.dai-keys { display: inline-flex; align-items: center; gap: 5px; }
-.dai-pal-foot { grid-column: 1 / -1; display: flex; gap: 14px; flex-wrap: wrap; padding: 7px 14px; border-top: 1px solid var(--dai-line); font-size: 11px; color: var(--dai-muted); }
+.dai-keys { display: inline-flex; align-items: center; gap: 7px; }
+.dai-pal-foot { grid-column: 1 / -1; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 10px 14px; border-top: 1px solid var(--dai-line); font-size: 11px; color: var(--dai-muted); }
 .dai-pal-none { padding: 14px 10px; font-size: 12px; color: var(--dai-muted); }
 
 @media (max-width: 900px) {

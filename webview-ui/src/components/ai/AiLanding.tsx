@@ -94,7 +94,7 @@ function AiLanding({ dk8s, logPrompts, buildPrompts }: {
       )}
 
       <div className="dai-hint" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        Type <KbdView keys="/" size="xs" /> in the message box for every prompt.
+        Type <KbdView keys="/" size="md" /> in the message box for every prompt.
       </div>
     </div>
   );

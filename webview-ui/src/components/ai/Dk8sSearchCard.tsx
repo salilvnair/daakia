@@ -65,6 +65,8 @@ interface ThreadGroup {
   thread?: string;
   source: 'live' | 'archive';
   file?: string;
+  /** The pod's owner — how its replacement is found after a rollout. */
+  workload?: string;
   failures: number;
   lines: ResultLine[];
 }
@@ -82,7 +84,7 @@ export interface Dk8sSearchResult {
   query: string;
   around: number;
   groups: ThreadGroup[];
-  scanned: { pods: number; lines: number; archivePods: number };
+  scanned: { pods: number; lines: number; archivePods: number; archiveFiles?: number };
   errors: { pod: string; error: string }[];
   truncated: boolean;
   elapsedMs: number;
@@ -329,6 +331,7 @@ function ResultCard({ result, submit }: { result: Dk8sSearchResult; submit?: (te
         <span style={{ fontVariantNumeric: 'tabular-nums' }}>
           Searched {plural(result.scanned.pods, 'pod')} live
           {archiveSearched ? ` and the archive on ${plural(archiveSearched, 'pod')}` : ''}
+          {archiveSearched && result.scanned.archiveFiles ? ` (${plural(result.scanned.archiveFiles, 'file')} with hits)` : ''}
           {' · '}
           {result.liveMs !== undefined && archiveSearched
             ? `${secs(result.liveMs)} + ${secs(result.archiveMs ?? 0)}`
@@ -418,7 +421,7 @@ const FOLD = 5;
 
 function GroupView({ group }: { group: ThreadGroup }) {
   const [expanded, setExpanded] = useState(false);
-  const [status, setStatus] = useState<{ text: string; tone: 'ok' | 'warn' } | undefined>();
+  const [status, setStatus] = useState<{ text: string; tone: 'ok' | 'warn'; pods?: string[] } | undefined>();
 
   const cited = (l: ResultLine) => l.role === 'hit' || l.role === 'failure';
   const first = group.lines.findIndex(cited);
@@ -436,23 +439,64 @@ function GroupView({ group }: { group: ThreadGroup }) {
   const anchor = group.lines.find(l => l.role === 'failure') ?? group.lines.find(l => l.role === 'hit');
   const hits = group.lines.filter(l => l.role === 'hit').length;
 
+  /*
+    The pod is not on screen any more — usually a rollout replaced it. Say
+    which pod and which workload, and offer the workload's pods as they are
+    now: they will not hold lines from before the rollout, but they are where
+    the same request would be looked for next.
+  */
+  const podGone = () => {
+    const now = group.workload
+      ? useK8sStore.getState().pods.filter(p => p.namespace === group.namespace
+          && (p.context ?? '') === group.context && p.workload?.name === group.workload)
+      : [];
+    setStatus({
+      tone: 'warn',
+      pods: now.map(p => p.name),
+      text: `${group.pod} is not being watched any more${group.workload ? ` — ${group.workload} has probably rolled out since` : ''}. `
+        + (now.length ? `The lines are still here; ${group.workload}'s pod${now.length === 1 ? ' is' : 's are'} now:`
+          : group.workload ? `None of ${group.workload}'s pods are being watched; the lines are still here.`
+            : 'The lines are still here.'),
+    });
+  };
+
   const open = () => {
     if (!anchor) return;
-    useTabsStore.getState().openDk8sTab();
+    const k8s = useK8sStore.getState();
     if (group.source === 'archive' && group.file) {
-      postMsg({
-        type: 'dk8s:openLogFile', file: group.file, line: anchor.fileLine,
-        pod: group.pod, namespace: group.namespace, context: group.context,
-      });
+      /* The file lives inside the pod: the Explorer opens on its folder, with the file picked out. */
+      const pod = k8s.pods.find(p => p.name === group.pod && p.namespace === group.namespace && (p.context ?? '') === group.context);
+      if (!pod) { podGone(); return; }
+      useTabsStore.getState().openDk8sTab();
+      k8s.openExplorerAt({ path: group.file.slice(0, group.file.lastIndexOf('/')) || '/', highlight: group.file });
+      k8s.openDetail(pod);
+      /* openDetail brings back the tab last read on that pod — the Explorer is asked for after it. */
+      useK8sStore.getState().setDetailTab('explorer');
       return;
     }
-    const how = useK8sStore.getState().openPodLink({
+    useTabsStore.getState().openDk8sTab();
+    const how = k8s.openPodLink({
       context: group.context, namespace: group.namespace, pod: group.pod,
       ts: anchor.ts, text: anchor.text,
     });
-    if (how === 'no-pod') {
-      setStatus({ tone: 'warn', text: 'That pod is not being watched now — a rollout may have replaced it. The lines are still here.' });
-    }
+    if (how === 'no-pod') podGone();
+  };
+
+  /* An archive line, at its line number: the file copied out of the pod and opened in an editor. */
+  const openAtLine = () => {
+    if (!anchor || !group.file) return;
+    postMsg({
+      type: 'dk8s:openLogFile', file: group.file, line: anchor.fileLine,
+      pod: group.pod, namespace: group.namespace, context: group.context,
+    });
+  };
+
+  const openReplacement = (pod: string) => {
+    if (!anchor) return;
+    useTabsStore.getState().openDk8sTab();
+    useK8sStore.getState().openPodLink({
+      context: group.context, namespace: group.namespace, pod, ts: anchor.ts, text: anchor.text,
+    });
   };
 
   const copyLink = async () => {
@@ -484,9 +528,16 @@ function GroupView({ group }: { group: ThreadGroup }) {
         </span>
         <span className="flex-1" />
         <ButtonView variant="secondary" size="sm" accentColor={DK8S} color={DK8S} disabled={!anchor}
-                    iconLeft={<ExternalIcon />} onClick={open}>
+                    iconLeft={<ExternalIcon />} onClick={open}
+                    title={group.source === 'archive' ? "Open the file's folder in the pod's Explorer" : "Open this line in the pod's Logs"}>
           Open in dk8s
         </ButtonView>
+        {group.source === 'archive' && group.file && (
+          <ButtonView variant="secondary" size="sm" disabled={!anchor} onClick={openAtLine}
+                      title="Copy the file out of the pod and open it in an editor at this line">
+            At line {anchor?.fileLine ?? ''}
+          </ButtonView>
+        )}
         {group.source === 'live' && (
           <IconButtonView size="sm" tooltip="Copy a link to this line" aria-label="Copy a link to this line"
                           disabled={!anchor} icon={<LinkIcon />} onClick={copyLink} />
@@ -507,8 +558,14 @@ function GroupView({ group }: { group: ThreadGroup }) {
       </div>
 
       {status && (
-        <div style={{ marginTop: 6, fontSize: 11, color: status.tone === 'warn' ? 'var(--color-warning)' : 'var(--color-text-secondary)' }}>
-          {status.text}
+        <div className="flex items-center flex-wrap" style={{ marginTop: 6, gap: 6, fontSize: 11, color: status.tone === 'warn' ? 'var(--color-warning)' : 'var(--color-text-secondary)' }}>
+          <span>{status.text}</span>
+          {status.pods?.map(pod => (
+            <ButtonView key={pod} variant="secondary" size="sm" accentColor={DK8S} color={DK8S}
+                        title={`Open ${pod}'s Logs at this time`} onClick={() => openReplacement(pod)}>
+              <span style={{ fontFamily: MONO }}>{pod}</span>
+            </ButtonView>
+          ))}
         </div>
       )}
     </div>

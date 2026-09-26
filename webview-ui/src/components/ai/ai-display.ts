@@ -17,6 +17,11 @@ export function displayEnvelope(content: string, dk8s?: unknown[]): string {
     : { type: 'text', rawText: content });
 }
 
+/** An answer that did not come — stopped, or failed — with the question to ask again. */
+export function noticeEnvelope(text: string, tone: 'stopped' | 'error', retry?: string): string {
+  return JSON.stringify({ type: 'daakia-notice', tone, rawText: text, ...(retry ? { retry } : {}) });
+}
+
 /** A message the chat library can seed a conversation with. */
 export interface UiMessage {
   id: string;

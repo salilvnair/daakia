@@ -214,6 +214,40 @@ describe('what leaves the machine', () => {
   });
 });
 
+describe('the archive, pod by pod', () => {
+  it('says which pod it is reading and where, counts the files that held a hit, and names the workload of each group', async () => {
+    const phases: Record<string, unknown>[] = [];
+    const hit = (pod: string) => ({
+      pod, namespace: 'n', context: 'c', line: 7, level: 'error', hits: [], before: [], after: [],
+      text: L('nio-8104-exec-4', 'ERROR', 'failed for 4242'), source: 'archive' as const,
+      rel: 'zp.log.1', file: '/var/log/zp/zp.log.1',
+    });
+    const r = await runDk8sSearch({ query: '4242' }, {
+      targets: [
+        { context: 'c', namespace: 'n', pod: 'zp-a', workload: 'zp-backend' },
+        { context: 'c', namespace: 'n', pod: 'zp-b', workload: 'zp-backend' },
+      ],
+      searchLogs: (_t, _o, cb) => { cb.onFinished({ pods: 2, matched: 0, scanned: 0, stopped: false }); return { cancel() {} }; },
+      searchArchive: async (t) => ({
+        result: {
+          pod: t.pod, namespace: 'n', scanned: 0, matched: 1, capped: false, elapsedMs: 5, roots: ['/var/log/zp'],
+          files: t.pod === 'zp-a' ? [{ rel: 'zp.log.1', file: '/var/log/zp/zp.log.1', bytes: 0, mtime: 0, scanned: 0, matched: 1 }] : [],
+        },
+        matches: t.pod === 'zp-a' ? [hit(t.pod)] : [],
+      }),
+      onPhase: p => phases.push({ ...p }),
+    });
+    const running = phases.filter(p => p.phase === 'archive' && p.pod);
+    expect(running.map(p => [p.pod, p.podIndex])).toEqual([['zp-a', 1], ['zp-b', 2]]);
+    // The second pod is announced under the path the first one was read at.
+    expect(running[1].roots).toEqual(['/var/log/zp']);
+    expect(running[1].files).toBe(1);
+    expect(phases.at(-1)).toMatchObject({ phase: 'archive', state: 'done', files: 1, roots: ['/var/log/zp'] });
+    expect(r.scanned.archiveFiles).toBe(1);
+    expect(r.groups[0].workload).toBe('zp-backend');
+  });
+});
+
 describe('running it', () => {
   const targets = [
     { context: 'c', namespace: 'n', pod: 'zp-backend-big-one-1' },
