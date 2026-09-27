@@ -164,6 +164,12 @@ import {
   handleTerminalOpen, handleTerminalInput, handleTerminalResize,
   handleTerminalClose, closeAllTerminals,
 } from '../src/panel/main/handlers/terminal-handler';
+import {
+  handlePyProbe, handlePyPods, handlePyRun, handlePyStop, handlePyEndSession,
+  handlePyDebugStart, handlePyDebugCmd, handlePyDebugConsole, handlePyDebugBreakpoints,
+  handlePyDebugWatches, handlePyDebugStop,
+  handlePyScriptsList, handlePyScriptsSave, handlePyScriptsDelete,
+} from '../src/panel/main/handlers/python-handler';
 
 export type PostMessage = (msg: unknown) => void;
 import { historyCap } from '../src/services/history-cap';
@@ -633,6 +639,51 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'term:close':
       handleTerminalClose(msg);
+      break;
+    // ── Python in a pod — the same handlers the extension routes to ──
+    case 'py:probe':
+      await handlePyProbe(msg, post);
+      break;
+    case 'py:pods':
+      await handlePyPods(msg, post);
+      break;
+    case 'py:run':
+      /* Not awaited: a run lasts as long as the script does, and the socket
+         has other messages to deliver meanwhile — a Stop among them. */
+      void handlePyRun(msg, post);
+      break;
+    case 'py:stop':
+      handlePyStop(msg);
+      break;
+    case 'py:endSession':
+      await handlePyEndSession(msg, post);
+      break;
+    case 'py:debug:start':
+      void handlePyDebugStart(msg, post);
+      break;
+    case 'py:debug:cmd':
+      handlePyDebugCmd(msg);
+      break;
+    case 'py:debug:console':
+      handlePyDebugConsole(msg);
+      break;
+    case 'py:debug:breakpoints':
+      handlePyDebugBreakpoints(msg);
+      break;
+    case 'py:debug:watches':
+      handlePyDebugWatches(msg);
+      break;
+    case 'py:debug:stop':
+      handlePyDebugStop(msg, post);
+      break;
+    case 'py:scripts:list':
+      handlePyScriptsList(msg, post);
+      break;
+    case 'py:scripts:save':
+      handlePyScriptsSave(msg, post);
+      break;
+    case 'py:scripts:delete':
+      handlePyScriptsDelete(msg, post);
       break;
     case 'dk8s:shell':
       await handleDk8sShell(msg, post);

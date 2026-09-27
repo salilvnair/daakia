@@ -9,6 +9,12 @@ import {
   handleTerminalOpen, handleTerminalInput, handleTerminalResize,
   handleTerminalClose, closeAllTerminals,
 } from './handlers/terminal-handler';
+import {
+  handlePyProbe, handlePyPods, handlePyRun, handlePyStop, handlePyEndSession,
+  handlePyDebugStart, handlePyDebugCmd, handlePyDebugConsole, handlePyDebugBreakpoints,
+  handlePyDebugWatches, handlePyDebugStop,
+  handlePyScriptsList, handlePyScriptsSave, handlePyScriptsDelete, disposePython,
+} from './handlers/python-handler';
 import * as path from 'path';
 import * as fs from 'fs';
 import { getSqliteStatus, getDbPath, getHistory, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt, getAiPromptTemplates, setAiPromptTemplates, saveAiConversation, loadAiConversation, clearAiConversation, type AiConversationMessage, getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries, insertUiAudit, getUiAuditEntries, clearUiAuditEntries, getDbTables, getDbTableRows, deleteDbRow, onDbReloaded, describeDbReload } from '../../storage/db';
@@ -167,7 +173,7 @@ import {
   handleDkghScheduleRan, disposeDkgh, handleDkghFieldMap, handleDkghLabelsFrom,
   handleDkghSearchIssues, handleDkghPlanCreate, handleDkghApplyCreate,
 } from './handlers/dkgh-handler';
-import { scheduleAutoExport, COLLECTION_MUTATION_TYPES, startAutoSyncTimer, stopAutoSyncTimer } from '../../services/git-sync';
+import { scheduleAutoExport, COLLECTION_MUTATION_TYPES, SCRIPT_MUTATION_TYPES, startAutoSyncTimer, stopAutoSyncTimer } from '../../services/git-sync';
 import {
   initSmWorkflowStorage,
   handleSmWorkflowGetAll,
@@ -286,6 +292,8 @@ export class MainPanel {
     // coming, and the long-lived ones are the most worth having recorded.
     flushOpenSessions();
     disposeDk8s();
+    // A script mid-run or a pdb at a breakpoint is a process in someone's pod.
+    disposePython();
     disposeDkgh();
     stopAutoSyncTimer();
     disposeMonitors();
@@ -359,7 +367,7 @@ export class MainPanel {
     }
 
     // ── Git-native sync: write collections through to workspace files (debounced) ──
-    if (COLLECTION_MUTATION_TYPES.has(msg.type)) {
+    if (COLLECTION_MUTATION_TYPES.has(msg.type) || SCRIPT_MUTATION_TYPES.has(msg.type)) {
       queueMicrotask(() => scheduleAutoExport());
     }
 
@@ -785,6 +793,49 @@ export class MainPanel {
         break;
       case 'term:close':
         handleTerminalClose(msg);
+        break;
+      // ── Python in a pod: the pod tab and the Scripts screen ──
+      case 'py:probe':
+        void handlePyProbe(msg, this._post);
+        break;
+      case 'py:pods':
+        void handlePyPods(msg, this._post);
+        break;
+      case 'py:run':
+        void handlePyRun(msg, this._post);
+        break;
+      case 'py:stop':
+        handlePyStop(msg);
+        break;
+      case 'py:endSession':
+        void handlePyEndSession(msg, this._post);
+        break;
+      case 'py:debug:start':
+        void handlePyDebugStart(msg, this._post);
+        break;
+      case 'py:debug:cmd':
+        handlePyDebugCmd(msg);
+        break;
+      case 'py:debug:console':
+        handlePyDebugConsole(msg);
+        break;
+      case 'py:debug:breakpoints':
+        handlePyDebugBreakpoints(msg);
+        break;
+      case 'py:debug:watches':
+        handlePyDebugWatches(msg);
+        break;
+      case 'py:debug:stop':
+        handlePyDebugStop(msg, this._post);
+        break;
+      case 'py:scripts:list':
+        handlePyScriptsList(msg, this._post);
+        break;
+      case 'py:scripts:save':
+        handlePyScriptsSave(msg, this._post);
+        break;
+      case 'py:scripts:delete':
+        handlePyScriptsDelete(msg, this._post);
         break;
       case 'dk8s:shell':
         void handleDk8sShell(msg, this._post);

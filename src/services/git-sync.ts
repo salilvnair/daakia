@@ -34,6 +34,7 @@ import {
 } from '../storage/workspaces';
 import { redactHistoryRow, REDACTED } from './sync-redact';
 import { loadSavedConfigs, saveConfigs } from '../mock/mock-server-manager';
+import { scriptsForSync, importSyncedScripts } from './py-scripts';
 
 const execFile = promisify(execFileCb);
 
@@ -442,6 +443,15 @@ function exportPrivateWorkspace(ws: WorkspaceRow, dir: string, scope: GitSyncSco
         counts.collections++;
       }
     }
+    /* Python scripts for pods travel with the collections they sit beside.
+       A workspace's scripts are written for its services, so they go where
+       its collections go — see py-scripts.ts for why they are scoped at all. */
+    if (scope.collections) {
+      const scripts = scriptsForSync(ws.id);
+      if (scripts.length > 0) {
+        writeJson(path.join(dir, 'scripts.daakia.json'), { version: '1.0', kind: 'py-scripts', scripts });
+      }
+    }
     if (scope.environments) {
       const environments = readEnvironments();
       if (environments.length > 0) {
@@ -477,6 +487,10 @@ function importPrivateWorkspace(dir: string, scope: GitSyncScope, counts: SyncBu
         const doc = readJson<{ collections?: CollectionTreeNode[] }>(path.join(dir, `${protocol}.daakia.json`));
         if (Array.isArray(doc?.collections)) counts.collections += upsertTree(doc.collections, protocol, null);
       }
+    }
+    if (scope.collections) {
+      const doc = readJson<{ scripts?: unknown[] }>(path.join(dir, 'scripts.daakia.json'));
+      if (Array.isArray(doc?.scripts)) importSyncedScripts(meta.id, doc.scripts);
     }
     if (scope.environments) {
       const doc = readJson<{ environments?: SyncEnvironment[] }>(path.join(dir, 'environments.daakia.json'));
@@ -1011,6 +1025,16 @@ export const COLLECTION_MUTATION_TYPES = new Set([
   'deleteRequestFromCollection', 'updateCollectionProperties', 'duplicateCollection',
   'duplicateRequest', 'reorderCollections', 'moveRequest', 'reorderRequests',
 ]);
+
+/**
+ * Message types that change the Python scripts library.
+ *
+ * Their own set rather than folded into the one above: that one is also the
+ * list a teammate's read-only workspace refuses (workspace-handler.ts), and
+ * its refusal answers with a collections tree — a reply about the wrong thing.
+ * These only need the write-through.
+ */
+export const SCRIPT_MUTATION_TYPES = new Set(['py:scripts:save', 'py:scripts:delete']);
 
 // ─── Real git operations (SSH sync) ────────────────────────────────────────────
 //

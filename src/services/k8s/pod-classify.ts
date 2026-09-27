@@ -135,6 +135,28 @@ export interface PodCapabilities {
    * profiler needs — so an action depending on it must not be offered.
    */
   ptrace?: boolean;
+  /**
+   * What `python3 -V` said, e.g. `Python 3.11.6`.
+   *
+   * The name is not the version. Images exist whose `python3` is a symlink to
+   * a 2.7 interpreter, and a script written for 3 fails on one of those with a
+   * SyntaxError that points at the script rather than at the image. The
+   * Python tab refuses on the version, so it has to be read, not assumed.
+   */
+  python3Version?: string;
+  /** What a bare `python -V` said — usually 2.7 on the images that have it. */
+  pythonVersion?: string;
+  /**
+   * Directories this container can write to, in the order worth trying.
+   *
+   * The Python tab copies a script in before running it, and `/tmp` is the
+   * obvious place — until a pod runs with `readOnlyRootFilesystem`, which
+   * hardened charts set routinely. Checked with `test -w`, which asks
+   * `access(2)` and so reports a read-only mount as unwritable WITHOUT writing
+   * anything: this probe also runs when somebody merely opens Doctor, and a
+   * probe that leaves files behind in a production pod is not a probe.
+   */
+  writableDirs?: string[];
   /** Probe could not run at all (no shell, RBAC, pod not running). */
   unreachable?: string;
 }
@@ -166,6 +188,16 @@ const PROBE_SCRIPT = [
   '  d=$(printf "%d" "0x$c" 2>/dev/null || echo 0);',
   '  if [ "$(( d / 524288 % 2 ))" -eq 1 ]; then echo "cap=ptrace"; fi;',
   'fi',
+  // Which Python, by version rather than by name. `-V` prints to stderr on
+  // 2.x and stdout on 3.x, hence the redirect; `head -n1` because some
+  // distributions add a second line about the build.
+  'command -v python3 >/dev/null 2>&1 && echo "py3=$(python3 -V 2>&1 | head -n1)"',
+  'command -v python >/dev/null 2>&1 && echo "py=$(python -V 2>&1 | head -n1)"',
+  // Where a script could be copied. `-w` asks access(2), which says no for a
+  // read-only mount, so nothing is written to find out. `/` is never offered:
+  // a HOME of `/` is a root filesystem, and `/daakia` is not somewhere to
+  // leave a file even briefly.
+  'for d in /tmp /dev/shm "$HOME"; do [ -n "$d" ] && [ "$d" != "/" ] && [ -d "$d" ] && [ -w "$d" ] && echo "wdir=$d"; done',
   // The script's exit status is its last command's, and a capability check
   // that legitimately finds nothing exits 1. Without this the whole probe
   // reads as a failed exec and EVERY pod is reported unreachable.
@@ -271,28 +303,52 @@ async function probeCapabilitiesUncached(
       caps.unreachable = firstLine(r.stderr) || r.failure || `exit ${r.code}`;
       return caps;
     }
-    for (const line of r.stdout.split('\n')) {
-      const t = line.trim();
-      if (t.startsWith('shell=')) caps.shell = t.slice(6);
-      else if (t.startsWith('bin=')) {
-        const b = t.slice(4);
-        if (b === 'tar') caps.tar = true;
-        else if (b === 'python3') caps.python3 = true;
-        else if (b === 'jcmd') caps.jcmd = true;
-        else if (b === 'jstack') caps.jstack = true;
-        else if (b === 'jmap') caps.jmap = true;
-        else if (b === 'jfr') caps.jfr = true;
-      } else if (t.startsWith('pid=')) {
-        caps.targetPid = t.slice(4).split(':')[1];
-      } else if (t === 'cap=ptrace') {
-        caps.ptrace = true;
-      }
-    }
+    parseProbeOutput(r.stdout, caps);
     if (!caps.shell) caps.shell = sh;
     return caps;
   }
 
   caps.unreachable = 'no shell in this container (distroless?)';
+  return caps;
+}
+
+/**
+ * The probe script's answer, one `key=value` per line, folded into `caps`.
+ *
+ * Its own function so the parsing can be tested without an exec — the script
+ * is the part that talks to a container, and this is the part that has to be
+ * right about what it said.
+ */
+export function parseProbeOutput(stdout: string, caps: PodCapabilities): PodCapabilities {
+  for (const line of stdout.split('\n')) {
+    const t = line.trim();
+    if (t.startsWith('shell=')) caps.shell = t.slice(6);
+    else if (t.startsWith('bin=')) {
+      const b = t.slice(4);
+      if (b === 'tar') caps.tar = true;
+      else if (b === 'python3') caps.python3 = true;
+      else if (b === 'jcmd') caps.jcmd = true;
+      else if (b === 'jstack') caps.jstack = true;
+      else if (b === 'jmap') caps.jmap = true;
+      else if (b === 'jfr') caps.jfr = true;
+    } else if (t.startsWith('pid=')) {
+      caps.targetPid = t.slice(4).split(':')[1];
+    } else if (t === 'cap=ptrace') {
+      caps.ptrace = true;
+    } else if (t.startsWith('py3=')) {
+      /* Only kept when it reads as a version. A `python3` that is a broken
+         symlink answers with an error message, and "python 3.11" in a header
+         must never be built from one. */
+      if (/Python\s+\d/i.test(t)) caps.python3Version = t.slice(4).trim();
+    } else if (t.startsWith('py=')) {
+      if (/Python\s+\d/i.test(t)) caps.pythonVersion = t.slice(3).trim();
+    } else if (t.startsWith('wdir=')) {
+      const d = t.slice(5).trim();
+      if (d.startsWith('/') && d !== '/') {
+        caps.writableDirs = [...(caps.writableDirs ?? []), d];
+      }
+    }
+  }
   return caps;
 }
 

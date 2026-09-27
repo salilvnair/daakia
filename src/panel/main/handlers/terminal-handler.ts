@@ -85,7 +85,9 @@ function targetOf(msg: Record<string, unknown>): TerminalTarget | undefined {
  */
 let cached: { context: string; kc: KubeConfigHandle } | undefined;
 
-async function configFor(context: string): Promise<KubeConfigHandle> {
+/* Exported for the Python tab's debugger, which opens pdb over this same
+   transport and should not load a second copy of the kubeconfig to do it. */
+export async function configFor(context: string): Promise<KubeConfigHandle> {
   if (cached && cached.context === context) return cached.kc;
   const { KubeConfig } = await k8sModule();
   const kc = new KubeConfig();
