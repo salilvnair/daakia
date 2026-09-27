@@ -19,12 +19,12 @@
  * left as text, because a tree built out of a guess is worse than the raw line
  * it replaced.
  *
- * Multi-line payloads (a YAML dump, a pretty-printed body over forty lines)
- * arrive as continuations and are folded by the stack-trace path instead. They
- * are not handled here, and `shape` has no `yaml` for that reason.
+ * Multi-line payloads arrive as continuations. A YAML dump — a config printed
+ * at startup — is joined back into one event by the fold (`foldStackTraces`)
+ * and read here by `yamlPayload`; anything else multi-line stays text.
  */
 
-export type PayloadShape = 'json' | 'xml' | 'kv';
+export type PayloadShape = 'json' | 'xml' | 'kv' | 'yaml';
 
 export interface LogPayload {
   shape: PayloadShape;
@@ -50,7 +50,7 @@ export interface PayloadOptions {
   maxChars?: number;
 }
 
-const DEFAULT_SHAPES: PayloadShape[] = ['json', 'xml', 'kv'];
+const DEFAULT_SHAPES: PayloadShape[] = ['json', 'xml', 'kv', 'yaml'];
 const DEFAULT_MAX = 256 * 1024;
 
 /** Keys whose values are not shown until the reader asks. */
@@ -262,6 +262,164 @@ export function prettyXml(source: string): string[] {
     if (!closing && !selfContained && !declaration && piece.startsWith('<')) depth++;
   }
   return out;
+}
+
+// ── Why a line was not drawn ────────────────────────────────────────────────
+
+/**
+ * A line that looks like it carries a payload but will not be drawn — and why.
+ *
+ * Two reasons, and a reader needs to be told either one: a line longer than
+ * the limit in Settings is not parsed at all, and a line cut at 32 KB when it
+ * was read has lost the end of its body, so it can no longer parse. Silence
+ * would read as "there is no payload here".
+ */
+export function payloadNote(
+  text: string, opts: PayloadOptions & { truncated?: boolean } = {},
+): string | undefined {
+  const shapes = opts.shapes ?? DEFAULT_SHAPES;
+  const looks = (shapes.includes('json') && /[{[]/.test(text)) || (shapes.includes('xml') && /<[A-Za-z_]/.test(text));
+  if (!looks) return undefined;
+  const maxChars = opts.maxChars ?? DEFAULT_MAX;
+  if (text.length > maxChars) {
+    return `${Math.round(text.length / 1024)} KB — over the ${Math.round(maxChars / 1024)} KB limit set in Settings → DK8S → Logs, so it stays raw`;
+  }
+  if (opts.truncated) return 'cut at 32 KB when it was read — the payload is incomplete, so it stays raw';
+  return undefined;
+}
+
+// ── XML, as a tree ──────────────────────────────────────────────────────────
+
+export interface XmlNode {
+  name: string;
+  attrs: [string, string][];
+  children: XmlNode[];
+  /** Text directly inside, trimmed; a leaf is a node with text and no children. */
+  text?: string;
+}
+
+/**
+ * The element tree of an XML payload, or `undefined` if it does not close.
+ *
+ * Tolerant where a log is untidy (a declaration, comments, CDATA, stray
+ * whitespace) and strict where a guess would mislead: a tag that closes the
+ * wrong element, or one that never closes, and there is no tree — the view
+ * falls back to indented text, which is still every character the pod wrote.
+ */
+export function parseXmlTree(source: string): XmlNode | undefined {
+  const root: XmlNode = { name: '#root', attrs: [], children: [] };
+  const stack: XmlNode[] = [root];
+  const token = /<!\[CDATA\[([\s\S]*?)\]\]>|<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<!DOCTYPE[^>]*>|<(\/?)([A-Za-z_][\w.:-]*)((?:\s+[^\s=/>]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(\/?)>|([^<]+)/g;
+  let m: RegExpExecArray | null;
+  let consumed = 0;
+  while ((m = token.exec(source)) !== null) {
+    if (m.index !== consumed) return undefined;
+    consumed = m.index + m[0].length;
+    const top = stack[stack.length - 1];
+    if (m[1] !== undefined) { top.text = ((top.text ?? '') + m[1]).trim() || undefined; continue; }
+    if (m[3] === undefined && m[6] === undefined) continue; // comment, declaration, doctype
+    if (m[6] !== undefined) {
+      const t = m[6].trim();
+      if (t) top.text = top.text ? `${top.text} ${t}` : t;
+      continue;
+    }
+    const closing = m[2];
+    const name = m[3];
+    const rawAttrs = m[4];
+    const selfClosing = m[5];
+    if (closing) {
+      if (top.name !== name || stack.length === 1) return undefined;
+      stack.pop();
+      continue;
+    }
+    const attrs: [string, string][] = [];
+    for (const a of (rawAttrs ?? '').matchAll(/([^\s=/>]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) attrs.push([a[1], a[2] ?? a[3] ?? '']);
+    const node: XmlNode = { name, attrs, children: [] };
+    top.children.push(node);
+    if (!selfClosing) stack.push(node);
+  }
+  if (consumed !== source.length || stack.length !== 1 || root.children.length !== 1) return undefined;
+  return root.children[0];
+}
+
+// ── YAML, from a multi-line block ───────────────────────────────────────────
+
+/**
+ * A config dump, read as YAML — or `undefined` if any line is not YAML.
+ *
+ * Deliberately a small reader, not a YAML library: the only YAML a log line
+ * carries is the block-style dump an application prints at startup (`key:
+ * value`, nesting by indent, `- item` lists). Every line has to fit that, so a
+ * paragraph of prose with a colon in it is never claimed; two keys at least,
+ * because one `key: value` line is a sentence.
+ */
+export function parseYamlBlock(lines: string[]): Record<string, unknown> | undefined {
+  const rows = lines.filter(l => l.trim() && !/^\s*#/.test(l));
+  if (rows.length < 2) return undefined;
+  const indentOf = (l: string) => l.length - l.trimStart().length;
+  const base = Math.min(...rows.map(indentOf));
+  type Frame = { indent: number; value: Record<string, unknown> | unknown[] };
+  const root: Record<string, unknown> = {};
+  const stack: Frame[] = [{ indent: -1, value: root }];
+  let pendingKey: { obj: Record<string, unknown>; key: string; indent: number } | undefined;
+  let keys = 0;
+
+  for (const line of rows) {
+    const indent = indentOf(line) - base;
+    const body = line.trim();
+
+    /* A key with nothing after it opens a block: a map, or a list if the next line is `- `. */
+    if (pendingKey) {
+      if (indent <= pendingKey.indent) {
+        pendingKey.obj[pendingKey.key] = null;
+      } else {
+        const child: Record<string, unknown> | unknown[] = body.startsWith('- ') || body === '-' ? [] : {};
+        pendingKey.obj[pendingKey.key] = child;
+        stack.push({ indent: pendingKey.indent, value: child });
+      }
+      pendingKey = undefined;
+    }
+    while (stack.length > 1 && indent <= stack[stack.length - 1].indent) stack.pop();
+    const parent = stack[stack.length - 1].value;
+
+    const item = /^-\s+(.*)$/.exec(body);
+    if (item) {
+      if (!Array.isArray(parent)) return undefined;
+      parent.push(yamlScalar(item[1]));
+      continue;
+    }
+    const kv = /^("[^"]+"|'[^']+'|[A-Za-z_$][\w.$-]*)\s*:(?:\s+(.*))?$/.exec(body);
+    if (!kv || Array.isArray(parent)) return undefined;
+    const key = kv[1].replace(/^["']|["']$/g, '');
+    keys++;
+    if (kv[2] === undefined || kv[2] === '') pendingKey = { obj: parent, key, indent };
+    else parent[key] = yamlScalar(kv[2]);
+  }
+  if (pendingKey) pendingKey.obj[pendingKey.key] = null;
+  return keys >= 2 ? root : undefined;
+}
+
+function yamlScalar(raw: string): unknown {
+  const v = raw.replace(/\s+#.*$/, '').trim();
+  if (/^".*"$|^'.*'$/.test(v)) return v.slice(1, -1);
+  if (v === 'true' || v === 'false') return v === 'true';
+  if (v === 'null' || v === '~') return null;
+  if (/^-?\d+(\.\d+)?$/.test(v)) return Number(v);
+  return v;
+}
+
+/** A YAML block under a line, as a payload the row can offer like any other. */
+export function yamlPayload(prefix: string, lines: string[]): LogPayload | undefined {
+  const value = parseYamlBlock(lines);
+  if (!value) return undefined;
+  const n = Object.keys(value).length;
+  return {
+    shape: 'yaml',
+    prefix: prefix.trimEnd(),
+    source: lines.join('\n'),
+    value,
+    summary: `${n} ${n === 1 ? 'key' : 'keys'} · ${lines.length} lines`,
+  };
 }
 
 // ── Secrets ─────────────────────────────────────────────────────────────────

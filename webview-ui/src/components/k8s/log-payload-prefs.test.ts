@@ -2,18 +2,23 @@ import { describe, it, expect } from 'vitest';
 import {
   payloadPrefs, shapesText,
   PAYLOAD_DRAW_PREF, PAYLOAD_SHAPES_PREF, PAYLOAD_MODE_PREF,
-  PAYLOAD_DEPTH_PREF, PAYLOAD_MAX_PREF, PAYLOAD_SECRETS_PREF,
+  PAYLOAD_DEPTH_PREF, PAYLOAD_MAX_PREF, PAYLOAD_SECRETS_PREF, homePackages,
 } from './log-payload-prefs';
 
 describe('nothing chosen', () => {
   it('draws every shape as a tree, two deep, with secrets hidden', () => {
     expect(payloadPrefs({})).toEqual({
       draw: true,
-      shapes: ['json', 'xml', 'kv'],
+      shapes: ['json', 'xml', 'kv', 'yaml'],
       mode: 'tree',
       depth: 2,
       maxChars: 256 * 1024,
       hideSecrets: true,
+      collapsed: true,
+      remember: true,
+      keepRaw: true,
+      appFirst: true,
+      homePackages: [],
     });
   });
 });
@@ -49,7 +54,7 @@ describe('shapes', () => {
   });
 
   it('ignores a name it does not know', () => {
-    expect(payloadPrefs({ [PAYLOAD_SHAPES_PREF]: 'json,yaml,protobuf' }).shapes).toEqual(['json']);
+    expect(payloadPrefs({ [PAYLOAD_SHAPES_PREF]: 'json,yaml,protobuf' }).shapes).toEqual(['json', 'yaml']);
   });
 });
 
@@ -70,5 +75,12 @@ describe('the rest', () => {
   it('shows secrets only when told to', () => {
     expect(payloadPrefs({ [PAYLOAD_SECRETS_PREF]: 'off' }).hideSecrets).toBe(false);
     expect(payloadPrefs({}).hideSecrets).toBe(true);
+  });
+});
+
+describe('your packages', () => {
+  it('reads a list into dotted prefixes, so com.ac never claims com.acme', () => {
+    expect(homePackages('com.acme, org.acme.billing.')).toEqual(['com.acme.', 'org.acme.billing.']);
+    expect(homePackages('')).toEqual([]);
   });
 });

@@ -22,8 +22,9 @@ import {
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
   WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon, CloseIcon,
-  ChevronLeftIcon, SidebarLeftIcon, SearchIcon,
+  ChevronLeftIcon, SidebarLeftIcon, SearchIcon, BracesIcon,
 } from '../../icons';
+import { useTabsStore } from '../../store/tabs-store';
 import { useK8sStore, type LogLevel } from '../../store/k8s-store';
 import { useLogSource } from './log-source';
 import {
@@ -35,14 +36,14 @@ import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { buildFacets, filterTermFor } from './log-facets';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { logLineSettings, onLadder, tailLabel, contextLabel } from './log-settings';
-import { findPayload, type LogPayload } from './log-payload';
+import { findPayload, payloadNote, type LogPayload } from './log-payload';
 import { compileMarks, markOf, type MarkHit } from './logger-marks';
 import { LineFieldsView } from './LineFieldsView';
 import { determinantsIn } from './determinants';
 import { SummaryPanel } from './SummaryPanel';
 import { usePatternsFor, MARK_COLORS } from '../../store/dk8s-logger-store';
 import { scopeOf } from './LoggersTab';
-import { payloadPrefs } from './log-payload-prefs';
+import { payloadPrefs, openLoggers, setOpenLogger, setPayloadPref, PAYLOAD_MODE_PREF, type PayloadMode } from './log-payload-prefs';
 import { LogPayloadView } from './LogPayloadView';
 import { FacetRail } from './FacetRail';
 import { LogSkeleton } from './LogSkeleton';
@@ -55,7 +56,7 @@ import {
   timeBuckets, ribbonTicks, COMPACT_RIBBON_PX,
   formatLogTime, selectionText, LEVEL_ORDER, foldStackTraces, bufferBytes,
   compactCount, grepTermFor, frameOrigin, type MatchedLine, type FieldFilter,
-  displayText,
+  displayText, ownFramesFirst,
 } from './log-view';
 import {
   AnalyzeModal, planAnalyze, ANALYZE_HEAD, ANALYZE_TAIL, type AnalyzePlan,
@@ -1004,20 +1005,24 @@ export function LogViewer() {
 
   // Fold, then expand the ones the user opened. Expansion is keyed on the
   // heading line's seq so it survives new lines arriving above it.
-  const rowsRef = useRef<{ line: MatchedLine; folded?: MatchedLine[]; isFrame?: boolean }[]>([]);
+  const rowsRef = useRef<{ line: MatchedLine; folded?: MatchedLine[]; isFrame?: boolean; yaml?: LogPayload }[]>([]);
   const offsetsRef = useRef<Float64Array>(new Float64Array(1));
   const rowAtRef = useRef<(y: number) => number>(() => 0);
+  const yamlOn = payloadOpts.shapes.includes('yaml');
   const rows = useMemo(() => {
-    const folded = foldStackTraces(visible, foldTraces);
-    const out: { line: MatchedLine; folded?: MatchedLine[]; isFrame?: boolean }[] = [];
+    const folded = foldStackTraces(visible, foldTraces, { yaml: yamlOn });
+    const out: { line: MatchedLine; folded?: MatchedLine[]; isFrame?: boolean; yaml?: LogPayload }[] = [];
     for (const r of folded) {
-      out.push({ line: r.line, folded: r.folded });
-      if (r.folded && expanded.has(r.line.seq)) {
-        for (const f of r.folded) out.push({ line: f, isFrame: true });
+      out.push({ line: r.line, folded: r.folded, yaml: r.yaml });
+      /* A YAML block is drawn as its payload, never as frames. An opened trace
+         lists the reader's own frames first when Settings says so. */
+      if (r.folded && !r.yaml && expanded.has(r.line.seq)) {
+        const frames = payloadOpts.appFirst ? ownFramesFirst(r.folded, payloadOpts.homePackages) : r.folded;
+        for (const f of frames) out.push({ line: f, isFrame: true });
       }
     }
     return out;
-  }, [visible, foldTraces, expanded]);
+  }, [visible, foldTraces, expanded, yamlOn, payloadOpts.appFirst, payloadOpts.homePackages]);
 
   const total = rows.length;
   // Sized from the largest number it will hold, so the column does not shift
@@ -1095,21 +1100,63 @@ export function LogViewer() {
     ruinous for two hundred thousand, and a row nobody can see has no chip to
     put a verdict on. The window moves as you scroll and this moves with it.
   */
+  /*
+    Detection is per event and cached: a line is parsed once for the settings
+    it was parsed under, not on every scroll past it — which is what lets the
+    footer count payloads across the whole buffer rather than the screen.
+  */
+  const payloadCache = useRef(new Map<number, { text: string; key: string; p: LogPayload | null }>());
+  const payloadKey = `${payloadOpts.shapes.join(',')}|${payloadOpts.maxChars}`;
+  const payloadOf = useCallback((line: MatchedLine): LogPayload | undefined => {
+    if (!payloadOpts.shapes.length) return undefined;
+    const text = displayText(line);
+    const hit = payloadCache.current.get(line.seq);
+    if (hit && hit.key === payloadKey && hit.text === text) return hit.p ?? undefined;
+    const p = findPayload(text, { shapes: payloadOpts.shapes, maxChars: payloadOpts.maxChars }) ?? null;
+    if (payloadCache.current.size > 60_000) payloadCache.current.clear();
+    payloadCache.current.set(line.seq, { text, key: payloadKey, p });
+    return p ?? undefined;
+  }, [payloadKey, payloadOpts.shapes, payloadOpts.maxChars]);
+
   const payloads = useMemo(() => {
     const found = new Map<number, LogPayload>();
     if (!payloadOpts.shapes.length) return found;
     for (const row of slice) {
       if (row.isFrame) continue;
-      const p = findPayload(displayText(row.line), {
-        shapes: payloadOpts.shapes,
-        maxChars: payloadOpts.maxChars,
-      });
+      const p = row.yaml ?? payloadOf(row.line);
       if (p) found.set(row.line.seq, p);
     }
     return found;
     // `slice` is a new array every render; its identity is the window.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [first, last, rows, payloadOpts.shapes, payloadOpts.maxChars]);
+  }, [first, last, rows, payloadOf]);
+
+  /* A line that looks like it carries one but will not be drawn says why. */
+  const payloadNotes = useMemo(() => {
+    const found = new Map<number, string>();
+    if (!payloadOpts.shapes.length) return found;
+    for (const row of slice) {
+      if (row.isFrame || payloads.has(row.line.seq)) continue;
+      const note = payloadNote(displayText(row.line), {
+        shapes: payloadOpts.shapes, maxChars: payloadOpts.maxChars, truncated: row.line.truncated,
+      });
+      if (note) found.set(row.line.seq, note);
+    }
+    return found;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payloads, payloadOpts.shapes, payloadOpts.maxChars]);
+
+  /* Events, not lines: a folded trace or a YAML block is one, and its frames are none. */
+  const eventStats = useMemo(() => {
+    let events = 0;
+    let withPayload = 0;
+    for (const row of rows) {
+      if (row.isFrame) continue;
+      events++;
+      if (row.yaml || payloadOf(row.line)) withPayload++;
+    }
+    return { events, withPayload };
+  }, [rows, payloadOf]);
 
   /*
     Marked patterns from the Loggers tab, matched over the same window.
@@ -1131,7 +1178,19 @@ export function LogViewer() {
   }, [first, last, rows, marks]);
 
   /* Opened by the reader, keyed on seq so new lines above do not shift it. */
-  const [openPayloads, setOpenPayloads] = useState<Set<number>>(new Set());
+  /*
+    A payload is open when the reader said so on that line; else when Settings
+    draws payloads open; else when its logger's payloads were left open and
+    "remember" is on.
+  */
+  const [payloadToggles, setPayloadToggles] = useState<Map<number, boolean>>(new Map());
+  const loggersOpen = useMemo(() => openLoggers(prefs), [prefs]);
+  const isPayloadOpen = useCallback((line: MatchedLine): boolean => {
+    const own = payloadToggles.get(line.seq);
+    if (own !== undefined) return own;
+    if (!payloadOpts.collapsed) return true;
+    return payloadOpts.remember && !!line.logger && loggersOpen.has(line.logger);
+  }, [payloadToggles, payloadOpts.collapsed, payloadOpts.remember, loggersOpen]);
   const [openFields, setOpenFields] = useState<Set<number>>(new Set());
   const toggleFields = useCallback((seq: number) => {
     setOpenFields(prev => {
@@ -1140,13 +1199,11 @@ export function LogViewer() {
       return next;
     });
   }, []);
-  const togglePayload = useCallback((seq: number) => {
-    setOpenPayloads(prev => {
-      const next = new Set(prev);
-      if (next.has(seq)) next.delete(seq); else next.add(seq);
-      return next;
-    });
-  }, []);
+  const togglePayload = useCallback((line: MatchedLine) => {
+    const open = !isPayloadOpen(line);
+    setPayloadToggles(prev => new Map(prev).set(line.seq, open));
+    if (payloadOpts.remember && line.logger) setOpenLogger(line.logger, open);
+  }, [isPayloadOpen, payloadOpts.remember]);
 
   /*
     Put the linked line on screen, once.
@@ -1663,6 +1720,31 @@ export function LogViewer() {
                     icon={<LayersIcon size={IconSize.item} />} />
 
         {/*
+          How payloads open, for the whole tab — each line still keeps its own
+          switch. Only when there is a payload to draw: a control for lines that
+          do not exist is noise on a log that is all sentences.
+        */}
+        {payloadOpts.draw && eventStats.withPayload > 0 && (
+          <>
+            <Sep />
+            <BadgeChipView tone={ACCENT} size="xs"
+                           title={`${eventStats.withPayload.toLocaleString()} of these events carry a JSON, XML, YAML or key=value payload, drawn as a chip on its line`}>
+              <span className="inline-flex items-center gap-1"><BracesIcon size={11} /> Structured</span>
+            </BadgeChipView>
+            <SegmentedControlView
+              size="xs"
+              accentColor={ACCENT}
+              value={payloadOpts.mode}
+              onChange={v => setPayloadPref(PAYLOAD_MODE_PREF, v as PayloadMode)}
+              options={[
+                { value: 'tree', label: 'Tree' }, { value: 'pretty', label: 'Pretty' },
+                ...(payloadOpts.keepRaw ? [{ value: 'raw', label: 'Raw' }] : []),
+              ]}
+            />
+          </>
+        )}
+
+        {/*
           Everything that reaches back to the cluster.
 
           Hidden, not disabled, when these lines are a result that already
@@ -2036,7 +2118,9 @@ export function LogViewer() {
                     const line = row.line;
                     const isOpen = expanded.has(line.seq);
                     const payload = row.isFrame ? undefined : payloads.get(line.seq);
-                    const payloadIsOpen = openPayloads.has(line.seq);
+                    const payloadIsOpen = payload ? isPayloadOpen(line) : false;
+                    const note = row.isFrame ? undefined : payloadNotes.get(line.seq);
+                    const shownText = sentenceOf(line, payload);
                     const mark = row.isFrame ? undefined : markHits.get(line.seq);
                     const markColor = mark ? MARK_COLORS[mark.color] : undefined;
                     const fieldsAreOpen = openFields.has(line.seq);
@@ -2145,11 +2229,11 @@ export function LogViewer() {
                             searched for.
                           */
                           opacity: line.context ? 0.5
-                            : row.isFrame && frameOrigin(line.text) === 'library' ? 0.55 : 1,
+                            : row.isFrame && frameOrigin(line.text, payloadOpts.homePackages) === 'library' ? 0.55 : 1,
                           flex: logWrap ? 1 : undefined,
                           minWidth: 0,
                         }}>
-                          <Highlighted text={displayText(line)} hits={line.hits} />
+                          <Highlighted text={shownText} hits={line.hits} />
                           {/*
                             A cut line says it was cut.
 
@@ -2172,7 +2256,7 @@ export function LogViewer() {
 
                         {/* The fold. One row instead of forty, and the count is
                             on it so you know what you are choosing to open. */}
-                        {row.folded && row.folded.length > 0 && (
+                        {row.folded && row.folded.length > 0 && !row.yaml && (
                           <button
                             type="button"
                             onClick={() => setExpanded(prev => {
@@ -2201,6 +2285,12 @@ export function LogViewer() {
                                 them framework" says the same thing about where
                                 to look without inventing the other number.
                               */
+                              const home = payloadOpts.homePackages;
+                              /* With your packages stated, the count that matters: how many are yours. */
+                              if (home.length) {
+                                const mine = row.folded!.filter(f => frameOrigin(f.text, home) === 'app').length;
+                                return `${row.folded!.length} frames · ${mine} of yours`;
+                              }
                               const lib = row.folded!.filter(f => frameOrigin(f.text) === 'library').length;
                               return lib
                                 ? `… ${row.folded!.length} more frames · ${lib} framework`
@@ -2224,7 +2314,7 @@ export function LogViewer() {
                           one line at two heights is the first thing the eye
                           notices about a row it was meant to read.
                         */}
-                        {row.folded && row.folded.length > 0 && (
+                        {row.folded && row.folded.length > 0 && !row.yaml && (
                           <button
                             type="button"
                             onClick={() => askAboutTrace(line, row.folded!)}
@@ -2254,7 +2344,7 @@ export function LogViewer() {
                         {payload && (
                           <button
                             type="button"
-                            onClick={() => togglePayload(line.seq)}
+                            onClick={() => togglePayload(line)}
                             title={payloadIsOpen
                               ? 'Fold this payload back into the line'
                               : `Draw this ${payload.shape.toUpperCase()} payload`}
@@ -2270,6 +2360,13 @@ export function LogViewer() {
                               : <ChevronRightIcon size={IconSize.chip} />}
                             {payload.shape.toUpperCase()} · {payload.summary}
                           </button>
+                        )}
+
+                        {/* A line that looks like it carries a payload, and why it is not drawn. */}
+                        {note && (
+                          <BadgeChipView tone="var(--color-warning)" size="xs" title={note} style={{ alignSelf: 'center' }}>
+                            payload not drawn
+                          </BadgeChipView>
                         )}
 
                         {/*
@@ -2311,6 +2408,8 @@ export function LogViewer() {
                             mode={payloadOpts.mode}
                             depth={payloadOpts.depth}
                             hideSecrets={payloadOpts.hideSecrets}
+                            keepRaw={payloadOpts.keepRaw}
+                            title={[line.logger, line.ts !== undefined ? formatLogTime(line.ts) : undefined, detail?.name].filter(Boolean).join(' · ')}
                           />
                         )}
                       </div>
@@ -2413,6 +2512,13 @@ export function LogViewer() {
             {visible.length.toLocaleString()} shown
           </span>
         )}
+        {payloadOpts.draw && eventStats.events > 0 && (
+          <span style={{ fontVariantNumeric: 'tabular-nums' }}
+                title="Events, not lines: a folded stack trace or a YAML block is one event.">
+            {eventStats.events.toLocaleString()} event{eventStats.events === 1 ? '' : 's'}
+            {` · ${eventStats.withPayload.toLocaleString()} carry a payload`} · parsed on this machine, never sent anywhere
+          </span>
+        )}
         <div className="flex-1" />
         <span>
           {isSnapshot ? (logDetail ?? 'a search result')
@@ -2444,10 +2550,33 @@ export function LogViewer() {
           </button>
         )}
         <span>select any text to ask AI about it</span>
+        <ButtonView variant="secondary" size="xs" accentColor={ACCENT}
+                    title="Settings → DK8S → Logs: payloads, stack traces and what the counters count"
+                    onClick={() => useTabsStore.getState().openSettingsTab('dk8s-logs')}>
+          Rendering settings
+        </ButtonView>
       </div>
 
     </div>
   );
+}
+
+/**
+ * What the row reads: the message, with the payload lifted off it.
+ *
+ * The chip beside it stands for the payload, so the row stays a sentence. The
+ * whole line comes back when a search hit falls inside the payload — a match
+ * the reader cannot see is a match they will think is wrong — and for a line
+ * that is nothing but its payload.
+ */
+function sentenceOf(line: MatchedLine, payload: LogPayload | undefined): string {
+  const full = displayText(line);
+  if (!payload || payload.shape === 'yaml' || !payload.prefix) return full;
+  const at = full.indexOf(payload.source);
+  if (at < 0) return full;
+  if (line.hits?.some(([, to]) => to > at)) return full;
+  const after = full.slice(at + payload.source.length).trim();
+  return after ? `${full.slice(0, at).trimEnd()} ${after}` : full.slice(0, at).trimEnd();
 }
 
 function ContainerChip({ name }: { name: string }) {

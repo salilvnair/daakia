@@ -54,7 +54,13 @@ export type BodyMode = 'none' | 'json' | 'raw' | 'form-data' | 'x-www-form-urlen
 
 export type AuthType = 'none' | 'bearer' | 'basic' | 'api-key' | 'oauth2';
 
-export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki' | 'dk8s' | 'dk8s-results' | 'dk8s-logfile' | 'dkgh' | 'workspace';
+export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki' | 'dk8s' | 'dk8s-results' | 'dk8s-logfile' | 'dk8s-payload' | 'dkgh' | 'workspace';
+
+/** A log payload opened in a tab of its own — held whole, so it outlives the log it came from. */
+export interface PayloadView {
+  payload: import('../components/k8s/log-payload').LogPayload;
+  title: string;
+}
 
 /** A pod whose whole log a `dk8s-logfile` tab downloads and shows. */
 export interface LogFileTarget {
@@ -75,6 +81,8 @@ export interface RequestTab {
   protocol: Protocol;
   /** `dk8s-logfile` only: which pod's log. The download itself lives in a temp file named after the tab. */
   logFile?: LogFileTarget;
+  /** `dk8s-payload` only: the payload it shows. */
+  payloadView?: PayloadView;
   name: string;
   method: HttpMethod;
   url: string;
@@ -575,6 +583,8 @@ interface TabsState {
    * the file.
    */
   openDk8sLogFileTab: (target: LogFileTarget) => void;
+  /** Open a log payload in a tab of its own. */
+  openDk8sPayloadTab: (view: PayloadView) => void;
   /**
    * Bring an existing search-result tab back to the front, if there is one.
    *
@@ -720,6 +730,13 @@ export const useTabsStore = create<TabsState>((set, get) => {
       const { activeTabId } = get();
       const tab = createDefaultTab({ type: 'dk8s-logfile', name: `log · ${target.pod}` });
       tab.logFile = target;
+      set(s => ({ tabs: [...s.tabs, tab], activeTabId: tab.id, previousTabId: activeTabId }));
+    },
+
+    openDk8sPayloadTab: (view) => {
+      const { activeTabId } = get();
+      const tab = createDefaultTab({ type: 'dk8s-payload', name: `${view.payload.shape.toUpperCase()} · ${view.title}`.slice(0, 60).replace(/[\s·]+$/, '') });
+      tab.payloadView = view;
       set(s => ({ tabs: [...s.tabs, tab], activeTabId: tab.id, previousTabId: activeTabId }));
     },
 

@@ -461,7 +461,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
              dk8s, and it is not the pods. */
           const isDk8sResults = tab.type === 'dk8s-results';
           /* A downloaded pod log: dk8s's colour, and a page icon — it is a document. */
-          const isDk8sLogFile = tab.type === 'dk8s-logfile';
+          const isDk8sLogFile = tab.type === 'dk8s-logfile' || tab.type === 'dk8s-payload';
           const isDkgh = tab.type === 'dkgh';
           const isWorkspace = tab.type === 'workspace';
           const SM_ACCENT = 'var(--color-sm-tab, #f59e0b)';

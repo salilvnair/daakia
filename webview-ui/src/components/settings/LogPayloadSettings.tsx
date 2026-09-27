@@ -1,5 +1,5 @@
 /**
- * Settings → DK8S → Logs → the machine half of a line.
+ * Settings → DK8S → Logs → how a log event is drawn, and what the counters count.
  *
  * One switch at the top that means it: off, the log is plain text again and
  * nothing below is consulted. That ordering is the whole design — somebody who
@@ -8,13 +8,17 @@
  * Everything under it is dimmed rather than hidden while the switch is off, so
  * the choices somebody made are still visible as the ones that would come back.
  */
+import { useState } from 'react';
+import { ButtonView, CheckboxView, SegmentedControlView, SelectInputView, TextInputView } from '@salilvnair/dui';
 import { useUiStateStore } from '../../store/ui-state-store';
 import {
-  payloadPrefs, shapesText,
+  payloadPrefs, shapesText, resetRenderingPrefs,
   PAYLOAD_DRAW_PREF, PAYLOAD_SHAPES_PREF, PAYLOAD_MODE_PREF,
   PAYLOAD_DEPTH_PREF, PAYLOAD_MAX_PREF, PAYLOAD_SECRETS_PREF,
-  type PayloadMode,
+  PAYLOAD_COLLAPSED_PREF, PAYLOAD_REMEMBER_PREF, PAYLOAD_KEEP_RAW_PREF,
+  TRACE_APP_FIRST_PREF, TRACE_HOME_PREF, PAYLOAD_OPEN_LOGGERS_PREF, openLoggers,
 } from '../../components/k8s/log-payload-prefs';
+import { LOG_FOLD_PREF, prefOn } from '../../components/k8s/log-view-prefs';
 import type { PayloadShape } from '../../components/k8s/log-payload';
 import { BracesIcon } from '../../icons';
 
@@ -27,195 +31,207 @@ const cardStyle: React.CSSProperties = {
 };
 
 const SHAPES: { id: PayloadShape; label: string; hint: string }[] = [
-  { id: 'json', label: 'JSON', hint: 'a whole-line event, or a body after the message' },
-  { id: 'xml', label: 'XML', hint: 'SOAP envelopes and fragments' },
+  { id: 'json', label: 'JSON', hint: 'whole line, or after the text' },
+  { id: 'xml', label: 'XML', hint: 'envelopes and fragments' },
+  { id: 'yaml', label: 'YAML', hint: 'config dumps, joined back into one event' },
   { id: 'kv', label: 'key=value', hint: 'logfmt and the like, three pairs or more' },
-];
-
-const MODES: { id: PayloadMode; label: string; hint: string }[] = [
-  { id: 'tree', label: 'Tree', hint: 'collapsible, the way the response viewer draws JSON' },
-  { id: 'pretty', label: 'Pretty', hint: 'indented text, nothing to click' },
-  { id: 'raw', label: 'Raw', hint: 'exactly what the pod wrote' },
 ];
 
 export function LogPayloadSettings() {
   const prefs = useUiStateStore(s => s.prefs);
   const setPref = useUiStateStore(s => s.setPref);
   const p = payloadPrefs(prefs);
+  const on = (key: string, v: boolean) => setPref(key, v ? 'on' : 'off');
+  const [confirmReset, setConfirmReset] = useState(false);
 
   /* `p.shapes` is empty while the switch is off, so the ticks come from what is
      stored rather than from what is in force — otherwise turning the master
      switch off would appear to untick every shape as well. */
   const ticked = payloadPrefs({ ...prefs, [PAYLOAD_DRAW_PREF]: 'on' }).shapes;
-
   const toggleShape = (id: PayloadShape) => {
     const next = ticked.includes(id) ? ticked.filter(s => s !== id) : [...ticked, id];
     setPref(PAYLOAD_SHAPES_PREF, shapesText(next));
   };
+  const remembered = openLoggers(prefs).size;
 
   return (
     <div className="flex flex-col gap-3">
       <SectionRule label="payloads" />
 
-      <label className="flex items-start gap-3 px-4 py-3.5 rounded-lg cursor-pointer" style={cardStyle}>
-        <input
-          type="checkbox"
-          checked={p.draw}
-          onChange={e => setPref(PAYLOAD_DRAW_PREF, e.target.checked ? 'on' : 'off')}
-          style={{ accentColor: ACCENT, marginTop: 2, width: 15, height: 15 }}
-        />
+      {/* ── The master switch ── */}
+      <div className="flex items-start gap-3 px-4 py-3.5 rounded-lg" style={{ ...cardStyle, borderColor: p.draw ? `color-mix(in srgb, ${ACCENT} 45%, var(--color-surface-border))` : undefined }}>
+        <CheckboxView checked={p.draw} accentColor={ACCENT} onChange={v => on(PAYLOAD_DRAW_PREF, v)} />
         <span className="flex flex-col gap-1.5 flex-1 min-w-0">
-          <span className="text-[13px] flex items-center gap-2"
-                style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
+          <span className="text-[13px] flex items-center gap-2" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
             <span style={{ color: ACCENT, display: 'inline-flex' }}><BracesIcon size={14} /></span>
             Draw structured payloads
           </span>
           <span className="text-[11.5px] leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
-            A line that ends in JSON, XML or a run of <code>key=value</code> pairs gets a chip; opening it
-            draws the payload under the line, the way a stack trace folds. The message itself is never
-            rewritten, and nothing is claimed unless it parses. Off, every line is plain text.
+            A line carrying JSON, XML, YAML or a run of <code>key=value</code> pairs reads as its sentence,
+            with a chip for the payload; opening the chip draws it under the line. Nothing is claimed
+            unless it parses. Off, every line is plain text, exactly as the container wrote it — and
+            everything below follows this one.
           </span>
         </span>
-      </label>
+      </div>
 
-      <div className="flex flex-col gap-3 px-4 py-3.5 rounded-lg"
-           style={{ ...cardStyle, opacity: p.draw ? 1 : 0.55 }}>
-
-        <div className="flex flex-col gap-2">
-          <span className="text-[12px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-            Which shapes
-          </span>
-          {SHAPES.map(s => (
-            <label key={s.id} className="flex items-center gap-2.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={ticked.includes(s.id)}
-                disabled={!p.draw}
-                onChange={() => toggleShape(s.id)}
-                style={{ accentColor: ACCENT, width: 14, height: 14 }}
-              />
-              <span className="text-[12px]" style={{ color: 'var(--color-text-primary)' }}>{s.label}</span>
-              <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>{s.hint}</span>
-            </label>
-          ))}
+      <div className="flex flex-col gap-3 px-4 py-3.5 rounded-lg" style={{ ...cardStyle, opacity: p.draw ? 1 : 0.55 }}>
+        {/* ── Which shapes ── */}
+        <Group title="Which shapes">
+          <div className="grid gap-x-6 gap-y-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))' }}>
+            {SHAPES.map(s => (
+              <Row key={s.id} checked={ticked.includes(s.id)} disabled={!p.draw} onChange={() => toggleShape(s.id)} label={s.label} hint={s.hint} />
+            ))}
+          </div>
           {p.draw && ticked.length === 0 && (
             <span className="text-[11px]" style={{ color: 'var(--color-warning)' }}>
               Nothing ticked — the switch above is on, but there is no shape left to look for.
             </span>
           )}
-        </div>
+        </Group>
 
-        <div className="h-px" style={{ background: 'var(--color-surface-border)' }} />
+        <Rule />
 
-        <div className="flex flex-col gap-2">
-          <span className="text-[12px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-            How it opens
-          </span>
-          <span className="text-[11px] leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
-            The starting point for every payload. Each line keeps its own switch, because the reason to
-            change is always a particular line.
-          </span>
-          <div className="flex gap-1.5">
-            {MODES.map(m => (
-              <button
-                key={m.id}
-                type="button"
-                disabled={!p.draw}
-                onClick={() => setPref(PAYLOAD_MODE_PREF, m.id)}
-                title={m.hint}
-                className="px-2.5 py-1 rounded cursor-pointer text-[11.5px]"
-                style={p.mode === m.id
-                  ? { background: ACCENT, color: 'var(--color-on-accent, #10262b)', border: '1px solid transparent' }
-                  : {
-                    background: 'transparent',
-                    color: 'var(--color-text-secondary)',
-                    border: '1px solid var(--color-surface-border)',
-                  }}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2.5 mt-1">
-            <label htmlFor="payload-depth" className="text-[11.5px]" style={{ color: 'var(--color-text-secondary)' }}>
-              Open a tree to depth
-            </label>
-            <select
-              id="payload-depth"
+        {/* ── How it opens ── */}
+        <Group title="How it opens" hint="The starting point for every payload, and the switch in the Logs toolbar. Each line keeps its own switch, because the reason to change is always a particular line.">
+          <div className="flex items-center gap-3 flex-wrap">
+            <SegmentedControlView
+              size="sm"
+              accentColor={ACCENT}
+              disabled={!p.draw}
+              value={p.mode}
+              onChange={v => setPref(PAYLOAD_MODE_PREF, v)}
+              options={[{ value: 'tree', label: 'Tree' }, { value: 'pretty', label: 'Pretty' }, { value: 'raw', label: 'Raw' }]}
+            />
+            <span className="text-[11.5px]" style={{ color: 'var(--color-text-secondary)' }}>Open to depth</span>
+            <SelectInputView
+              size="sm"
+              width="sm"
+              accentColor={ACCENT}
               value={String(p.depth)}
-              disabled={!p.draw}
-              onChange={e => setPref(PAYLOAD_DEPTH_PREF, e.target.value)}
-              className="px-2 py-1 rounded text-[11.5px]"
-              style={{
-                background: 'var(--color-input-bg, var(--color-panel))',
-                color: 'var(--color-text-primary)',
-                border: '1px solid var(--color-surface-border)',
-              }}
-            >
-              {[1, 2, 3, 4, 12].map(d => (
-                <option key={d} value={d}>{d === 12 ? 'all of it' : d}</option>
-              ))}
-            </select>
+              onChange={v => setPref(PAYLOAD_DEPTH_PREF, v)}
+              options={[{ value: '1', label: '1' }, { value: '2', label: '2' }, { value: '3', label: '3' }, { value: '12', label: 'all' }]}
+            />
           </div>
-        </div>
+          <Row checked={p.collapsed} disabled={!p.draw} onChange={v => on(PAYLOAD_COLLAPSED_PREF, v)}
+               label="Collapsed to one line until clicked"
+               hint="Off, every payload is drawn open under its line — a longer log, nothing to click." />
+          <Row checked={p.remember} disabled={!p.draw} onChange={v => on(PAYLOAD_REMEMBER_PREF, v)}
+               label="Remember what I opened, per logger"
+               hint={`Open one payload from a logger and its others open too, and stay open next time.${remembered ? ` ${remembered} logger${remembered === 1 ? '' : 's'} remembered.` : ''}`}
+               extra={remembered > 0 ? (
+                 <ButtonView variant="ghost" size="xs" accentColor={ACCENT} onClick={() => setPref(PAYLOAD_OPEN_LOGGERS_PREF, '[]')}>Forget them</ButtonView>
+               ) : undefined} />
+        </Group>
 
-        <div className="h-px" style={{ background: 'var(--color-surface-border)' }} />
+        <Rule />
 
-        <div className="flex flex-col gap-2">
-          <span className="text-[12px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-            Limits and secrets
-          </span>
-
+        {/* ── Limits and secrets ── */}
+        <Group title="Limits and secrets">
           <div className="flex items-center gap-2.5">
-            <label htmlFor="payload-max" className="text-[11.5px]" style={{ color: 'var(--color-text-secondary)' }}>
-              Stop parsing a line longer than
-            </label>
-            <select
-              id="payload-max"
+            <span className="text-[11.5px]" style={{ color: 'var(--color-text-secondary)' }}>Stop parsing above</span>
+            <SelectInputView
+              size="sm"
+              width="sm"
+              accentColor={ACCENT}
               value={String(Math.round(p.maxChars / 1024))}
-              disabled={!p.draw}
-              onChange={e => setPref(PAYLOAD_MAX_PREF, e.target.value)}
-              className="px-2 py-1 rounded text-[11.5px]"
-              style={{
-                background: 'var(--color-input-bg, var(--color-panel))',
-                color: 'var(--color-text-primary)',
-                border: '1px solid var(--color-surface-border)',
-              }}
-            >
-              {[64, 256, 1024].map(kb => (
-                <option key={kb} value={kb}>{kb >= 1024 ? '1 MB' : `${kb} KB`}</option>
-              ))}
-            </select>
+              onChange={v => setPref(PAYLOAD_MAX_PREF, v)}
+              options={[{ value: '64', label: '64 KB' }, { value: '256', label: '256 KB' }, { value: '1024', label: '1 MB' }]}
+            />
           </div>
           <span className="text-[11px] leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-            A megabyte of base64 on one line is not a payload anybody wants drawn, and parsing it on every
-            scroll is how a log view stops scrolling.
+            A longer line stays raw, with a note on it saying why. So does a line cut at 32 KB when it was
+            read: its payload lost its end and can no longer parse.
           </span>
+          <Row checked={p.hideSecrets} disabled={!p.draw} onChange={v => on(PAYLOAD_SECRETS_PREF, v)}
+               label="Hide values on secret-looking keys"
+               hint="token, password, secret, authorization — drawn as dots, revealed per line. Copy and Raw always mean the line as the pod wrote it." />
+          <Row checked={p.keepRaw} disabled={!p.draw} onChange={v => on(PAYLOAD_KEEP_RAW_PREF, v)}
+               label="Keep the raw text available on every line"
+               hint="Raw beside Tree and Pretty on every payload. Off, the switch offers only the two drawn modes." />
+        </Group>
+      </div>
 
-          <label className="flex items-start gap-2.5 cursor-pointer mt-1">
-            <input
-              type="checkbox"
-              checked={p.hideSecrets}
-              disabled={!p.draw}
-              onChange={e => setPref(PAYLOAD_SECRETS_PREF, e.target.checked ? 'on' : 'off')}
-              style={{ accentColor: ACCENT, marginTop: 2, width: 14, height: 14 }}
-            />
-            <span className="flex flex-col gap-1 min-w-0">
-              <span className="text-[12px]" style={{ color: 'var(--color-text-primary)' }}>
-                Hide values on secret-looking keys
-              </span>
-              <span className="text-[11px] leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-                <code>token</code>, <code>password</code>, <code>secret</code>, <code>authorization</code> and
-                their kin are drawn as dots, with a button on the payload to show them. Only what is drawn —
-                Copy, Raw and Export always mean the line as the pod wrote it.
-              </span>
-            </span>
-          </label>
+      {/* ── Stack traces and counters ── */}
+      <SectionRule label="stack traces and counters" />
+      <div className="flex flex-col gap-3 px-4 py-3.5 rounded-lg" style={cardStyle}>
+        <Row checked={prefOn(prefs, LOG_FOLD_PREF)} onChange={v => on(LOG_FOLD_PREF, v)}
+             label="Fold a stack trace into its first line"
+             hint="The frames sit behind one chip on the exception's line. The Logs toolbar has the same switch." />
+        <Row checked={p.appFirst} onChange={v => on(TRACE_APP_FIRST_PREF, v)}
+             label="Put your own packages first when it opens"
+             hint="Your frames lead and the framework's follow, each part in its own order. Without your packages below, whatever is not known framework leads." />
+        <div className="flex flex-col gap-1.5" style={{ paddingLeft: 28 }}>
+          <span className="text-[12px]" style={{ color: 'var(--color-text-primary)' }}>Your packages</span>
+          <TextInputView
+            size="sm"
+            width="lg"
+            accentColor={ACCENT}
+            value={prefs[TRACE_HOME_PREF] ?? ''}
+            onChange={e => setPref(TRACE_HOME_PREF, e.target.value)}
+            placeholder="com.acme, org.acme.billing"
+          />
+          <span className="text-[11px] leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+            Package prefixes that are your code. With them, a folded trace says <em>24 frames · 3 of yours</em>;
+            without, it counts only what is known framework — it never guesses which frames are yours.
+          </span>
         </div>
+        <div className="flex flex-col gap-1 px-3 py-2.5 rounded-md text-[11.5px] leading-relaxed"
+             style={{ background: 'color-mix(in srgb, var(--color-warning) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--color-warning) 35%, transparent)', color: 'var(--color-text-secondary)' }}>
+          <span><b style={{ color: 'var(--color-warning)' }}>The ERROR chip counts events, never frames.</b>{' '}
+            One exception with 24 frames is one error whether it is folded or open, so the number stops
+            jumping when you expand something. Lines inside a folded trace are not counted at all.</span>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="text-[11px] flex-1" style={{ color: 'var(--color-text-muted)' }}>
+          Parsing happens on this machine. Nothing here sends a log anywhere.
+        </span>
+        <ButtonView variant="secondary" size="sm" accentColor={ACCENT}
+                    color={confirmReset ? 'var(--color-warning)' : undefined}
+                    title="Every setting on this card back to how it came. Your packages and the loggers you left open are kept."
+                    onClick={() => {
+                      if (!confirmReset) { setConfirmReset(true); setTimeout(() => setConfirmReset(false), 3000); return; }
+                      setConfirmReset(false);
+                      resetRenderingPrefs();
+                    }}>
+          {confirmReset ? 'Click again to reset' : 'Back to defaults'}
+        </ButtonView>
       </div>
     </div>
   );
+}
+
+function Group({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-[12px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>{title}</span>
+      {hint && <span className="text-[11px] leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>{hint}</span>}
+      {children}
+    </div>
+  );
+}
+
+function Row({ checked, onChange, label, hint, disabled, extra }: {
+  checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string; disabled?: boolean; extra?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <span style={{ marginTop: 1 }}>
+        <CheckboxView checked={checked} disabled={disabled} size="sm" accentColor={ACCENT} onChange={onChange} />
+      </span>
+      <span className="flex flex-col gap-0.5 min-w-0 flex-1 cursor-pointer" onClick={() => !disabled && onChange(!checked)}>
+        <span className="text-[12px]" style={{ color: 'var(--color-text-primary)' }}>{label}</span>
+        {hint && <span className="text-[11px] leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>{hint}</span>}
+      </span>
+      {extra}
+    </div>
+  );
+}
+
+function Rule() {
+  return <div className="h-px" style={{ background: 'var(--color-surface-border)' }} />;
 }
 
 function SectionRule({ label }: { label: string }) {

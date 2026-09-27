@@ -9,6 +9,7 @@
  * jumps there.
  */
 import type { LogLine, LogLevel } from '../../store/k8s-store';
+import { yamlPayload, type LogPayload } from './log-payload';
 
 export const LEVEL_ORDER: LogLevel[] = ['error', 'warn', 'info', 'debug', 'other'];
 
@@ -651,6 +652,17 @@ export interface FoldedRow {
   line: MatchedLine;
   /** Frames folded under this row, if it heads a stack trace. */
   folded?: MatchedLine[];
+  /**
+   * The lines under this row were a YAML block, joined back into its event.
+   * `folded` then holds those lines, and this is how they are drawn — as a
+   * payload, never as frames.
+   */
+  yaml?: LogPayload;
+}
+
+export interface FoldOptions {
+  /** Join a YAML block that follows a line back into that line's event. */
+  yaml?: boolean;
 }
 
 /**
@@ -748,12 +760,32 @@ function isTraceHeader(text: string): boolean {
     || /^[\w$]+(\.[\w$]+)*(Exception|Error|Throwable)(:|\s|$)/.test(text);
 }
 
-export function foldStackTraces(lines: MatchedLine[], enabled: boolean): FoldedRow[] {
-  if (!enabled) return lines.map(line => ({ line }));
+export function foldStackTraces(lines: MatchedLine[], enabled: boolean, opts: FoldOptions = {}): FoldedRow[] {
+  if (!enabled && !opts.yaml) return lines.map(line => ({ line }));
 
   const rows: FoldedRow[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+
+    /*
+      A YAML dump — the config an application prints at startup — is one event
+      written as forty lines. Joined back under the line that introduced it, it
+      is drawn as a tree like any other payload. Checked before the trace fold,
+      and only for lines that are not frames: a trace is never YAML.
+    */
+    if (opts.yaml && !foldsInto(line)) {
+      let j = i + 1;
+      const block: MatchedLine[] = [];
+      while (j < lines.length && lines[j].continuation && !isStackFrame(lines[j].text)) { block.push(lines[j]); j++; }
+      const yaml = block.length >= 2 ? yamlPayload(line.message ?? line.text, block.map(b => b.text)) : undefined;
+      if (yaml) {
+        rows.push({ line, folded: block, yaml });
+        i = j - 1;
+        continue;
+      }
+    }
+    if (!enabled) { rows.push({ line }); continue; }
+
     if (foldsInto(line)) {
       // A run of frames with no header above it — can happen after a filter
       // hides the header. Keep the first so the run is not invisible.
@@ -776,6 +808,24 @@ export function foldStackTraces(lines: MatchedLine[], enabled: boolean): FoldedR
     }
   }
   return rows;
+}
+
+/**
+ * The frames of an opened trace, the reader's own first.
+ *
+ * With packages stated, those frames lead; without, whatever is not known to
+ * be framework leads — the same honesty as the fold's count, which never calls
+ * a frame yours without being told. Order is kept within each part: a stack
+ * read top to bottom still means what it meant.
+ */
+export function ownFramesFirst(frames: MatchedLine[], homePackages: string[] = []): MatchedLine[] {
+  const mine: MatchedLine[] = [];
+  const rest: MatchedLine[] = [];
+  for (const f of frames) {
+    const origin = frameOrigin(f.text, homePackages);
+    (origin === 'app' || (!homePackages.length && origin === 'unknown') ? mine : rest).push(f);
+  }
+  return [...mine, ...rest];
 }
 
 /** Bytes held, for the footer. Rough by design — it is a scale, not an audit. */
