@@ -47,6 +47,9 @@ import { scopeOf } from './LoggersTab';
 import { payloadPrefs, openLoggers, setOpenLogger, setPayloadPref, PAYLOAD_MODE_PREF, type PayloadMode } from './log-payload-prefs';
 import { LogPayloadView } from './LogPayloadView';
 import { FacetRail } from './FacetRail';
+import { podHue, podTail } from './pod-hue';
+import { readFields } from './field-readers';
+import { useFieldReaders } from './follow-prefs';
 import { LogSkeleton } from './LogSkeleton';
 import {
   setFilterProvider, clearFilterProvider,
@@ -732,6 +735,7 @@ export function LogViewer() {
        whichever pod happened to be open behind it. */
     clearFieldFilters, closeDetail, isSnapshot, contextCap, sharedRange,
     paging, focusSeq, onFindContext,
+    focusLabel, selectedSeq, onSelectLine, selectedLabel, podColumn, podColor, columns, railLead, footerNote,
   } = useLogSource();
 
   /* Every "how many lines" ladder in this view, from Settings → DK8S → Logs. */
@@ -745,6 +749,8 @@ export function LogViewer() {
   /* Yours and your team's that apply to this pod and are on — the same set
      the Summary panel answers, so the button never offers an empty panel. */
   const determinants = useDeterminantsFor(detail).enabled;
+  /* Every pattern's holes and every named field — what decides whether a row has fields to open. */
+  const fieldReaders = useFieldReaders();
   const [summaryOpen, setSummaryOpen] = useState(false);
   /* The marks over the whole buffer — the map, the rail, Only marked. See LogMarks. */
   const markIdx = useMarkIndex(catalogue, logs);
@@ -2164,6 +2170,7 @@ export function LogViewer() {
           style={{ flex: 1, minWidth: 0, minHeight: 0 }}
           first={
             <div className="flex flex-col h-full min-h-0">
+          {railLead}
           <MarkedRail
             patterns={catalogue}
             idx={markIdx}
@@ -2271,6 +2278,15 @@ export function LogViewer() {
                         */
                         data-log-ts={line.ts}
                         data-log-text={line.text}
+                        /* A page that shows what a line names beside the log
+                           is told which line was clicked. Not a drag that
+                           selected text, and not a press on one of the row's
+                           own chips — those mean something else. */
+                        onClick={onSelectLine && !row.isFrame ? (e) => {
+                          if ((e.target as HTMLElement).closest('button, a, input')) return;
+                          if (window.getSelection()?.toString()) return;
+                          onSelectLine(line);
+                        } : undefined}
                         /* A column, so a payload can be drawn under the line it
                            came on. The row is what the virtualiser measures, so
                            the card's height is accounted for by growing it. */
@@ -2282,8 +2298,11 @@ export function LogViewer() {
                              level tint over it would leave the one line
                              somebody was sent looking like every other
                              warning on screen. */
+                          cursor: onSelectLine && !row.isFrame ? 'pointer' : undefined,
                           background: line.seq === linkedSeq
                             ? `color-mix(in srgb, ${ACCENT} 22%, transparent)`
+                            : line.seq === selectedSeq
+                              ? `color-mix(in srgb, ${ACCENT} 12%, transparent)`
                             /* A mark tints the row it claimed, under the level
                                tint, so a marked INFO is findable without an
                                error's weight. */
@@ -2295,7 +2314,7 @@ export function LogViewer() {
                                 ? 'color-mix(in srgb, var(--color-warning) 5%, transparent)'
                                 : 'transparent',
                           borderLeft: `2px solid ${
-                            line.seq === linkedSeq ? ACCENT
+                            line.seq === linkedSeq || line.seq === selectedSeq ? ACCENT
                             : markColor ?? (
                               line.level === 'error' ? 'var(--color-error)'
                               : line.level === 'warn' ? 'var(--color-warning)' : 'transparent'
@@ -2327,6 +2346,26 @@ export function LogViewer() {
                           </span>
                         )}
                         {!row.isFrame && <LevelTag level={line.level} />}
+
+                        {/* Lines from several pods say which one, on every row:
+                            the same thread name can be reused by another pod. */}
+                        {podColumn && !row.isFrame && (line as { pod?: string }).pod && (
+                          <span className="shrink-0 select-none truncate"
+                                title={(line as { pod?: string }).pod}
+                                style={{ width: 64, color: (podColor ?? podHue)((line as { pod?: string }).pod!) }}>
+                            {podTail((line as { pod?: string }).pod!)}
+                          </span>
+                        )}
+                        {columns && !row.isFrame && columns.map(c => {
+                          const v = c.value(line);
+                          return (
+                            <span key={c.key} className="shrink-0 truncate"
+                                  title={v === undefined ? `no ${c.key} on this line` : `${c.key} = ${v}`}
+                                  style={{ maxWidth: 150, color: v === undefined ? 'var(--color-text-muted)' : 'var(--color-info, #9cdcfe)', opacity: v === undefined ? 0.4 : 1 }}>
+                              {v ?? '—'}
+                            </span>
+                          );
+                        })}
 
                         <span style={{
                           color: line.level === 'error' ? 'var(--color-error)'
@@ -2499,7 +2538,8 @@ export function LogViewer() {
                         {/* Only a line with keys of its own — MDC, a payload's leaves, a pattern's
                             holes. Thread and logger are in the rail for every line already. */}
                         {!row.isFrame && (Object.keys(line.fields ?? {}).length > 0
-                          || payload?.value !== undefined || Object.keys(mark?.fields ?? {}).length > 0) && (
+                          || payload?.value !== undefined || Object.keys(mark?.fields ?? {}).length > 0
+                          || readFields(line, fieldReaders).length > 0) && (
                           <button
                             type="button"
                             onClick={() => toggleFields(line.seq)}
@@ -2516,6 +2556,12 @@ export function LogViewer() {
                               : <ChevronRightIcon size={IconSize.chip} />}
                             fields
                           </button>
+                        )}
+                        {((line.seq === selectedSeq && selectedLabel) || (line.seq === focusSeq && focusLabel)) && (
+                          <span className="ml-auto shrink-0 select-none self-center pl-2"
+                                style={{ color: ACCENT, fontSize: 10.5, fontFamily: 'var(--font-sans, system-ui)' }}>
+                            {line.seq === focusSeq && focusLabel ? focusLabel : selectedLabel}
+                          </span>
                         )}
                         </div>
 
@@ -2644,6 +2690,7 @@ export function LogViewer() {
             {` · ${eventStats.withPayload.toLocaleString()} carry a payload`} · parsed on this machine, never sent anywhere
           </span>
         )}
+        {footerNote && <span>{footerNote}</span>}
         <div className="flex-1" />
         <span>
           {isSnapshot ? (logDetail ?? 'a search result')

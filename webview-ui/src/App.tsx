@@ -1,5 +1,6 @@
 import { LogFileTab } from './components/k8s/LogFileTab';
 import { PayloadTab } from './components/k8s/PayloadTab';
+import { WindowTab } from './components/k8s/WindowTab';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import '@salilvnair/convengine-chat/style.css';
 import { installDaakiaBridges } from './ai/DaakiaVsCodeBridge';
@@ -125,7 +126,7 @@ export default function App() {
   /* A tab that draws its own whole page. Leaving one out of this list does
      not hide its panel — it renders the REQUEST editor underneath it as
      well, which is how a search result came to have a URL bar below it. */
-  const STANDALONE_TABS = ['settings', 'mock-server', 'dk8s', 'dk8s-results', 'dk8s-logfile', 'dk8s-payload', 'dkgh', 'state-machine', 'wiki', 'daakia-ai', 'workspace'];
+  const STANDALONE_TABS = ['settings', 'mock-server', 'dk8s', 'dk8s-results', 'dk8s-logfile', 'dk8s-payload', 'dk8s-window', 'dkgh', 'state-machine', 'wiki', 'daakia-ai', 'workspace'];
   const switchProtocol = useTabsStore(s => s.switchProtocol);
   const devToolsOpen = useDevToolsStore(s => s.isOpen);
   const protocolAccent = getProtocolAccent(activeProtocol);
@@ -302,7 +303,7 @@ export default function App() {
     const accent = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
       : activeTab?.type === 'workspace' ? 'var(--color-workspace)'
       : activeTab?.type === 'dkgh' ? 'var(--color-dkgh)'
-      : activeTab?.type === 'dk8s' || activeTab?.type === 'dk8s-results' || activeTab?.type === 'dk8s-logfile' || activeTab?.type === 'dk8s-payload' ? 'var(--color-dk8s)'
+      : activeTab?.type === 'dk8s' || activeTab?.type === 'dk8s-results' || activeTab?.type === 'dk8s-logfile' || activeTab?.type === 'dk8s-payload' || activeTab?.type === 'dk8s-window' ? 'var(--color-dk8s)'
       : activeTab?.type === 'state-machine' ? 'var(--color-mock-server)'
       : activeTab?.type === 'settings' ? 'var(--color-settings)'
       : activeTab?.type === 'wiki' ? 'var(--color-wiki)'
@@ -639,7 +640,7 @@ export default function App() {
   const accentVar = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
     : activeTab?.type === 'workspace' ? 'var(--color-workspace)'
     : activeTab?.type === 'dkgh' ? 'var(--color-dkgh)'
-    : activeTab?.type === 'dk8s' || activeTab?.type === 'dk8s-results' || activeTab?.type === 'dk8s-logfile' || activeTab?.type === 'dk8s-payload' ? 'var(--color-dk8s)'
+    : activeTab?.type === 'dk8s' || activeTab?.type === 'dk8s-results' || activeTab?.type === 'dk8s-logfile' || activeTab?.type === 'dk8s-payload' || activeTab?.type === 'dk8s-window' ? 'var(--color-dk8s)'
     : activeTab?.type === 'state-machine' ? 'var(--color-mock-server)'
     : activeTab?.type === 'settings' ? 'var(--color-settings)'
     : activeTab?.type === 'wiki' ? 'var(--color-wiki)'
@@ -930,6 +931,7 @@ export default function App() {
 
         {/* A log payload, opened in a tab of its own. */}
         {activeTab?.type === 'dk8s-payload' && <PayloadTab key={activeTab.id} tab={activeTab} />}
+        {activeTab?.type === 'dk8s-window' && <WindowTab key={activeTab.id} tab={activeTab} />}
 
         {tabs.some(t => t.type === 'dkgh') && (
           <div
@@ -1064,7 +1066,7 @@ export default function App() {
         </div>
 
         {/* Sidebar splitter — only for protocol tabs that have an expandable panel */}
-        {!(activeTab?.type === 'mock-server' || activeTab?.type === 'dk8s' || activeTab?.type === 'dk8s-results' || activeTab?.type === 'dk8s-logfile' || activeTab?.type === 'dk8s-payload' || activeTab?.type === 'state-machine' || activeTab?.type === 'settings') && (
+        {!(activeTab?.type === 'mock-server' || activeTab?.type === 'dk8s' || activeTab?.type === 'dk8s-results' || activeTab?.type === 'dk8s-logfile' || activeTab?.type === 'dk8s-payload' || activeTab?.type === 'dk8s-window' || activeTab?.type === 'state-machine' || activeTab?.type === 'settings') && (
           <div
             className="w-[6px] flex-shrink-0 cursor-col-resize relative select-none group"
             onPointerDown={handleSidebarPointerDown}

@@ -108,15 +108,20 @@ function Pane({ pane, focused, sharedRange }: {
     logLevels: pane.levels,
     logRequestedAt: pane.requestedAt,
     logFieldFilters: pane.fields,
-    addFieldFilter: (f: SplitPane['fields'][number]) => patch(pane.id, {
-      fields: pane.fields.some(x => x.field === f.field && x.value === f.value && x.mode === f.mode)
-        ? pane.fields
-        : [...pane.fields, f],
-    }),
-    removeFieldFilter: (f: SplitPane['fields'][number]) => patch(pane.id, {
-      fields: pane.fields.filter(
-        x => !(x.field === f.field && x.value === f.value && x.mode === f.mode),
-      ),
+    /* The pod view's rule: a chip already there flips between "only these" and
+       "not these". The view removes by field and value — this used to take a
+       whole filter, so removing a chip in a pane did nothing. */
+    addFieldFilter: (f: SplitPane['fields'][number]) => {
+      const existing = pane.fields.find(x => x.field === f.field && x.value === f.value);
+      if (existing && existing.mode === f.mode && f.mode === 'include') return;
+      patch(pane.id, {
+        fields: existing
+          ? pane.fields.map(x => (x === existing ? { ...x, mode: x.mode === 'include' ? 'exclude' as const : 'include' as const } : x))
+          : [...pane.fields, f],
+      });
+    },
+    removeFieldFilter: (field: string, value: string) => patch(pane.id, {
+      fields: pane.fields.filter(x => !(x.field === field && x.value === value)),
     }),
     clearFieldFilters: () => patch(pane.id, { fields: [] }),
     logFollow: pane.follow,

@@ -51,6 +51,12 @@ import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { AiSplit } from './AiAnswerPanel';
 import { resultLines, podsLabel, podsIn, timings, totals, type ResultLine } from './search-results';
+import { HitsByPodRail, HitFieldsRail } from './HitRails';
+import { FollowView } from './FollowView';
+import { useFieldReaders, useFollowPrefs, type SavedFollow } from './follow-prefs';
+import { valueOf } from './field-readers';
+import { atLeast } from './follow';
+import { snapshotSource, standIn } from './snapshot-source';
 import { filterLines } from './log-view';
 import { ACCENT, AI as AI_ACCENT } from './tone';
 
@@ -690,11 +696,48 @@ function SplitOpenResults({ searched }: { searched: SearchedPod[] }) {
   );
 }
 
+/**
+ * "Window": the minutes around the line you clicked, in a tab of their own.
+ *
+ * A hit at 11:00 and the question is what else the service did between 10:55
+ * and 11:05 — every API, every downstream, every retry. The Window tab reads
+ * that stretch on the pods this search covered and summarises it.
+ */
+function OpenWindow({ line, searched, query }: { line?: ResultLine; searched: SearchedPod[]; query: string }) {
+  const open = useTabsStore(s => s.openDk8sWindowTab);
+  const usable = !!line && line.ts !== undefined;
+  return (
+    <ButtonView
+      variant="secondary" size="sm" accentColor={ACCENT} color={usable ? ACCENT : undefined}
+      disabled={!usable}
+      iconLeft={<ClockIcon size={IconSize.action} />}
+      title={usable
+        ? 'What ran in the ten minutes around this line, on every pod searched — in a new tab'
+        : line ? 'This line has no timestamp to put a window around' : 'Click a line first — the window is around it'}
+      onClick={() => {
+        if (!line || line.ts === undefined) return;
+        logUiEvent('dk8s.results_open_window', { pods: searched.length });
+        open({
+          anchor: {
+            pod: line.pod, ts: line.ts, text: line.text, level: line.level,
+            message: line.message, thread: line.thread, fields: line.fields,
+          },
+          pods: searched, half: 300, query,
+        });
+      }}
+    >
+      Window
+    </ButtonView>
+  );
+}
+
 export function SearchResultsPage() {
   const {
     query, groups, at, scanned, searched,
     tab, setTab, filter, setFilter, levels, setLevels, contextLines,
-    fields, addField, removeField, wrap, setWrap,
+    fields, addField, removeField, clearFields, wrap, setWrap,
+    pods: shownPods, setPods, selected, setSelected, columns, toggleColumn,
+    floors, setFloor, charts, toggleChart, follow, setFollow,
   } = useResultTabStore();
   const openDk8sTab = useTabsStore(s => s.openDk8sTab);
   /*
@@ -721,13 +764,41 @@ export function SearchResultsPage() {
   const openAi = useDk8sAiStore(s => s.openPanel);
   const closeAi = useDk8sAiStore(s => s.closePanel);
   const answers = useDk8sAiStore(s => s.answers);
+  const readers = useFieldReaders();
+  const { order, askAbove, views } = useFollowPrefs();
 
-  const lines = useMemo(() => resultLines(groups), [groups]);
+  const allLines = useMemo(() => resultLines(groups), [groups]);
   const podNames = useMemo(
     () => [...new Set([...podsIn(groups), ...searched.map(s => s.pod)])],
     [groups, searched],
   );
   const sums = useMemo(() => totals(groups, searched), [groups, searched]);
+
+  /*
+    What the rails narrow, before the view's own filters run.
+
+    A pod picked in "hits by pod", and a floor from "Only when ≥ N" on a
+    numeric card. The floor keeps a hit's neighbours with it — the lines around
+    a slow call are why anybody asked for the slow calls.
+  */
+  const lines = useMemo(() => {
+    let out = shownPods.length ? allLines.filter(l => shownPods.includes(l.pod)) : allLines;
+    if (floors.length) {
+      const keep = new Set<string>();
+      for (const l of out) {
+        if (l.context) continue;
+        const ok = floors.every(f => atLeast([l], f.field, f.min, readers).length > 0);
+        if (ok) keep.add(`${l.pod}\u0000${l.sourceLine}`);
+      }
+      out = out.filter(l => {
+        for (let d = -contextLines; d <= contextLines; d++) if (keep.has(`${l.pod}\u0000${l.sourceLine + d}`)) return true;
+        return false;
+      });
+    }
+    return out;
+  }, [allLines, shownPods, floors, readers, contextLines]);
+
+  const selectedLine = useMemo(() => allLines.find(l => l.seq === selected), [allLines, selected]);
 
   const [downloadOpen, setDownloadOpen] = useState(false);
 
@@ -767,73 +838,74 @@ export function SearchResultsPage() {
     quietly attributing a result spanning twelve pods to whichever happened to
     come back first.
   */
-  const asPod = useMemo(() => ({
-    name: query || 'search',
-    namespace: [...new Set(searched.map(s => s.namespace))].join(', ') || '—',
-    context: groups[0]?.result.context ?? '',
-    uid: `search:${at}`,
-    phase: 'Search result',
-    ready: { current: sums.podsWithHits, total: sums.pods },
-    restarts: 0,
-    containers: [],
-    healthy: true,
-    deleting: false,
-  } as PodSummary), [query, searched, groups, at, sums]);
+  const asPod = useMemo(() => standIn(
+    query || 'search',
+    [...new Set(searched.map(s => s.namespace))].join(', ') || '—',
+    groups[0]?.result.context ?? '',
+    `search:${at}`,
+    'Search result',
+    { current: sums.podsWithHits, total: sums.pods },
+  ), [query, searched, groups, at, sums]);
 
-  const source = useMemo(() => ({
-    logs: lines,
-    logStatus: 'ended',
-    logDetail: `${sums.matches} match${sums.matches === 1 ? '' : 'es'} across ${sums.pods} pods`,
-    logDropped: 0,
-    logFilter: filter,
-    logLevels: levels,
-    logRequestedAt: at,
-    logFieldFilters: fields,
-    addFieldFilter: addField,
-    removeFieldFilter: removeField,
-    clearFieldFilters: () => fields.forEach(removeField),
-    logFollow: false,
-    logLive: false,
-    logTail: 0,
-    logDirection: 'last',
-    logSince: 0,
-    logWrap: wrap,
-    logPrevious: false,
-    logFrom: undefined,
-    logTo: undefined,
-    logLineNumbers,
-    logContainer: undefined,
-    logExportOpen: false,
+  const startFollow = useCallback((field: string, value: string) => {
+    if (!selectedLine) return;
+    logUiEvent('dk8s.results_follow', { field, pods: searched.length });
+    setFollow({
+      conds: [{ field, value, on: true }],
+      anchor: { pod: selectedLine.pod, ts: selectedLine.ts, text: selectedLine.text },
+      width: 90,
+      oneTimeline: true,
+      onlyPod: false,
+      tag: `follow:${Date.now()}`,
+    });
+  }, [selectedLine, searched.length, setFollow]);
+
+  const openView = useCallback((v: SavedFollow) => {
+    setFollow({
+      conds: v.conds, anchor: v.anchor, width: v.width, oneTimeline: v.oneTimeline, onlyPod: v.onlyPod,
+      tag: `follow:${Date.now()}`, pods: v.pods,
+    });
+  }, [setFollow]);
+
+  const source = useMemo(() => snapshotSource({
+    lines,
+    view: {
+      filter, setFilter, levels, setLevels, fields, addField, removeField, clearFields, wrap, setWrap,
+    },
     detail: asPod,
-    runtime: undefined,
-    setLogFilter: setFilter,
-    toggleLogLevel: (level: (typeof levels)[number]) => setLevels(
-      levels.includes(level) ? levels.filter(l => l !== level) : [...levels, level],
-    ),
-    setLogWrap: setWrap,
-    /* Everything below reaches the cluster, and a result that already happened
-       cannot. They exist because the view's shape says they do; `isSnapshot`
-       is what stops any of them being on screen. */
-    setLogFollow: () => {},
-    setLogLive: () => {},
-    setLogTail: () => {},
-    setLogDirection: () => {},
-    setLogSince: () => {},
-    setLogPrevious: () => {},
-    setLogWindow: () => {},
-    setLogSelection: () => {},
-    setLogContainer: () => {},
-    fetchLogs: () => {},
-    openLogExport: () => setDownloadOpen(true),
-    closeLogExport: () => {},
-    closeDetail: goBack,
-    isSnapshot: true,
+    logDetail: `${sums.matches} match${sums.matches === 1 ? '' : 'es'} across ${sums.pods} pods`,
+    requestedAt: at,
+    lineNumbers: logLineNumbers,
+    onExport: () => setDownloadOpen(true),
+    onClose: goBack,
+    title: query,
     /* The page can only show neighbours the search brought back. */
     contextCap: contextLines,
-    title: query,
-  } as unknown as LogSource), [
-    lines, filter, levels, fields, wrap, logLineNumbers, asPod, at, sums, query,
-    addField, removeField, setFilter, setLevels, setWrap, goBack, contextLines,
+    extra: {
+      selectedSeq: selected,
+      onSelectLine: (l) => setSelected(l.seq === selected ? undefined : l.seq),
+      selectedLabel: 'the line you clicked',
+      podColumn: podNames.length > 1,
+      columns: columns.map(key => ({
+        key,
+        value: (l) => valueOf(l, key, readers),
+        onRemove: () => toggleColumn(key),
+      })),
+      railLead: (
+        <HitsByPodRail
+          lines={allLines}
+          pods={podNames}
+          shown={shownPods}
+          onTogglePod={pod => setPods(shownPods.includes(pod) ? shownPods.filter(p => p !== pod) : [pod])}
+          onLogger={logger => addField({ field: 'logger', value: logger, mode: 'include' })}
+        />
+      ),
+      footerNote: 'Fields come from the logger’s own pattern and its MDC — nothing is guessed.',
+    },
+  }), [
+    lines, allLines, filter, levels, fields, wrap, logLineNumbers, asPod, at, sums, query,
+    addField, removeField, clearFields, setFilter, setLevels, setWrap, goBack, contextLines,
+    selected, setSelected, podNames, columns, readers, toggleColumn, shownPods, setPods,
   ]);
 
   if (!groups.length && !searched.length) {
@@ -896,6 +968,7 @@ export function SearchResultsPage() {
             several. Following them all at once, though, is exactly what a
             result over several pods leads to — so that is offered here. */}
         <OpenFullLogs searched={searched} groups={groups} />
+        <OpenWindow line={selectedLine} searched={searched} query={query} />
         <SplitOpenResults searched={searched} />
 
         <ButtonView
@@ -912,6 +985,7 @@ export function SearchResultsPage() {
       </div>
 
       <AiSplit>
+        {follow ? <FollowView /> : (
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
           <div className="flex items-center gap-1 px-4 pt-2 shrink-0"
                style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
@@ -934,16 +1008,45 @@ export function SearchResultsPage() {
                 </button>
               );
             })}
+            {tab === 'logs' && columns.length > 0 && (
+              <span className="flex items-center gap-1.5 ml-3 text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
+                columns
+                {columns.map(c => (
+                  <ChipView key={c} size="xs" rounded label={c} color={ACCENT} onRemove={() => toggleColumn(c)} />
+                ))}
+              </span>
+            )}
           </div>
 
-          <div className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 flex">
             {tab === 'overview' ? <SearchOverview /> : (
-              <LogSourceProvider value={source}>
-                <LogViewer />
-              </LogSourceProvider>
+              <>
+                <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+                  <LogSourceProvider value={source}>
+                    <LogViewer />
+                  </LogSourceProvider>
+                </div>
+                <HitFieldsRail
+                  line={selectedLine}
+                  lines={allLines}
+                  readers={readers}
+                  order={order}
+                  askAbove={askAbove}
+                  columns={columns}
+                  floors={floors}
+                  charts={charts}
+                  views={views}
+                  onFollow={startFollow}
+                  onToggleColumn={toggleColumn}
+                  onFloor={setFloor}
+                  onToggleChart={toggleChart}
+                  onOpenView={openView}
+                />
+              </>
             )}
           </div>
         </div>
+        )}
       </AiSplit>
 
       {downloadOpen && (

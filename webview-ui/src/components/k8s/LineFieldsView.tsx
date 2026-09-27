@@ -21,6 +21,8 @@ import { useMemo, useState } from 'react';
 import { useLogSource } from './log-source';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { fieldsOf, countHere, isExact, ORIGIN_LABEL, type LineField } from './line-fields';
+import { readFields } from './field-readers';
+import { useFieldReaders } from './follow-prefs';
 import { HIDDEN } from './log-payload';
 import type { LogPayload } from './log-payload';
 import type { MarkHit } from './logger-marks';
@@ -37,10 +39,13 @@ export function LineFieldsView({ line, payload, mark }: {
   const { logs, addFieldFilter } = useLogSource();
   const searchEverywhere = useDk8sSearchStore(s => s.searchEverywhere);
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
+  /* Every catalogued pattern and every field named in Settings, not only the marked ones. */
+  const readers = useFieldReaders();
 
   /* The line's own keys. Thread and logger are in the rail beside the log for every line;
      repeating them here made every row look like it had something to show. */
-  const fields = useMemo(() => fieldsOf(line, { payload, mark }).filter(f => f.origin !== 'format'), [line, payload, mark]);
+  const fields = useMemo(() => fieldsOf(line, { payload, mark, read: readFields(line, readers) })
+    .filter(f => f.origin !== 'format'), [line, payload, mark, readers]);
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
     for (const f of fields) out[f.key] = countHere(logs, f);

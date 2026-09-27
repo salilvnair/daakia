@@ -54,12 +54,33 @@ export type BodyMode = 'none' | 'json' | 'raw' | 'form-data' | 'x-www-form-urlen
 
 export type AuthType = 'none' | 'bearer' | 'basic' | 'api-key' | 'oauth2';
 
-export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki' | 'dk8s' | 'dk8s-results' | 'dk8s-logfile' | 'dk8s-payload' | 'dkgh' | 'workspace';
+export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki' | 'dk8s' | 'dk8s-results' | 'dk8s-logfile' | 'dk8s-payload' | 'dk8s-window' | 'dkgh' | 'workspace';
 
 /** A log payload opened in a tab of its own — held whole, so it outlives the log it came from. */
 export interface PayloadView {
   payload: import('../components/k8s/log-payload').LogPayload;
   title: string;
+}
+
+/**
+ * The minutes around a hit, opened as a tab of their own.
+ *
+ * What it is anchored on and which pods to read — enough to read them again
+ * after a restart, since the lines themselves are too many to keep.
+ */
+export interface WindowView {
+  anchor: {
+    pod: string; ts: number; text: string; level?: string;
+    /** What the hit's format read — so the window can offer to narrow by it before a line is back. */
+    message?: string; thread?: string; fields?: Record<string, string>;
+  };
+  pods: { pod: string; namespace: string; context: string; containers: string[] }[];
+  /** Seconds either side of the anchor, or an explicit range. */
+  half: number;
+  from?: number;
+  to?: number;
+  /** The search it was opened from, for the header. */
+  query?: string;
 }
 
 /** A pod whose whole log a `dk8s-logfile` tab downloads and shows. */
@@ -85,6 +106,8 @@ export interface RequestTab {
   aiChatId?: string;
   /** `dk8s-payload` only: the payload it shows. */
   payloadView?: PayloadView;
+  /** `dk8s-window` only: the window it reads. */
+  windowView?: WindowView;
   name: string;
   method: HttpMethod;
   url: string;
@@ -587,6 +610,8 @@ interface TabsState {
   openDk8sLogFileTab: (target: LogFileTarget) => void;
   /** Open a log payload in a tab of its own. */
   openDk8sPayloadTab: (view: PayloadView) => void;
+  /** Open the minutes around a hit in a tab of their own: "Window · 11:00:14". */
+  openDk8sWindowTab: (view: WindowView) => void;
   /**
    * Bring an existing search-result tab back to the front, if there is one.
    *
@@ -743,6 +768,15 @@ export const useTabsStore = create<TabsState>((set, get) => {
       const { activeTabId } = get();
       const tab = createDefaultTab({ type: 'dk8s-payload', name: `${view.payload.shape.toUpperCase()} · ${view.title}`.slice(0, 60).replace(/[\s·]+$/, '') });
       tab.payloadView = view;
+      set(s => ({ tabs: [...s.tabs, tab], activeTabId: tab.id, previousTabId: activeTabId }));
+    },
+
+    openDk8sWindowTab: (view) => {
+      const { activeTabId } = get();
+      const d = new Date(view.anchor.ts);
+      const p = (n: number) => String(n).padStart(2, '0');
+      const tab = createDefaultTab({ type: 'dk8s-window', name: `Window · ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}` });
+      tab.windowView = view;
       set(s => ({ tabs: [...s.tabs, tab], activeTabId: tab.id, previousTabId: activeTabId }));
     },
 

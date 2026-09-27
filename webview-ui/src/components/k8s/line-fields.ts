@@ -26,7 +26,7 @@ import type { LogLine } from '../../store/k8s-store';
 import { isSecretKey, type LogPayload } from './log-payload';
 import type { MarkHit } from './logger-marks';
 
-export type FieldOrigin = 'format' | 'mdc' | 'pattern' | 'payload';
+export type FieldOrigin = 'format' | 'mdc' | 'pattern' | 'custom' | 'payload';
 
 export interface LineField {
   key: string;
@@ -40,6 +40,7 @@ export const ORIGIN_LABEL: Record<FieldOrigin, string> = {
   format: 'the layout pattern',
   mdc: 'the MDC',
   pattern: 'a catalogued pattern',
+  custom: 'a field you named',
   payload: 'the payload',
 };
 
@@ -57,7 +58,12 @@ const MAX_PAYLOAD_FIELDS = 40;
  */
 export function fieldsOf(
   line: LogLine,
-  extra: { payload?: LogPayload; mark?: MarkHit } = {},
+  extra: {
+    payload?: LogPayload;
+    mark?: MarkHit;
+    /** What the field readers found — every catalogued pattern's holes, and the fields named in Settings. */
+    read?: { key: string; value: string; origin: 'pattern' | 'custom' }[];
+  } = {},
 ): LineField[] {
   const out: LineField[] = [];
   const taken = new Set<string>();
@@ -76,7 +82,9 @@ export function fieldsOf(
 
   for (const [key, value] of Object.entries(line.fields ?? {})) push(key, String(value), 'mdc');
 
+  for (const f of extra.read ?? []) if (f.origin === 'custom') push(f.key, f.value, 'custom');
   for (const [key, value] of Object.entries(extra.mark?.fields ?? {})) push(key, value, 'pattern');
+  for (const f of extra.read ?? []) if (f.origin === 'pattern') push(f.key, f.value, 'pattern');
 
   if (extra.payload?.value !== undefined) {
     for (const [key, value] of leaves(extra.payload.value)) push(key, value, 'payload');

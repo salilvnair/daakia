@@ -46,3 +46,20 @@ export function send(text: string): boolean {
 export function hasPlaceholder(text: string): boolean {
   return /\{\w+\}/.test(text);
 }
+
+/**
+ * Open a Daakia AI tab with this text in its composer, for the reader to send.
+ *
+ * From a screen that is not the AI tab — a Follow, a Window — the chat is not
+ * mounted yet when the tab opens, so the text waits for it. Prefilled, never
+ * sent: the reader adds the question, the lines are only what it is about.
+ */
+export function openWith(text: string, title?: string): void {
+  useTabsStore.getState().openDaakiaAiTab(title ? { title } : undefined);
+  let tries = 0;
+  const attempt = () => {
+    if (prefill(text) || ++tries > 40) return;
+    setTimeout(attempt, 100);
+  };
+  setTimeout(attempt, 50);
+}

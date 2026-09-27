@@ -26,7 +26,8 @@
  * wired to nothing, because a Fetch button that cannot fetch is worse than no
  * Fetch button.
  */
-import { createContext, useContext } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
+import type { LogLine } from '../../store/k8s-store';
 import { useK8sStore } from '../../store/k8s-store';
 
 type K8sStore = ReturnType<typeof useK8sStore.getState>;
@@ -105,6 +106,26 @@ export type LogSource = Pick<K8sStore,
   };
   /** A line to bring on screen and mark, for a source with no pod link to carry it. */
   focusSeq?: number;
+  /** What the focused line is called on its row — "you came from here". */
+  focusLabel?: string;
+  /**
+   * The line the reader clicked, on a page that shows beside the log what that
+   * line names. Absent, a click on a row does nothing, as it always has.
+   */
+  selectedSeq?: number;
+  onSelectLine?: (line: LogLine) => void;
+  /** What the selected line is called on its row — "the line you clicked". */
+  selectedLabel?: string;
+  /** Which pod said each line, as a column — for lines that came from several. */
+  podColumn?: boolean;
+  /** The pod column's colour — by replica where replicas must be told apart. */
+  podColor?: (pod: string) => string;
+  /** Fields drawn as columns after the level: "Add as column". */
+  columns?: { key: string; value: (line: LogLine) => string | undefined; onRemove: () => void }[];
+  /** Drawn above the field rail: a page's own summary of these lines. */
+  railLead?: ReactNode;
+  /** One sentence in the footer, where the page has something true to say of every line. */
+  footerNote?: string;
   /**
    * Told when the reader picks "±N lines around" — a paged source filters on
    * the host, and has to bring those surrounding lines back with the hits.
