@@ -17,8 +17,10 @@ const label: React.CSSProperties = {
 };
 
 export function RunSetup({
-  container, containers, onContainer, args, onArgs, onEnter, path, copied, tmpReadOnly, streamed,
+  container, containers, onContainer, args, onArgs, onEnter, path, copied, tmpReadOnly, streamed, size = 'md',
 }: {
+  /** The button's height — see `PyToolbarSize`. */
+  size?: 'sm' | 'md';
   /** Absent where the container is chosen elsewhere — the Scripts screen picks it with the pods. */
   container?: string;
   containers?: string[];
@@ -40,7 +42,7 @@ export function RunSetup({
 
   return (
     <span ref={anchor} className="inline-flex min-w-0">
-      <ButtonView size="md" variant="secondary"
+      <ButtonView size={size} variant="secondary"
                   iconLeft={<LayersIcon size={IconSize.action} />}
                   iconRight={<ChevronDownIcon size={IconSize.action} />}
                   title="Container, arguments, and where the file goes in the pod"

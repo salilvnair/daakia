@@ -47,6 +47,8 @@ export interface AiSettingsOverrides {
   frequencyPenalty?: number;
   presencePenalty?: number;
   seed?: number | null;
+  /** 'off': answer without thinking first — see the host's `AiSettings.thinking`. */
+  thinking?: 'off';
 }
 
 export interface AiCallOptions {

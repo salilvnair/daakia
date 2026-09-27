@@ -13,9 +13,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ButtonView, SelectInputView, TextInputView, SplitPanelView, EmptyStateView, BadgeChipView,
-  PopoverView, CheckboxView, UnderlineTabsView, IconSize,
+  PopoverView, UnderlineTabsView, IconSize,
 } from '@salilvnair/dui';
-import { PlayIcon, BugIcon, PythonIcon, CodeIcon, ChevronRightIcon } from '../../../icons';
+import { PlayIcon, BugIcon, PythonIcon, CodeIcon, ChevronRightIcon, RefreshIcon } from '../../../icons';
 import { postMsg } from '../../../vscode';
 import { useK8sStore } from '../../../store/k8s-store';
 import { useWorkspaceStore } from '../../../store/workspace-store';
@@ -25,19 +25,15 @@ import { ScriptTitle, ScriptSave, ScriptMenu } from './ScriptHeader';
 import { RunSetup } from './RunSetup';
 import { AskPyAi } from './AskPyAi';
 import { usePythonMenu } from './py-menu';
+import { PodPicker, type PickablePod } from './PodPicker';
+import { GhostToggle } from './ghost-toggle';
 import { PyEditor } from './PyEditor';
 import { OutputPane, ConsolePane } from './PyBottomPanel';
 import { PyDebugPanes } from './PyDebugPanes';
 import { DebugBar } from './PythonTab';
 import { newId, podShort, summarizeRuns, compareOutputs, PY_HEADER_HEIGHT } from './py-view';
-import { ACCENT, ACCENT_SOFT, OK, BAD, WARN, MUTED } from '../tone';
+import { ACCENT, ACCENT_SOFT, OK, BAD, WARN, MUTED, AI as AI_ACCENT } from '../tone';
 
-interface PickablePod {
-  name: string;
-  app: string;
-  phase: string;
-  containers?: string[];
-}
 
 export function ScriptsScreen() {
   const contexts = useK8sStore(s => s.contexts);
@@ -75,6 +71,9 @@ export function ScriptsScreen() {
   const [picked, setPicked] = useState<string[]>([]);
   const [container, setContainer] = useState<string>('');
   const [pickerOpen, setPickerOpen] = useState(false);
+  /* Ask AI's side panel: open or not, and the element it renders into. */
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiEl, setAiEl] = useState<HTMLDivElement | null>(null);
   const pickerRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
@@ -217,7 +216,7 @@ export function ScriptsScreen() {
           </ButtonView>
         </span>
         <PopoverView open={pickerOpen} onClose={() => setPickerOpen(false)} anchorEl={pickerRef.current} placement="bottom">
-          <PodChecklist pods={pods} picked={picked} onChange={setPicked} error={podsError} />
+          <PodPicker pods={pods} picked={picked} onChange={setPicked} error={podsError} onDone={() => setPickerOpen(false)} />
         </PopoverView>
         {containers.length > 1 && (
           <>
@@ -227,17 +226,32 @@ export function ScriptsScreen() {
                              onChange={setContainer} />
           </>
         )}
-        <span className="flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-full"
-              style={{ color: 'var(--color-text-secondary)', background: 'var(--color-surface-hover)' }}
+        {/* python3 on the picked pods, and asking again — one control the
+            height and edge of the pickers beside it, not a pill and a link. */}
+        <span className="inline-flex items-stretch overflow-hidden"
+              style={{
+                height: 24, borderRadius: 6, border: '1px solid var(--color-surface-border)',
+                background: `color-mix(in srgb, ${pyTone} 7%, var(--color-surface))`,
+              }}
               title={found.filter(p => p?.verdict && !p.verdict.ok).map(p => p!.verdict!.reason).join('\n') || undefined}>
-          <span style={{ width: 6, height: 6, borderRadius: 6, background: pyTone }} />
-          {pyLabel}
+          <span className="inline-flex items-center gap-1.5 text-[11.5px]"
+                style={{ padding: '0 9px', color: pyTargets.length ? 'var(--color-text-secondary)' : MUTED }}>
+            <PythonIcon size={12} color={pyTargets.length ? pyTone : MUTED} />
+            {pyLabel}
+          </span>
+          <button type="button" disabled={!pyTargets.length || checking} onClick={() => checkAll(true)}
+                  title="Ask every selected pod for its python3 again" aria-label="Check python3 again"
+                  className="inline-flex items-center justify-center border-none cursor-pointer disabled:cursor-default"
+                  style={{
+                    width: 26, background: 'transparent', borderLeft: '1px solid var(--color-surface-border)',
+                    color: pyTargets.length && !checking ? 'var(--color-text-secondary)' : MUTED,
+                    opacity: pyTargets.length ? 1 : 0.5,
+                  }}>
+            <RefreshIcon size={12} className={checking && pyTargets.length ? 'animate-spin' : undefined} />
+          </button>
         </span>
-        <ButtonView size="xs" variant="ghost" disabled={!pyTargets.length || checking} onClick={() => checkAll(true)}
-                    title="Ask every selected pod for its python3 again">
-          Check python3
-        </ButtonView>
         <span className="flex-1" />
+        <GhostToggle size="sm" />
         <ButtonView size="sm" variant="secondary" accentColor="var(--color-success)" color="var(--color-success)"
                     iconLeft={<PlayIcon size={IconSize.action} />}
                     disabled={!script || !pyTargets.length || running}
@@ -258,7 +272,15 @@ export function ScriptsScreen() {
         <ScriptLibrary heading="LIBRARY" width={236}
                        footer="Scripts belong to the workspace and travel with Git Sync, like collections." />
 
-        <div className="flex flex-col flex-1 min-w-0 min-h-0">
+        {/* Ask AI as a side panel, the way a pod's AI analysis sits beside
+            its log: the answer is read next to the script it is about. */}
+        <SplitPanelView
+          direction="horizontal" collapsed={!aiOpen || !script} defaultSplit={64}
+          minFirstPct={35} minSecondPct={22} accentColor={AI_ACCENT}
+          className="flex-1 min-w-0 min-h-0"
+          second={<div ref={setAiEl} className="h-full w-full min-w-0 min-h-0" />}
+          first={
+        <div className="flex flex-col h-full min-w-0 min-h-0">
           {!script ? (
             <div className="flex-1 grid place-items-center">
               <EmptyStateView
@@ -276,19 +298,22 @@ export function ScriptsScreen() {
                   buttons are in the row above, for every script alike. */}
               <div className="flex items-center gap-2 px-3 flex-shrink-0 min-w-0"
                    style={{ height: PY_HEADER_HEIGHT, borderBottom: '1px solid var(--color-surface-border)' }}>
-                <ScriptTitle scriptId={script.id} />
-                <ScriptSave scriptId={script.id} />
+                {/* `sm`: the pods row above is 24px, and this row matches it. */}
+                <ScriptTitle scriptId={script.id} size="sm" />
+                <ScriptSave scriptId={script.id} size="sm" />
                 <span className="flex-1" />
                 <RunSetup
+                  size="sm"
                   args={args}
                   onArgs={(a) => selectedId && setArgs(selectedId, a)}
                   onEnter={onRunAll}
                 />
-                <AskPyAi scriptId={script.id}
+                <AskPyAi scriptId={script.id} size="sm"
+                         dock={{ el: aiEl, open: aiOpen, setOpen: setAiOpen }}
                          target={firstPod && !firstBlocked ? pyTargets[0] : undefined}
                          pythonVersion={pyTargets[0] ? probes[targetKey(pyTargets[0])]?.verdict?.version?.text : undefined}
                          lastRun={shownRun} />
-                <ScriptMenu scriptId={script.id} />
+                <ScriptMenu scriptId={script.id} size="sm" />
               </div>
               {debugLive && (
                 <div className="flex items-center gap-2 px-3 flex-shrink-0"
@@ -350,6 +375,8 @@ export function ScriptsScreen() {
             </>
           )}
         </div>
+          }
+        />
 
         {myDebug && (
           <div className="flex flex-col flex-shrink-0 min-h-0 overflow-auto"
@@ -369,46 +396,6 @@ export function ScriptsScreen() {
 
 function countWord(n: number): string {
   return ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'][n] ?? String(n);
-}
-
-/** Which pods: grouped by app, running first — a script against a pod that is not up fails at the exec. */
-function PodChecklist({ pods, picked, onChange, error }: {
-  pods: PickablePod[]; picked: string[]; onChange: (p: string[]) => void; error?: string;
-}) {
-  const running = pods.filter(p => p.phase === 'Running');
-  const toggle = (name: string) => onChange(picked.includes(name) ? picked.filter(n => n !== name) : [...picked, name]);
-  const apps = [...new Set(running.map(p => p.app))];
-  return (
-    <div className="flex flex-col gap-1 p-2.5 overflow-auto" style={{ maxHeight: 360, minWidth: 300 }}>
-      {error && <span className="text-[11px]" style={{ color: BAD }}>{error}</span>}
-      {!error && running.length === 0 && (
-        <span className="text-[11px]" style={{ color: MUTED }}>No running pods in this namespace.</span>
-      )}
-      {apps.map(app => {
-        const mine = running.filter(p => p.app === app);
-        const all = mine.every(p => picked.includes(p.name));
-        return (
-          <div key={app} className="flex flex-col">
-            <div className="flex items-center gap-2 py-1"
-                 style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-              <CheckboxView size="xs" checked={all} indeterminate={!all && mine.some(p => picked.includes(p.name))}
-                            onChange={() => onChange(all
-                              ? picked.filter(n => !mine.some(p => p.name === n))
-                              : [...new Set([...picked, ...mine.map(p => p.name)])])}
-                            label={app} />
-              <span className="text-[10.5px]" style={{ color: MUTED }}>{mine.length}</span>
-            </div>
-            {mine.map(p => (
-              <div key={p.name} className="pl-5 py-0.5 rounded"
-                   style={{ background: picked.includes(p.name) ? ACCENT_SOFT : undefined }}>
-                <CheckboxView size="xs" checked={picked.includes(p.name)} onChange={() => toggle(p.name)} label={p.name} />
-              </div>
-            ))}
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 /**

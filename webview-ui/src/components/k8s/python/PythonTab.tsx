@@ -32,6 +32,7 @@ import { ScriptLibrary } from './ScriptLibrary';
 import { ScriptTitle, ScriptSave, ScriptMenu } from './ScriptHeader';
 import { RunSetup } from './RunSetup';
 import { AskPyAi } from './AskPyAi';
+import { GhostToggle } from './ghost-toggle';
 import { usePythonMenu } from './py-menu';
 import { PyEditor } from './PyEditor';
 import { PyBottomPanel, type BottomTab } from './PyBottomPanel';
@@ -205,6 +206,7 @@ export function PythonTab() {
               )}
               <AskPyAi scriptId={script?.id} target={blocked ? undefined : target}
                        pythonVersion={verdict?.version?.text} lastRun={shown} />
+              <GhostToggle />
               <ButtonView
                 size="md" variant="secondary"
                 iconLeft={<BugIcon size={IconSize.action} color={WARN} />}

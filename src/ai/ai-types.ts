@@ -88,6 +88,13 @@ export interface AiSettings {
   stopSequences: string[];      // optional stop tokens
   responseFormat: 'text' | 'json_object'; // default 'text'
   seed?: number;                // optional deterministic seed
+  /**
+   * 'off': answer without thinking first. For calls that must be quick and
+   * short — ghost text. A thinking model (DeepSeek's `deepseek-flash`) spends
+   * a small `maxTokens` on its reasoning and comes back with no text at all.
+   * Sent only to providers that take it; others ignore it.
+   */
+  thinking?: 'off';
 }
 
 export const DEFAULT_AI_SETTINGS: AiSettings = {

@@ -20,6 +20,10 @@ import { copyText } from '../../utils/clipboard';
 
 export type { ContextMenuItem };
 
+/** Wide enough for "Change All Occurrences" beside its Ctrl+F2 — `md` cut
+    the longer entries to "Change All …". */
+const MENU_WIDTH = 272;
+
 export const SEP = (id: string): ContextMenuItem => ({ id, label: '', separator: true });
 
 /** Copy what is selected, when something is. */
@@ -99,7 +103,7 @@ export function useSurfaceMenu(build: (target: HTMLElement, selection: string) =
   }, [build, open]);
 
   const element = menu ? (
-    <ContextMenuView open anchorEl={null} position={{ x: menu.x, y: menu.y }} width="md"
+    <ContextMenuView open anchorEl={null} position={{ x: menu.x, y: menu.y }} width={MENU_WIDTH}
                      onClose={() => setMenu(null)} items={menu.items} />
   ) : null;
 

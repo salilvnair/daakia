@@ -98,6 +98,8 @@ function buildOpenAiRequest(payload: AiRequestPayload, baseUrl: string, endpoint
   if (payload.settings.stopSequences.length) body.stop = payload.settings.stopSequences;
   if (payload.settings.responseFormat === 'json_object') body.response_format = { type: 'json_object' };
   if (payload.settings.seed != null) body.seed = payload.settings.seed;
+  /* DeepSeek's switch for its thinking mode; see `AiSettings.thinking`. */
+  if (payload.settings.thinking === 'off' && payload.provider === 'deepseek') body.thinking = { type: 'disabled' };
   if (payload.tools?.length) {
     body.tools = payload.tools.map(t => ({ type: t.type, function: t.function }));
   }

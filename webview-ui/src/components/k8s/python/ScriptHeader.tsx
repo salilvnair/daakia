@@ -13,7 +13,7 @@
  */
 import { useRef, useState } from 'react';
 import {
-  ButtonView, IconButtonView, TextInputView, PopoverView, IconSize,
+  ButtonView, IconButtonView, TextInputView, PopoverView, ContextMenuView, IconSize,
 } from '@salilvnair/dui';
 import {
   TrashIcon, PythonIcon, MoreHorizontalIcon, SaveIcon, SaveCheckIcon, CopyIcon,
@@ -27,7 +27,15 @@ const label: React.CSSProperties = {
 };
 
 /** The name, its folder, and the unsaved dot — click to rename or refile. */
-export function ScriptTitle({ scriptId }: { scriptId: string }) {
+/**
+ * The toolbar's control height. `md` where the row stands alone (a pod's
+ * Python tab); `sm` on the Scripts screen, where it sits under the pods row
+ * and matches its pickers and Run on pods.
+ */
+export type PyToolbarSize = 'sm' | 'md';
+const CONTROL_H: Record<PyToolbarSize, number> = { sm: 24, md: 28 };
+
+export function ScriptTitle({ scriptId, size = 'md' }: { scriptId: string; size?: PyToolbarSize }) {
   const script = usePyStore(s => s.scripts.find(x => x.id === scriptId));
   const draft = usePyStore(s => s.drafts[scriptId]);
   const dirty = usePyStore(s => s.isDirty(scriptId));
@@ -45,7 +53,7 @@ export function ScriptTitle({ scriptId }: { scriptId: string }) {
       <button type="button" onClick={() => setOpen(o => !o)}
               title="Rename, or file it in a folder"
               className="py-title inline-flex items-center gap-2 min-w-0 px-2 rounded-md cursor-pointer border-none bg-transparent"
-              style={{ height: 28 }}>
+              style={{ height: CONTROL_H[size] }}>
         <PythonIcon size={IconSize.action} color="var(--color-success)" />
         <span className="font-mono text-[12.5px] truncate" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
           {name}
@@ -83,13 +91,13 @@ export function ScriptTitle({ scriptId }: { scriptId: string }) {
  * Coloured while there is something to save, and a green check once there is
  * not, so the state reads without a dot to interpret. Ctrl+S does the same.
  */
-export function ScriptSave({ scriptId }: { scriptId: string }) {
+export function ScriptSave({ scriptId, size = 'md' }: { scriptId: string; size?: PyToolbarSize }) {
   const dirty = usePyStore(s => s.isDirty(scriptId));
   const save = usePyStore(s => s.save);
   const exists = usePyStore(s => s.scripts.some(x => x.id === scriptId));
   if (!exists) return null;
   return (
-    <ButtonView size="md" variant="secondary"
+    <ButtonView size={size} variant="secondary"
                 accentColor={dirty ? SAVE : SAVED}
                 color={dirty ? SAVE : SAVED}
                 disabled={!dirty}
@@ -105,7 +113,7 @@ const SAVE = 'var(--color-info)';
 const SAVED = 'var(--color-success)';
 
 /** Save, Save as, Delete — behind one ⋯, since each is done once in a while. */
-export function ScriptMenu({ scriptId }: { scriptId: string }) {
+export function ScriptMenu({ scriptId, size = 'md' }: { scriptId: string; size?: PyToolbarSize }) {
   const script = usePyStore(s => s.scripts.find(x => x.id === scriptId));
   const draft = usePyStore(s => s.drafts[scriptId]);
   const dirty = usePyStore(s => s.isDirty(scriptId));
@@ -120,36 +128,43 @@ export function ScriptMenu({ scriptId }: { scriptId: string }) {
   if (!script) return null;
   const name = draft?.name ?? script.name;
 
-  const Item = ({ icon, text, hint, onClick, danger, disabled }: {
-    icon: React.ReactNode; text: string; hint?: string; onClick: () => void; danger?: boolean; disabled?: boolean;
-  }) => (
-    <button type="button" disabled={disabled} onClick={onClick}
-            className="py-menu-item flex items-center gap-2.5 w-full px-3 text-left text-[12px] border-none bg-transparent cursor-pointer rounded-md"
-            style={{ height: 30, color: danger ? 'var(--color-error)' : 'var(--color-text-primary)', opacity: disabled ? 0.45 : 1 }}>
-      <span className="inline-flex" style={{ color: danger ? 'var(--color-error)' : MUTED }}>{icon}</span>
-      <span className="flex-1">{text}</span>
-      {hint && <span className="text-[10.5px]" style={{ color: MUTED }}>{hint}</span>}
-    </button>
-  );
-
   return (
     <span ref={anchor} className="inline-flex">
-      <IconButtonView size="md" icon={<MoreHorizontalIcon size={IconSize.action} />}
+      <IconButtonView size={size} icon={<MoreHorizontalIcon size={IconSize.action} />}
                       tooltip="Save, save as, delete" aria-label="Script actions"
                       onClick={() => { setAsName(undefined); setOpen(o => !o); }} />
-      <PopoverView open={open} onClose={() => setOpen(false)} anchorEl={anchor.current} placement="bottom" borderRadius={10}>
-        <div className="flex flex-col p-1.5" style={{ width: 240 }}>
-          {asName === undefined ? (
-            <>
-              <Item icon={<SaveIcon size={IconSize.action} />} text="Save" hint="Ctrl+S" disabled={!dirty}
-                    onClick={() => { save(scriptId); setOpen(false); }} />
-              <Item icon={<CopyIcon size={IconSize.action} />} text="Save as…"
-                    onClick={() => setAsName(name.replace(/\.py$/, '-copy.py'))} />
-              <div className="my-1" style={{ height: 1, background: 'var(--color-surface-border)' }} />
-              <Item icon={<TrashIcon size={IconSize.action} />} text="Delete" danger
-                    onClick={() => { setOpen(false); setConfirm(true); }} />
-            </>
-          ) : (
+      {/* dui's own menu — the same one as every other ⋯ and right-click in
+          Daakia — rather than a hand-made list in a popover. */}
+      <ContextMenuView
+        anchorEl={anchor.current}
+        open={open && asName === undefined}
+        onClose={() => setOpen(false)}
+        align="right"
+        width="md"
+        items={[
+          {
+            id: 'save', label: 'Save', shortcut: 'Ctrl+S', disabled: !dirty,
+            icon: <SaveIcon size={IconSize.action} />, iconColor: 'var(--color-info)',
+            onClick: () => { save(scriptId); setOpen(false); },
+          },
+          {
+            id: 'save-as', label: 'Save as…',
+            icon: <CopyIcon size={IconSize.action} />, iconColor: 'var(--color-ctx-duplicate)',
+            onClick: () => setAsName(name.replace(/\.py$/, '-copy.py')),
+          },
+          { id: 'sep', label: '', separator: true },
+          {
+            id: 'delete', label: 'Delete', danger: true,
+            icon: <TrashIcon size={IconSize.action} />,
+            onClick: () => { setOpen(false); setConfirm(true); },
+          },
+        ]}
+      />
+      {/* Save as needs a name, so it is a small form of its own. */}
+      <PopoverView open={open && asName !== undefined} onClose={() => { setOpen(false); setAsName(undefined); }}
+                   anchorEl={anchor.current} placement="bottom" borderRadius={10}>
+        <div className="flex flex-col p-1.5" style={{ width: 260 }}>
+          {asName !== undefined && (
             <div className="flex flex-col gap-2 p-1.5">
               <span style={label}>save a copy as</span>
               <TextInputView autoFocus size="md" value={asName} aria-label="New script name"
@@ -170,7 +185,6 @@ export function ScriptMenu({ scriptId }: { scriptId: string }) {
           )}
         </div>
       </PopoverView>
-      <style>{'.py-menu-item:not(:disabled):hover { background: var(--color-surface-hover) !important; }'}</style>
 
       {confirm && (
         <ConfirmDialog

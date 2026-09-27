@@ -15,8 +15,9 @@
  * change, where Ctrl+Z still has the old one.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ButtonView, PopoverView, MarkdownView, IconSize } from '@salilvnair/dui';
-import { SparkleIcon, CopyIcon, CheckIcon, PythonIcon } from '../../../icons';
+import { SparkleIcon, CopyIcon, CheckIcon, PythonIcon, CloseIcon } from '../../../icons';
 import { ColoredCode } from './ColoredCode';
 import { usePyStore, type PyRun, type PyTarget } from '../../../store/dk8s-python-store';
 import { usePyIntelStore } from '../../../store/dk8s-py-intel-store';
@@ -75,7 +76,17 @@ export function lineChange(before: string, after: string): { added: number; remo
   return { added, removed };
 }
 
-export function AskPyAi({ scriptId, target, pythonVersion, lastRun }: {
+/** The popover's width; its hidden anchor is as wide, so it opens leftward from the button. */
+const POP_W = 520;
+
+export function AskPyAi({ scriptId, target, pythonVersion, lastRun, size = 'md', dock }: {
+  /** The button's height — see `PyToolbarSize`. */
+  size?: 'sm' | 'md';
+  /**
+   * A side panel to answer in instead of a popover — the Scripts screen's.
+   * The button opens and closes it, lit while it is open.
+   */
+  dock?: { el: HTMLElement | null; open: boolean; setOpen: (open: boolean) => void };
   scriptId?: string;
   target?: PyTarget;
   pythonVersion?: string;
@@ -86,7 +97,14 @@ export function AskPyAi({ scriptId, target, pythonVersion, lastRun }: {
   const editSource = usePyStore(s => s.editSource);
   const intel = usePyIntelStore(s => (scriptId ? s.byScript[scriptId] : undefined));
   const resolve = useAiPromptTemplatesStore(s => s.resolve);
-  const [open, setOpen] = useState(false);
+  const [popOpen, setPopOpen] = useState(false);
+  const open = dock ? dock.open : popOpen;
+  const setOpen = (next: boolean | ((o: boolean) => boolean)) => {
+    const v = typeof next === 'function' ? next(open) : next;
+    if (dock) dock.setOpen(v); else setPopOpen(v);
+  };
+  const setOpenRef = useRef(setOpen);
+  setOpenRef.current = setOpen;
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -94,6 +112,7 @@ export function AskPyAi({ scriptId, target, pythonVersion, lastRun }: {
   const [copied, setCopied] = useState(false);
   const pending = useRef<AiOnce | null>(null);
   const anchor = useRef<HTMLSpanElement>(null);
+  const popAnchor = useRef<HTMLSpanElement>(null);
 
   const source = draft?.source ?? script?.source ?? '';
   const name = draft?.name ?? script?.name ?? 'script.py';
@@ -149,7 +168,7 @@ export function AskPyAi({ scriptId, target, pythonVersion, lastRun }: {
   useEffect(() => {
     const onAsk = (e: Event) => {
       const q = String((e as CustomEvent).detail?.question ?? '');
-      setOpen(true);
+      setOpenRef.current(true);
       setQuestion(q);
       if (q && (e as CustomEvent).detail?.send) askRef.current(q);
     };
@@ -159,30 +178,32 @@ export function AskPyAi({ scriptId, target, pythonVersion, lastRun }: {
 
   const change = result?.code ? lineChange(source, result.code) : undefined;
 
-  return (
-    <span ref={anchor} className="inline-flex">
-      <ButtonView size="md" variant="secondary" accentColor={AI_ACCENT} color={AI_ACCENT}
-                  iconLeft={<SparkleIcon size={IconSize.action} color={AI_ACCENT} />}
-                  disabled={!scriptId}
-                  title="Ask AI about this script — fix it, change it, or explain it"
-                  onClick={() => setOpen(o => !o)}>
-        Ask AI
-      </ButtonView>
-      <PopoverView open={open} onClose={() => setOpen(false)} anchorEl={anchor.current} placement="bottom" borderRadius={12}>
-        <div className="flex flex-col" style={{ width: 520, maxHeight: 620 }}>
-          <div className="flex items-center gap-2 px-3.5 py-2.5"
+  const docked = !!dock;
+  const body = (
+        <div className="flex flex-col"
+             style={docked
+               ? { width: '100%', height: '100%', minHeight: 0, background: 'var(--color-surface-secondary, var(--color-surface))' }
+               : { width: POP_W, maxHeight: 620 }}>
+          <div className="flex items-center gap-2 px-3.5 py-2.5 flex-shrink-0"
                style={{
                  borderBottom: '1px solid var(--color-surface-border)',
                  background: `linear-gradient(135deg, color-mix(in srgb, ${AI_ACCENT} 18%, transparent), transparent 70%)`,
                }}>
             <SparkleIcon size={IconSize.action} color={AI_ACCENT} />
-            <span className="text-[12.5px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>Ask AI about {name}</span>
-            <span className="text-[11px] ml-auto" style={{ color: MUTED }}>
+            <span className="text-[12.5px] font-semibold truncate" style={{ color: 'var(--color-text-primary)' }}>Ask AI about {name}</span>
+            <span className="text-[11px] ml-auto flex-shrink-0" style={{ color: MUTED }}>
               {pythonVersion ? `python ${pythonVersion}` : 'python'}{target?.container ? ` · ${target.container}` : ''}
             </span>
+            {docked && (
+              <button type="button" onClick={() => setOpen(false)} aria-label="Close Ask AI" title="Close"
+                      className="inline-flex items-center justify-center border-none bg-transparent cursor-pointer rounded"
+                      style={{ width: 22, height: 22, color: MUTED }}>
+                <CloseIcon size={IconSize.action} />
+              </button>
+            )}
           </div>
 
-          <div className="flex flex-col gap-2 p-3.5">
+          <div className="flex flex-col gap-2 p-3.5 flex-shrink-0">
             <textarea
               autoFocus
               value={question}
@@ -219,7 +240,8 @@ export function AskPyAi({ scriptId, target, pythonVersion, lastRun }: {
           </div>
 
           {(busy || error || result) && (
-            <div className="flex flex-col gap-2 px-3.5 pb-3.5 overflow-auto" style={{ borderTop: '1px solid var(--color-surface-border)' }}>
+            <div className="flex flex-col gap-2 px-3.5 pb-3.5 overflow-auto min-h-0"
+                 style={{ borderTop: '1px solid var(--color-surface-border)', ...(docked ? { flex: 1 } : {}) }}>
               <div className="pt-2.5" style={label}>answer</div>
               {busy && <span className="text-[12px]" style={{ color: MUTED }}>Thinking about {name}…</span>}
               {error && <span className="text-[12px]" style={{ color: BAD }}>{error}</span>}
@@ -253,20 +275,54 @@ export function AskPyAi({ scriptId, target, pythonVersion, lastRun }: {
                         </ButtonView>
                         {(change.added > 0 || change.removed > 0) && (
                           <ButtonView size="xs" variant="secondary" accentColor="var(--color-success)" color="var(--color-success)"
-                                      onClick={() => { if (scriptId) editSource(scriptId, result.code); setOpen(false); }}>
+                                      onClick={() => { if (scriptId) editSource(scriptId, result.code); if (!docked) setOpen(false); }}>
                             Apply to script
                           </ButtonView>
                         )}
                       </div>
-                      <ColoredCode code={result.code} maxHeight={240} />
+                      <ColoredCode code={result.code} maxHeight={docked ? 520 : 240} />
                     </div>
                   )}
                 </>
               )}
             </div>
           )}
+          {docked && !busy && !error && !result && (
+            <div className="flex-1 grid place-items-center px-6 text-center text-[11.5px] leading-relaxed" style={{ color: MUTED }}>
+              Ask about the script beside it — fix the last error, change what it does, or explain a line.
+              Right-click a line or a selection in the editor to ask about just that.
+            </div>
+          )}
         </div>
-      </PopoverView>
+  );
+
+  return (
+    <span ref={anchor} className="inline-flex relative">
+      <ButtonView size={size} variant="secondary" accentColor={AI_ACCENT} color={AI_ACCENT}
+                  aria-pressed={docked ? open : undefined}
+                  iconLeft={<SparkleIcon size={IconSize.action} color={AI_ACCENT} />}
+                  disabled={!scriptId}
+                  title={docked
+                    ? open ? 'Hide the Ask AI panel' : 'Ask AI about this script, in a panel beside it'
+                    : 'Ask AI about this script — fix it, change it, or explain it'}
+                  onClick={() => setOpen(o => !o)}
+                  style={docked && open
+                    ? { background: `color-mix(in srgb, ${AI_ACCENT} 18%, transparent)`, borderColor: `color-mix(in srgb, ${AI_ACCENT} 50%, transparent)` }
+                    : undefined}>
+        Ask AI
+      </ButtonView>
+      {/* The popover opens at its anchor's left edge; an invisible anchor as
+          wide as the popover and flush with the button's right edge makes it
+          open leftward, under the button, instead of off the window's edge. */}
+      <span ref={popAnchor} aria-hidden className="absolute pointer-events-none"
+            style={{ right: 0, top: 0, bottom: 0, width: POP_W, visibility: 'hidden' }} />
+      {docked
+        ? (open && dock.el ? createPortal(body, dock.el) : null)
+        : (
+          <PopoverView open={open} onClose={() => setOpen(false)} anchorEl={popAnchor.current} placement="bottom" borderRadius={12}>
+            {body}
+          </PopoverView>
+        )}
     </span>
   );
 }

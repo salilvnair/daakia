@@ -15,7 +15,8 @@
  *   - AI ghost text, the grey suggestion Tab accepts — and after a comment
  *     line, the code the comment asks for, offered on the next line.
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { EditorOptions } from '@salilvnair/dui';
 import { CodeEditor } from '../../shared/editors/CodeEditor';
 import { usePyStore, evaluateInDebugger, type PyTarget } from '../../../store/dk8s-python-store';
 import {
@@ -23,6 +24,7 @@ import {
 } from '../../../store/dk8s-py-intel-store';
 import { useAiPromptTemplatesStore } from '../../../store/prompt-template';
 import { askOnce } from '../../../services/ai/ai-once';
+import { usePyGhost, ghostOn } from './ghost-toggle';
 import { inlineValues, hoverExprAt, ghostPrompt, cleanGhost } from './py-view';
 
 /* The selected text of each open script's editor — what Ask AI means by "these lines". */
@@ -35,6 +37,18 @@ export function selectionOf(scriptId: string): string {
 const CHECK_AFTER_MS = 900;
 /** And before the model is asked for ghost text — shorter, it is what the reader is waiting on. */
 const GHOST_AFTER_MS = 450;
+
+/**
+ * Passed through dui, which re-applies its options on every keystroke — set
+ * with `updateOptions` at mount they were undone by the next character.
+ *
+ * Quick suggestions only in code, and only for what the container knows (no
+ * list of every word in the file): an open suggest list hides ghost text, so
+ * a list on every word typed meant the AI's suggestion almost never showed.
+ */
+const PY_OPTIONS = {
+  quickSuggestions: { other: 'on', comments: 'off', strings: 'off' },
+} as unknown as EditorOptions;
 
 export function PyEditor({ scriptId, readOnly, reveal, target, pythonVersion }: {
   scriptId: string;
@@ -67,7 +81,9 @@ export function PyEditor({ scriptId, readOnly, reveal, target, pythonVersion }: 
   /* The providers are registered once per editor and read these at call time. */
   const live = useRef({ scriptId, target, pythonVersion });
   live.current = { scriptId, target, pythonVersion };
-  useEffect(() => () => { for (const d of disposers.current) d.dispose(); disposers.current = []; }, []);
+  /* Bumped when Monaco hands over an editor; the effect below registers the
+     providers against it. */
+  const [mounted, setMounted] = useState(0);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -125,12 +141,15 @@ export function PyEditor({ scriptId, readOnly, reveal, target, pythonVersion }: 
   const resolveRef = useRef(templates);
   resolveRef.current = templates;
 
-  const onMount = (editor: any, monaco: any) => {
-    editorRef.current = editor;
-    monacoRef.current = monaco;
-    /* Monaco's own right-click menu off: the tab's dui menu (py-menu.tsx)
-       answers instead, with Find, Replace and the rest in it. */
-    editor.updateOptions({ contextmenu: false });
+  /*
+    The hover, completion and ghost-text providers, registered from an effect
+    and not from Monaco's mount callback. Registered at mount and disposed by
+    an unmount effect, they were lost for good whenever React ran that
+    cleanup without a new mount — every hot reload, and StrictMode's second
+    pass — and ghost text silently stopped. An effect's cleanup is always
+    followed by its setup again, so here they come back.
+  */
+  const register = (editor: any, monaco: any) => {
     decoRef.current = editor.createDecorationsCollection([]);
     selections.set(live.current.scriptId, () => {
       const sel = editor.getSelection();
@@ -139,7 +158,17 @@ export function PyEditor({ scriptId, readOnly, reveal, target, pythonVersion }: 
     });
     for (const d of disposers.current) d.dispose();
     disposers.current = [];
-    editor.updateOptions({ inlineSuggest: { enabled: true, mode: 'subwordSmart' }, quickSuggestions: { other: true, comments: false, strings: false } });
+    /* Not among the options dui re-applies, so set once here they stay set. */
+    editor.updateOptions({
+      inlineSuggest: {
+        enabled: true, showToolbar: 'onHover',
+        /* Monaco hides ghost text while the suggest list is open; with the
+           list opening as names are typed, the AI's line almost never showed.
+           Both at once, as in VS Code with Copilot. */
+        experimental: { showOnSuggestConflict: 'always' },
+      },
+      wordBasedSuggestions: 'off',
+    });
 
     const ours = (model: any) => model === editor.getModel();
     const intelNow = () => {
@@ -241,7 +270,7 @@ export function PyEditor({ scriptId, readOnly, reveal, target, pythonVersion }: 
     let lastAsk: { key: string; text: Promise<string> } | undefined;
     disposers.current.push(monaco.languages.registerInlineCompletionsProvider('python', {
       provideInlineCompletions: async (model: any, position: any, _ctx: any, token: any) => {
-        if (!ours(model) || readOnly) return { items: [] };
+        if (!ours(model) || readOnly || !ghostOn()) return { items: [] };
         const d = usePyStore.getState().debug;
         if (d && !d.ended && d.state.status === 'paused') return { items: [] };
         const line = model.getLineContent(position.lineNumber);
@@ -269,7 +298,9 @@ export function PyEditor({ scriptId, readOnly, reveal, target, pythonVersion }: 
               suffix: prompt.suffix || '(end of file)',
               imports: i ? Object.entries(i.aliases).map(([a, m]) => (a === m ? m : `${a} = ${m}`)).join(', ') || 'none' : 'unknown',
             }),
-            settings: { temperature: 0.1, maxTokens: 300, responseFormat: 'text' },
+            /* No thinking: a thinking model spent all 300 tokens reasoning
+               and answered with nothing, so no ghost text ever showed. */
+            settings: { temperature: 0.1, maxTokens: 300, responseFormat: 'text', thinking: 'off' },
           }, 15_000);
           token.onCancellationRequested?.(() => ask.cancel());
           lastAsk = { key, text: ask.text };
@@ -293,17 +324,37 @@ export function PyEditor({ scriptId, readOnly, reveal, target, pythonVersion }: 
       freeInlineCompletions: () => {},
     }));
 
+    /* Switched off: the suggestion on screen goes with it. */
+    const unsub = usePyGhost.subscribe(s => { if (!s.on) editor.trigger('ghost', 'editor.action.inlineSuggest.hide', {}); });
+    disposers.current.push({ dispose: unsub });
+
     /* Enter after a comment: ask straight away for the code it describes. */
     disposers.current.push(editor.onDidChangeModelContent((e: any) => {
       if (!e.changes?.some((c: any) => c.text.includes('\n'))) return;
       const pos = editor.getPosition();
       const model = editor.getModel();
       if (!pos || !model || pos.lineNumber < 2) return;
-      if (/^\s*#/.test(model.getLineContent(pos.lineNumber - 1))) {
+      if (ghostOn() && /^\s*#/.test(model.getLineContent(pos.lineNumber - 1))) {
         setTimeout(() => editor.trigger('comment', 'editor.action.inlineSuggest.trigger', {}), 0);
       }
     }));
   };
+
+  const onMount = (editor: any, monaco: any) => {
+    editorRef.current = editor;
+    monacoRef.current = monaco;
+    setMounted(n => n + 1);
+  };
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    if (!editor || !monaco) return;
+    register(editor, monaco);
+    return () => { for (const d of disposers.current) d.dispose(); disposers.current = []; };
+    // Once per editor: `register` reads what changes through `live`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted]);
 
   return (
     <CodeEditor
@@ -318,6 +369,10 @@ export function PyEditor({ scriptId, readOnly, reveal, target, pythonVersion }: 
       pausedLine={pausedLine}
       onToggleBreakpoint={(line) => toggle(scriptId, line)}
       onEditorMount={onMount}
+      /* Monaco's own right-click menu off: the tab's dui menu (py-menu.tsx)
+         answers instead, with Find, Replace and the rest in it. */
+      contextMenuMode="none"
+      editorOptions={PY_OPTIONS}
     />
   );
 }

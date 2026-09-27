@@ -24,6 +24,7 @@ import { usePyStore } from '../../../store/dk8s-python-store';
 import { getMonacoEditorInstance } from '../../../services/editor/monaco-instance';
 import { copyText } from '../../../utils/clipboard';
 import { askPyAi } from './AskPyAi';
+import { usePyGhost, ghostAllowed, openGhostSettings } from './ghost-toggle';
 import { AI as AI_ACCENT } from '../tone';
 
 const RUN = 'var(--color-success)';
@@ -158,6 +159,22 @@ export function usePythonMenu({ scriptId, onRun, onDebug, canRun, canDebug, outp
           onClick: () => askPyAi(text ? `About these lines:\n${text}\n\n` : ''),
         },
         ...(oneLine ? [{ id: 'watch-sel', label: `Add ${text.trim()} to Watch`, icon: <EyeIcon size={14} />, iconColor: WARN, onClick: () => st.addWatch(text.trim()) }] : []),
+        SEP('ed-sep-4'),
+        (() => {
+          if (!ghostAllowed()) {
+            return {
+              id: 'ghost', label: 'AI suggestions are off in Settings…', icon: <SparkleIcon size={14} />,
+              iconColor: 'var(--color-text-muted)', onClick: openGhostSettings,
+            };
+          }
+          const on = usePyGhost.getState().on;
+          return {
+            id: 'ghost', label: on ? 'Turn AI suggestions off' : 'Turn AI suggestions on',
+            description: on ? 'Grey code as you type; Tab accepts' : undefined,
+            icon: <SparkleIcon size={14} />, iconColor: on ? 'var(--color-text-muted)' : AI_ACCENT,
+            onClick: () => usePyGhost.getState().toggle(),
+          };
+        })(),
       ];
     }
 
