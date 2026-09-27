@@ -84,6 +84,9 @@ import {
   handleDk8sCaptureStart, handleDk8sCaptureRead, handleDk8sCaptureFilter, handleDk8sCaptureLocate, handleDk8sCaptureClose,
 } from '../src/panel/main/handlers/k8s-handler';
 import {
+  handleDk8sReadProject, handleDk8sReadPodLoggers, handleDk8sAskLog, handleDk8sExportCatalogue,
+} from '../src/panel/main/handlers/loggers-handler';
+import {
   handleDk8sPodMounts, handleDk8sPvList, handleDk8sPvSearch, handleDk8sPodPicker,
 } from '../src/panel/main/handlers/pv-in-pod-handler';
 import { handleDk8sHeapInvestigate } from '../src/panel/main/handlers/heap-investigate';
@@ -533,6 +536,20 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
        without a path is a scan that cannot be run — say so rather than hang. */
     case 'dk8s:scanLoggers':
       void handleDk8sScanLoggers(msg, post);
+      break;
+    /* The Loggers tab — the same four MainPanel routes. A folder read without
+       a path gets the shim's folder, so type the path here. */
+    case 'dk8s:readProject':
+      void handleDk8sReadProject(msg, post);
+      break;
+    case 'dk8s:readPodLoggers':
+      void handleDk8sReadPodLoggers(msg, post);
+      break;
+    case 'dk8s:askLog':
+      void handleDk8sAskLog(msg, post);
+      break;
+    case 'dk8s:exportCatalogue':
+      void handleDk8sExportCatalogue(msg, post);
       break;
     case 'dk8s:captureStart':
       void handleDk8sCaptureStart(msg, post);

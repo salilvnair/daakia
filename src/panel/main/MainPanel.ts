@@ -106,6 +106,9 @@ import { handleDebugMessage } from './handlers/debug-handler';
 import { noteProtocolSend, auditProtocolResponse } from '../../services/protocol-audit';
 import { noteSessionConnect, auditSessionMessage, flushOpenSessions } from '../../services/session-audit';
 import {
+  handleDk8sReadProject, handleDk8sReadPodLoggers, handleDk8sAskLog, handleDk8sExportCatalogue,
+} from './handlers/loggers-handler';
+import {
   handleDk8sProbe, handleDk8sCommands, handleDk8sSetClusterTimeout, handleDk8sUseContext, handleDk8sSetDefaultContext, handleDk8sNamespaces,
   handleDk8sSetNamespace, handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSetLogLineNumbers, handleDk8sSearchLogs, handleDk8sCancelSearch, handleDk8sCancelExport,
   handleDk8sLoadPv, handleDk8sSavePv, handleDk8sOpenLogFile, handleDk8sProbeAccess,
@@ -672,6 +675,20 @@ export class MainPanel {
         break;
       case 'dk8s:scanLoggers':
         void handleDk8sScanLoggers(msg, this._post);
+        break;
+      // The Loggers tab: Add loggers' project and pod sources, Ask the log,
+      // and Export catalogue. See loggers-handler.ts.
+      case 'dk8s:readProject':
+        void handleDk8sReadProject(msg, this._post);
+        break;
+      case 'dk8s:readPodLoggers':
+        void handleDk8sReadPodLoggers(msg, this._post);
+        break;
+      case 'dk8s:askLog':
+        void handleDk8sAskLog(msg, this._post);
+        break;
+      case 'dk8s:exportCatalogue':
+        void handleDk8sExportCatalogue(msg, this._post);
         break;
       case 'dk8s:captureStart':
         void handleDk8sCaptureStart(msg, this._post);

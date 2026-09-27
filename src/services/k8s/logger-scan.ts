@@ -25,6 +25,7 @@
  */
 import { promises as fs } from 'fs';
 import * as path from 'path';
+import { loggerOfSource, fallbackLogger } from './logger-source';
 
 export type ScanLanguage = 'java' | 'python' | 'node' | 'go';
 
@@ -38,6 +39,12 @@ export interface ScanHit {
   language: ScanLanguage;
   /** Test source, by its path. Off by default when the hits are offered. */
   test: boolean;
+  /**
+   * The logger this call writes through — the class, the module, the name a
+   * `getLogger("…")` gave it. What the catalogue files the pattern under, so
+   * a scanned message lands beside its logger instead of in a pile of its own.
+   */
+  logger?: string;
 }
 
 export interface ScanResult {
@@ -47,12 +54,12 @@ export interface ScanResult {
   stoppedAt?: 'files' | 'hits';
 }
 
-const MAX_FILE = 512 * 1024;
+export const MAX_FILE = 512 * 1024;
 const MAX_FILES = 4000;
 const MAX_HITS = 2000;
 
 /** Never application source, always large. */
-const SKIP_DIRS = new Set([
+export const SKIP_DIRS = new Set([
   'node_modules', '.git', '.svn', '.hg', 'target', 'build', 'dist', 'out',
   '.gradle', '.idea', '.vscode', '__pycache__', '.venv', 'venv', 'vendor',
   'coverage', '.next', '.nuxt', '.cache', 'bin', 'obj',
@@ -77,13 +84,13 @@ const LANGUAGES: { ext: string[]; language: ScanLanguage }[] = [
 const CALL = /(?:^|[^\w])((?:[\w$]*(?:log|logger|logging|slf4j|console)[\w$]*)\s*(?:\.\s*[\w$]+\s*)*?)\.\s*(trace|debug|info|warn|warning|error|fatal|exception)\s*\(/gi;
 
 /** Test source, by convention rather than by content. */
-function isTest(relative: string): boolean {
+export function isTest(relative: string): boolean {
   const p = relative.replace(/\\/g, '/').toLowerCase();
   return p.includes('/test/') || p.includes('/tests/') || p.includes('/spec/')
     || /(^|\/)test_[^/]*$/.test(p) || /[._-](test|spec)\.[\w]+$/.test(p);
 }
 
-function languageOf(file: string): ScanLanguage | undefined {
+export function languageOf(file: string): ScanLanguage | undefined {
   const ext = path.extname(file).toLowerCase();
   return LANGUAGES.find(l => l.ext.includes(ext))?.language;
 }
@@ -196,8 +203,15 @@ export async function scanFolder(root: string): Promise<ScanResult> {
         if (stat.size > MAX_FILE) continue;
         const text = await fs.readFile(full, 'utf8');
         filesRead++;
-        for (const hit of scanText(text, path.relative(root, full), language)) {
-          hits.push(hit);
+        const relative = path.relative(root, full);
+        const found = scanText(text, relative, language);
+        /* One logger per file, worked out once — not per call, and not at all
+           for a file with nothing in it. */
+        const logger = found.length
+          ? (loggerOfSource(text, relative, language) ?? fallbackLogger(text, relative, language)).name
+          : undefined;
+        for (const hit of found) {
+          hits.push({ ...hit, logger });
           if (hits.length >= MAX_HITS) { stoppedAt = 'hits'; return; }
         }
       } catch {
