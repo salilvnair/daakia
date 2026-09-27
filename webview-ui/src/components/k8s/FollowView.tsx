@@ -21,10 +21,8 @@
  * only inside a message becomes followable.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ButtonView, CheckboxView, PopoverView, TextInputView, ProgressBarView, IconSize } from '@salilvnair/dui';
-import {
-  ChevronLeftIcon, CloseIcon, PlusIcon, ColumnsIcon, DownloadIcon, SparkleIcon, SearchIcon, SaveIcon, ClockIcon,
-} from '../../icons';
+import { CheckboxView, PopoverView, TextInputView, ProgressBarView, IconSize } from '@salilvnair/dui';
+import { ChevronLeftIcon, CloseIcon, SearchIcon } from '../../icons';
 import { useResultTabStore } from '../../store/dk8s-result-tab-store';
 import { useTaggedSearchStore } from '../../store/dk8s-tagged-search-store';
 import { useK8sStore } from '../../store/k8s-store';
@@ -46,13 +44,9 @@ import { replicaHue, podTail } from './pod-hue';
 import { snapshotSource, standIn, useSnapshotView } from './snapshot-source';
 import { asPodSummaries } from './searched-pods';
 import { openWith } from '../ai/ai-chat-actions';
-import { ACCENT, AI as AI_ACCENT } from './tone';
+import { FOLLOW, CHECK, FIELD_VALUE, AMBER, tint } from './follow-tone';
+import { LineButton, FillButton, CheckLabel, railLabel, mono } from './follow-ui';
 import { templateParts } from './logger-pattern';
-
-const label: React.CSSProperties = {
-  fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-  color: 'var(--color-text-muted)',
-};
 
 /** The big glass, while the pods are read — the same moment as the search dialog's. */
 export function ReadingPods({ title, detail, done, total }: { title: string; detail: React.ReactNode; done: number; total: number }) {
@@ -80,23 +74,47 @@ export function ReadingPods({ title, detail, done, total }: { title: string; det
   );
 }
 
+/**
+ * One condition, as the board draws it.
+ *
+ * On: a teal pill with the field, its value and a round × to drop it — a
+ * click on the words switches it off without dropping it, to see what it was
+ * hiding. Off: a dashed pill with a box to switch it back on.
+ */
 function ConditionChip({ c, onToggle, onDrop }: { c: Condition; onToggle: () => void; onDrop: () => void }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 shrink-0"
-          style={{
-            height: 24, padding: '0 3px 0 8px', borderRadius: 999, fontSize: 11.5,
-            background: c.on ? `color-mix(in srgb, ${ACCENT} 16%, transparent)` : 'transparent',
-            border: c.on ? '1px solid transparent' : '1px dashed var(--color-surface-border)',
-            color: c.on ? ACCENT : 'var(--color-text-secondary)',
-          }}>
-      <CheckboxView checked={c.on} onChange={onToggle} size="sm" accentColor={ACCENT}
-                    aria-label={c.on ? 'Stop applying this condition' : 'Apply this condition'} />
+  const words = (
+    <>
       <span style={{ opacity: 0.8 }}>{c.field} =</span>
-      <span className="font-mono truncate" style={{ maxWidth: 220 }} title={c.value}>{c.value}</span>
+      <span className="truncate" style={{ ...mono, maxWidth: 220 }} title={c.value}>{c.value}</span>
+    </>
+  );
+  if (!c.on) {
+    return (
+      <span className="inline-flex items-center shrink-0"
+            style={{
+              gap: 7, height: 27, padding: '0 5px 0 10px', borderRadius: 999, fontSize: 11.5,
+              border: '1px dashed var(--color-surface-border)', color: 'var(--color-text-secondary)',
+            }}>
+        {words}
+        <CheckboxView checked={false} onChange={onToggle} size="sm" accentColor={CHECK} aria-label="Apply this condition" />
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center shrink-0"
+          style={{
+            gap: 7, height: 27, padding: '0 5px 0 10px', borderRadius: 999, fontSize: 11.5,
+            background: tint(FOLLOW, 16), color: FOLLOW,
+          }}>
+      <button type="button" onClick={onToggle} title="Switch this condition off, without dropping it"
+              className="inline-flex items-center cursor-pointer border-none bg-transparent p-0 min-w-0"
+              style={{ gap: 7, color: 'inherit', font: 'inherit' }}>
+        {words}
+      </button>
       <button type="button" onClick={onDrop} aria-label="Drop this condition" title="Drop this condition"
-              className="inline-flex items-center justify-center rounded-full cursor-pointer border-none"
-              style={{ width: 17, height: 17, background: `color-mix(in srgb, ${ACCENT} 22%, transparent)`, color: ACCENT }}>
-        <CloseIcon size={9} />
+              className="inline-flex items-center justify-center cursor-pointer border-none shrink-0"
+              style={{ width: 18, height: 18, borderRadius: '50%', background: tint(FOLLOW, 25), color: FOLLOW }}>
+        <CloseIcon size={9} strokeWidth={3} />
       </button>
     </span>
   );
@@ -112,40 +130,34 @@ function AddCondition({ suggestions, onAdd }: {
   const anchor = useRef<HTMLSpanElement>(null);
   const add = (c: { field: string; value: string }) => { onAdd(c); setOpen(false); setField(''); setValue(''); };
   return (
-    <span ref={anchor}>
-      <ButtonView size="sm" variant="secondary" accentColor={ACCENT} iconLeft={<PlusIcon size={IconSize.chip} />}
-                  onClick={() => setOpen(o => !o)}>
-        condition
-      </ButtonView>
+    <span ref={anchor} className="shrink-0">
+      <LineButton h={27} fs={11.5} onClick={() => setOpen(o => !o)}
+                  style={{ borderRadius: 999, border: '1px dashed var(--color-surface-border)', color: 'var(--color-text-muted)' }}>
+        + condition
+      </LineButton>
       <PopoverView open={open} onClose={() => setOpen(false)} anchorEl={anchor.current} placement="bottom" borderRadius={10}>
         <div className="flex flex-col gap-2 p-3" style={{ width: 320 }}>
           {suggestions.length > 0 && (
             <>
-              <div style={label}>carried by these lines</div>
-              <div className="flex flex-col gap-1" style={{ maxHeight: 200, overflowY: 'auto' }}>
+              <div style={railLabel}>carried by these lines</div>
+              <div className="flex flex-col" style={{ gap: 5, maxHeight: 200, overflowY: 'auto' }}>
                 {suggestions.map(s => (
-                  <button key={`${s.field}=${s.value}`} type="button" onClick={() => add(s)}
-                          className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer border-none bg-transparent text-left hover:bg-[var(--color-surface-hover)]">
-                    <span className="text-[11.5px] flex-1" style={{ color: 'var(--color-text-primary)' }}>{s.field}</span>
-                    <span className="font-mono text-[11px] truncate" style={{ maxWidth: 140, color: 'var(--color-warning-text, #ce9178)' }}>{s.value}</span>
-                    <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>{s.n}</span>
-                  </button>
+                  <TouchedRow key={`${s.field}=${s.value}`} t={s} onClick={() => add(s)} title={`Add ${s.field} = ${s.value}`} />
                 ))}
               </div>
             </>
           )}
-          <div style={label}>or name one</div>
+          <div style={railLabel}>or name one</div>
           <div className="flex items-center gap-1.5">
             <TextInputView value={field} placeholder="field" onChange={e => setField(e.target.value)} size="sm" />
             <span style={{ color: 'var(--color-text-muted)' }}>=</span>
             <TextInputView value={value} placeholder="value" onChange={e => setValue(e.target.value)} size="sm" />
           </div>
           <div className="flex justify-end">
-            <ButtonView size="sm" variant="secondary" accentColor={ACCENT} color={ACCENT}
-                        disabled={!field.trim() || !value.trim()}
+            <FillButton h={24} disabled={!field.trim() || !value.trim()}
                         onClick={() => add({ field: field.trim(), value: value.trim() })}>
               Add
-            </ButtonView>
+            </FillButton>
           </div>
         </div>
       </PopoverView>
@@ -158,11 +170,8 @@ function SaveAsView({ onSave }: { onSave: (name: string) => void }) {
   const [name, setName] = useState('');
   const anchor = useRef<HTMLSpanElement>(null);
   return (
-    <span ref={anchor}>
-      <ButtonView size="sm" variant="secondary" accentColor={ACCENT} iconLeft={<SaveIcon size={IconSize.chip} />}
-                  onClick={() => setOpen(o => !o)}>
-        Save as view
-      </ButtonView>
+    <span ref={anchor} className="shrink-0">
+      <LineButton h={26} fs={11.5} onClick={() => setOpen(o => !o)}>Save as view</LineButton>
       <PopoverView open={open} onClose={() => setOpen(false)} anchorEl={anchor.current} placement="bottom" borderRadius={10}>
         <div className="flex flex-col gap-2 p-3" style={{ width: 280 }}>
           <div className="text-[11.5px]" style={{ color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
@@ -170,16 +179,40 @@ function SaveAsView({ onSave }: { onSave: (name: string) => void }) {
           </div>
           <TextInputView value={name} placeholder="What this follow is" onChange={e => setName(e.target.value)} size="sm" />
           <div className="flex justify-end">
-            <ButtonView size="sm" variant="secondary" accentColor={ACCENT} color={ACCENT} disabled={!name.trim()}
+            <FillButton h={24} disabled={!name.trim()}
                         onClick={() => { onSave(name.trim()); setOpen(false); setName(''); }}>
               Save
-            </ButtonView>
+            </FillButton>
           </div>
         </div>
       </PopoverView>
     </span>
   );
 }
+
+/** "requestDataId  8842  19" — a value these lines also carry, one click from being the condition. */
+function TouchedRow({ t, onClick, title }: {
+  t: { field: string; value: string; n: number };
+  onClick: (e: React.MouseEvent) => void;
+  title: string;
+}) {
+  return (
+    <button type="button" onClick={onClick} title={title}
+            className="flex items-center text-left cursor-pointer bg-transparent hover:bg-[var(--color-surface-hover)]"
+            style={{
+              gap: 8, padding: '6px 9px', borderRadius: 7, fontSize: 11.5,
+              border: '1px solid var(--color-surface-border)', color: 'var(--color-text-primary)',
+            }}>
+      <span className="flex-1 min-w-0 truncate">{t.field}</span>
+      <span className="truncate" style={{ ...mono, maxWidth: 130, color: FIELD_VALUE }}>{t.value}</span>
+      <span style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>{t.n}</span>
+    </button>
+  );
+}
+
+/** "Open the three pods in a split" — the board says the number in words. */
+const COUNT_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+const inWords = (n: number) => COUNT_WORDS[n] ?? String(n);
 
 export function FollowView() {
   const { follow, setFollow, patchFollow, searched, query } = useResultTabStore();
@@ -324,18 +357,20 @@ export function FollowView() {
   });
 
   const nextW = nextWidth(follow.width);
+  const splitCount = Math.min(MAX_PANES.grid, counts.filter(c => c.n).length || pods.length);
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
       {/* ── The question: conditions, window ── */}
-      <div className="flex items-center gap-2 px-3.5 py-2 shrink-0 flex-wrap"
-           style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        <ButtonView size="sm" variant="secondary" accentColor={ACCENT} title="Back to the hits" aria-label="Back to the hits"
-                    iconLeft={<ChevronLeftIcon size={IconSize.action} />}
+      <div className="flex items-center shrink-0 flex-wrap"
+           style={{ gap: 8, minHeight: 46, padding: '0 14px', borderBottom: '1px solid var(--color-surface-border)' }}>
+        <LineButton h={26} title="Back to the hits" aria-label="Back to the hits"
+                    style={{ width: 26, padding: 0 }}
+                    iconLeft={<ChevronLeftIcon size={13} />}
                     onClick={() => { drop(follow.tag); setFollow(undefined); }} />
         {conds.map((c, i) => (
-          <span key={`${c.field}=${c.value}`} className="inline-flex items-center gap-2">
-            {i > 0 && <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>AND</span>}
+          <span key={`${c.field}=${c.value}`} className="inline-flex items-center" style={{ gap: 8 }}>
+            {i > 0 && <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>AND</span>}
             <ConditionChip
               c={c}
               onToggle={() => setConds(conds.map((x, j) => (j === i ? { ...x, on: !x.on } : x)))}
@@ -346,17 +381,20 @@ export function FollowView() {
         <AddCondition suggestions={also} onAdd={t => swapOrAdd(t, true)} />
         <div className="flex-1" />
         {anchorTime && (
-          <span className="inline-flex items-center gap-1.5 px-2.5 text-[11.5px] rounded-md"
-                style={{ height: 24, border: '1px solid var(--color-surface-border)', color: 'var(--color-text-secondary)' }}>
-            <ClockIcon size={IconSize.chip} /> {widthLabel(follow.width)} around {anchorTime}
+          <span className="inline-flex items-center shrink-0"
+                style={{
+                  height: 26, padding: '0 10px', borderRadius: 6, fontSize: 11.5,
+                  border: '1px solid var(--color-surface-border)', color: 'var(--color-text-secondary)',
+                }}>
+            {widthLabel(follow.width).replace('± ', '±')} around {anchorTime}
           </span>
         )}
         {anchorTime && (
-          <ButtonView size="sm" variant="secondary" accentColor={ACCENT} disabled={!nextW}
+          <LineButton h={26} fs={11.5} disabled={!nextW}
                       title={nextW ? `Read ${widthLabel(nextW)} around the line instead` : 'Already the widest window'}
                       onClick={() => nextW && patchFollow({ width: nextW })}>
             Widen
-          </ButtonView>
+          </LineButton>
         )}
         <SaveAsView onSave={save} />
       </div>
@@ -364,36 +402,40 @@ export function FollowView() {
       <div className="flex flex-1 min-h-0">
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
           {/* ── How many, where ── */}
-          <div className="flex items-center gap-3.5 px-3.5 py-2 shrink-0 flex-wrap text-[11.5px]"
-               style={{ borderBottom: '1px solid var(--color-surface-border)', color: 'var(--color-text-muted)' }}>
+          <div className="flex items-center shrink-0 flex-wrap"
+               style={{
+                 gap: 14, padding: '8px 14px', fontSize: 11.5,
+                 borderBottom: '1px solid var(--color-surface-border)', color: 'var(--color-text-muted)',
+               }}>
             <span style={{ color: 'var(--color-text-primary)' }}>
               {running && !lines.length ? 'Reading…' : `${lines.length.toLocaleString()} line${lines.length === 1 ? '' : 's'}`}
             </span>
             {counts.map(c => {
               const err = errors.get(c.pod);
               return (
-                <span key={c.pod} className="inline-flex items-center gap-1.5" style={{ opacity: c.n || err ? 1 : 0.55 }}
+                <span key={c.pod} className="inline-flex items-center" style={{ gap: 6, opacity: c.n || err ? 1 : 0.55 }}
                       title={err ? `${c.pod} could not be read: ${err}` : c.pod}>
                   <span style={{ width: 7, height: 7, borderRadius: 2, background: replicaHue(c.pod, podNames) }} />
-                  <span className="font-mono">{c.pod}</span> · {err
-                    ? <span style={{ color: 'var(--color-warning)' }}>not read</span>
+                  {c.pod} &middot; {err
+                    ? <span style={{ color: AMBER }}>not read</span>
                     : c.n}
                 </span>
               );
             })}
             <div className="flex-1" />
-            <CheckboxView label="One timeline" checked={follow.oneTimeline} size="sm" accentColor={ACCENT}
-                          onChange={v => patchFollow({ oneTimeline: v })} />
-            <CheckboxView label={threadFollowed ? 'Only this thread’s pod' : 'Only the pod you came from'}
-                          checked={follow.onlyPod} size="sm" accentColor={ACCENT}
-                          onChange={v => patchFollow({ onlyPod: v })} />
+            <CheckLabel checked={follow.oneTimeline} onChange={v => patchFollow({ oneTimeline: v })}>
+              One timeline
+            </CheckLabel>
+            <CheckLabel checked={follow.onlyPod} onChange={v => patchFollow({ onlyPod: v })}>
+              {threadFollowed ? 'Only this thread’s pod' : 'Only the pod you came from'}
+            </CheckLabel>
           </div>
 
           <div className="flex-1 min-h-0">
             {running && !lines.length ? (
               <ReadingPods
                 title="Following"
-                detail={<>Reading {pods.length} pod{pods.length === 1 ? '' : 's'} for <span className="font-mono" style={{ color: 'var(--color-dk8s)' }}>{q}</span>
+                detail={<>Reading {pods.length} pod{pods.length === 1 ? '' : 's'} for <span className="font-mono" style={{ color: FOLLOW }}>{q}</span>
                   {anchorTime ? <> within {widthLabel(follow.width)} of {anchorTime}</> : null}</>}
                 done={search?.progress.done ?? 0} total={search?.progress.total ?? pods.length}
               />
@@ -402,7 +444,7 @@ export function FollowView() {
                 <span className="text-[13px]" style={{ color: 'var(--color-text-primary)' }}>
                   {pods.length === 1 ? 'The pod could not be read' : `None of the ${pods.length} pods could be read`}
                 </span>
-                <div className="flex flex-col gap-1 text-[11.5px] font-mono max-w-[640px] text-left" style={{ color: 'var(--color-warning)' }}>
+                <div className="flex flex-col gap-1 text-[11.5px] font-mono max-w-[640px] text-left" style={{ color: AMBER }}>
                   {[...errors].map(([pod, err]) => <span key={pod}>{podTail(pod)} · {err}</span>)}
                 </div>
               </div>
@@ -415,9 +457,9 @@ export function FollowView() {
                     : 'Every condition is switched off — switch one on to follow it.'}
                 </span>
                 {nextW && conds.some(c => c.on) && (
-                  <ButtonView size="sm" variant="secondary" accentColor={ACCENT} color={ACCENT} onClick={() => patchFollow({ width: nextW })}>
+                  <LineButton h={26} fs={11.5} tone={FOLLOW} onClick={() => patchFollow({ width: nextW })}>
                     Widen to {widthLabel(nextW)}
-                  </ButtonView>
+                  </LineButton>
                 )}
               </div>
             ) : (
@@ -427,104 +469,93 @@ export function FollowView() {
             )}
           </div>
 
-          <div className="flex items-center gap-2.5 px-3.5 shrink-0 text-[11.5px]"
-               style={{ height: 38, borderTop: '1px solid var(--color-surface-border)', color: 'var(--color-text-muted)' }}>
-            <span>The same thread name can be reused by another pod &mdash; the pod column is always shown for that reason.</span>
+          <div className="flex items-center shrink-0"
+               style={{
+                 gap: 10, height: 36, padding: '0 14px', fontSize: 11.5,
+                 borderTop: '1px solid var(--color-surface-border)', color: 'var(--color-text-muted)',
+               }}>
+            <span className="min-w-0 truncate">The same thread name can be reused by another pod &mdash; the pod column is always shown for that reason.</span>
             <div className="flex-1" />
             {pods.length > 1 && (
-              <ButtonView size="sm" variant="secondary" accentColor={ACCENT} color={ACCENT}
-                          iconLeft={<ColumnsIcon size={IconSize.action} />} onClick={openInSplit}>
-                Open the {Math.min(MAX_PANES.grid, counts.filter(c => c.n).length || pods.length)} pods in a split
-              </ButtonView>
+              <LineButton h={26} fs={11.5} tone={FOLLOW} onClick={openInSplit}>
+                Open the {inWords(splitCount)} pods in a split
+              </LineButton>
             )}
           </div>
         </div>
 
         {/* ── Why, and what next ── */}
         <div className="flex flex-col min-h-0 shrink-0"
-             style={{ width: 300, borderLeft: '1px solid var(--color-surface-border)', background: 'var(--color-panel, var(--color-surface))' }}>
+             style={{ width: 300, borderLeft: '1px solid var(--color-surface-border)', background: 'var(--color-surface)' }}>
           <div className="flex-1 min-h-0 overflow-auto">
-            <div className="px-3.5 pt-3 pb-1 text-[12.5px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>Why these lines</div>
-            <div className="px-3.5 pb-3 text-[11.5px]" style={{ color: 'var(--color-text-secondary)', lineHeight: 1.65 }}>
+            <div style={{ padding: '12px 14px 6px', fontSize: 12.5, fontWeight: 600, color: 'var(--color-text-primary)' }}>Why these lines</div>
+            <div style={{ padding: '0 14px 12px', fontSize: 11.5, lineHeight: 1.65, color: 'var(--color-text-secondary)' }}>
               {origins.length ? (
                 <>
                   Every one of them carries{' '}
                   {origins.map(({ c, where }, i) => (
                     <span key={c.field}>
                       {i > 0 && ' and '}
-                      <span className="font-mono" style={{ color: ACCENT }}>{c.field}={c.value}</span> in {where}
+                      <span style={{ ...mono, color: FOLLOW }}>{c.field}={c.value}</span> in {where}
                     </span>
                   ))}
                   . Nothing was inferred and no model was asked.
-                  {threadFollowed && anchorTime && (
-                    <> A thread name is only unique inside one pod and only until it goes back to the pool, so this is pinned
-                      to {widthLabel(follow.width)} around the line you came from.</>
-                  )}
                 </>
               ) : 'Every condition is off.'}
             </div>
 
-            <div className="px-3.5 pb-3">
-              <div className="mb-2" style={label}>what else {threadFollowed ? 'this thread' : 'these lines'} touched</div>
+            <div style={{ padding: '0 14px 10px' }}>
+              <div style={{ ...railLabel, marginBottom: 7 }}>what else {threadFollowed ? 'this thread' : 'these lines'} touched</div>
               {also.length ? (
-                <div className="flex flex-col gap-1">
-                  {also.map(t => (
-                    <button key={`${t.field}=${t.value}`} type="button"
-                            onClick={e => swapOrAdd(t, e.shiftKey)}
-                            title={`Follow ${t.field} = ${t.value} instead · Shift-click to add it`}
-                            className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer text-left bg-transparent"
-                            style={{ border: '1px solid var(--color-surface-border)', color: 'var(--color-text-primary)' }}>
-                      <span className="flex-1 text-[11.5px] truncate">{t.field}</span>
-                      <span className="font-mono text-[11px] truncate" style={{ maxWidth: 120, color: 'var(--color-warning-text, #ce9178)' }}>{t.value}</span>
-                      <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>{t.n}</span>
-                    </button>
-                  ))}
-                  <div className="text-[10.5px] mt-1" style={{ color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+                <>
+                  <div className="flex flex-col" style={{ gap: 5 }}>
+                    {also.map(t => (
+                      <TouchedRow key={`${t.field}=${t.value}`} t={t}
+                                  onClick={e => swapOrAdd(t, e.shiftKey)}
+                                  title={`Follow ${t.field} = ${t.value} instead · Shift-click to add it`} />
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 11, marginTop: 7, lineHeight: 1.5, color: 'var(--color-text-muted)' }}>
                     Click one to swap the condition, Shift-click to add it.
                   </div>
-                </div>
+                </>
               ) : (
-                <div className="text-[11px]" style={{ color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+                <div style={{ fontSize: 11, lineHeight: 1.5, color: 'var(--color-text-muted)' }}>
                   {lines.length ? 'These lines carry nothing else to follow.' : 'Once lines come back, the other ids they carry are listed here.'}
                 </div>
               )}
             </div>
 
-            <div className="px-3.5 py-3" style={{ borderTop: '1px solid var(--color-surface-border)' }}>
-              <div className="mb-2" style={label}>when it is not in the MDC</div>
-              <div className="text-[11.5px]" style={{ color: 'var(--color-text-secondary)', lineHeight: 1.65 }}>
+            <div style={{ padding: '10px 14px', borderTop: '1px solid var(--color-surface-border)' }}>
+              <div style={{ ...railLabel, marginBottom: 7 }}>when it is not in the MDC</div>
+              <div style={{ fontSize: 11.5, lineHeight: 1.65, color: 'var(--color-text-secondary)' }}>
                 A value that only appears inside the message is still followable &mdash; the logger&rsquo;s pattern names the
                 hole it sits in
                 {example ? (
                   <>, so{' '}
-                    <span className="font-mono" style={{ color: ACCENT }}>
+                    <span style={{ ...mono, color: FOLLOW }}>
                       {templateParts(example.template).map((p, i) => (p.hole ? <span key={i}>{'{}'}</span> : <span key={i}>{p.text}</span>))}
                     </span>
                     {' '}gives {example.holes.length === 1 ? 'a field called ' : 'fields called '}
-                    <span style={{ color: ACCENT }}>{example.holes.join(', ')}</span> and the same Follow works on it.</>
+                    <span style={{ color: FOLLOW }}>{example.holes.join(', ')}</span> and the same Follow works on it.</>
                 ) : (
                   <>. Add the logger&rsquo;s calls in the Loggers tab, or name a field on the Fields page, and the value in each
                     {' {}'} becomes a field this works on.</>
                 )}
               </div>
-              <div className="mt-2">
-                <ButtonView size="xs" variant="secondary" accentColor={ACCENT}
-                            onClick={() => useTabsStore.getState().openSettingsTab('dk8s-fields')}>
-                  Edit how fields are read
-                </ButtonView>
-              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 px-3.5 py-2.5 shrink-0" style={{ borderTop: '1px solid var(--color-surface-border)' }}>
-            <span className="flex-1 min-w-0"><ButtonView size="sm" variant="secondary" accentColor={ACCENT} width="fullWidth" disabled={!lines.length}
-                        iconLeft={<DownloadIcon size={IconSize.action} />} onClick={exportThese}>
+          <div className="flex items-center shrink-0"
+               style={{ gap: 6, padding: '10px 14px', borderTop: '1px solid var(--color-surface-border)' }}>
+            <LineButton h={26} fs={11.5} style={{ flexGrow: 1, flexBasis: 0, minWidth: 0 }}
+                        disabled={!lines.length} onClick={exportThese}>
               Export these lines
-            </ButtonView></span>
-            <span className="flex-1 min-w-0"><ButtonView size="sm" variant="secondary" accentColor={AI_ACCENT} color={AI_ACCENT} width="fullWidth" disabled={!lines.length}
-                        iconLeft={<SparkleIcon size={IconSize.action} />} onClick={askAi}>
+            </LineButton>
+            <LineButton h={26} fs={11.5} style={{ flexGrow: 1, flexBasis: 0, minWidth: 0 }}
+                        disabled={!lines.length} onClick={askAi}>
               Ask the AI tab
-            </ButtonView></span>
+            </LineButton>
           </div>
         </div>
       </div>

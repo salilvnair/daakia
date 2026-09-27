@@ -32,6 +32,7 @@ import { ScriptLibrary } from './ScriptLibrary';
 import { ScriptTitle, ScriptSave, ScriptMenu } from './ScriptHeader';
 import { RunSetup } from './RunSetup';
 import { AskPyAi } from './AskPyAi';
+import { usePythonMenu } from './py-menu';
 import { PyEditor } from './PyEditor';
 import { PyBottomPanel, type BottomTab } from './PyBottomPanel';
 import { PyDebugPanes, DebugToolbar } from './PyDebugPanes';
@@ -141,13 +142,24 @@ export function PythonTab() {
     return () => window.removeEventListener('keydown', onKey);
   }, [selectedId, save]);
 
+  /* Right-click anywhere on the tab: what can be done with what is under the pointer. */
+  const menu = usePythonMenu({
+    scriptId: script?.id,
+    onRun, onDebug,
+    canRun: !!script && !blocked && !running,
+    canDebug: !!script && !blocked && !noFile && !running && !(debug && !debug.ended),
+    output: () => (shown ? shown.chunks.map(c => c.text).join('') : ''),
+    onClearOutput: () => usePyStore.getState().clearRuns(r => r.sessionId === sessionId),
+  });
+
   if (!detail || !target) return null;
 
   const containers = detail.containers.map(c => c.name);
   const path = shown?.path ?? plannedPath(pyProbe?.base, name);
 
   return (
-    <div className="flex h-full min-h-0">
+    <div className="flex h-full min-h-0" data-context-menu="python" onContextMenu={menu.onContextMenu}>
+      {menu.element}
       <ScriptLibrary heading="SCRIPTS" footer="Saved in this workspace — Git Sync carries them." />
 
       <div className="flex flex-col flex-1 min-w-0 min-h-0">
@@ -260,6 +272,7 @@ export function PythonTab() {
                 first={<PyEditor scriptId={script.id} reveal={reveal}
                                  target={blocked ? undefined : target} pythonVersion={verdict?.version?.text} />}
                 second={(
+                  <div className="h-full" data-py-output>
                   <PyBottomPanel
                     runs={myRuns}
                     run={shown}
@@ -269,6 +282,7 @@ export function PythonTab() {
                     onJump={(line) => setReveal({ line, n: Date.now() })}
                     onPickRun={setShownRunId}
                   />
+                  </div>
                 )}
               />
             </div>

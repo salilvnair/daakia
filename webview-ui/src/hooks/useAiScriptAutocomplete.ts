@@ -186,6 +186,8 @@ export function useAiScriptAutocomplete({ enabled, mode }: UseAiScriptAutocomple
             return { items: [] };
           }
         },
+        /* Monaco 0.55 calls `disposeInlineCompletions`; without it no ghost text shows. */
+        disposeInlineCompletions: () => {},
         freeInlineCompletions: () => {},
       }
     );

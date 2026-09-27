@@ -127,6 +127,11 @@ export type LogSource = Pick<K8sStore,
   /** One sentence in the footer, where the page has something true to say of every line. */
   footerNote?: string;
   /**
+   * Told when the gutter switches to compact ticks or back. A split pane says
+   * "compact" in its title strip, and only the gutter knows its own height.
+   */
+  onGutterCompact?: (compact: boolean) => void;
+  /**
    * Told when the reader picks "±N lines around" — a paged source filters on
    * the host, and has to bring those surrounding lines back with the hits.
    */

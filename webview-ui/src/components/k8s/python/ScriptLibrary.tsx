@@ -95,7 +95,7 @@ export function ScriptLibrary({ heading, footer, width = 208 }: {
                 {g.items.map(it => {
                   const on = it.id === selectedId;
                   return (
-                    <button key={it.id} type="button" onClick={() => select(it.id)}
+                    <button key={it.id} type="button" onClick={() => select(it.id)} data-py-script={it.id}
                             className="py-lib-row flex items-center gap-2 w-full text-left cursor-pointer border-none rounded-md"
                             style={{
                               padding: '6px 8px', fontSize: 12.5,

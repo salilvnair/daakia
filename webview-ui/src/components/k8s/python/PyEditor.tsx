@@ -128,6 +128,9 @@ export function PyEditor({ scriptId, readOnly, reveal, target, pythonVersion }: 
   const onMount = (editor: any, monaco: any) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
+    /* Monaco's own right-click menu off: the tab's dui menu (py-menu.tsx)
+       answers instead, with Find, Replace and the rest in it. */
+    editor.updateOptions({ contextmenu: false });
     decoRef.current = editor.createDecorationsCollection([]);
     selections.set(live.current.scriptId, () => {
       const sel = editor.getSelection();
@@ -283,6 +286,10 @@ export function PyEditor({ scriptId, readOnly, reveal, target, pythonVersion }: 
           }],
         };
       },
+      /* Monaco 0.55 calls `disposeInlineCompletions`; without it the call throws
+         when a suggestion is about to show, and the ghost text never appears.
+         `freeInlineCompletions` is the older name, kept for older builds. */
+      disposeInlineCompletions: () => {},
       freeInlineCompletions: () => {},
     }));
 

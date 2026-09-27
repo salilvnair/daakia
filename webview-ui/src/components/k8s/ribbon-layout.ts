@@ -24,13 +24,46 @@
  *   5. The hover card is placed inside the pane, on whichever side has room.
  */
 import { ribbonBands } from './log-view';
+import type { LogLevel } from '../../store/k8s-store';
+import { GUTTER_CALM, GUTTER_WARN, RED } from './follow-tone';
 
 /** The thinnest a band is ever drawn. Three pixels is the least that reads as a colour. */
 export const BAND_FLOOR_PX = 3;
-/** The gap under each band. */
-export const BAND_GAP_PX = 1;
+/** The gap under each band — two pixels, so neighbouring blocks read as blocks and not as one bar. */
+export const BAND_GAP_PX = 2;
 /** The thinnest the you-are-here box is ever drawn. */
 export const MARKER_MIN_PX = 6;
+
+// ── How it is drawn ─────────────────────────────────────────────────────────
+
+/**
+ * The gutter's width, hairline included, and its blocks'.
+ *
+ * Sixteen pixels down the pane's right edge with an 8px column of blocks in
+ * it: a gutter, not a second pane. It was 38px with 20px bands, which in a
+ * three-way split is most of a word of every line, in every pane, for a
+ * picture the eye reads at a glance.
+ */
+export const GUTTER_W = 16;
+export const GUTTER_BLOCK_W = 8;
+/** How far the you-are-here box stands out past the blocks on each side: 12px over 8. */
+export const MARKER_EDGE = 2;
+
+/**
+ * A block's colour, by the worst level in it.
+ *
+ * Solid colours rather than the level colours faded: a calm stretch is a dim
+ * green-teal, a warning a dim amber, and an error full red, so the one thing
+ * the gutter is for — where the trouble is — is the only loud thing in it.
+ */
+export function blockColor(worst: LogLevel): string {
+  return worst === 'error' ? RED : worst === 'warn' ? GUTTER_WARN : GUTTER_CALM;
+}
+
+/** A compact tick's colour: an error is red, a warning the gutter's amber. */
+export function tickColor(level: 'error' | 'warn'): string {
+  return level === 'error' ? RED : GUTTER_WARN;
+}
 
 /**
  * How many bands a track this tall gets, each at least the floor.

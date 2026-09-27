@@ -21,11 +21,18 @@
  * `dk8s.log.askTheLog` in the Prompt Library: its system half says how to
  * answer (JSON, every claim cited), its user half carries the window, the
  * catalogue, the lines and the question. Both can be edited there.
+ *
+ * ── How it is drawn ──
+ *
+ * Value for value from the AiSearch board: the question box edged in the Ask
+ * colour with its hint on the right, the window as a clock button, the answer
+ * in a card with its ids and values coloured, IN ORDER as one bordered table
+ * whose failed rows are tinted, and the rail's cited lines as cards. The
+ * colours are `asklog-tone.ts`, where each is written beside the board value
+ * it stands for, so this file and the board can be read against each other.
  */
-import { useMemo, useState } from 'react';
-import {
-  ButtonView, TextInputView, SelectInputView, ChipView, IconSize,
-} from '@salilvnair/dui';
+import { useMemo, useRef, useState } from 'react';
+import { ButtonView, ChipView, ContextMenuView, IconSize } from '@salilvnair/dui';
 import { useK8sStore, type LogLine } from '../../store/k8s-store';
 import { useDk8sAskLogStore, type AskRun } from '../../store/dk8s-ask-log-store';
 import {
@@ -33,19 +40,31 @@ import {
 } from '../../store/dk8s-logger-store';
 import {
   askWindowLines, buildEvidence, catalogueBlock, windowBlock, windowRange, citeLabel, citedLines,
-  answerText, filterForLines, suggestions, ASK_WINDOW_NAME, type AskWindow,
+  answerText, answerSpans, filterForLines, suggestions, ASK_WINDOW_NAME, type AskWindow,
 } from './ask-log';
 import { buildRows, shortName } from './logger-catalogue';
 import { useMarkIndex } from './LogMarks';
 import { formatLogTime } from './log-view';
 import { scopeOf } from './LoggersTab';
 import {
-  SparkleIcon, CopyIcon, FileTextIcon, ThumbUpIcon, ThumbDownIcon, ClockIcon, ShieldIcon,
-  SpinnerIcon, ChevronRightIcon, StopSquareIcon,
+  SparkleIcon, ClockIcon, ChevronDownIcon, CheckIcon, CloseIcon, WarningTriangleIcon,
+  SpinnerIcon, StopSquareIcon, ExternalLinkIcon, FilterIcon, SendIcon, PencilIcon, SaveIcon,
 } from '../../icons';
-import { AI, AI_INK } from './tone';
+import { useSurfaceMenu, copyItem, selectionItems, textInputAt, SEP, type ContextMenuItem } from './surface-menu';
+import {
+  PANEL, CARD, DIVIDER, EDGE, TEXT, LABEL, QUIET, ASK, ASK_INK, ASK_LINK, ASK_ID, ASK_VALUE,
+  ASK_ERROR, ASK_WARN, ASK_ERROR_ROW, ASK_YES, ASK_NO, MONO, OUTLINE_BUTTON, OUTLINE_PILL,
+} from './asklog-tone';
 
 const WINDOWS: AskWindow[] = ['10m', '30m', '1h', '2h', 'all'];
+
+/** The small caps the board heads every section with. */
+const HEAD = { fontSize: 11, fontWeight: 700, letterSpacing: '0.05em' } as const;
+const RAIL_HEAD = { fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', color: LABEL } as const;
+
+/** IN ORDER's columns: number, time, what happened, the logger it came from. */
+const STEP_COLUMNS = '26px 96px 1fr 128px';
+const AGGREGATE_COLUMNS = '26px 1fr 128px';
 
 export function AskLogTab() {
   const detail = useK8sStore(s => s.detail);
@@ -61,13 +80,18 @@ export function AskLogTab() {
   const ask = useDk8sAskLogStore(s => s.ask);
   const cancel = useDk8sAskLogStore(s => s.cancel);
 
-  const [question, setQuestion] = useState('');
-  const [win, setWin] = useState<AskWindow>('10m');
-
   /* The answer on screen: the newest for this pod. */
   const run = runs.find(r => r.scope === scope);
 
-  /* The window's clock times, for the select's labels. */
+  /* The box holds the question the answer below is for — coming back to the
+     tab shows the pair, not an answer under an empty box. */
+  const [question, setQuestion] = useState(() => run?.question ?? '');
+  const [win, setWin] = useState<AskWindow>(() => run?.window ?? '10m');
+  const [winOpen, setWinOpen] = useState(false);
+  const winRef = useRef<HTMLButtonElement>(null);
+  const boxRef = useRef<HTMLInputElement>(null);
+
+  /* The window's clock times, for the button and its menu. */
   const ranges = useMemo(() => Object.fromEntries(WINDOWS.map(w => {
     const lw = askWindowLines(logs, w);
     return [w, windowRange(lw.from, lw.to)];
@@ -99,78 +123,215 @@ export function AskLogTab() {
     setWin(w);
   };
 
+  const canAsk = !!question.trim() && logs.length > 0;
+
+  /* Put a question in the box to be edited, rather than asked as it stands. */
+  const draft = (q: string) => {
+    setQuestion(q);
+    requestAnimationFrame(() => { boxRef.current?.focus(); boxRef.current?.select(); });
+  };
+
+  /* Right-click: what was clicked says what it is through `data-ask-*`. A
+     selection's Copy comes first wherever there is one; the question box gets
+     its editing entries from the surface menu. */
+  const menu = useSurfaceMenu((target, selection) => {
+    if (textInputAt(target)) return [];
+    const sel = selectionItems(selection);
+    const lead = (items: ContextMenuItem[]) => (sel.length ? [...sel, SEP('sel-sep'), ...items] : items);
+    const a = run?.answer;
+    const at = (n: number) => run?.numbered.get(n);
+
+    const cite = target.closest('[data-ask-line]') as HTMLElement | null;
+    if (cite) {
+      const l = at(Number(cite.dataset.askLine));
+      if (!l) return sel;
+      const msg = (l.message ?? l.text).trim();
+      return lead([
+        { id: 'open-line', label: 'Open in Logs', icon: <ExternalLinkIcon size={14} />, iconColor: ASK_LINK, onClick: () => openLine(l) },
+        { id: 'ask-line', label: 'Ask what led to this…', icon: <SparkleIcon size={14} />, iconColor: ASK, onClick: () => draft(`What led to this: ${msg.slice(0, 160)}`) },
+        SEP('line-sep'),
+        copyItem('copy-line', 'Copy line', l.text),
+        ...(l.message && l.message !== l.text ? [copyItem('copy-message', 'Copy message', l.message)] : []),
+      ]);
+    }
+
+    const step = target.closest('[data-ask-step]') as HTMLElement | null;
+    if (step && a) {
+      const s = a.steps[Number(step.dataset.askStep)];
+      if (!s) return sel;
+      const lines = s.lines.map(at).filter((l): l is LogLine => !!l);
+      return lead([
+        ...(lines[0] ? [{ id: 'open-step', label: 'Open the line in Logs', icon: <ExternalLinkIcon size={14} />, iconColor: ASK_LINK, onClick: () => openLine(lines[0]) }] : []),
+        ...(lines.length > 1 ? [{ id: 'open-step-all', label: `Show its ${lines.length} lines in Logs`, icon: <FilterIcon size={14} />, iconColor: ASK_LINK, onClick: () => openLines(lines) }] : []),
+        { id: 'ask-step', label: 'Ask about this step…', icon: <SparkleIcon size={14} />, iconColor: ASK, onClick: () => draft(`Why: ${s.text}`) },
+        SEP('step-sep'),
+        copyItem('copy-step', 'Copy step', s.text),
+        ...(lines[0] ? [copyItem('copy-step-line', 'Copy the line', lines[0].text)] : []),
+      ]);
+    }
+
+    const agg = target.closest('[data-ask-agg]') as HTMLElement | null;
+    if (agg && a) {
+      const g = a.aggregates[Number(agg.dataset.askAgg)];
+      if (!g) return sel;
+      const lines = g.lines.map(at).filter((l): l is LogLine => !!l);
+      return lead([
+        ...(lines.length ? [{ id: 'open-agg', label: `Show the ${lines.length} line${lines.length === 1 ? '' : 's'} in Logs`, icon: <FilterIcon size={14} />, iconColor: ASK_LINK, onClick: () => openLines(lines) }] : []),
+        copyItem('copy-agg', 'Copy', g.text),
+      ]);
+    }
+
+    const check = target.closest('[data-ask-check]') as HTMLElement | null;
+    if (check) {
+      const c = checks.find(x => x.id === check.dataset.askCheck);
+      if (!c) return sel;
+      return [
+        { id: 'ask-check', label: 'Ask this again', disabled: !logs.length, icon: <SendIcon size={14} />, iconColor: ASK, onClick: () => send(c.question, c.window as AskWindow) },
+        { id: 'edit-check', label: 'Edit before asking', icon: <PencilIcon size={14} />, iconColor: 'var(--color-ctx-rename)', onClick: () => { setWin(c.window as AskWindow); draft(c.question); } },
+        copyItem('copy-check', 'Copy question', c.question),
+        SEP('check-sep'),
+        { id: 'forget', label: 'Forget this check', danger: true, icon: <CloseIcon size={14} />, onClick: () => removeCheck(c.id) },
+      ];
+    }
+
+    const q = target.closest('[data-ask-q]') as HTMLElement | null;
+    if (q) {
+      const text = q.dataset.askQ!;
+      const same = q.dataset.askSame === 'true' && run ? run.window : undefined;
+      return [
+        { id: 'ask-q', label: 'Ask this', disabled: !logs.length, icon: <SendIcon size={14} />, iconColor: ASK, onClick: () => send(text, same) },
+        { id: 'edit-q', label: 'Edit before asking', icon: <PencilIcon size={14} />, iconColor: 'var(--color-ctx-rename)', onClick: () => draft(text) },
+        copyItem('copy-q', 'Copy question', text),
+      ];
+    }
+
+    if (run && target.closest('[data-ask-answer]')) {
+      const cited = a ? citedLines(a).map(at).filter((l): l is LogLine => !!l) : [];
+      return lead([
+        ...(a || run.text ? [copyItem('copy-answer', 'Copy answer', a ? answerText(a, run.numbered) : run.text)] : []),
+        ...(cited.length ? [{ id: 'open-all', label: `Show the ${cited.length} cited line${cited.length === 1 ? '' : 's'} in Logs`, icon: <FilterIcon size={14} />, iconColor: ASK_LINK, onClick: () => openLines(cited) }] : []),
+        ...(run.question ? [
+          SEP('ans-sep'),
+          { id: 'again', label: 'Ask it again', disabled: !logs.length || !!activeId, icon: <SendIcon size={14} />, iconColor: ASK, onClick: () => send(run.question, run.window) },
+          { id: 'save-check', label: 'Save as a check', icon: <SaveIcon size={14} />, iconColor: 'var(--color-info)', onClick: () => saveCheck(run.scope, run.question, run.window) },
+        ] : []),
+      ]);
+    }
+
+    return sel;
+  });
+
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col h-full min-h-0" style={{ background: PANEL, color: TEXT, fontSize: 13 }}
+         data-context-menu="ask-log" onContextMenu={menu.onContextMenu}>
+      {menu.element}
       {/* ── The question ── */}
-      <div className="flex flex-col gap-2.5 px-5 pt-4 pb-3 shrink-0"
-           style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        <span className="text-[11px] font-bold" style={{ letterSpacing: '0.05em', color: 'var(--color-text-secondary)' }}>
-          Ask about this window
-        </span>
-        <div className="flex items-center gap-2">
-          <div className="flex-1 min-w-0">
-            <TextInputView
-              value={question}
-              onChange={e => setQuestion(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') send(question); }}
-              placeholder="an id, or a question"
-              size="lg"
-              accentColor={AI}
-              width="fullWidth"
-              prefixIcon={<SparkleIcon size={IconSize.action} color={AI} />}
-            />
-          </div>
-          <SelectInputView
-            value={win}
-            onChange={v => setWin(v as AskWindow)}
-            size="lg"
-            accentColor={AI}
-            menuMinWidth={260}
-            options={WINDOWS.map(w => ({ value: w, label: `${ranges[w]} · ${ASK_WINDOW_NAME[w]}` }))}
+      <div className="flex items-center shrink-0" style={{ gap: 8, padding: '12px 14px 10px' }}>
+        <div className="flex items-center flex-1 min-w-0"
+             style={{ gap: 8, height: 34, padding: '0 12px', border: `1px solid ${ASK}`, borderRadius: 8, background: CARD }}>
+          <SparkleIcon size={14} color={ASK} style={{ flexShrink: 0 }} />
+          <input
+            ref={boxRef}
+            type="text"
+            aria-label="Ask about this window"
+            value={question}
+            onChange={e => setQuestion(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') send(question); }}
+            className="flex-1 min-w-0"
+            style={{ border: 'none', background: 'none', color: TEXT, fontSize: 13, outline: 'none', padding: 0 }}
           />
-          {activeId ? (
-            <ButtonView size="lg" variant="secondary" onClick={cancel}
-                        iconLeft={<StopSquareIcon size={IconSize.action} />}>
-              Stop
-            </ButtonView>
-          ) : (
-            <ButtonView size="lg" variant="primary" accentColor={AI} disabled={!question.trim() || !logs.length}
-                        onClick={() => send(question)}
-                        style={question.trim() && logs.length
-                          ? { background: AI, borderColor: AI, color: AI_INK, fontWeight: 600 } : undefined}>
-              Ask
-            </ButtonView>
-          )}
+          <span className="shrink-0" style={{ fontSize: 11, color: QUIET }}>an id, or a question</span>
         </div>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[11px] mr-1" style={{ color: 'var(--color-text-muted)' }}>try</span>
-          {tries.map(t => (
-            <ChipView key={t} label={t} size="sm" onClick={() => send(t)} title="Ask this" />
-          ))}
-          {checks.length > 0 && (
-            <span className="text-[11px] ml-3 mr-1" style={{ color: 'var(--color-text-muted)' }}>your checks</span>
-          )}
-          {checks.map(c => (
-            <ChipView key={c.id} label={`${c.question} · ${ASK_WINDOW_NAME[c.window as AskWindow] ?? c.window}`} size="sm"
-                      color={AI} onClick={() => send(c.question, c.window as AskWindow)}
-                      onRemove={() => removeCheck(c.id)} removeLabel="Forget this check" title="Ask this again" />
-          ))}
-        </div>
+
+        {/* The window: a clock, the clock times it covers, and a menu of the
+            others — the times rather than "last 10 minutes", because a pod
+            that went quiet an hour ago has its last ten minutes at 13:00. */}
+        <button
+          ref={winRef}
+          type="button"
+          onClick={() => setWinOpen(o => !o)}
+          title={ASK_WINDOW_NAME[win]}
+          aria-haspopup="menu"
+          aria-expanded={winOpen}
+          className="inline-flex items-center shrink-0 cursor-pointer"
+          style={{
+            gap: 6, height: 34, padding: '0 11px', border: `1px solid ${EDGE}`, borderRadius: 8,
+            background: CARD, color: TEXT, fontSize: 12, whiteSpace: 'nowrap',
+          }}
+        >
+          <ClockIcon size={12} color={QUIET} strokeWidth={2} />
+          {ranges[win]}
+          <ChevronDownIcon size={11} color={QUIET} />
+        </button>
+        <ContextMenuView
+          anchorEl={winRef.current}
+          open={winOpen}
+          onClose={() => setWinOpen(false)}
+          align="right"
+          width="md"
+          items={WINDOWS.map(w => ({
+            id: w,
+            label: ranges[w],
+            description: ASK_WINDOW_NAME[w],
+            icon: w === win ? <CheckIcon size={IconSize.action} /> : <ClockIcon size={IconSize.action} strokeWidth={2} />,
+            iconColor: w === win ? ASK : undefined,
+            onClick: () => { setWin(w); setWinOpen(false); },
+          }))}
+        />
+
+        {activeId ? (
+          <ButtonView variant="secondary" onClick={cancel}
+                      iconLeft={<StopSquareIcon size={IconSize.action} />}
+                      style={{ ...OUTLINE_BUTTON, height: 34, padding: '0 14px', borderRadius: 8, background: CARD, color: TEXT, fontSize: 12.5 }}>
+            Stop
+          </ButtonView>
+        ) : (
+          <ButtonView variant="primary" accentColor={ASK} disabled={!canAsk}
+                      onClick={() => send(question)}
+                      style={{
+                        height: 34, padding: '0 14px', border: 'none', borderRadius: 8,
+                        background: ASK, color: ASK_INK, fontSize: 12.5, fontWeight: 600,
+                      }}>
+            Ask
+          </ButtonView>
+        )}
+      </div>
+
+      <div className="flex items-center flex-wrap shrink-0" style={{ gap: 6, padding: '0 14px 10px' }}>
+        <span style={{ fontSize: 11, color: QUIET }}>try</span>
+        {tries.map(t => (
+          <span key={t} className="contents" data-ask-q={t}>
+            <ChipView label={t} size="sm" onClick={() => send(t)} title="Ask this" style={{ ...OUTLINE_PILL, height: 24 }} />
+          </span>
+        ))}
+        {checks.length > 0 && (
+          <span style={{ fontSize: 11, color: QUIET, marginLeft: 8 }}>your checks</span>
+        )}
+        {checks.map(c => (
+          <span key={c.id} className="contents" data-ask-check={c.id}>
+            <ChipView label={`${c.question} · ${ASK_WINDOW_NAME[c.window as AskWindow] ?? c.window}`} size="sm"
+                      onClick={() => send(c.question, c.window as AskWindow)}
+                      onRemove={() => removeCheck(c.id)} removeLabel="Forget this check" title="Ask this again"
+                      style={{ ...OUTLINE_PILL, height: 24, color: ASK }} />
+          </span>
+        ))}
         {!logs.length && (
-          <span className="text-[11.5px]" style={{ color: 'var(--color-text-muted)' }}>
+          <span className="basis-full" style={{ fontSize: 11.5, color: QUIET }}>
             There is no log in view to ask about — open the Logs tab and fetch a window first.
           </span>
         )}
       </div>
 
-      {run ? <Answer run={run} onAsk={q => send(q, run.window)} /> : (
-        <div className="flex-1 flex items-center justify-center px-8">
-          <span className="text-[12px] leading-relaxed text-center" style={{ color: 'var(--color-text-muted)', maxWidth: 520 }}>
-            Ask by id or in words over a time window. Every claim in the answer carries the lines it came from,
-            each a click away in the Logs tab — evidence, not a summary you must trust.
-          </span>
-        </div>
-      )}
+      <div className="flex flex-1 min-h-0" style={{ borderTop: `1px solid ${EDGE}` }}>
+        {run ? <Answer run={run} logs={logs} onAsk={q => send(q, run.window)} /> : (
+          <div className="flex-1 flex items-center justify-center px-8">
+            <span className="leading-relaxed text-center" style={{ fontSize: 12, color: QUIET, maxWidth: 520 }}>
+              Ask by id or in words over a time window. Every claim in the answer carries the lines it came from,
+              each a click away in the Logs tab — evidence, not a summary you must trust.
+            </span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -189,14 +350,75 @@ function openLines(lines: LogLine[]) {
   s.setDetailTab('logs');
 }
 
-function Answer({ run, onAsk }: { run: AskRun; onAsk: (q: string) => void }) {
+/**
+ * A sentence of the answer, with its ids in teal, its values in amber and its
+ * times and quoted names monospaced — see `answerSpans` for what counts as
+ * which. Everything else takes the colour of the paragraph it is in.
+ */
+function Spans({ text }: { text: string }) {
+  return (
+    <>
+      {answerSpans(text).map((s, i) => {
+        switch (s.kind) {
+          case 'id': return <span key={i} style={{ fontFamily: MONO, color: ASK_ID }}>{s.text}</span>;
+          case 'value': return <span key={i} style={{ fontFamily: MONO, color: ASK_VALUE }}>{s.text}</span>;
+          case 'time': return <span key={i} style={{ fontFamily: MONO, color: TEXT }}>{s.text}</span>;
+          case 'code': return <span key={i} style={{ fontFamily: MONO }}>{s.text}</span>;
+          case 'count': return <span key={i} style={{ color: TEXT }}>{s.text}</span>;
+          default: return <span key={i}>{s.text}</span>;
+        }
+      })}
+    </>
+  );
+}
+
+/** "[1–6]" after a sentence: the lines it stands on, opened as one filter. */
+function Cite({ lines, onOpen }: { lines: number[]; onOpen: () => void }) {
+  if (!lines.length) return null;
+  return (
+    <button type="button" onClick={onOpen} title="Open these lines in Logs"
+            className="border-none bg-transparent cursor-pointer p-0"
+            style={{ color: ASK, font: 'inherit' }}>
+      {' '}[{citeLabel(lines)}]
+    </button>
+  );
+}
+
+/** A link into the Logs tab — "OrderService ›", "see them ›". */
+function LogLink({ children, title, onClick }: { children: React.ReactNode; title: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} title={title}
+            className="border-none bg-transparent cursor-pointer p-0 truncate"
+            style={{ fontSize: 11.5, textAlign: 'right', color: ASK_LINK }}>
+      {children} &rsaquo;
+    </button>
+  );
+}
+
+function Answer({ run, logs, onAsk }: { run: AskRun; logs: LogLine[]; onAsk: (q: string) => void }) {
   const setVerdict = useDk8sAskLogStore(s => s.setVerdict);
   const [copied, setCopied] = useState(false);
   const a = run.answer;
-  const cited = a ? citedLines(a) : [];
-  const citedLog = cited.map(n => run.numbered.get(n)).filter((l): l is LogLine => !!l);
+  const cited = useMemo(() => (a ? citedLines(a) : []), [a]);
+  const citedLog = useMemo(
+    () => cited.map(n => run.numbered.get(n)).filter((l): l is LogLine => !!l),
+    [cited, run.numbered],
+  );
   const seconds = run.finishedAt ? ((run.finishedAt - run.startedAt) / 1000).toFixed(1) : undefined;
   const hms = (ts?: number) => (ts === undefined ? '?' : formatLogTime(ts).slice(0, 8));
+
+  /* The exception under a cited line — the red line on the board's ERROR
+     card. The numbered map holds the event; its first continuation line is
+     still in the buffer right after it, found in one pass. */
+  const exceptionOf = useMemo(() => {
+    const out = new Map<number, string>();
+    const want = new Set(citedLog.slice(0, 40).map(l => l.seq));
+    if (!want.size) return out;
+    for (let i = 0; i < logs.length - 1; i++) {
+      if (want.has(logs[i].seq) && logs[i + 1].continuation) out.set(logs[i].seq, logs[i + 1].text.trim());
+    }
+    return out;
+  }, [logs, citedLog]);
 
   const copy = () => {
     void navigator.clipboard?.writeText(a ? answerText(a, run.numbered) : run.text);
@@ -205,219 +427,252 @@ function Answer({ run, onAsk }: { run: AskRun; onAsk: (q: string) => void }) {
   };
 
   const at = (n: number) => run.numbered.get(n);
+  const linesOf = (ns: number[]) => ns.map(at).filter((l): l is LogLine => !!l);
+  const hasTable = !!a && (a.steps.length > 0 || a.aggregates.length > 0);
 
   return (
-    <div className="flex flex-1 min-h-0">
+    <>
       {/* ── The answer ── */}
-      <div className="flex-1 min-w-0 overflow-auto px-5 py-4 flex flex-col gap-4">
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold" style={{ letterSpacing: '0.05em', color: 'var(--color-text-secondary)' }}>ANSWER</span>
-          <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+      <div className="flex-1 min-w-0 flex flex-col overflow-auto" style={{ padding: '14px 16px', gap: 12 }}>
+        <div className="flex items-center shrink-0" style={{ gap: 8 }}>
+          <span style={{ ...HEAD, color: ASK }}>ANSWER</span>
+          <span style={{ fontSize: 11, color: QUIET }}>
             read {run.total.toLocaleString()} lines · {hms(run.from)}&ndash;{hms(run.to)}
             {seconds ? ` · ${seconds}s` : ''}
           </span>
           <div className="flex-1" />
-          <ButtonView size="xs" variant="secondary" disabled={run.streaming || (!a && !run.text)} onClick={copy}
-                      iconLeft={<CopyIcon size={IconSize.inline} />}>
+          <ButtonView variant="secondary" disabled={run.streaming || (!a && !run.text)} onClick={copy}
+                      style={OUTLINE_BUTTON}>
             {copied ? 'Copied' : 'Copy'}
           </ButtonView>
-          <ButtonView size="xs" variant="secondary" disabled={!citedLog.length} onClick={() => openLines(citedLog)}
-                      iconLeft={<FileTextIcon size={IconSize.inline} />}>
+          <ButtonView variant="secondary" disabled={!citedLog.length} onClick={() => openLines(citedLog)}
+                      style={OUTLINE_BUTTON}>
             Open all in Logs
           </ButtonView>
         </div>
 
-        <div className="text-[13px]" style={{ color: 'var(--color-text-primary)' }}>{run.question}</div>
-
-        {run.streaming && (
-          <div className="flex items-center gap-2 text-[12px]" style={{ color: 'var(--color-text-muted)' }}>
-            <SpinnerIcon size={IconSize.action} color={AI} />
-            Reading {run.sent.toLocaleString()} of {run.total.toLocaleString()} lines{run.text ? ` · ${run.text.length.toLocaleString()} characters back` : '…'}
-          </div>
-        )}
-        {run.error && (
-          <div className="px-3 py-2 rounded-md text-[12px]"
-               style={{ color: 'var(--color-error)', background: 'color-mix(in srgb, var(--color-error) 10%, transparent)' }}>
-            {run.error}
-          </div>
-        )}
-
-        {/* Prose when the model sent no JSON: shown as it came, with no
-            citations drawn, because none were given. */}
-        {!run.streaming && !a && run.text && (
-          <div className="text-[12.5px] leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--color-text-primary)' }}>
-            {run.text}
-            <div className="mt-2 text-[11px]" style={{ color: 'var(--color-warning)' }}>
-              This answer came back without its line numbers, so nothing in it links to the log.
+        <div className="shrink-0" data-ask-answer
+             style={{ padding: '12px 14px', border: `1px solid ${EDGE}`, borderRadius: 9, background: CARD, fontSize: 13, lineHeight: 1.65 }}>
+          {run.streaming && (
+            <div className="flex items-center" style={{ gap: 8, fontSize: 12, color: QUIET }}>
+              <SpinnerIcon size={IconSize.action} color={ASK} />
+              Reading {run.sent.toLocaleString()} of {run.total.toLocaleString()} lines{run.text ? ` · ${run.text.length.toLocaleString()} characters back` : '…'}
             </div>
-          </div>
-        )}
+          )}
+          {run.error && (
+            <div style={{ fontSize: 12, color: ASK_ERROR }}>{run.error}</div>
+          )}
 
-        {a && (
+          {/* Prose when the model sent no JSON: shown as it came, with no
+              citations drawn, because none were given. */}
+          {!run.streaming && !a && run.text && (
+            <div className="whitespace-pre-wrap" style={{ fontSize: 12.5, color: TEXT }}>
+              {run.text}
+              <div style={{ marginTop: 8, fontSize: 11, color: ASK_WARN }}>
+                This answer came back without its line numbers, so nothing in it links to the log.
+              </div>
+            </div>
+          )}
+
+          {/* The first paragraph is the answer; the ones after it are what
+              surrounds it, a step quieter — the board's two voices. */}
+          {a && a.answer.map((p, i) => (i === 0 ? (
+            <span key={i} style={{ color: TEXT }}>
+              <Spans text={p.text} />
+              <Cite lines={p.cites} onOpen={() => openLines(linesOf(p.cites))} />
+            </span>
+          ) : (
+            <div key={i} style={{ marginTop: 8, color: LABEL, fontSize: 12.5 }}>
+              <Spans text={p.text} />
+              <Cite lines={p.cites} onOpen={() => openLines(linesOf(p.cites))} />
+            </div>
+          )))}
+          {!run.streaming && !run.error && !run.text && !a && (
+            <span style={{ fontSize: 12, color: QUIET }}>Nothing came back.</span>
+          )}
+        </div>
+
+        {a && hasTable && (
           <>
-            <div className="flex flex-col gap-2.5">
-              {a.answer.map((p, i) => (
-                <p key={i} className="m-0 text-[13px] leading-relaxed" style={{ color: 'var(--color-text-primary)' }}>
-                  {p.text}
-                  {p.cites.length > 0 && (
-                    <button type="button" onClick={() => openLines(p.cites.map(at).filter((l): l is LogLine => !!l))}
-                            title="Open these lines in Logs"
-                            className="ml-1 px-1 rounded border-none cursor-pointer text-[11px] font-mono"
-                            style={{ color: AI, background: `color-mix(in srgb, ${AI} 14%, transparent)` }}>
-                      [{citeLabel(p.cites)}]
-                    </button>
-                  )}
-                </p>
+            <div className="flex items-center shrink-0" style={{ gap: 8 }}>
+              <span style={{ ...HEAD, color: LABEL }}>IN ORDER</span>
+              <span style={{ fontSize: 11, color: QUIET }}>every step carries the line it came from</span>
+            </div>
+
+            <div className="flex flex-col overflow-hidden"
+                 style={{ flex: '1 0 auto', border: `1px solid ${EDGE}`, borderRadius: 9, background: CARD }}>
+              {a.steps.map((s, i) => {
+                const line = at(s.lines[0]);
+                const time = s.time ?? (line?.ts !== undefined ? formatLogTime(line.ts) : '');
+                const logger = s.logger ?? (line?.logger ? shortName(line.logger) : undefined);
+                const tone = line?.level === 'error' ? ASK_ERROR : line?.level === 'warn' ? ASK_WARN : undefined;
+                const last = i === a.steps.length - 1 && !a.aggregates.length;
+                return (
+                  <div key={i} className="grid items-center" data-ask-step={i}
+                       style={{
+                         gridTemplateColumns: STEP_COLUMNS, gap: 10, padding: '8px 12px',
+                         borderBottom: last ? undefined : `1px solid ${DIVIDER}`,
+                         background: line?.level === 'error' ? ASK_ERROR_ROW : undefined,
+                       }}>
+                    <span style={{ fontSize: 11, color: ASK }}>{i + 1}</span>
+                    <span className="truncate" style={{ fontFamily: MONO, fontSize: 11.5, color: QUIET }}>{time}</span>
+                    {/* A failed or warning step is one colour end to end, as
+                        on the board; a plain one gets its ids coloured. */}
+                    <span className="min-w-0" title={s.text} style={{ fontSize: 12.5, color: tone ?? TEXT }}>
+                      {tone ? s.text : <Spans text={s.text} />}
+                    </span>
+                    {line ? (
+                      <LogLink title={`Open line ${s.lines[0]} in Logs`} onClick={() => openLine(line)}>
+                        {logger ?? `line ${s.lines[0]}`}
+                      </LogLink>
+                    ) : <span />}
+                  </div>
+                );
+              })}
+              {a.aggregates.map((g, i) => (
+                <div key={`g${i}`} className="grid items-center" data-ask-agg={i}
+                     style={{
+                       gridTemplateColumns: AGGREGATE_COLUMNS, gap: 10, padding: '8px 12px',
+                       borderBottom: i === a.aggregates.length - 1 ? undefined : `1px solid ${DIVIDER}`,
+                     }}>
+                  <span style={{ fontSize: 11, color: ASK }}>{a.steps.length + i + 1}</span>
+                  <span className="min-w-0" style={{ fontSize: 12.5, color: LABEL }}>
+                    {g.text}
+                    {g.lines.length > 0 && (
+                      <>
+                        {' — '}
+                        <span style={{ color: QUIET }}>{g.lines.length} line{g.lines.length === 1 ? '' : 's'} behind this</span>
+                      </>
+                    )}
+                  </span>
+                  {g.lines.length > 0 ? (
+                    <LogLink title="Open these lines in Logs" onClick={() => openLines(linesOf(g.lines))}>
+                      see them
+                    </LogLink>
+                  ) : <span />}
+                </div>
               ))}
             </div>
-
-            {a.steps.length > 0 && (
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-[11px] font-bold" style={{ letterSpacing: '0.05em', color: 'var(--color-text-secondary)' }}>IN ORDER</span>
-                  <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>every step carries the line it came from</span>
-                </div>
-                {a.steps.map((s, i) => {
-                  const line = at(s.lines[0]);
-                  const time = s.time ?? (line?.ts !== undefined ? formatLogTime(line.ts) : '');
-                  const logger = s.logger ?? (line?.logger ? shortName(line.logger) : undefined);
-                  return (
-                    <div key={i} className="flex items-center gap-3 py-1.5 px-2 rounded"
-                         style={{ background: 'var(--color-surface)' }}>
-                      <span className="shrink-0 flex items-center justify-center rounded-full text-[10.5px] font-bold"
-                            style={{ width: 20, height: 20, color: AI, background: `color-mix(in srgb, ${AI} 16%, transparent)` }}>
-                        {i + 1}
-                      </span>
-                      <span className="shrink-0 font-mono text-[11.5px]" style={{ color: 'var(--color-text-muted)', width: 96 }}>{time}</span>
-                      <span className="flex-1 min-w-0 text-[12.5px] truncate" title={s.text}
-                            style={{ color: line?.level === 'error' ? 'var(--color-error)' : line?.level === 'warn' ? 'var(--color-warning)' : 'var(--color-text-primary)' }}>
-                        {s.text}
-                      </span>
-                      {line && (
-                        <button type="button" onClick={() => openLine(line)}
-                                title={`Open line ${s.lines[0]} in Logs`}
-                                className="shrink-0 flex items-center gap-0.5 border-none bg-transparent cursor-pointer text-[11.5px] font-mono"
-                                style={{ color: 'var(--color-text-secondary)' }}>
-                          {logger ?? `line ${s.lines[0]}`} <ChevronRightIcon size={IconSize.inline} />
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-                {a.aggregates.map((g, i) => (
-                  <div key={`g${i}`} className="flex items-center gap-3 py-1.5 px-2 rounded"
-                       style={{ border: '1px dashed var(--color-surface-border)' }}>
-                    <span className="shrink-0 flex items-center justify-center rounded-full text-[10.5px] font-bold"
-                          style={{ width: 20, height: 20, color: 'var(--color-warning)', background: 'color-mix(in srgb, var(--color-warning) 16%, transparent)' }}>
-                      {a.steps.length + i + 1}
-                    </span>
-                    <span className="flex-1 min-w-0 text-[12.5px]" style={{ color: 'var(--color-text-primary)' }}>
-                      {g.text}{g.lines.length ? ` — ${g.lines.length} line${g.lines.length === 1 ? '' : 's'} behind this` : ''}
-                    </span>
-                    {g.lines.length > 0 && (
-                      <button type="button" onClick={() => openLines(g.lines.map(at).filter((l): l is LogLine => !!l))}
-                              className="shrink-0 flex items-center gap-0.5 border-none bg-transparent cursor-pointer text-[11.5px]"
-                              style={{ color: 'var(--color-text-secondary)' }}>
-                        see them <ChevronRightIcon size={IconSize.inline} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {a.followUps.length > 0 && (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {a.followUps.map(f => (
-                  <ChipView key={f} label={f} size="sm" onClick={() => onAsk(f)} title="Ask this over the same window" />
-                ))}
-              </div>
-            )}
           </>
+        )}
+
+        {a && a.followUps.length > 0 && (
+          <div className="flex flex-wrap shrink-0" style={{ gap: 8 }}>
+            {a.followUps.map(f => (
+              <span key={f} className="contents" data-ask-q={f} data-ask-same="true">
+                <ChipView label={f} size="md" onClick={() => onAsk(f)} title="Ask this over the same window"
+                          style={{ ...OUTLINE_PILL, height: 28, padding: '0 11px' }} />
+              </span>
+            ))}
+          </div>
         )}
       </div>
 
-      {/* ── What it read, and the lines behind it ── */}
-      <div className="shrink-0 flex flex-col min-h-0 overflow-auto"
-           style={{ width: 330, borderLeft: '1px solid var(--color-surface-border)', background: 'var(--color-surface)' }}>
-        <div className="px-4 pt-4 pb-2 flex items-baseline gap-2">
-          <span className="text-[11px] font-bold" style={{ letterSpacing: '0.05em', color: 'var(--color-text-secondary)' }}>THE LINES BEHIND IT</span>
-          <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>{cited.length} cited</span>
+      {/* ── The lines behind it, and what it read ── */}
+      <div className="shrink-0 flex flex-col min-h-0"
+           style={{ width: 330, borderLeft: `1px solid ${EDGE}`, background: CARD }}>
+        <div className="flex items-center shrink-0" style={{ gap: 8, padding: '12px 14px 8px' }}>
+          <span style={RAIL_HEAD}>THE LINES BEHIND IT</span>
+          <span style={{ fontSize: 10.5, color: QUIET }}>{cited.length} cited</span>
         </div>
-        <div className="flex flex-col gap-2 px-4 pb-3">
+        <div className="flex flex-col min-h-0 overflow-auto" style={{ flex: '0 1 auto', gap: 6, padding: '0 10px 10px' }}>
           {cited.slice(0, 40).map(n => {
-            const l = at(n)!;
+            const l = at(n);
             if (!l) return null;
+            const exception = exceptionOf.get(l.seq);
             return (
-              <button key={n} type="button" onClick={() => openLine(l)} title="Open this line in Logs"
-                      className="flex flex-col gap-0.5 text-left border-none cursor-pointer px-2 py-1.5 rounded"
-                      style={{ background: 'var(--color-panel)' }}>
-                <span className="font-mono text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
-                  [{n}] {l.ts !== undefined ? formatLogTime(l.ts) : ''} {l.level !== 'other' ? l.level.toUpperCase() : ''} {l.logger ? shortName(l.logger) : ''}
+              <button key={n} type="button" onClick={() => openLine(l)} title="Open this line in Logs" data-ask-line={n}
+                      className="flex flex-col text-left cursor-pointer shrink-0"
+                      style={{
+                        padding: '7px 9px', border: `1px solid ${EDGE}`, borderLeft: `2px solid ${ASK}`, borderRadius: 6,
+                        background: PANEL, fontFamily: MONO, fontSize: 11, lineHeight: 1.5,
+                      }}>
+                <span style={{ color: QUIET }}>
+                  [{n}] {[
+                    l.ts !== undefined ? formatLogTime(l.ts) : '',
+                    l.level !== 'other' ? l.level.toUpperCase() : '',
+                    l.logger ? shortName(l.logger) : '',
+                  ].filter(Boolean).join(' ')}
                 </span>
-                <span className="font-mono text-[11px] break-words"
-                      style={{ color: l.level === 'error' ? 'var(--color-error)' : l.level === 'warn' ? 'var(--color-warning)' : 'var(--color-text-primary)' }}>
-                  {(l.message ?? l.text).slice(0, 240)}
-                </span>
+                <span className="break-words" style={{ color: TEXT }}>{(l.message ?? l.text).slice(0, 240)}</span>
+                {exception && <span className="break-words" style={{ color: ASK_ERROR }}>{exception.slice(0, 240)}</span>}
               </button>
             );
           })}
           {!cited.length && (
-            <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+            <span style={{ fontSize: 11, color: QUIET, padding: '0 4px' }}>
               {run.streaming ? 'The lines appear with the answer.' : 'Nothing cited.'}
             </span>
           )}
         </div>
 
-        <div className="px-4 py-3 flex flex-col gap-1.5" style={{ borderTop: '1px solid var(--color-surface-border)' }}>
-          <span className="text-[11px] font-bold mb-1" style={{ letterSpacing: '0.05em', color: 'var(--color-text-secondary)' }}>WHAT IT READ</span>
-          <Fact label="window" icon={<ClockIcon size={IconSize.inline} />}>{hms(run.from)} &ndash; {hms(run.to)}</Fact>
+        <div className="shrink-0" style={{ ...RAIL_HEAD, padding: '10px 14px 8px', borderTop: `1px solid ${EDGE}` }}>WHAT IT READ</div>
+        <div className="shrink-0" style={{ padding: '0 14px 10px', fontSize: 11.5, lineHeight: 1.8, color: LABEL }}>
+          <Fact label="window">{hms(run.from)} &ndash; {hms(run.to)}</Fact>
           <Fact label="lines">
             {run.total.toLocaleString()}{run.sent < run.total ? ` · ${run.sent.toLocaleString()} sent` : ''}
           </Fact>
           <Fact label="loggers touched">
             {(a?.loggers.length || run.loggersTouched.length).toLocaleString()} of {run.loggersKnown.toLocaleString()}
           </Fact>
-          <Fact label="pod">{run.pod ? `…${run.pod.slice(-5)}` : '—'}</Fact>
-          <div className="flex items-start gap-2 mt-2 text-[11px] leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-            <span className="shrink-0 pt-0.5"><ShieldIcon size={IconSize.action} /></span>
-            <span>
-              Secret values in the window are replaced before anything is sent, and the answer never carries one.
-              {run.redactionNote ? ` Taken out of this one: ${run.redactionNote}.` : ''} Which provider answers the
-              question is yours to choose in Settings.
-            </span>
+          <Fact label="pod" mono>{run.pod ? `…${run.pod.slice(-5)}` : '—'}</Fact>
+        </div>
+
+        <div className="flex shrink-0"
+             style={{ margin: '0 14px', padding: '9px 10px', gap: 8, border: `1px solid ${EDGE}`, borderRadius: 7, background: PANEL }}>
+          <WarningTriangleIcon size={13} color={ASK_WARN} style={{ flexShrink: 0, marginTop: 1 }} />
+          <div style={{ fontSize: 11, lineHeight: 1.55, color: LABEL }}>
+            Secret values in the window are replaced before anything is sent, and the answer never carries one.
+            {run.redactionNote ? ` Taken out of this one: ${run.redactionNote}.` : ''} Which provider answers the
+            question is yours to choose in Settings.
           </div>
         </div>
 
-        <div className="mt-auto px-4 py-3 flex items-center gap-2" style={{ borderTop: '1px solid var(--color-surface-border)' }}>
-          <span className="text-[11.5px]" style={{ color: 'var(--color-text-secondary)' }}>Was this right?</span>
-          <ButtonView size="xs" variant="secondary" disabled={run.streaming || !!run.error}
-                      aria-label="Yes, this was right" title="Yes, this was right"
-                      color={run.verdict === 'right' ? 'var(--color-success)' : undefined}
-                      onClick={() => setVerdict(run.id, 'right')}
-                      iconLeft={<ThumbUpIcon size={IconSize.inline} color="var(--color-success)" />} />
-          <ButtonView size="xs" variant="secondary" disabled={run.streaming || !!run.error}
-                      aria-label="No, this was wrong" title="No, this was wrong"
-                      color={run.verdict === 'wrong' ? 'var(--color-error)' : undefined}
-                      onClick={() => setVerdict(run.id, 'wrong')}
-                      iconLeft={<ThumbDownIcon size={IconSize.inline} color="var(--color-error)" />} />
+        <div className="flex-1" />
+        <div className="flex items-center shrink-0" style={{ gap: 8, padding: '10px 14px', borderTop: `1px solid ${EDGE}` }}>
+          <span style={{ fontSize: 11, color: QUIET }}>Was this right?</span>
+          <Verdict on={run.verdict === 'right'} color={ASK_YES} label="Yes, this was right"
+                   disabled={run.streaming || !!run.error} onClick={() => setVerdict(run.id, 'right')}
+                   icon={<CheckIcon size={12} />} />
+          <Verdict on={run.verdict === 'wrong'} color={ASK_NO} label="No, this was wrong"
+                   disabled={run.streaming || !!run.error} onClick={() => setVerdict(run.id, 'wrong')}
+                   icon={<CloseIcon size={12} />} />
           <div className="flex-1" />
-          <ButtonView size="xs" variant="secondary" disabled={!run.question}
+          <ButtonView variant="secondary" disabled={!run.question}
                       title="Keep this question, to ask it again over the same length of window"
-                      onClick={() => saveCheck(run.scope, run.question, run.window)}>
+                      onClick={() => saveCheck(run.scope, run.question, run.window)}
+                      style={OUTLINE_BUTTON}>
             Save as a check
           </ButtonView>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
-function Fact({ label, icon, children }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {
+/** ✓ or ✗: a 24px square, the glyph in its colour, filled faintly once chosen. */
+function Verdict({ on, color, label, disabled, onClick, icon }: {
+  on: boolean; color: string; label: string; disabled: boolean; onClick: () => void; icon: React.ReactNode;
+}) {
   return (
-    <div className="flex items-center gap-2 text-[11.5px]">
-      <span className="flex items-center gap-1" style={{ color: 'var(--color-text-muted)', width: 110 }}>{icon}{label}</span>
-      <span className="font-mono" style={{ color: 'var(--color-text-primary)' }}>{children}</span>
+    <ButtonView variant="secondary" aria-label={label} title={label} disabled={disabled} onClick={onClick}
+                aria-pressed={on}
+                style={{
+                  ...OUTLINE_BUTTON, width: 24, padding: 0, color,
+                  border: `1px solid ${on ? color : EDGE}`,
+                  background: on ? `color-mix(in srgb, ${color} 16%, transparent)` : 'none',
+                }}>
+      {icon}
+    </ButtonView>
+  );
+}
+
+/** One row of WHAT IT READ: the name on the left, the value right-aligned. */
+function Fact({ label, mono, children }: { label: string; mono?: boolean; children: React.ReactNode }) {
+  return (
+    <div className="flex">
+      <span className="flex-1">{label}</span>
+      <span style={{ color: TEXT, fontFamily: mono ? MONO : undefined }}>{children}</span>
     </div>
   );
 }

@@ -38,7 +38,8 @@ import { useUiStateStore } from '../../store/ui-state-store';
 import { logLineSettings, onLadder, tailLabel, contextLabel } from './log-settings';
 import { findPayload, payloadNote, type LogPayload } from './log-payload';
 import { markOf, keepMarked, nextMarked, type MarkHit } from './logger-marks';
-import { useMarkIndex, MarkedBar, MarkMapStrip, MarkedRail, MarkedFooter } from './LogMarks';
+import { useMarkIndex, MarkedBar, MarkMapStrip, MarkedRail, MarkedCount, MarkedJump } from './LogMarks';
+import { OUTLINE_BUTTON } from './asklog-tone';
 import { LineFieldsView } from './LineFieldsView';
 import { useDeterminantsFor } from './use-determinants';
 import { SummaryPanel } from './SummaryPanel';
@@ -70,8 +71,11 @@ import { ExportLogsModal } from './ExportLogsModal';
 import { ACCENT } from './tone';
 import {
   BAND_FLOOR_PX, BAND_GAP_PX, markerBox, bandAt, hoverCardPlacement, type CardPlacement,
+  GUTTER_W, GUTTER_BLOCK_W, blockColor, tickColor, MARKER_EDGE,
 } from './ribbon-layout';
 import { RibbonHover, HOVER_CARD_W } from './RibbonHover';
+import { LineCard, cardRowStyle, type LineCardKind } from './ClickedLine';
+import { FOLLOW } from './follow-tone';
 /**
  * One size for every control in the toolbar.
  *
@@ -105,10 +109,10 @@ const ROW_HEIGHT = 19;
  */
 const RAIL_MIN_WIDTH = 720;
 const OVERSCAN = 25;
-/** Width of the ribbon column, including its gutter. */
-const RIBBON_W = 38;
-/** The bands themselves. Thick enough to read as colour and to click. */
-const RIBBON_BAND_W = 20;
+/** Width of the ribbon column, including its gutter — the pane's own gutter, see `ribbon-layout`. */
+const RIBBON_W = GUTTER_W;
+/** The blocks themselves. */
+const RIBBON_BAND_W = GUTTER_BLOCK_W;
 const LEVEL_SHORT: Record<LogLevel, string> = {
   error: 'err', warn: 'wrn', info: 'info', debug: 'dbg', other: 'plain',
 };
@@ -280,7 +284,7 @@ const BAND_GAP = BAND_GAP_PX;
 
 function DensityRibbon({
   lines, scrollTop, contentHeight, viewportHeight, onJump, onScrollTo, onDragStart, onDragEnd,
-  sharedRange, viewTimes,
+  sharedRange, viewTimes, onCompact,
 }: {
   lines: MatchedLine[];
   /** One clock across a split: bands become equal slices of this span. */
@@ -314,6 +318,8 @@ function DensityRibbon({
    */
   onDragStart: () => void;
   onDragEnd: () => void;
+  /** Told when the gutter goes compact or back — a split pane says so in its title strip. */
+  onCompact?: (compact: boolean) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(400);
@@ -345,6 +351,7 @@ function DensityRibbon({
   const bands = ribbonBands(height, BAND_MIN, BAND_GAP);
   /* Too short for density to mean anything: marks instead of bands. */
   const compact = height < COMPACT_RIBBON_PX;
+  useEffect(() => { onCompact?.(compact); }, [compact, onCompact]);
   const buckets = useMemo(
     () => (compact ? [] : sharedRange
       ? timeBuckets(lines, bands, sharedRange)
@@ -470,8 +477,8 @@ function DensityRibbon({
   };
 
   return (
-    <div ref={columnRef} className="relative shrink-0 flex flex-col items-stretch py-1"
-         style={{ width: RIBBON_W }}>
+    <div ref={columnRef} className="relative shrink-0 flex flex-col items-stretch"
+         style={{ width: RIBBON_W, padding: '3px 0', borderLeft: '1px solid var(--color-surface-border)' }}>
       <div
         ref={ref}
         /* `min-h-0`: the track measures the pane it is in, never the bands it
@@ -483,8 +490,8 @@ function DensityRibbon({
            glows past that; clipping the track cut its sides and its glow off
            and left two floating lines. `ribbonBands` already guarantees the
            bands fit, so there is nothing for a clip to catch. */
-        className="relative flex-1 min-h-0 flex flex-col gap-px mx-auto"
-        style={{ width: RIBBON_BAND_W, cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+        className="relative flex-1 min-h-0 flex flex-col mx-auto"
+        style={{ width: RIBBON_BAND_W, gap: BAND_GAP, cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
         onPointerDown={e => { setHover(undefined); onPointerDown(e); }}
         onPointerMove={e => {
           if (!dragging) { hoverAt(e.clientY); return; }
@@ -509,11 +516,11 @@ function DensityRibbon({
               borderRadius: 2,
               /* On a shared clock an empty slice is drawn as a faint slot
                  rather than skipped, so "silent here" stays visible. */
-              background: b.count ? levelColor(b.worst) : 'var(--color-surface-border)',
-              // Errors at full strength, calm stretches receded to texture —
-              // the ribbon exists to make trouble findable, not to be even.
-              opacity: !b.count ? 0.25
-                : b.worst === 'error' ? 0.95 : b.worst === 'warn' ? 0.72 : 0.3,
+              background: b.count ? blockColor(b.worst) : 'var(--color-surface-border)',
+              // Calm and warning blocks are solid, dimmed colours of their own
+              // and errors are full red — see `blockColor`. Only an empty slot
+              // is faded, so it reads as a slot and not as a block.
+              opacity: !b.count ? 0.25 : 1,
             }}
           />
         ))}
@@ -533,7 +540,7 @@ function DensityRibbon({
               top: `calc(${(t.at * 100).toFixed(2)}% - 1.5px)`,
               height: 3,
               borderRadius: 2,
-              background: t.level === 'error' ? 'var(--color-error)' : 'var(--color-warning)',
+              background: tickColor(t.level),
             }}
           />
         ))}
@@ -544,13 +551,12 @@ function DensityRibbon({
           <div
             className="absolute pointer-events-none"
             style={{
-              left: -4, right: -4,
+              left: -MARKER_EDGE, right: -MARKER_EDGE,
               top: viewTop,
               height: viewH,
-              border: `1.5px solid ${ACCENT}`,
+              boxSizing: 'border-box',
+              border: `2px solid ${FOLLOW}`,
               borderRadius: 3,
-              background: `color-mix(in srgb, ${ACCENT} 10%, transparent)`,
-              boxShadow: `0 0 6px color-mix(in srgb, ${ACCENT} 45%, transparent)`,
               // No transition while dragging, or the marker lags the pointer.
               transition: dragging ? 'none' : 'top .12s linear',
             }}
@@ -736,6 +742,7 @@ export function LogViewer() {
     clearFieldFilters, closeDetail, isSnapshot, contextCap, sharedRange,
     paging, focusSeq, onFindContext,
     focusLabel, selectedSeq, onSelectLine, selectedLabel, podColumn, podColor, columns, railLead, footerNote,
+    onGutterCompact,
   } = useLogSource();
 
   /* Every "how many lines" ladder in this view, from Settings → DK8S → Logs. */
@@ -2249,6 +2256,11 @@ export function LogViewer() {
                     const mark = row.isFrame ? undefined : markHits.get(line.seq);
                     const markColor = mark ? MARK_COLORS[mark.color] : undefined;
                     const fieldsAreOpen = openFields.has(line.seq);
+                    /* The line the page is about — "the line you clicked", "you
+                       came from here" — drawn as a card, see `ClickedLine`. */
+                    const card: LineCardKind | undefined = row.isFrame ? undefined
+                      : line.seq === selectedSeq && selectedLabel ? 'clicked'
+                      : line.seq === focusSeq && focusLabel ? 'from' : undefined;
                     // Position in what is on screen, so it reads 1..N and the
                     // last number is the count — the same thing an editor's
                     // gutter tells you at a glance.
@@ -2322,9 +2334,21 @@ export function LogViewer() {
                           }`,
                           paddingLeft: row.isFrame ? 22 : 6,
                           opacity: row.isFrame ? 0.75 : 1,
+                          ...(card ? cardRowStyle(card) : {}),
                         }}
                       >
+                        <LineCard kind={card} line={line} readers={fieldReaders}>
                         <div className="flex gap-2.5 items-start">
+                        {/* Lines from several pods say which one, first on
+                            every row: the same thread name can be reused by
+                            another pod, and the pod is what tells them apart. */}
+                        {podColumn && !row.isFrame && (line as { pod?: string }).pod && (
+                          <span className="shrink-0 select-none truncate"
+                                title={(line as { pod?: string }).pod}
+                                style={{ width: card ? 100 : 104, color: (podColor ?? podHue)((line as { pod?: string }).pod!) }}>
+                            {podTail((line as { pod?: string }).pod!)}
+                          </span>
+                        )}
                         {/* Off is a real preference: on a narrow panel the
                             gutter is width a long line needs more. */}
                         {logLineNumbers && (
@@ -2347,15 +2371,6 @@ export function LogViewer() {
                         )}
                         {!row.isFrame && <LevelTag level={line.level} />}
 
-                        {/* Lines from several pods say which one, on every row:
-                            the same thread name can be reused by another pod. */}
-                        {podColumn && !row.isFrame && (line as { pod?: string }).pod && (
-                          <span className="shrink-0 select-none truncate"
-                                title={(line as { pod?: string }).pod}
-                                style={{ width: 64, color: (podColor ?? podHue)((line as { pod?: string }).pod!) }}>
-                            {podTail((line as { pod?: string }).pod!)}
-                          </span>
-                        )}
                         {columns && !row.isFrame && columns.map(c => {
                           const v = c.value(line);
                           return (
@@ -2559,11 +2574,12 @@ export function LogViewer() {
                         )}
                         {((line.seq === selectedSeq && selectedLabel) || (line.seq === focusSeq && focusLabel)) && (
                           <span className="ml-auto shrink-0 select-none self-center pl-2"
-                                style={{ color: ACCENT, fontSize: 10.5, fontFamily: 'var(--font-sans, system-ui)' }}>
+                                style={{ color: FOLLOW, fontSize: 10.5, fontFamily: 'var(--font-sans, system-ui)' }}>
                             {line.seq === focusSeq && focusLabel ? focusLabel : selectedLabel}
                           </span>
                         )}
                         </div>
+                        </LineCard>
 
                         {fieldsAreOpen && (
                           <LineFieldsView line={line} payload={payload} mark={mark} />
@@ -2608,6 +2624,7 @@ export function LogViewer() {
             if (!el) return;
             el.scrollTop = top;
           }}
+          onCompact={onGutterCompact}
           onDragStart={() => { draggingRef.current = true; setLogFollow(false); }}
           onDragEnd={() => {
             draggingRef.current = false;
@@ -2648,8 +2665,10 @@ export function LogViewer() {
       )}
 
       {/* ── Footer: what is held, and where you are ── */}
-      <div className="flex items-center gap-3 px-4 py-1.5 text-[10.5px] shrink-0"
-           style={{ borderTop: '1px solid var(--color-surface-border)', color: 'var(--color-text-muted)' }}>
+      {/* 32px and 11.5px, the LogsMarked board's footer, so its 24px
+          buttons stand in it with room either side. */}
+      <div className="flex items-center gap-3 px-4 py-1 text-[11.5px] shrink-0"
+           style={{ minHeight: 32, borderTop: '1px solid var(--color-surface-border)', color: 'var(--color-text-muted)' }}>
         {/*
           What is held, said as a fraction of what was asked for.
 
@@ -2677,6 +2696,7 @@ export function LogViewer() {
           {!isSnapshot && logs.length >= logTail && ' · at the limit'}
           {logs.length > 0 && ` · ${(bufferBytes(logs) / 1024 / 1024).toFixed(1)} MB`}
           {oldest !== undefined && ` · oldest ${formatLogTime(oldest)}`}
+          {marks.length > 0 && <MarkedCount inView={markedInView} />}
         </span>
         {visible.length !== logs.length && (
           <span style={{ color: ACCENT, fontVariantNumeric: 'tabular-nums' }}>
@@ -2702,7 +2722,7 @@ export function LogViewer() {
           <button
             type="button"
             onClick={() => setLogFollow(true)}
-            className="cursor-pointer bg-transparent border-none px-0 text-[10.5px]"
+            className="cursor-pointer bg-transparent border-none px-0 text-[11.5px]"
             style={{ color: ACCENT }}
           >
             ↓ jump to newest
@@ -2715,26 +2735,29 @@ export function LogViewer() {
             type="button"
             onClick={clearLinkedLine}
             title="Clear the highlight this link left"
-            className="cursor-pointer bg-transparent border-none px-0 text-[10.5px]"
+            className="cursor-pointer bg-transparent border-none px-0 text-[11.5px]"
             style={{ color: ACCENT }}
           >
             linked line · clear
           </button>
         )}
-        {marks.length > 0 && <MarkedFooter inView={markedInView} onNext={() => jumpToNextMark()} />}
         <span>select any text to ask AI about it</span>
-        {/* The window on screen, asked about as a whole — the Ask the log tab. */}
+        {/* The board's pair, side by side and alike: Jump to next match, then
+            the window on screen asked about as a whole — the Ask the log tab. */}
+        {marks.length > 0 && <MarkedJump inView={markedInView} onNext={() => jumpToNextMark()} />}
         {!isSnapshot && (
-          <ButtonView variant="secondary" size="xs" accentColor={AI_ACCENT} color={AI_ACCENT}
+          <ButtonView variant="secondary" accentColor={AI_ACCENT}
                       disabled={!logs.length}
                       title="Ask a question of this pod's log over a window, with the lines behind every answer"
-                      onClick={() => useK8sStore.getState().setDetailTab('ask')}>
+                      onClick={() => useK8sStore.getState().setDetailTab('ask')}
+                      style={OUTLINE_BUTTON}>
             Ask AI about this window
           </ButtonView>
         )}
-        <ButtonView variant="secondary" size="xs" accentColor={ACCENT}
+        <ButtonView variant="secondary" accentColor={ACCENT}
                     title="Settings → DK8S → Logs: payloads, stack traces and what the counters count"
-                    onClick={() => useTabsStore.getState().openSettingsTab('dk8s-logs')}>
+                    onClick={() => useTabsStore.getState().openSettingsTab('dk8s-logs')}
+                    style={OUTLINE_BUTTON}>
           Rendering settings
         </ButtonView>
       </div>

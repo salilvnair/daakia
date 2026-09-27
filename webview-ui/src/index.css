@@ -402,6 +402,16 @@
   --color-workspace: #0d9488;
   --color-dk8s: #0891b2;
   --color-dk8s-muted: #0e7490;
+  /* The Follow boards' hues (see `follow-tone.ts`). Dark takes the boards' own
+     hexes from each `var()`'s fallback; these are the ones that go thin on
+     white, stepped deeper the way the other hues in this block are. */
+  --color-follow: #3d7f8c;
+  --color-follow-ink: #ffffff;
+  --color-follow-check: #0d9488;
+  --color-follow-field: #7c3aed;
+  --color-follow-ok: #047857;
+  --color-gutter-calm: #6fb3a0;
+  --color-gutter-warn: #d4a72c;
   /* Deeper on a light ground, the way the other tab hues are — #DE7356 is
      built for the dark panel and goes thin on white. */
   --color-dkgh: #c0543a;
@@ -1412,11 +1422,13 @@ input[type="number"] {
 /* ─── Monaco Find widget: fix X close button vertical alignment ──────────────
    Real class: .button.codicon.codicon-widget-close (SimpleButton in findWidget.js)
    Monaco positions it `position:absolute; top:5px` in a 33px widget.
-   Button total height = 16px + 3px padding × 2 = 22px → perfect center = (33-22)/2 = 5.5px.
-   Use calc(50% - 11px) so it works regardless of our border overrides.
+   Button total height = 16px + 3px padding × 2 = 22px → centred on the FIND
+   row = (33-22)/2 = 5.5px. A fixed offset, not 50%: with Replace open the
+   widget is two rows tall, and 50% dropped the X between them — VS Code keeps
+   it on the Find row.
    ─────────────────────────────────────────────────────────────────────────── */
 .monaco-editor .find-widget > .button.codicon-widget-close {
-  top: calc(50% - 11px) !important;
+  top: 5.5px !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;

@@ -24,6 +24,7 @@ import { ScriptLibrary } from './ScriptLibrary';
 import { ScriptTitle, ScriptSave, ScriptMenu } from './ScriptHeader';
 import { RunSetup } from './RunSetup';
 import { AskPyAi } from './AskPyAi';
+import { usePythonMenu } from './py-menu';
 import { PyEditor } from './PyEditor';
 import { OutputPane, ConsolePane } from './PyBottomPanel';
 import { PyDebugPanes } from './PyDebugPanes';
@@ -172,8 +173,17 @@ export function ScriptsScreen() {
 
   const firstBlocked = !!firstPod && probes[targetKey(pyTargets[0])]?.verdict?.ok === false;
 
+  const menu = usePythonMenu({
+    scriptId: script?.id,
+    onRun: onRunAll, onDebug: onDebugFirst,
+    canRun: !!script && pyTargets.length > 0 && !running,
+    canDebug: !!script && !!firstPod && !firstBlocked && !(debug && !debug.ended),
+    output: () => (shownRun ? shownRun.chunks.map(c => c.text).join('') : ''),
+  });
+
   return (
-    <div className="flex flex-col flex-1 min-h-0">
+    <div className="flex flex-col flex-1 min-h-0" data-context-menu="python" onContextMenu={menu.onContextMenu}>
+      {menu.element}
       {/* ── Title ── */}
       <div className="flex items-center gap-2.5 px-3.5 flex-shrink-0"
            style={{ height: 38, borderBottom: '1px solid var(--color-surface-border)' }}>

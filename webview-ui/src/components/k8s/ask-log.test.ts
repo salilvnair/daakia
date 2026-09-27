@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   askWindowLines, buildEvidence, parseAnswer, citeLabel, citedLines, questionTokens, filterForLines,
-  catalogueBlock, windowRange, answerText, suggestions,
+  catalogueBlock, windowRange, answerText, suggestions, answerSpans,
 } from './ask-log';
 import type { LogLine } from '../../store/k8s-store';
 import type { CatalogueRow } from './logger-catalogue';
@@ -122,5 +122,23 @@ describe('the catalogue block', () => {
 
   it('offers an id to follow when the marks found one', () => {
     expect(suggestions({ idField: 'orderId', idValue: 'A-4470', win: '10m' })[1]).toBe('orderId A-4470');
+  });
+});
+
+describe('the answer, as the board colours it', () => {
+  const kinds = (t: string) => answerSpans(t).filter(s => s.kind !== 'text').map(s => `${s.kind}:${s.text}`);
+
+  it('finds ids, values, times and counts in plain sentences', () => {
+    expect(kinds('Order A-4470 was rejected with capture_timeout after 14:02:15; 14 of 22 failed.'))
+      .toEqual(['id:A-4470', 'value:capture_timeout', 'time:14:02:15', 'count:14 of 22']);
+  });
+
+  it('takes backticks off and classifies what was inside', () => {
+    expect(kinds('audit row `order.rejected` written for `C-991`')).toEqual(['code:order.rejected', 'id:C-991']);
+    expect(answerSpans('a `b` c').map(s => s.text).join('')).toBe('a b c');
+  });
+
+  it('leaves ordinary words alone', () => {
+    expect(kinds('It is not only this order, e.g. the one next door.')).toEqual([]);
   });
 });

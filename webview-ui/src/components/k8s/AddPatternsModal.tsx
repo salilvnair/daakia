@@ -22,39 +22,52 @@
  * matched here — either it never ran, or the text differs from the build in
  * this pod" is something a tester needs to know BEFORE they spend an
  * afternoon watching for a line that will never be written that way.
+ *
+ * ── Drawn to the board ──
+ *
+ * The Add patterns board, piece for piece: the purple header band with "into"
+ * on its right, the four ways in as tabs, a 40% left column (the paste box in
+ * the editor's own syntax colours, the "reads" dialect chips, OR DROP A FILE
+ * as a dashed box, the note pinned to the bottom) and on the right WHAT THAT
+ * MATCHES — holes as teal pills, LEVEL pills, the 2H count green when it
+ * matched and amber when it did not — then A LINE IT MATCHED with its purple
+ * edge, "Show what it matches on" with the regex beside it, and the footer
+ * under the right column only. The Scan tab swaps in the Scan the repository
+ * board and its own title, and puts its folder chip into this header.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ModalView, ButtonView, SegmentedControlView, SelectInputView, CheckboxView, MultilineInputView,
-  TextInputView, FilterInputView, BadgeChipView, IconSize,
-} from '@salilvnair/dui';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { ModalView, TextInputView, SearchInputView } from '@salilvnair/dui';
 import { useK8sStore } from '../../store/k8s-store';
 import { usePatternsFor, useLoggersFor, addPatterns } from '../../store/dk8s-logger-store';
 import {
   parsePaste, dialectsOf, regexSource, learnShapes, numericHoles, fromPlainText, findCalls,
 } from './logger-calls';
 import { compilePattern, matchPattern, type LoggerPattern } from './logger-pattern';
-import { linesInWindow, buildRows, shortName, LEVEL_COLOR } from './logger-catalogue';
+import { linesInWindow, buildRows, shortName } from './logger-catalogue';
 import { formatLogTime } from './log-view';
 import { ScanRepoPane } from './ScanRepoPane';
-import { PatternTemplate } from './PatternTemplate';
+import { ChevronRightIcon, ChevronDownIcon, MarkFlagIcon, SearchIcon } from '../../icons';
+import { LOGGERS, HOLE } from './tone';
 import {
-  PlusIcon, CodeIcon, SearchIcon, FileTextIcon, PencilIcon, InfoCircleIcon, UploadIcon, EyeIcon, EyeOffIcon,
-  WarningTriangleIcon,
-} from '../../icons';
-import { LOGGERS, LOGGERS_SOFT, LOGGERS_INK, HOLE } from './tone';
+  CARD, CARD_EDGE, EDGE, DIVIDER, TEXT, LABEL, QUIET, GREEN, AMBER, PICKED, PICKED_ROW, HOLE_FILL,
+  SYN_VAR, SYN_CALL, SYN_STRING,
+} from './loggers-tone';
+import {
+  DialogHead, BoardTabs, Tick, LevelPill, SectionLabel, NoteBox, Code, HolePills, Picker, BoardButton, HEAD_TYPE,
+} from './loggers-parts';
 import { logUiEvent } from '../../store/ui-audit-store';
 
 type Tab = 'paste' | 'scan' | 'learn' | 'hand';
 
 const TWO_HOURS = '2h' as const;
-const GRID = '24px minmax(0, 1fr) 60px 84px';
+/** The board's table: tick 30 · PATTERN & FIELDS · LEVEL 74 · MATCHES 2H 92. */
+const GRID = '30px minmax(0, 1fr) 74px 92px';
 
 interface Tested {
   key: string;
   pattern: LoggerPattern;
   count: number;
-  sample?: { text: string; ts?: number; level: string; logger?: string };
+  sample?: { text: string; ts?: number; level: string; logger?: string; fields: Record<string, string> };
   numeric: string[];
 }
 
@@ -83,6 +96,7 @@ export function AddPatternsModal({ scope, into: initialInto, onClose }: {
   const [showRegex, setShowRegex] = useState(false);
   const [markAll, setMarkAll] = useState(true);
   const [dragging, setDragging] = useState(false);
+  const [headSlot, setHeadSlot] = useState<HTMLSpanElement | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const now = useMemo(() => Date.now(), []);
@@ -134,7 +148,7 @@ export function AddPatternsModal({ scope, into: initialInto, onClose }: {
         const hit = matchPattern(compiled, l.message ?? l.text);
         if (!hit) continue;
         count++;
-        if (!sample) sample = { text: l.message ?? l.text, ts: l.ts, level: l.level, logger: l.logger };
+        if (!sample) sample = { text: l.message ?? l.text, ts: l.ts, level: l.level, logger: l.logger, fields: hit.fields };
         if (fields.length < 30) fields.push(hit.fields);
       }
       return { key: pattern.template, pattern, count, sample, numeric: numericHoles(pattern, fields) };
@@ -174,19 +188,39 @@ export function AddPatternsModal({ scope, into: initialInto, onClose }: {
     }
   };
 
-  const noteFor = (t: Tested): { text: string; warn?: boolean } => {
+  /* The note under a pattern. Field names are set in mono teal, as the board
+     sets `reqId` and `tookMs`. */
+  const noteFor = (t: Tested): { text: ReactNode; warn?: boolean } => {
     if (t.count === 0) return { text: 'nothing matched here — either it never ran, or the text differs from the build in this pod', warn: true };
     if (t.pattern.exception) return { text: 'the last argument is the exception — its stack trace is folded into the match' };
     const h = t.pattern.holes;
-    if (h.length === 0) return { text: t.pattern.objectFields?.length ? `fields ${t.pattern.objectFields.join(', ')} — carried beside the message` : 'no values in it — found by its text' };
-    if (h.length === 1) return { text: `field ${h[0]} — kept from the log, so you can filter by it` };
+    if (h.length === 0) {
+      return {
+        text: t.pattern.objectFields?.length
+          ? <>fields <Field>{t.pattern.objectFields.join(', ')}</Field> — carried beside the message</>
+          : 'no values in it — found by its text',
+      };
+    }
+    if (h.length === 1) return { text: <>field <Field>{h[0]}</Field> — kept from the log, so you can filter by it</> };
     const num = t.numeric[0];
     return {
       text: num
-        ? `${h.length === 2 ? 'two' : h.length} fields — ${num} reads as a number, so "slowest 10" sorts`
-        : `${h.length} fields — ${h.join(', ')}`,
+        ? <>{h.length === 2 ? 'two' : h.length} fields — <Field>{num}</Field> reads as a number, so "slowest 10" sorts</>
+        : <>{h.length} fields — <Field>{h.join(', ')}</Field></>,
     };
   };
+
+  const actions = (
+    <>
+      <BoardButton h={30} onClick={onClose}>Cancel</BoardButton>
+      <BoardButton h={30} tone="primary" disabled={!chosen.length} onClick={add}>
+        {`Add ${chosen.length.toLocaleString()} pattern${chosen.length === 1 ? '' : 's'}`}
+      </BoardButton>
+    </>
+  );
+  const markAllTick = (
+    <Tick checked={markAll} onChange={setMarkAll} color={LABEL} fontSize={11.5} label="Mark all after adding" />
+  );
 
   return (
     <ModalView
@@ -194,94 +228,92 @@ export function AddPatternsModal({ scope, into: initialInto, onClose }: {
       onClose={onClose}
       size="xxl"
       height="86vh"
-      headerColor={LOGGERS}
-      headerIcon={<PlusIcon size={IconSize.row} color={LOGGERS} />}
-      title="Add patterns"
-      subtitle="what a logger can say, so a tester can look for it before it happens"
-      headerRight={
-        <div className="flex items-center gap-2">
-          <span className="text-[11.5px]" style={{ color: 'var(--color-text-muted)' }}>into</span>
-          <SelectInputView
-            value={into}
-            onChange={setInto}
-            size="sm"
-            accentColor={LOGGERS}
-            menuMinWidth={320}
-            options={[
-              { value: '', label: 'the logger each call names' },
-              ...loggerNames.map(n => ({ value: n, label: n })),
-            ]}
-          />
-        </div>
-      }
-      bodyStyle={{ display: 'flex', flexDirection: 'column', minHeight: 0, gap: 12 }}
-      footerLeft={
-        <div className="flex items-center gap-4">
-          <CheckboxView checked={markAll} onChange={setMarkAll} size="sm" accentColor={LOGGERS} label="Mark all after adding" />
-          {tab !== 'scan' && (
-            <span className="text-[11.5px]" style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-              {tested.length} pattern{tested.length === 1 ? '' : 's'} · {matching} match here · {tested.length - matching} silent
-            </span>
-          )}
-        </div>
-      }
-      footerRight={
-        <div className="flex items-center gap-2">
-          <ButtonView label="Cancel" size="sm" variant="secondary" onClick={onClose} />
-          <ButtonView
-            size="sm" variant="primary" accentColor={LOGGERS} disabled={!chosen.length} onClick={add}
-            style={chosen.length ? { background: LOGGERS, borderColor: LOGGERS, color: LOGGERS_INK, fontWeight: 600 } : undefined}
-          >
-            {`Add ${chosen.length.toLocaleString()} pattern${chosen.length === 1 ? '' : 's'}`}
-          </ButtonView>
-        </div>
-      }
+      elevated
+      noPadding
+      showCloseIcon={false}
+      bodyStyle={{ display: 'flex', flexDirection: 'column', minHeight: 0, overflowY: 'hidden' }}
     >
-      <SegmentedControlView
-        value={tab}
-        onChange={v => setTab(v as Tab)}
-        size="md"
-        variant="rounded"
-        accentColor={LOGGERS}
-        options={[
-          { value: 'paste', label: 'Paste the code', icon: <CodeIcon size={IconSize.action} /> },
-          { value: 'scan', label: 'Scan the repository', icon: <SearchIcon size={IconSize.action} /> },
-          { value: 'learn', label: 'Learn from the log', icon: <FileTextIcon size={IconSize.action} /> },
-          { value: 'hand', label: 'Write one by hand', icon: <PencilIcon size={IconSize.action} /> },
-        ]}
+      <DialogHead
+        icon={tab === 'scan' ? <SearchIcon size={15} color={LOGGERS} /> : <MarkFlagIcon size={15} color={LOGGERS} />}
+        title={tab === 'scan' ? 'Scan the repository' : 'Add patterns'}
+        subtitle={tab === 'scan'
+          ? 'every logger call in the source, as patterns'
+          : 'what a logger can say, so a tester can look for it before it happens'}
+        right={
+          <>
+            <span style={{ fontSize: 11.5, color: LABEL }}>into</span>
+            <Picker
+              value={into}
+              onChange={setInto}
+              mono
+              height={27}
+              fontSize={11.5}
+              menuMinWidth={320}
+              maxWidth={320}
+              options={[
+                { value: '', label: 'the logger each call names' },
+                ...loggerNames.map(n => ({ value: n, label: n })),
+              ]}
+            />
+            {tab === 'scan' && <span ref={setHeadSlot} className="inline-flex items-center" />}
+          </>
+        }
       />
 
+      <div className="shrink-0" style={{ padding: '10px 16px 0' }}>
+        <BoardTabs
+          value={tab}
+          onChange={setTab}
+          height={30}
+          padX={12}
+          options={[
+            { value: 'paste', label: 'Paste the code' },
+            { value: 'scan', label: 'Scan the repository' },
+            { value: 'learn', label: 'Learn from the log' },
+            { value: 'hand', label: 'Write one by hand' },
+          ]}
+        />
+      </div>
+
       {tab === 'scan' ? (
-        <ScanRepoPane window={window2h} existingTemplates={existingTemplates} into={into || undefined}
-                      onChosen={setScanChosen} />
+        <div className="flex flex-col flex-1 min-h-0" style={{ borderTop: `1px solid ${EDGE}` }}>
+          <ScanRepoPane window={window2h} existingTemplates={existingTemplates} into={into || undefined}
+                        onChosen={setScanChosen} headSlot={headSlot} extra={markAllTick} actions={actions} />
+        </div>
       ) : (
-        <div className="flex flex-1 min-h-0 gap-4">
+        <div className="flex flex-1 min-h-0" style={{ borderTop: `1px solid ${EDGE}` }}>
           {/* ── Left: the source ── */}
-          <div className="flex flex-col gap-2.5 min-h-0" style={{ width: '42%' }}>
+          <div className="flex flex-col shrink-0 min-h-0"
+               style={{ width: '40%', minWidth: 360, borderRight: `1px solid ${EDGE}` }}>
             {tab === 'paste' && (
               <>
-                <Label>PASTE LOGGER CALLS</Label>
-                <MultilineInputView
+                <SectionLabel style={{ padding: '10px 16px 6px' }}>PASTE LOGGER CALLS</SectionLabel>
+                <PasteBox
                   value={paste}
-                  onChange={e => setPaste(e.target.value)}
-                  rows={9}
-                  resize="vertical"
-                  accentColor={LOGGERS}
+                  onChange={setPaste}
                   placeholder={'log.info("checking bcbl api for request:{}", reqId);\nlog.warn("bcbl api slow for request:{} took {}ms", reqId, tookMs);'}
-                  style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 11.5 }}
                 />
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>reads</span>
+                <div className="flex items-center flex-wrap" style={{ gap: 8, padding: '10px 16px' }}>
+                  <span style={{ fontSize: 11.5, color: QUIET }}>reads</span>
                   {([['slf4j', 'SLF4J {}'], ['printf', 'printf %s'], ['fstring', 'python f-string'], ['plain', 'plain text']] as const)
                     .map(([k, label]) => (
-                      <BadgeChipView key={k} size="xs" tone={dialects[k] ? LOGGERS : 'var(--color-text-muted)'}
-                                     title={dialects[k] ? 'Recognised in what you pasted' : 'Read when it appears'}
-                                     style={{ opacity: dialects[k] || !paste.trim() ? 1 : 0.5 }}>
+                      <span key={k}
+                            title={dialects[k] ? 'Recognised in what you pasted' : 'Read when it appears'}
+                            style={{
+                              padding: '2px 8px', borderRadius: 999, fontSize: 11, background: CARD,
+                              color: dialects[k] ? TEXT : LABEL,
+                            }}>
                         {label}
-                      </BadgeChipView>
+                      </span>
                     ))}
                 </div>
+                <SectionLabel style={{ padding: '4px 16px 8px' }}>OR DROP A FILE</SectionLabel>
                 <div
+                  role="button"
+                  tabIndex={0}
+                  title="Drop a file here, or click to choose one"
+                  onClick={() => fileRef.current?.click()}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileRef.current?.click(); } }}
                   onDragOver={e => { e.preventDefault(); setDragging(true); }}
                   onDragLeave={() => setDragging(false)}
                   onDrop={e => {
@@ -290,85 +322,85 @@ export function AddPatternsModal({ scope, into: initialInto, onClose }: {
                     const f = e.dataTransfer.files?.[0];
                     if (f) void takeFile(f);
                   }}
-                  className="flex items-center gap-3 px-3 py-3 rounded-md"
+                  className="shrink-0 text-center cursor-pointer truncate"
                   style={{
-                    border: `1px dashed ${dragging ? LOGGERS : 'var(--color-surface-border)'}`,
-                    background: dragging ? LOGGERS_SOFT : 'transparent',
+                    margin: '0 16px', padding: 14, borderRadius: 8, fontSize: 11.5,
+                    border: `1px dashed ${dragging ? LOGGERS : CARD_EDGE}`,
+                    background: dragging ? PICKED : 'transparent',
+                    color: dropped ? LABEL : QUIET,
                   }}
                 >
-                  <UploadIcon size={IconSize.row} color={dragging ? LOGGERS : 'var(--color-text-muted)'} />
-                  <div className="flex flex-col flex-1 min-w-0">
-                    <span className="text-[10px] font-bold" style={{ letterSpacing: '0.05em', color: 'var(--color-text-muted)' }}>
-                      OR DROP A FILE
-                    </span>
-                    <span className="text-[11px] truncate" style={{ color: 'var(--color-text-secondary)' }}>
-                      {dropped ?? 'BcblClient.java · a .log sample · a list of message templates'}
-                    </span>
-                  </div>
-                  <ButtonView size="xs" variant="secondary" onClick={() => fileRef.current?.click()}>Choose a file</ButtonView>
-                  <input ref={fileRef} type="file" className="hidden"
-                         onChange={e => { const f = e.target.files?.[0]; if (f) void takeFile(f); e.target.value = ''; }} />
+                  {dropped ?? 'BcblClient.java · a .log sample · a list of message templates'}
                 </div>
-                <Note>
-                  The log never carries the {'{}'} — it carries the value. Daakia keeps the fixed text around each
-                  hole and names the hole after the argument, so the line is found however the value changes, and the
-                  value itself becomes a field you can filter and group by.
-                </Note>
+                <input ref={fileRef} type="file" className="hidden"
+                       onChange={e => { const f = e.target.files?.[0]; if (f) void takeFile(f); e.target.value = ''; }} />
+                <div className="flex-1" />
+                <NoteBox style={{ margin: '12px 16px 14px' }}>
+                  The log never carries the <Code>{'{}'}</Code> &mdash; it carries the value. Daakia keeps the fixed
+                  text around each hole and names the hole after the argument, so the line is found however the value
+                  changes, and the value itself becomes a field you can filter and group by.
+                </NoteBox>
               </>
             )}
 
             {tab === 'learn' && (
               <>
-                <div className="flex items-center gap-2">
-                  <Label>{learnFrom ? `SHAPES IN ${dropped ?? 'THE DROPPED FILE'}` : 'SHAPES IN THIS POD’S LAST 2 HOURS'}</Label>
+                <div className="flex items-center shrink-0" style={{ gap: 8, padding: '10px 16px 6px' }}>
+                  <SectionLabel>{learnFrom ? `SHAPES IN ${(dropped ?? 'THE DROPPED FILE').toUpperCase()}` : 'SHAPES IN THIS POD’S LAST 2 HOURS'}</SectionLabel>
                   <div className="flex-1" />
                   {learnFrom && (
-                    <ButtonView size="xs" variant="ghost" onClick={() => { setLearnFrom(undefined); setDropped(undefined); }}>
+                    <BoardButton tone="quiet" onClick={() => { setLearnFrom(undefined); setDropped(undefined); }}>
                       Use this pod instead
-                    </ButtonView>
+                    </BoardButton>
                   )}
                 </div>
-                <FilterInputView value={learnQuery} onChange={setLearnQuery} placeholder="Filter" size="sm" accentColor={LOGGERS} />
-                <div className="flex-1 min-h-0 overflow-auto rounded-md" style={{ border: '1px solid var(--color-surface-border)' }}>
+                <div className="shrink-0" style={{ padding: '0 16px 8px' }}>
+                  <SearchInputView value={learnQuery} onChange={setLearnQuery} placeholder="Filter" aria-label="Filter the shapes"
+                                   size="lg" height={28}
+                                   style={{ background: CARD, border: `1px solid ${EDGE}`, borderRadius: 6, paddingLeft: 10, paddingRight: 10 }} />
+                </div>
+                <div className="flex-1 min-h-0 overflow-auto"
+                     style={{ margin: '0 16px', border: `1px solid ${EDGE}`, borderRadius: 8, background: CARD }}>
                   {shapes.length === 0 && (
-                    <div className="px-3 py-3 text-[11.5px]" style={{ color: 'var(--color-text-muted)' }}>
+                    <div style={{ padding: 12, fontSize: 11.5, color: QUIET }}>
                       No lines to learn from — open the Logs tab and fetch some, or drop a .log file on the Paste tab.
                     </div>
                   )}
                   {shapes
                     .filter(s => !learnQuery.trim() || s.pattern.template.toLowerCase().includes(learnQuery.trim().toLowerCase()))
                     .map(s => (
-                      <div key={s.pattern.template} className="flex items-center gap-2 px-2.5 py-1"
-                           style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-                        <CheckboxView checked={learnPicked.has(s.pattern.template)} size="sm" accentColor={LOGGERS}
-                                      onChange={() => setLearnPicked(prev => {
-                                        const next = new Set(prev);
-                                        if (next.has(s.pattern.template)) next.delete(s.pattern.template);
-                                        else next.add(s.pattern.template);
-                                        return next;
-                                      })} />
-                        <span className="flex-1 min-w-0 truncate font-mono text-[11px]" title={s.sample}>
-                          <PatternTemplate template={s.pattern.template} />
+                      <label key={s.pattern.template} className="flex items-center cursor-pointer"
+                             style={{ gap: 10, padding: '7px 11px', borderBottom: `1px solid ${DIVIDER}` }}>
+                        <Tick checked={learnPicked.has(s.pattern.template)}
+                              ariaLabel={`Keep ${s.pattern.template}`}
+                              onChange={() => setLearnPicked(prev => {
+                                const next = new Set(prev);
+                                if (next.has(s.pattern.template)) next.delete(s.pattern.template);
+                                else next.add(s.pattern.template);
+                                return next;
+                              })} />
+                        <span className="flex-1 min-w-0 truncate font-mono" style={{ fontSize: 11.5 }} title={s.sample}>
+                          <HolePills template={s.pattern.template} />
                         </span>
-                        <span className="text-[11px] font-mono" style={{ color: 'var(--color-text-muted)' }}>{s.count}</span>
-                        <ButtonView size="xs" variant="ghost" title="Name the holes yourself"
-                                    onClick={() => { setHandTemplate(s.pattern.template); setTab('hand'); }}>
+                        <span className="font-mono" style={{ fontSize: 11.5, color: QUIET }}>{s.count.toLocaleString()}</span>
+                        <BoardButton tone="quiet" title="Name the holes yourself"
+                                     onClick={e => { e.preventDefault(); setHandTemplate(s.pattern.template); setTab('hand'); }}>
                           Edit
-                        </ButtonView>
-                      </div>
+                        </BoardButton>
+                      </label>
                     ))}
                 </div>
-                <Note>
+                <NoteBox style={{ margin: '12px 16px 14px' }}>
                   Every id and number in a line becomes a hole, and lines with the same shape are one pattern. The
                   holes are named value1, value2 — Edit gives them names that mean something.
-                </Note>
+                </NoteBox>
               </>
             )}
 
             {tab === 'hand' && (
               <>
-                <Label>THE MESSAGE, WITH ITS HOLES NAMED</Label>
-                <div className="flex items-center gap-2">
+                <SectionLabel style={{ padding: '10px 16px 6px' }}>THE MESSAGE, WITH ITS HOLES NAMED</SectionLabel>
+                <div className="flex items-center shrink-0" style={{ gap: 8, padding: '0 16px' }}>
                   <div className="flex-1 min-w-0">
                     <TextInputView
                       value={handTemplate}
@@ -380,79 +412,76 @@ export function AddPatternsModal({ scope, into: initialInto, onClose }: {
                       style={{ fontFamily: 'var(--font-mono, monospace)' }}
                     />
                   </div>
-                  <SelectInputView value={handLevel} onChange={setHandLevel} size="md" accentColor={LOGGERS}
-                                   options={['none', 'error', 'warn', 'info', 'debug', 'trace']
-                                     .map(l => ({ value: l, label: l === 'none' ? 'no level' : l.toUpperCase() }))} />
+                  <Picker lead="Level" value={handLevel} onChange={setHandLevel}
+                          options={['none', 'error', 'warn', 'info', 'debug', 'trace']
+                            .map(l => ({ value: l, label: l === 'none' ? 'not set' : l.toUpperCase() }))} />
                 </div>
-                <Note>
+                <div className="flex-1" />
+                <NoteBox style={{ margin: '12px 16px 14px' }}>
                   Write the fixed words as they appear in the log, and put a name in braces where the value goes:
-                  {' '}<code>{'order {orderId} rejected: {reason}'}</code>. A bare <code>{'{}'}</code> or <code>%s</code> works
+                  {' '}<Code>{'order {orderId} rejected: {reason}'}</Code>. A bare <Code>{'{}'}</Code> or <Code>%s</Code> works
                   too, and is named arg1, arg2.
-                </Note>
+                </NoteBox>
               </>
             )}
           </div>
 
           {/* ── Right: WHAT THAT MATCHES ── */}
-          <div className="flex flex-col flex-1 min-w-0 min-h-0 gap-2.5">
-            <div className="flex items-baseline gap-2">
-              <Label>WHAT THAT MATCHES</Label>
-              <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-                tested against the last 2 hours on this pod
-              </span>
+          <div className="flex flex-col flex-1 min-w-0 min-h-0">
+            <div className="flex items-center shrink-0" style={{ gap: 8, padding: '10px 16px 6px' }}>
+              <SectionLabel>WHAT THAT MATCHES</SectionLabel>
+              <span className="truncate" style={{ fontSize: 11, color: QUIET }}>tested against the last 2 hours on this pod</span>
+              <div className="flex-1" />
+              {markAllTick}
             </div>
-            <div className="flex flex-col flex-1 min-h-0 rounded-md overflow-hidden"
-                 style={{ border: '1px solid var(--color-surface-border)' }}>
-              <div className="grid gap-3 px-3 py-1.5 shrink-0 text-[10px] font-bold"
-                   style={{ gridTemplateColumns: GRID, letterSpacing: '0.05em', color: 'var(--color-text-muted)',
-                            borderBottom: '1px solid var(--color-surface-border)' }}>
+
+            <div className="flex flex-col min-h-0 overflow-hidden"
+                 style={{ flex: '0 1 auto', margin: '0 16px', border: `1px solid ${EDGE}`, borderRadius: 8, background: CARD }}>
+              <div className="grid shrink-0"
+                   style={{ ...HEAD_TYPE, fontSize: 10, gridTemplateColumns: GRID, gap: 10, padding: '7px 11px', borderBottom: `1px solid ${EDGE}` }}>
                 <div /><div>PATTERN &amp; FIELDS</div><div>LEVEL</div><div style={{ textAlign: 'right' }}>MATCHES 2H</div>
               </div>
-              <div className="flex-1 min-h-0 overflow-auto">
+              <div className="min-h-0 overflow-auto">
                 {tested.length === 0 && (
-                  <div className="px-3 py-3 text-[11.5px]" style={{ color: 'var(--color-text-muted)' }}>
+                  <div style={{ padding: '12px 11px', fontSize: 11.5, color: QUIET }}>
                     {tab === 'paste' ? 'Paste logger calls on the left.' : tab === 'learn' ? 'Tick the shapes to keep.' : 'Write a template on the left.'}
                   </div>
                 )}
-                {tested.map(t => {
+                {tested.map((t, i) => {
                   const note = noteFor(t);
                   const existing = existingTemplates.has(t.key);
-                  const lv = t.pattern.level?.toUpperCase();
                   return (
                     <div key={t.key}
                          onClick={() => setSelected(t.key)}
-                         className="grid gap-3 items-start px-3 py-2 cursor-pointer"
+                         className="grid items-start cursor-pointer"
                          style={{
-                           gridTemplateColumns: GRID, borderBottom: '1px solid var(--color-surface-border)',
-                           background: selected === t.key ? LOGGERS_SOFT : 'transparent',
+                           gridTemplateColumns: GRID, gap: 10, padding: '9px 11px',
+                           borderBottom: i === tested.length - 1 ? 'none' : `1px solid ${DIVIDER}`,
+                           background: selected === t.key ? PICKED_ROW : 'transparent',
                            opacity: existing ? 0.5 : 1,
                          }}>
-                      <span onClick={e => e.stopPropagation()} className="inline-flex pt-0.5">
-                        <CheckboxView checked={!off.has(t.key) && !existing} disabled={existing} size="sm" accentColor={LOGGERS}
-                                      onChange={() => setOff(prev => {
-                                        const next = new Set(prev);
-                                        if (next.has(t.key)) next.delete(t.key); else next.add(t.key);
-                                        return next;
-                                      })} />
+                      <span className="inline-flex" style={{ marginTop: 2 }}>
+                        <Tick checked={!off.has(t.key) && !existing} disabled={existing}
+                              ariaLabel={`Add ${t.pattern.template}`}
+                              onChange={() => setOff(prev => {
+                                const next = new Set(prev);
+                                if (next.has(t.key)) next.delete(t.key); else next.add(t.key);
+                                return next;
+                              })} />
                       </span>
-                      <div className="flex flex-col gap-0.5 min-w-0">
-                        <span className="font-mono text-[11.5px] truncate" title={t.pattern.template}>
-                          <PatternTemplate template={t.pattern.template} dim={t.count === 0} />
-                        </span>
-                        <span className="flex items-center gap-1 text-[11px]"
-                              style={{ color: note.warn ? 'var(--color-warning)' : 'var(--color-text-muted)' }}>
-                          {note.warn && <WarningTriangleIcon size={IconSize.inline} />}
+                      <div className="min-w-0">
+                        <div className="font-mono truncate" style={{ fontSize: 12 }} title={t.pattern.template}>
+                          <HolePills template={t.pattern.template} />
+                        </div>
+                        <div className="truncate" style={{ marginTop: 4, fontSize: 11, color: note.warn && !existing ? AMBER : QUIET }}>
                           {existing ? 'already in the catalogue' : note.text}
-                          {t.pattern.logger && !existing ? <span style={{ color: 'var(--color-text-muted)' }}> · {shortName(t.pattern.logger)}</span> : null}
-                        </span>
+                          {t.pattern.logger && !existing ? <span style={{ color: QUIET }}> · {shortName(t.pattern.logger)}</span> : null}
+                        </div>
                       </div>
-                      <span className="text-[10.5px] font-bold pt-0.5" style={{ color: lv ? LEVEL_COLOR[lv] : 'var(--color-text-muted)' }}>
-                        {lv ?? '—'}
-                      </span>
-                      <span className="text-right font-mono text-[12px] pt-0.5"
-                            style={{ color: t.count ? 'var(--color-text-primary)' : 'var(--color-warning)' }}>
+                      <div><LevelPill level={t.pattern.level} /></div>
+                      <div className="text-right font-mono" style={{ fontSize: 12, color: t.count ? GREEN : AMBER }}>
                         {t.count.toLocaleString()}
-                      </span>
+                      </div>
                     </div>
                   );
                 })}
@@ -460,30 +489,54 @@ export function AddPatternsModal({ scope, into: initialInto, onClose }: {
             </div>
 
             {current && (
-              <div className="flex flex-col gap-1.5 px-3 py-2.5 rounded-md shrink-0"
-                   style={{ background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)' }}>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold" style={{ letterSpacing: '0.05em', color: 'var(--color-text-muted)' }}>
-                    A LINE IT MATCHED
-                  </span>
-                  <div className="flex-1" />
-                  <ButtonView size="xs" variant="ghost" onClick={() => setShowRegex(v => !v)}
-                              iconLeft={showRegex ? <EyeOffIcon size={IconSize.inline} /> : <EyeIcon size={IconSize.inline} />}>
-                    {showRegex ? 'Hide what it matches on' : 'Show what it matches on'}
-                  </ButtonView>
-                </div>
-                <span className="font-mono text-[11.5px] truncate" title={current.sample?.text}
-                      style={{ color: current.sample ? 'var(--color-text-primary)' : 'var(--color-text-muted)' }}>
+              <>
+                <SectionLabel style={{ padding: '12px 16px 6px' }}>A LINE IT MATCHED</SectionLabel>
+                <div className="shrink-0 font-mono truncate"
+                     title={current.sample?.text}
+                     style={{
+                       margin: '0 16px', padding: '9px 12px', border: `1px solid ${EDGE}`, borderLeft: `2px solid ${LOGGERS}`,
+                       borderRadius: 8, background: CARD, fontSize: 11.5, lineHeight: 1.7,
+                       color: current.sample ? TEXT : QUIET,
+                     }}>
                   {current.sample
-                    ? [current.sample.ts !== undefined ? formatLogTime(current.sample.ts) : '', current.sample.level.toUpperCase(),
-                      current.sample.logger ? shortName(current.sample.logger) : '', current.sample.text].filter(Boolean).join(' ')
+                    ? (
+                      <>
+                        <span style={{ color: QUIET }}>
+                          {[current.sample.ts !== undefined ? formatLogTime(current.sample.ts) : '',
+                            current.sample.level.toUpperCase().padEnd(5, ' '),
+                            current.sample.logger ? shortName(current.sample.logger) : ''].filter(Boolean).join(' ')}{' '}
+                        </span>
+                        <SampleText text={current.sample.text} pattern={current.pattern} fields={current.sample.fields} />
+                      </>
+                    )
                     : 'No line in the last 2 hours.'}
-                </span>
-                {showRegex && (
-                  <code className="text-[11px] break-all" style={{ color: HOLE }}>{regexSource(current.pattern)}</code>
-                )}
-              </div>
+                </div>
+                <div className="flex items-start shrink-0" style={{ gap: 8, padding: '10px 16px 0' }}>
+                  <BoardButton h={26} tone="quiet" onClick={() => setShowRegex(v => !v)} aria-expanded={showRegex}
+                               className="shrink-0"
+                               iconLeft={showRegex ? <ChevronDownIcon size={11} /> : <ChevronRightIcon size={11} />}>
+                    Show what it matches on
+                  </BoardButton>
+                  <span className={`font-mono min-w-0${showRegex ? ' break-all' : ' truncate'}`}
+                        title={regexSource(current.pattern)}
+                        style={{ fontSize: 11, lineHeight: '26px', color: showRegex ? LABEL : QUIET }}>
+                    {regexSource(current.pattern)}
+                  </span>
+                </div>
+              </>
             )}
+
+            <div className="flex-1" />
+
+            {/* ── Footer, under the right column only ── */}
+            <div className="flex items-center shrink-0"
+                 style={{ gap: 10, marginTop: 12, padding: '14px 16px', borderTop: `1px solid ${EDGE}` }}>
+              <span className="truncate" style={{ fontSize: 11.5, color: QUIET, fontVariantNumeric: 'tabular-nums' }}>
+                {tested.length} pattern{tested.length === 1 ? '' : 's'} &middot; {matching} match here &middot; {tested.length - matching} silent
+              </span>
+              <div className="flex-1" />
+              {actions}
+            </div>
           </div>
         </div>
       )}
@@ -491,19 +544,107 @@ export function AddPatternsModal({ scope, into: initialInto, onClose }: {
   );
 }
 
-function Label({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="text-[10px] font-bold shrink-0" style={{ letterSpacing: '0.05em', color: 'var(--color-text-muted)' }}>
-      {children}
-    </span>
-  );
+/** A field's name inside a note, in mono teal — `reqId`. */
+function Field({ children }: { children: ReactNode }) {
+  return <span className="font-mono" style={{ color: HOLE }}>{children}</span>;
 }
 
-function Note({ children }: { children: React.ReactNode }) {
+/**
+ * The matched line's message with each hole's VALUE on a teal pill —
+ * `A-4470` where the template says `reqId` — found left to right, so a value
+ * that also appears in the fixed text is pilled where the hole put it.
+ */
+function SampleText({ text, pattern, fields }: { text: string; pattern: LoggerPattern; fields: Record<string, string> }) {
+  const out: ReactNode[] = [];
+  let at = 0;
+  pattern.holes.forEach((name, i) => {
+    const value = fields[name];
+    if (!value) return;
+    const idx = text.indexOf(value, at);
+    if (idx < 0) return;
+    if (idx > at) out.push(text.slice(at, idx));
+    out.push(
+      <span key={`h${i}`} style={{ padding: '0 5px', borderRadius: 4, color: HOLE, background: HOLE_FILL }}>{value}</span>,
+    );
+    at = idx + value.length;
+  });
+  if (at < text.length) out.push(text.slice(at));
+  return <>{out}</>;
+}
+
+// ── The paste box ────────────────────────────────────────────────────────────
+
+/*
+  Strings, then a name directly before `(` (a call), then any other name (a
+  variable). Everything else — dots, commas, parentheses — stays text colour.
+  Deliberately small: it colours what the board colours and nothing else, and
+  it never has to be right about a language, only about what a logger call
+  looks like.
+*/
+const TOKEN = /("(?:[^"\\\n]|\\.)*"?|'(?:[^'\\\n]|\\.)*'?|`(?:[^`\\]|\\.)*`?)|([A-Za-z_$][\w$]*)(?=\s*\()|([A-Za-z_$][\w$]*)/g;
+
+function highlight(text: string): ReactNode[] {
+  const out: ReactNode[] = [];
+  let last = 0;
+  TOKEN.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = TOKEN.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    const color = m[1] ? SYN_STRING : m[2] ? SYN_CALL : SYN_VAR;
+    out.push(<span key={m.index} style={{ color }}>{m[0]}</span>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+/**
+ * The board's paste box: the calls in the editor's own colours — the logger
+ * and the arguments light blue, the method yellow, the message orange — on the
+ * card colour at 12/21 mono.
+ *
+ * A textarea cannot colour its own text, so the colours are a `<pre>` drawn
+ * exactly behind a transparent textarea with the same font, padding and line
+ * height; the caret and the selection are the textarea's, the colour is the
+ * pre's, and scrolling one scrolls the other. The box resizes from its corner
+ * like any other text box.
+ *
+ * Long calls wrap rather than scroll sideways. Both layers wrap the same way
+ * only if they are the same width, so both reserve the scrollbar's gutter —
+ * the pre never shows a scrollbar, but it keeps the room one would take.
+ *
+ * The light theme's catch-all gives every textarea an opaque fill and a text
+ * colour with `!important`, which covers the pre — so there the box is a
+ * plain, readable text box without the colours, rather than a broken one.
+ */
+function PasteBox({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+  const pre = useRef<HTMLPreElement>(null);
+  const metrics = {
+    margin: 0, padding: '10px 12px', fontSize: 12, lineHeight: '21px',
+    whiteSpace: 'pre-wrap' as const, overflowWrap: 'anywhere' as const, wordBreak: 'normal' as const,
+    scrollbarGutter: 'stable' as const, tabSize: 4, border: 'none',
+  };
   return (
-    <div className="flex items-start gap-2 text-[11px] leading-relaxed shrink-0" style={{ color: 'var(--color-text-muted)' }}>
-      <span className="shrink-0 pt-0.5"><InfoCircleIcon size={IconSize.action} color={LOGGERS} /></span>
-      <span>{children}</span>
+    <div className="relative shrink-0 overflow-hidden"
+         style={{ margin: '0 16px', height: 190, minHeight: 84, resize: 'vertical', border: `1px solid ${EDGE}`, borderRadius: 8, background: CARD }}>
+      <pre ref={pre} aria-hidden className="font-mono absolute inset-0 overflow-hidden pointer-events-none"
+           style={{ ...metrics, color: TEXT }}>
+        {highlight(value)}{'\n '}
+      </pre>
+      <textarea
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onScroll={e => { if (pre.current) pre.current.scrollTop = e.currentTarget.scrollTop; }}
+        placeholder={placeholder}
+        spellCheck={false}
+        wrap="soft"
+        aria-label="Paste logger calls"
+        className="font-mono absolute inset-0 w-full h-full overflow-y-auto overflow-x-hidden"
+        style={{
+          ...metrics, resize: 'none', outline: 'none', background: 'transparent',
+          color: 'transparent', caretColor: TEXT,
+        }}
+      />
     </div>
   );
 }

@@ -27,15 +27,40 @@ export const WINDOW_HALVES = [300, 900] as const;
  * tall whichever it is.
  */
 export function density(lines: { ts?: number; level?: string }[], from: number, to: number, buckets = 60):
-{ n: number; errors: number }[] {
-  const out = Array.from({ length: buckets }, () => ({ n: 0, errors: 0 }));
+{ n: number; errors: number; warns: number }[] {
+  const out = Array.from({ length: buckets }, () => ({ n: 0, errors: 0, warns: 0 }));
   const span = Math.max(1, to - from);
   for (const l of lines) {
     if (l.ts === undefined || l.ts < from || l.ts > to) continue;
     const i = Math.min(buckets - 1, Math.floor(((l.ts - from) / span) * buckets));
     out[i].n++;
     if (l.level === 'error') out[i].errors++;
+    else if (l.level === 'warn') out[i].warns++;
   }
+  return out;
+}
+
+/** What a stretch of the window was, by the worst line in it. */
+export type RunTone = 'none' | 'calm' | 'warn' | 'error';
+
+/**
+ * The density strip as the board draws it: runs, not bars.
+ *
+ * Neighbouring slices that were the same — quiet, warning, error — are one
+ * segment whose width is how many slices it spans, so forty minutes reads as
+ * a handful of blocks: a long calm stretch, a sliver of amber, the red one the
+ * hit is in. Height does not carry a count; an error run is drawn taller so
+ * it is found first.
+ */
+export function densityRuns(buckets: { n: number; errors: number; warns: number }[]):
+{ tone: RunTone; span: number; lines: number; from: number }[] {
+  const out: { tone: RunTone; span: number; lines: number; from: number }[] = [];
+  buckets.forEach((b, i) => {
+    const tone: RunTone = !b.n ? 'none' : b.errors ? 'error' : b.warns ? 'warn' : 'calm';
+    const last = out[out.length - 1];
+    if (last && last.tone === tone) { last.span++; last.lines += b.n; return; }
+    out.push({ tone, span: 1, lines: b.n, from: i });
+  });
   return out;
 }
 
@@ -58,9 +83,47 @@ export function failing(row: SummaryRow): number {
   return (row.mix ?? []).filter(([v]) => isFailingValue(v)).reduce((a, [, n]) => a + n, 0);
 }
 
-/** "28·201 3·504" — the mix, as it reads in a table cell. */
+/** "28×201 3×504" — the mix, as it reads in a table cell. */
 export function mixLabel(row: SummaryRow): string {
-  return (row.mix ?? []).map(([v, n]) => `${n}·${v}`).join(' ');
+  return (row.mix ?? []).map(([v, n]) => `${n}×${v}`).join(' ');
+}
+
+/**
+ * How one value of a mix is coloured: a 5xx or a word that says it failed is
+ * `bad`, a 4xx is `warn` — the caller's mistake, not the service's — and
+ * everything else is `ok`. The board draws `28×201` green, `5×409` amber and
+ * `3×504` red, in one cell.
+ */
+export function mixTone(value: string): 'ok' | 'warn' | 'bad' {
+  if (!isFailingValue(value)) return 'ok';
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 400 && n < 500 ? 'warn' : 'bad';
+}
+
+/** Whether a row had a failure the service owns — the row the board tints red. */
+export function brokeHere(row: SummaryRow): boolean {
+  return (row.mix ?? []).some(([v]) => mixTone(v) === 'bad');
+}
+
+/**
+ * A measure's worst, the way a person says it: `30.0s`, `340ms`.
+ *
+ * Only when the measure's name says it is a duration in milliseconds — `took`,
+ * `ms`, `elapsed`, `duration`, `latency`. Any other number is shown as it was
+ * logged: a pool reading of 10 is not ten milliseconds.
+ */
+export function worstLabel(measure: string | undefined, n: number | undefined): string {
+  if (n === undefined) return '—';
+  if (measure && isMillis(measure)) return n >= 1000 ? `${(n / 1000).toFixed(1)}s` : `${Math.round(n)}ms`;
+  return String(n);
+}
+
+/** `took`, `ms`, `elapsed_ms`, `durationMs` — but not `items`, which also ends in "ms". */
+function isMillis(name: string): boolean {
+  const WORD = 'ms|millis|took|elapsed|duration|latency';
+  return new RegExp(`^(${WORD})$`, 'i').test(name)
+    || new RegExp(`[_.-](${WORD})$`, 'i').test(name)
+    || /[a-z](Ms|Millis|Took|Elapsed|Duration|Latency)$/.test(name);
 }
 
 /** A downstream's line: "3 timed out" or "all fine". */
@@ -93,6 +156,18 @@ export function narrowBy(
   for (const f of readFields(anchor)) push(f.key, f.value);
   push('pod', anchor.pod);
   return out.slice(0, 8);
+}
+
+/**
+ * A narrowing chip's value, short enough to sit in a pill: a pod by the part
+ * that tells replicas apart (`7d9f2`), a thread by its last two parts
+ * (`exec-7` of `http-nio-8080-exec-7`), anything else cut at 18 characters.
+ */
+export function chipValue(field: string, value: string): string {
+  const parts = value.split('-');
+  if (field === 'pod') return parts.length > 1 ? parts[parts.length - 1] : value;
+  if (field === 'thread' && parts.length > 2) return parts.slice(-2).join('-');
+  return value.length > 18 ? `${value.slice(0, 18)}…` : value;
 }
 
 /** Lines that keep every narrowing chip that is on. */

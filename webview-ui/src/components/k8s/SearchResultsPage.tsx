@@ -896,6 +896,7 @@ export function SearchResultsPage() {
           lines={allLines}
           pods={podNames}
           shown={shownPods}
+          current={selectedLine?.pod}
           onTogglePod={pod => setPods(shownPods.includes(pod) ? shownPods.filter(p => p !== pod) : [pod])}
           onLogger={logger => addField({ field: 'logger', value: logger, mode: 'include' })}
         />
@@ -905,7 +906,7 @@ export function SearchResultsPage() {
   }), [
     lines, allLines, filter, levels, fields, wrap, logLineNumbers, asPod, at, sums, query,
     addField, removeField, clearFields, setFilter, setLevels, setWrap, goBack, contextLines,
-    selected, setSelected, podNames, columns, readers, toggleColumn, shownPods, setPods,
+    selected, setSelected, podNames, columns, readers, toggleColumn, shownPods, setPods, selectedLine,
   ]);
 
   if (!groups.length && !searched.length) {

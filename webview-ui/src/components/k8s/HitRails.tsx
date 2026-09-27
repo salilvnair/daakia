@@ -9,6 +9,12 @@
  * that matched — a search for `LedgerClient` that also caught `LedgerRetry`
  * is two stories, and a click narrows to one.
  *
+ * Each pod wears its replica's colour — red, amber, blue in the order the
+ * pods were searched — the same colour Follow's count strip and pod column
+ * give it, so a pod is recognisable from one screen to the next by colour
+ * alone. By app (`podHue`) all three would be one colour, which is the one
+ * thing a result over three replicas must not do.
+ *
  * ── Right: what the line knows ──
  *
  * A search finds a line; the question after is never about that line. So the
@@ -18,36 +24,42 @@
  * that spreads over most of the log is "wide", and Follow asks before running
  * it. A number is not followed at all: it is charted, or used as a floor.
  *
+ * The card the Correlate by order picks — the one "follow this line" means —
+ * is the selected card: teal-edged, its Follow filled, its value one click
+ * from the clipboard. The others offer Follow in outline; a wide one says it
+ * will ask, in amber, where the rest have Add as column.
+ *
  * Every card says where it was read from, and the rail says it once at the
  * bottom — the layout pattern and the MDC are the pod's own words, a pattern's
  * hole is somebody's statement about a logger, and nothing here is guessed.
  */
 import { useMemo, useState } from 'react';
 import { ButtonView, ModalView, IconSize } from '@salilvnair/dui';
-import { CopyIcon, CheckIcon, SettingsIcon, CloseIcon } from '../../icons';
+import { CopyIcon, CheckIcon, CloseIcon } from '../../icons';
 import { copyText } from '../../utils/clipboard';
 import { useTabsStore } from '../../store/tabs-store';
 import type { ResultLine } from './search-results';
 import { fieldsOf, type LineField } from './line-fields';
 import { readFields, valueOf, type FieldReader } from './field-readers';
-import { spread, numberOf, series, whereFrom, isMeasure } from './follow';
+import { spread, numberOf, series, isMeasure } from './follow';
 import { correlateFor, removeView, type CorrelateKey, type SavedFollow } from './follow-prefs';
-import { podHue, podTail } from './pod-hue';
-import { ACCENT } from './tone';
-
-const label: React.CSSProperties = {
-  fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-  color: 'var(--color-text-muted)',
-};
+import { replicaHue, podTail } from './pod-hue';
+import { FOLLOW, FIELD_KEY, FIELD_VALUE, FIELD_NUMBER, AMBER, GOOD, tint } from './follow-tone';
+import { LineButton, FillButton, railLabel, mono } from './follow-ui';
 
 /* ── Left ── */
 
-export function HitsByPodRail({ lines, pods, shown, onTogglePod, onLogger }: {
+export function HitsByPodRail({ lines, pods, shown, current, onTogglePod, onLogger }: {
   lines: ResultLine[];
   /** Every pod searched, so a pod with nothing is listed as nothing. */
   pods: string[];
   /** The pods on screen; empty is all. */
   shown: string[];
+  /**
+   * The pod of the line the reader clicked. With every pod on screen, its row
+   * is the one marked — the rail says where the line in the card came from.
+   */
+  current?: string;
   onTogglePod: (pod: string) => void;
   onLogger: (logger: string) => void;
 }) {
@@ -68,40 +80,49 @@ export function HitsByPodRail({ lines, pods, shown, onTogglePod, onLogger }: {
   if (byPod.length < 2 && !loggers.length) return null;
 
   return (
-    <div className="flex flex-col py-2.5 shrink-0" style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+    <div className="flex flex-col shrink-0"
+         style={{ padding: '10px 0', borderBottom: '1px solid var(--color-surface-border)' }}>
       {byPod.length > 1 && (
         <>
-          <div className="px-3 pb-1.5" style={label}>hits by pod</div>
+          <div style={{ ...railLabel, padding: '0 12px 8px' }}>hits by pod</div>
           {byPod.map(([pod, n]) => {
-            const on = shown.includes(pod);
+            const filtered = shown.includes(pod);
+            const on = filtered || (!shown.length && pod === current);
             return (
               <button key={pod} type="button" onClick={() => onTogglePod(pod)}
-                      title={on ? `Show every pod again` : `Only ${pod}`}
-                      className="flex items-center gap-2 w-full px-3 py-1.5 text-left cursor-pointer border-none"
+                      title={filtered ? 'Show every pod again' : `Only ${pod}`}
+                      className="flex items-center w-full text-left cursor-pointer border-none"
                       style={{
-                        background: on ? `color-mix(in srgb, ${ACCENT} 10%, transparent)` : 'transparent',
-                        borderLeft: `2px solid ${on ? ACCENT : 'transparent'}`,
+                        gap: 9, padding: '7px 12px', fontSize: 12,
+                        background: on ? tint(FOLLOW, 10) : 'transparent',
+                        borderLeft: on ? `2px solid ${FOLLOW}` : 'none',
+                        color: on ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
                         opacity: n ? 1 : 0.55,
                       }}>
-                <span style={{ width: 7, height: 7, borderRadius: 7, background: podHue(pod), flexShrink: 0 }} />
-                <span className="flex-1 truncate font-mono text-[11px]" style={{ color: 'var(--color-text-primary)' }}>{pod}</span>
-                <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>{n}</span>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: replicaHue(pod, pods), flexShrink: 0 }} />
+                <span className="flex-1 min-w-0 truncate" style={{ ...mono, fontSize: 11.5 }}>{pod}</span>
+                <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>{n}</span>
               </button>
             );
           })}
         </>
       )}
+      {byPod.length > 1 && loggers.length > 0 && (
+        <div style={{ height: 1, margin: '10px 12px', background: 'var(--color-surface-border)' }} />
+      )}
       {loggers.length > 0 && (
         <>
-          <div className="px-3 pt-3 pb-1.5" style={label}>loggers that matched</div>
-          {loggers.map(([logger, n]) => (
-            <button key={logger} type="button" onClick={() => onLogger(logger)}
-                    title={`Only lines from ${logger}`}
-                    className="flex items-center gap-2 w-full px-3 py-1 text-left cursor-pointer border-none bg-transparent hover:bg-[var(--color-surface-hover)]">
-              <span className="flex-1 truncate font-mono text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>{logger}</span>
-              <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>{n}</span>
-            </button>
-          ))}
+          <div style={{ ...railLabel, padding: '0 12px 8px' }}>loggers that matched</div>
+          <div style={{ padding: '0 12px', ...mono, fontSize: 11, lineHeight: 1.9 }}>
+            {loggers.map(([logger, n]) => (
+              <button key={logger} type="button" onClick={() => onLogger(logger)}
+                      title={`Only lines from ${logger}`}
+                      className="block w-full truncate text-left cursor-pointer border-none bg-transparent p-0 hover:underline"
+                      style={{ font: 'inherit', lineHeight: 'inherit', color: 'var(--color-text-secondary)' }}>
+                {logger} <span style={{ color: 'var(--color-text-muted)' }}>&middot; {n}</span>
+              </button>
+            ))}
+          </div>
         </>
       )}
     </div>
@@ -128,11 +149,48 @@ export function Sparkline({ points, width = 260, height = 44 }: { points: { ts: 
          aria-label={`${points.length} values from ${min} to ${max}`} style={{ display: 'block' }}>
       <line x1={4} x2={width - 4} y1={y(min)} y2={y(min)} stroke="var(--color-surface-border)" strokeWidth={1} />
       <path d={`${d} L${x(last.ts).toFixed(1)},${y(min)} L${x(t0).toFixed(1)},${y(min)} Z`}
-            fill={`color-mix(in srgb, ${ACCENT} 16%, transparent)`} stroke="none" />
-      <path d={d} fill="none" stroke={ACCENT} strokeWidth={1.4} />
-      <circle cx={x(last.ts)} cy={y(last.v)} r={2.6} fill={ACCENT} />
+            fill={tint(FOLLOW, 16)} stroke="none" />
+      <path d={d} fill="none" stroke={FOLLOW} strokeWidth={1.4} />
+      <circle cx={x(last.ts)} cy={y(last.v)} r={2.6} fill={FOLLOW} />
       <text x={width - 4} y={9} textAnchor="end" fontSize={9} fill="var(--color-text-muted)">max {max}</text>
     </svg>
+  );
+}
+
+/** Where each reader's fields came from, in the words the rail's footer uses. */
+const FROM: Record<string, string> = {
+  format: 'the layout pattern', mdc: 'the MDC', pattern: 'the message itself',
+  custom: 'a field you named', payload: 'the payload',
+};
+const FROM_ORDER = ['format', 'mdc', 'pattern', 'custom', 'payload'];
+
+/**
+ * "thread from the layout pattern, requestDataId and downstream from the MDC,
+ * hikari.active from the message itself." — `whereFrom`'s sentence, with each
+ * field's name in the teal the board draws it in.
+ */
+function WhereFrom({ fields }: { fields: LineField[] }) {
+  const groups = FROM_ORDER
+    .map(origin => ({ origin, keys: fields.filter(f => f.origin === origin).map(f => f.key) }))
+    .filter(g => g.keys.length);
+  if (!groups.length) return <>The layout pattern, the MDC, the Loggers tab&rsquo;s patterns and the fields you name &mdash; in that order.</>;
+  const name = (k: string) => <span key={k} style={{ color: FOLLOW }}>{k}</span>;
+  return (
+    <>
+      {groups.map((g, gi) => (
+        <span key={g.origin}>
+          {gi > 0 && ', '}
+          {g.keys.map((k, i) => (
+            <span key={k}>
+              {i > 0 && (i === g.keys.length - 1 ? ' and ' : ', ')}
+              {name(k)}
+            </span>
+          ))}
+          {' '}from {FROM[g.origin]}
+        </span>
+      ))}
+      .
+    </>
   );
 }
 
@@ -164,7 +222,11 @@ export function HitFieldsRail({
     return fieldsOf(line, { read: readFields(line, readers) }).filter(f => f.key !== 'logger');
   }, [line, readers]);
 
-  /* The card Follow-this-line would pick: the first key in the Correlate order the line carries. */
+  /*
+    The selected card: the first key in the Correlate order the line carries —
+    what following the whole line would take. Its Follow is the filled one, so
+    "follow this line" is that button, on the card that says what it follows.
+  */
   const byOrder = useMemo(() => (line
     ? correlateFor(line, order, k => valueOf(line, k, readers))
     : undefined), [line, order, readers]);
@@ -180,31 +242,19 @@ export function HitFieldsRail({
 
   return (
     <div className="flex flex-col h-full min-h-0"
-         style={{ width: 320, flexShrink: 0, borderLeft: '1px solid var(--color-surface-border)', background: 'var(--color-panel, var(--color-surface))' }}>
-      <div className="px-3.5 pt-3 pb-2 shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="text-[12.5px] font-semibold flex-1" style={{ color: 'var(--color-text-primary)' }}>Fields in this line</div>
-          {line && (
-            <ButtonView size="xs" variant="secondary" accentColor={ACCENT} color={byOrder ? ACCENT : undefined}
-                        disabled={!byOrder}
-                        title={byOrder
-                          ? `Follows ${byOrder.field} — the first of the Correlate by order this line carries`
-                          : 'This line carries none of the Correlate by fields — follow one of its fields instead'}
-                        onClick={() => byOrder && follow({ key: byOrder.field, value: byOrder.value, origin: 'mdc' })}>
-              Follow this line
-            </ButtonView>
-          )}
-        </div>
-        <div className="text-[11px] mt-0.5" style={{ color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+         style={{ width: 320, flexShrink: 0, borderLeft: '1px solid var(--color-surface-border)', background: 'var(--color-surface)' }}>
+      <div className="shrink-0" style={{ padding: '12px 14px 8px' }}>
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-text-primary)' }}>Fields in this line</div>
+        <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 3, lineHeight: 1.5 }}>
           {line
             ? 'Follow takes the value across every pod in the search, not just this one.'
             : 'Click a line to see what it names — its thread, its ids — and follow any of them across the pods.'}
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-auto px-2.5 flex flex-col gap-1.5 pb-2">
+      <div className="flex-1 min-h-0 overflow-auto flex flex-col" style={{ padding: '0 10px 8px', gap: 6 }}>
         {line && !fields.length && (
-          <div className="text-[11px] px-1 py-2" style={{ color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
+          <div style={{ fontSize: 11, padding: '8px 4px', color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
             This line names nothing that can be followed. A log format on its pod would give it a thread;
             a pattern in the Loggers tab, or a field on the Fields page, would name the values in its message.
           </div>
@@ -217,57 +267,75 @@ export function HitFieldsRail({
           const wide = !numeric && s.lines >= askAbove;
           const isPrimary = f.key === primary;
           const floor = floors.find(x => x.field === f.key);
+          const charted = charts.includes(f.key);
+          const isColumn = columns.includes(f.key);
+          const column = (
+            <LineButton tone={isColumn ? FOLLOW : undefined} onClick={() => onToggleColumn(f.key)}
+                        style={{ padding: '0 9px' }}>
+              {isColumn ? 'Remove column' : 'Add as column'}
+            </LineButton>
+          );
           return (
-            <div key={f.key} className="rounded-lg px-2.5 py-2"
+            <div key={f.key} className="group"
                  style={{
-                   border: `1px solid ${isPrimary ? ACCENT : 'var(--color-surface-border)'}`,
-                   background: isPrimary ? `color-mix(in srgb, ${ACCENT} 8%, transparent)` : 'transparent',
+                   padding: '8px 10px', borderRadius: 8,
+                   border: `1px solid ${isPrimary ? FOLLOW : 'var(--color-surface-border)'}`,
+                   background: isPrimary ? tint(FOLLOW, 8) : 'transparent',
                  }}>
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-[11px]" style={{ color: 'var(--color-info, #9cdcfe)' }}>{f.key}</span>
+              <div className="flex items-center" style={{ gap: 8 }}>
+                <span className="truncate" style={{ ...mono, fontSize: 11, color: FIELD_KEY }}>{f.key}</span>
                 <span className="flex-1" />
-                <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }} title={`Read from ${f.origin}`}>
+                <span className="shrink-0" style={{ fontSize: 10, color: 'var(--color-text-muted)' }} title={`Read from ${f.origin}`}>
                   {numeric ? 'numeric' : `${s.lines.toLocaleString()} line${s.lines === 1 ? '' : 's'}${s.pods > 1 ? ` · ${s.pods} pods` : ''}`}
                 </span>
               </div>
-              <div className="font-mono text-[11.5px] my-1 break-all"
-                   style={{ color: numeric ? 'var(--color-success, #b5cea8)' : 'var(--color-warning-text, #ce9178)' }}>
+              <div style={{ ...mono, fontSize: 11.5, margin: '3px 0 7px', wordBreak: 'break-all', color: numeric ? FIELD_NUMBER : FIELD_VALUE }}>
                 {f.secret ? '••••••' : f.value}
               </div>
               {numeric ? (
                 <>
-                  <div className="flex items-center gap-1.5">
-                    <ButtonView size="xs" variant="secondary" accentColor={ACCENT}
-                                color={charts.includes(f.key) ? ACCENT : undefined}
-                                onClick={() => onToggleChart(f.key)}>
-                      {charts.includes(f.key) ? 'Hide chart' : 'Chart it'}
-                    </ButtonView>
-                    <ButtonView size="xs" variant="secondary" accentColor={ACCENT}
-                                color={floor ? ACCENT : undefined}
+                  <div className="flex items-center" style={{ gap: 6 }}>
+                    <LineButton tone={charted ? FOLLOW : undefined} onClick={() => onToggleChart(f.key)}>
+                      {charted ? 'Hide chart' : 'Chart it'}
+                    </LineButton>
+                    <LineButton tone={floor ? FOLLOW : undefined} style={{ padding: '0 9px' }}
                                 title={floor ? 'Show every line again' : `Only lines where ${f.key} is at least ${n}`}
                                 onClick={() => onFloor(f.key, floor ? undefined : n)}>
                       {floor ? `≥ ${floor.min} · clear` : `Only when ≥ ${n}`}
-                    </ButtonView>
+                    </LineButton>
                   </div>
-                  {charts.includes(f.key) && (
+                  {charted && (
                     <div className="mt-2"><Sparkline points={series(hits, f.key, readers)} /></div>
                   )}
                 </>
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  <ButtonView size="xs" variant={isPrimary && !wide ? 'accent' : 'secondary'} accentColor={ACCENT}
-                              color={isPrimary || wide ? undefined : ACCENT}
-                              title={`Every line with ${f.key} = ${f.value}, on every pod in the search`}
+              ) : wide && !isPrimary ? (
+                <div className="flex items-center" style={{ gap: 8 }}>
+                  <LineButton title={`Every line with ${f.key} = ${f.value}, on every pod in the search`}
                               onClick={() => follow(f)}>
                     Follow
-                  </ButtonView>
-                  <ButtonView size="xs" variant="secondary" accentColor={ACCENT}
-                              color={columns.includes(f.key) ? ACCENT : undefined}
-                              onClick={() => onToggleColumn(f.key)}>
-                    {columns.includes(f.key) ? 'Remove column' : 'Add as column'}
-                  </ButtonView>
-                  <CopyButton value={f.value} />
-                  {wide && <span className="text-[10.5px]" style={{ color: 'var(--color-warning)' }}>wide — it will ask first</span>}
+                  </LineButton>
+                  <span style={{ fontSize: 10.5, color: AMBER }}>wide &mdash; it will ask first</span>
+                  {/* The board has the note where Add as column would be. A
+                      column already on stays in view to be removed; otherwise
+                      the button waits for the pointer. */}
+                  {isColumn ? column : <Reveal>{column}</Reveal>}
+                </div>
+              ) : (
+                <div className="flex items-center" style={{ gap: 6 }}>
+                  {isPrimary ? (
+                    <FillButton title={`Every line with ${f.key} = ${f.value}, on every pod in the search — the first of the Correlate by order this line carries`}
+                                onClick={() => follow(f)}>
+                      Follow
+                    </FillButton>
+                  ) : (
+                    <LineButton tone={FOLLOW} title={`Every line with ${f.key} = ${f.value}, on every pod in the search`}
+                                onClick={() => follow(f)}>
+                      Follow
+                    </LineButton>
+                  )}
+                  {column}
+                  {isPrimary ? <CopyButton value={f.value} /> : <Reveal><CopyButton value={f.value} /></Reveal>}
+                  {wide && <span style={{ fontSize: 10.5, color: AMBER }}>wide</span>}
                 </div>
               )}
             </div>
@@ -275,15 +343,15 @@ export function HitFieldsRail({
         })}
 
         {!line && views.length > 0 && (
-          <div className="flex flex-col gap-1 mt-1">
-            <div className="px-1 pb-1" style={label}>saved follows</div>
+          <div className="flex flex-col mt-1" style={{ gap: 6 }}>
+            <div style={{ ...railLabel, padding: '0 4px 2px' }}>saved follows</div>
             {views.map(v => (
-              <div key={v.id} className="flex items-center gap-1.5 rounded-md px-2 py-1.5"
-                   style={{ border: '1px solid var(--color-surface-border)' }}>
+              <div key={v.id} className="flex items-center"
+                   style={{ gap: 6, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--color-surface-border)' }}>
                 <button type="button" onClick={() => onOpenView(v)}
                         className="flex-1 min-w-0 text-left cursor-pointer border-none bg-transparent p-0">
-                  <div className="text-[11.5px] truncate" style={{ color: 'var(--color-text-primary)' }}>{v.name}</div>
-                  <div className="text-[10px] truncate" style={{ color: 'var(--color-text-muted)' }}>
+                  <div className="truncate" style={{ fontSize: 11.5, color: 'var(--color-text-primary)' }}>{v.name}</div>
+                  <div className="truncate" style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
                     {v.conds.map(c => `${c.field} = ${c.value}`).join(' AND ')} · {v.pods.map(p => podTail(p.pod)).join(', ')}
                   </div>
                 </button>
@@ -295,30 +363,28 @@ export function HitFieldsRail({
         )}
       </div>
 
-      <div className="px-3.5 py-2.5 shrink-0" style={{ borderTop: '1px solid var(--color-surface-border)' }}>
-        <div className="mb-1.5" style={label}>where these came from</div>
-        <div className="text-[11px]" style={{ color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
-          {whereFrom(fields) || 'The layout pattern, the MDC, the Loggers tab’s patterns and the fields you name — in that order.'}
+      <div className="shrink-0" style={{ padding: '10px 14px', borderTop: '1px solid var(--color-surface-border)' }}>
+        <div style={{ ...railLabel, marginBottom: 6 }}>where these came from</div>
+        <div style={{ fontSize: 11, lineHeight: 1.6, color: 'var(--color-text-secondary)' }}>
+          <WhereFrom fields={fields} />
         </div>
-        <div className="mt-2">
-          <ButtonView size="xs" variant="secondary" accentColor={ACCENT}
-                      iconLeft={<SettingsIcon size={IconSize.chip} />}
-                      onClick={() => useTabsStore.getState().openSettingsTab('dk8s-fields')}>
-            Edit how fields are read
-          </ButtonView>
-        </div>
+        <LineButton style={{ marginTop: 8 }}
+                    onClick={() => useTabsStore.getState().openSettingsTab('dk8s-fields')}>
+          Edit how fields are read
+        </LineButton>
       </div>
 
       {asking && (
         <ModalView open onClose={() => setAsking(undefined)} size="sm"
                    title={`Follow ${asking.field}?`}
                    subtitle={`${asking.value}`}
-                   headerColor={ACCENT}
+                   headerColor={FOLLOW}
                    footerRight={
                      <div className="flex items-center gap-2">
-                       <ButtonView size="sm" variant="secondary" label="Cancel" onClick={() => setAsking(undefined)} />
-                       <ButtonView size="sm" variant="secondary" accentColor={ACCENT} color={ACCENT} label="Follow anyway"
-                                   onClick={() => { const a = asking; setAsking(undefined); onFollow(a.field, a.value); }} />
+                       <LineButton h={28} fs={12} onClick={() => setAsking(undefined)}>Cancel</LineButton>
+                       <FillButton h={28} fs={12} onClick={() => { const a = asking; setAsking(undefined); onFollow(a.field, a.value); }}>
+                         Follow anyway
+                       </FillButton>
                      </div>
                    }>
           <div className="text-[12px] py-1" style={{ color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
@@ -333,13 +399,22 @@ export function HitFieldsRail({
   );
 }
 
+/**
+ * A control the board does not draw on a card at rest — copy on a card that is
+ * not the selected one, Add as column on a wide one — kept, but shown only
+ * while the pointer or the keyboard is on the card.
+ */
+function Reveal({ children }: { children: React.ReactNode }) {
+  return <span className="inline-flex opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">{children}</span>;
+}
+
+/** The square copy button beside the selected card's Follow. */
 function CopyButton({ value }: { value: string }) {
   const [done, setDone] = useState(false);
   return (
-    <ButtonView size="xs" variant="secondary" accentColor={ACCENT}
-                title={done ? 'Copied' : 'Copy the value'} aria-label="Copy the value"
-                color={done ? 'var(--color-success)' : undefined}
-                iconLeft={done ? <CheckIcon size={IconSize.chip} /> : <CopyIcon size={IconSize.chip} />}
+    <LineButton title={done ? 'Copied' : 'Copy value'} aria-label="Copy value"
+                style={{ width: 26, padding: 0, color: done ? GOOD : 'var(--color-text-secondary)' }}
+                iconLeft={done ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
                 onClick={async () => { if (await copyText(value)) { setDone(true); setTimeout(() => setDone(false), 1400); } }} />
   );
 }

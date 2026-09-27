@@ -2656,3 +2656,64 @@ export function ThumbDownIcon(props: IconProps) {
     </svg>
   );
 }
+
+/** A pennant on a pole — a pattern marked in the Loggers tab, lit in the Logs tab. */
+export function MarkFlagIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M4 21V4h11l1 2h4v10h-5l-1-2H6v7z" />
+    </svg>
+  );
+}
+
+/** Three lines, the last one short — a logger's lines; the Loggers board's mark. */
+export function LoggerLinesIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M4 6h16M4 12h16M4 18h10" />
+    </svg>
+  );
+}
+
+/** A hexagon — the pod, as the dk8s boards draw it. */
+export function PodHexIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M12 2 3 7v10l9 5 9-5V7z" />
+    </svg>
+  );
+}
+
+/** A clipboard — something pasted in. */
+export function ClipboardIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <rect x="8" y="2" width="8" height="4" rx="1" />
+    </svg>
+  );
+}
+
+/** A square-cornered folder, the one the Loggers boards draw beside a path. */
+export function FolderFlatIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M3 7h6l2 2h10v10H3z" />
+    </svg>
+  );
+}
+
+/** Three lines, each shorter — calls going out, fewer at each hop. The Window's downstream card. */
+export function ShorterLinesIcon(props: IconProps) {
+  return <svg {...withDefaults(props)}><path d="M4 7h16M4 12h10M4 17h7" /></svg>;
+}
+
+/** Two arcs chasing each other — a retry, a round trip. The Window's retries card. */
+export function RoundTripIcon(props: IconProps) {
+  return <svg {...withDefaults(props)}><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 12a9 9 0 0 1-15 6.7L3 16" /></svg>;
+}
+
+/** Two bars — a row that can be dragged to reorder. */
+export function GripLinesIcon(props: IconProps) {
+  return <svg {...withDefaults(props)}><path d="M4 8h16M4 16h16" /></svg>;
+}

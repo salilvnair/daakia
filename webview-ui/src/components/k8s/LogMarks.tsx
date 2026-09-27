@@ -23,7 +23,7 @@
  * grows by a few hooks rather than a few hundred lines.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ButtonView, CheckboxView, IconSize } from '@salilvnair/dui';
+import { ButtonView, CheckboxView } from '@salilvnair/dui';
 import type { LogLine } from '../../store/k8s-store';
 import { MARK_COLORS, type CataloguePattern } from '../../store/dk8s-logger-store';
 import {
@@ -31,9 +31,9 @@ import {
   type CompiledMark, type MarkHit, type MarkFacet,
 } from './logger-marks';
 import { shortName } from './logger-catalogue';
-import { PatternTemplate } from './PatternTemplate';
-import { CloseIcon } from '../../icons';
-import { LOGGERS, LOGGERS_SOFT } from './tone';
+import { templateParts } from './logger-pattern';
+import { CloseIcon, MarkFlagIcon } from '../../icons';
+import { CARD, EDGE, TEXT, LABEL, QUIET, MONO, MARKS, MARKS_CHIP, OUTLINE_BUTTON } from './asklog-tone';
 
 export interface MarkIndex {
   marks: CompiledMark[];
@@ -68,7 +68,15 @@ export function useMarkIndex(catalogue: CataloguePattern[], logs: LogLine[]): Ma
   return { marks, index, counts, facets, levels };
 }
 
-/** "3 marked patterns highlighted ×", and Only marked beside it. */
+/**
+ * "3 marked patterns highlighted ×", and Only marked beside it.
+ *
+ * As the LogsMarked board draws it: a hairline after the level chips, then a
+ * purple pill with no edge — a flag, the count, the way out — so it reads as
+ * a state the log is in rather than as one more filter chip. A value picked
+ * in the rail is a second pill of the same kind, and Only marked is a plain
+ * checkbox in the label colour, the same as Following at the other end.
+ */
 export function MarkedBar({ count, onlyMarked, onOnlyMarked, onClear, field, onClearField }: {
   count: number;
   onlyMarked: boolean;
@@ -78,40 +86,56 @@ export function MarkedBar({ count, onlyMarked, onOnlyMarked, onClear, field, onC
   onClearField: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2.5 shrink-0">
-      <span className="flex items-center rounded overflow-hidden"
-            style={{ height: 26, border: `1px solid color-mix(in srgb, ${LOGGERS} 40%, transparent)`, background: LOGGERS_SOFT }}>
-        <span className="px-2 text-[11px]" style={{ color: LOGGERS, fontWeight: 600 }}
-              title="Marked in the Loggers tab. Each lights the lines it matches, in its own colour.">
-          {count} marked pattern{count === 1 ? '' : 's'} highlighted
-        </span>
-        <button type="button" onClick={onClear} title="Clear every mark" aria-label="Clear every mark"
-                className="flex items-center h-full px-1.5 border-none bg-transparent cursor-pointer"
-                style={{ color: LOGGERS }}>
-          <CloseIcon size={IconSize.chip} />
+    <div className="flex items-center shrink-0" style={{ gap: 8 }}>
+      <span aria-hidden="true" className="shrink-0" style={{ width: 1, height: 18, background: EDGE }} />
+      <span className="inline-flex items-center shrink-0" style={PILL}
+            title="Marked in the Loggers tab. Each lights the lines it matches, in its own colour.">
+        <MarkFlagIcon size={11} />
+        {count} marked pattern{count === 1 ? '' : 's'} highlighted
+        <button type="button" onClick={onClear} title="Clear every mark" aria-label="Clear marks"
+                className="inline-flex border-none bg-transparent cursor-pointer p-0" style={{ color: MARKS }}>
+          <CloseIcon size={11} />
         </button>
       </span>
       {field && (
-        <span className="flex items-center rounded overflow-hidden"
-              style={{ height: 26, border: `1px solid color-mix(in srgb, ${LOGGERS} 40%, transparent)` }}>
-          <span className="px-2 text-[11px] font-mono" style={{ color: LOGGERS }}>{field.field} {field.value}</span>
+        <span className="inline-flex items-center shrink-0" style={PILL}>
+          <span style={{ fontFamily: MONO }}>{field.field} {field.value}</span>
           <button type="button" onClick={onClearField} title="Show every marked line again" aria-label="Clear this value"
-                  className="flex items-center h-full px-1.5 border-none bg-transparent cursor-pointer" style={{ color: LOGGERS }}>
-            <CloseIcon size={IconSize.chip} />
+                  className="inline-flex border-none bg-transparent cursor-pointer p-0" style={{ color: MARKS }}>
+            <CloseIcon size={11} />
           </button>
         </span>
       )}
-      <CheckboxView checked={onlyMarked} onChange={onOnlyMarked} size="md" accentColor={LOGGERS} label="Only marked" />
+      <span className="inline-flex items-center shrink-0" style={{ gap: 7 }}>
+        <CheckboxView checked={onlyMarked} onChange={onOnlyMarked} size="sm" accentColor={MARKS} />
+        <span onClick={() => onOnlyMarked(!onlyMarked)} className="select-none cursor-pointer"
+              style={{ fontSize: 11.5, color: LABEL }}>
+          Only marked
+        </span>
+      </span>
     </div>
   );
 }
+
+/** The board's purple pill: 26px, fully round, 14% fill, no edge. */
+const PILL = {
+  gap: 7, height: 26, padding: '0 10px', borderRadius: 999,
+  fontSize: 11.5, color: MARKS, background: MARKS_CHIP, whiteSpace: 'nowrap',
+} as const;
 
 /**
  * The map down the right edge: a tick per marked row, in its mark's colour,
  * placed where the row sits in the scroll — by its measured offset, so a
  * wrapped row takes its real share. Ticks that land on the same pixel are one
  * tick; a click jumps to the row it stands for.
+ *
+ * Drawn to the board: a 22px strip on the rail's colour with a hairline
+ * edge, the ticks 10 by 3 with round ends, centred, and 6px clear at the top
+ * and bottom so the first and last are not cut by the edge.
  */
+const STRIP_PAD = 6;
+const TICK_H = 3;
+
 export function MarkMapStrip({ rows, offsets, contentHeight, index, onJump }: {
   rows: { line: { seq: number }; isFrame?: boolean }[];
   offsets: Float64Array;
@@ -136,25 +160,27 @@ export function MarkMapStrip({ rows, offsets, contentHeight, index, onJump }: {
       if (rows[i].isFrame) continue;
       const hit = index.get(rows[i].line.seq);
       if (!hit) continue;
-      const y = Math.min(height - 2, Math.floor((offsets[i] / contentHeight) * height));
+      const y = Math.min(height - TICK_H, Math.floor((offsets[i] / contentHeight) * height));
       if (!out.has(y)) out.set(y, { row: i, color: hit.color });
     }
     return out;
   }, [rows, offsets, contentHeight, index, height]);
 
   return (
-    <div ref={ref} className="relative shrink-0" aria-label="Where the marked lines are"
-         style={{ width: 8, borderLeft: '1px solid var(--color-surface-border)' }}>
-      {[...ticks.entries()].map(([y, t]) => (
-        <button
-          key={y}
-          type="button"
-          onClick={() => onJump(t.row)}
-          title="Go to this marked line"
-          className="absolute border-none cursor-pointer p-0"
-          style={{ top: y, left: 1, width: 6, height: 2, background: MARK_COLORS[t.color] ?? LOGGERS }}
-        />
-      ))}
+    <div className="relative shrink-0" aria-label="Where the marked lines are"
+         style={{ width: 22, borderLeft: `1px solid ${EDGE}`, background: CARD, padding: `${STRIP_PAD}px 0` }}>
+      <div ref={ref} className="relative h-full">
+        {[...ticks.entries()].map(([y, t]) => (
+          <button
+            key={y}
+            type="button"
+            onClick={() => onJump(t.row)}
+            title="Go to this marked line"
+            className="absolute border-none cursor-pointer p-0"
+            style={{ top: y, left: 5, width: 10, height: TICK_H, borderRadius: 2, background: MARK_COLORS[t.color] ?? MARKS }}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -164,6 +190,11 @@ export function MarkMapStrip({ rows, offsets, contentHeight, index, onJump }: {
  *
  * A mark's row steps to its next line; a hole's value narrows the log to the
  * marked lines carrying it, and pressing it again lets go.
+ *
+ * Each mark is a card the way the board draws one: its colour as a 2px edge
+ * on the left and an 8% wash behind, the template on one line in the text
+ * colour — holes and all, since the edge on this card already says which
+ * mark it is — and "Logger · N hits" under it.
  */
 export function MarkedRail({ patterns, idx, field, onNext, onField }: {
   patterns: CataloguePattern[];
@@ -175,20 +206,26 @@ export function MarkedRail({ patterns, idx, field, onNext, onField }: {
   const marked = patterns.filter(p => p.marked);
   if (!marked.length) return null;
   return (
-    <div className="flex flex-col shrink-0 py-2" style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-      <Heading>MARKED FROM LOGGERS</Heading>
-      {marked.map(p => {
+    <div className="flex flex-col shrink-0" style={{ padding: '12px 0 4px' }}>
+      <Heading color={MARKS}>MARKED FROM LOGGERS</Heading>
+      {marked.map((p, i) => {
         const color = MARK_COLORS[p.color ?? 0];
         const n = idx.counts[p.id] ?? 0;
         return (
           <button key={p.id} type="button" onClick={() => onNext(p.id)} disabled={!n}
                   title={n ? 'Go to its next line' : 'Nothing in the buffer matches it'}
-                  className="flex items-stretch gap-2 px-2.5 py-1 border-none bg-transparent text-left"
-                  style={{ cursor: n ? 'pointer' : 'default' }}>
-            <span className="shrink-0 rounded-sm" style={{ width: 3, background: color }} />
+                  className="flex border-none text-left"
+                  style={{
+                    gap: 8, padding: '6px 12px', marginTop: i ? 4 : 0,
+                    borderLeft: `2px solid ${color}`,
+                    background: `color-mix(in srgb, ${color} 8%, transparent)`,
+                    cursor: n ? 'pointer' : 'default',
+                  }}>
             <span className="flex flex-col min-w-0">
-              <span className="font-mono text-[10.5px] truncate"><PatternTemplate template={p.template} dim={!n} /></span>
-              <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
+              <span className="truncate" style={{ fontFamily: MONO, fontSize: 11, color: n ? TEXT : QUIET }}>
+                {templateText(p.template)}
+              </span>
+              <span style={{ fontSize: 10.5, color: QUIET }}>
                 {p.logger ? `${shortName(p.logger)} · ` : ''}{n.toLocaleString()} hit{n === 1 ? '' : 's'}
               </span>
             </span>
@@ -200,11 +237,9 @@ export function MarkedRail({ patterns, idx, field, onNext, onField }: {
         <>
           <Heading top>LEVEL</Heading>
           {idx.levels.map(([level, n]) => (
-            <div key={level} className="flex items-center gap-2 px-2.5 py-0.5 text-[10.5px] font-mono">
-              <span className="flex-1" style={{ color: level === 'error' ? 'var(--color-error)' : level === 'warn' ? 'var(--color-warning)' : 'var(--color-text-secondary)' }}>
-                {level.toUpperCase()}
-              </span>
-              <span style={{ color: 'var(--color-text-muted)' }}>{n.toLocaleString()}</span>
+            <div key={level} className="flex" style={{ gap: 8, padding: '3px 12px', fontSize: 12, color: LABEL }}>
+              <span className="flex-1">{level.toUpperCase()}</span>
+              <span style={{ color: QUIET }}>{n.toLocaleString()}</span>
             </div>
           ))}
         </>
@@ -218,10 +253,10 @@ export function MarkedRail({ patterns, idx, field, onNext, onField }: {
             return (
               <button key={value} type="button" onClick={() => onField(f.field, value)}
                       title={on ? 'Show every marked line again' : `Only the marked lines where ${f.field} is ${value}`}
-                      className="flex items-center gap-2 px-2.5 py-0.5 border-none cursor-pointer text-left text-[10.5px] font-mono"
-                      style={{ background: on ? LOGGERS_SOFT : 'transparent' }}>
-                <span className="flex-1 min-w-0 truncate" style={{ color: on ? LOGGERS : 'var(--color-text-secondary)' }}>{value}</span>
-                <span style={{ color: 'var(--color-text-muted)' }}>{n}</span>
+                      className="flex border-none cursor-pointer text-left"
+                      style={{ gap: 8, padding: '3px 12px', fontSize: 12, background: on ? MARKS_CHIP : 'transparent' }}>
+                <span className="flex-1 min-w-0 truncate" style={{ fontFamily: MONO, color: on ? MARKS : LABEL }}>{value}</span>
+                <span style={{ color: QUIET }}>{n}</span>
               </button>
             );
           })}
@@ -231,25 +266,40 @@ export function MarkedRail({ patterns, idx, field, onNext, onField }: {
   );
 }
 
-function Heading({ children, top }: { children: string; top?: boolean }) {
+/** `Order {orderId} rejected: {reason}`, as the one string the card shows. */
+function templateText(template: string): string {
+  return templateParts(template).map(p => (p.hole ? `{${p.text}}` : p.text)).join('');
+}
+
+function Heading({ children, top, color }: { children: string; top?: boolean; color?: string }) {
   return (
-    <span className="px-2.5 pb-1 text-[9px] font-bold"
-          style={{ paddingTop: top ? 8 : 0, letterSpacing: '0.06em', color: 'var(--color-text-muted)' }}>
+    <span style={{
+      padding: `${top ? 16 : 0}px 12px 8px`, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em',
+      color: color ?? LABEL,
+    }}>
       {children}
     </span>
   );
 }
 
-/** The footer's half: "24 match a marked pattern in view" and the jump. */
-export function MarkedFooter({ inView, onNext }: { inView: number; onNext: () => void }) {
+/**
+ * The footer's count: "24 match a marked pattern in view", right after the
+ * line count it qualifies and in the footer's own quiet colour — the board
+ * reads them as one sentence, "1,566 lines · 24 match a marked pattern".
+ */
+export function MarkedCount({ inView }: { inView: number }) {
   return (
-    <>
-      <span style={{ color: LOGGERS, fontVariantNumeric: 'tabular-nums' }}>
-        {inView.toLocaleString()} match a marked pattern in view
-      </span>
-      <ButtonView variant="secondary" size="xs" accentColor={LOGGERS} disabled={!inView} onClick={onNext}>
-        Jump to next match
-      </ButtonView>
-    </>
+    <span style={{ color: QUIET, fontVariantNumeric: 'tabular-nums' }}>
+      {` · ${inView.toLocaleString()} match a marked pattern in view`}
+    </span>
+  );
+}
+
+/** The footer's jump, the board's outlined 24px button beside Ask AI. */
+export function MarkedJump({ inView, onNext }: { inView: number; onNext: () => void }) {
+  return (
+    <ButtonView variant="secondary" accentColor={MARKS} disabled={!inView} onClick={onNext} style={OUTLINE_BUTTON}>
+      Jump to next match
+    </ButtonView>
   );
 }

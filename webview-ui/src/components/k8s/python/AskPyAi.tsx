@@ -14,9 +14,10 @@
  * lines it changes, and "Apply to script" puts it in the editor as an unsaved
  * change, where Ctrl+Z still has the old one.
  */
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ButtonView, PopoverView, MarkdownView, IconSize } from '@salilvnair/dui';
-import { SparkleIcon, CopyIcon, CheckIcon } from '../../../icons';
+import { SparkleIcon, CopyIcon, CheckIcon, PythonIcon } from '../../../icons';
+import { ColoredCode } from './ColoredCode';
 import { usePyStore, type PyRun, type PyTarget } from '../../../store/dk8s-python-store';
 import { usePyIntelStore } from '../../../store/dk8s-py-intel-store';
 import { useAiPromptTemplatesStore } from '../../../store/prompt-template';
@@ -25,9 +26,18 @@ import { copyText } from '../../../utils/clipboard';
 import { selectionOf } from './PyEditor';
 import { AI as AI_ACCENT, MUTED, BAD } from '../tone';
 
+/** Python's own green, for the proposed-script card. */
+const PY_GREEN = 'var(--color-success)';
+
 const label: React.CSSProperties = {
   fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: MUTED,
 };
+
+/** Open Ask AI with a question — sent straight away when `send` is set. */
+export const PY_ASK_EVENT = 'daakia:py-ask';
+export function askPyAi(question: string, send = false): void {
+  window.dispatchEvent(new CustomEvent(PY_ASK_EVENT, { detail: { question, send } }));
+}
 
 /** The last run, told briefly: how it ended and the end of what it printed. */
 export function describeRun(run: PyRun | undefined): string {
@@ -133,6 +143,20 @@ export function AskPyAi({ scriptId, target, pythonVersion, lastRun }: {
     );
   };
 
+  /* The editor's right-click menu asks through here: "Explain this", "Ask AI about the selection". */
+  const askRef = useRef(ask);
+  askRef.current = ask;
+  useEffect(() => {
+    const onAsk = (e: Event) => {
+      const q = String((e as CustomEvent).detail?.question ?? '');
+      setOpen(true);
+      setQuestion(q);
+      if (q && (e as CustomEvent).detail?.send) askRef.current(q);
+    };
+    window.addEventListener(PY_ASK_EVENT, onAsk);
+    return () => window.removeEventListener(PY_ASK_EVENT, onAsk);
+  }, []);
+
   const change = result?.code ? lineChange(source, result.code) : undefined;
 
   return (
@@ -207,26 +231,34 @@ export function AskPyAi({ scriptId, target, pythonVersion, lastRun }: {
                     </div>
                   )}
                   {result.code && change && (
-                    <div className="flex flex-col rounded-lg overflow-hidden" style={{ border: '1px solid var(--color-surface-border)' }}>
-                      <div className="flex items-center gap-2 px-2.5 py-1.5" style={{ background: 'var(--color-surface-hover)' }}>
-                        <span className="text-[11px] font-mono" style={{ color: 'var(--color-success)' }}>+{change.added}</span>
-                        <span className="text-[11px] font-mono" style={{ color: BAD }}>−{change.removed}</span>
-                        <span className="text-[11px]" style={{ color: MUTED }}>lines in the proposed {name}</span>
+                    <div className="flex flex-col rounded-lg overflow-hidden"
+                         style={{ border: `1px solid color-mix(in srgb, ${PY_GREEN} 35%, var(--color-surface-border))` }}>
+                      <div className="flex items-center gap-2 px-2.5 py-1.5"
+                           style={{ background: `linear-gradient(90deg, color-mix(in srgb, ${PY_GREEN} 14%, transparent), color-mix(in srgb, ${AI_ACCENT} 10%, transparent))` }}>
+                        <PythonIcon size={IconSize.action} color={PY_GREEN} />
+                        {change.added || change.removed ? (
+                          <>
+                            <span className="text-[11px] font-mono" style={{ color: 'var(--color-success)' }}>+{change.added}</span>
+                            <span className="text-[11px] font-mono" style={{ color: BAD }}>−{change.removed}</span>
+                            <span className="text-[11px]" style={{ color: MUTED }}>lines in the proposed {name}</span>
+                          </>
+                        ) : (
+                          <span className="text-[11px]" style={{ color: MUTED }}>No change to {name} — it already reads like this</span>
+                        )}
                         <span className="flex-1" />
                         <ButtonView size="xs" variant="secondary"
                                     iconLeft={copied ? <CheckIcon size={IconSize.chip} /> : <CopyIcon size={IconSize.chip} />}
                                     onClick={async () => { if (await copyText(result.code)) { setCopied(true); setTimeout(() => setCopied(false), 1400); } }}>
                           {copied ? 'Copied' : 'Copy code'}
                         </ButtonView>
-                        <ButtonView size="xs" variant="secondary" accentColor="var(--color-success)" color="var(--color-success)"
-                                    onClick={() => { if (scriptId) editSource(scriptId, result.code); setOpen(false); }}>
-                          Apply to script
-                        </ButtonView>
+                        {(change.added > 0 || change.removed > 0) && (
+                          <ButtonView size="xs" variant="secondary" accentColor="var(--color-success)" color="var(--color-success)"
+                                      onClick={() => { if (scriptId) editSource(scriptId, result.code); setOpen(false); }}>
+                            Apply to script
+                          </ButtonView>
+                        )}
                       </div>
-                      <pre className="m-0 px-3 py-2 text-[11.5px] overflow-auto"
-                           style={{ maxHeight: 220, fontFamily: 'var(--font-mono, monospace)', color: 'var(--color-text-secondary)' }}>
-                        {result.code}
-                      </pre>
+                      <ColoredCode code={result.code} maxHeight={240} />
                     </div>
                   )}
                 </>

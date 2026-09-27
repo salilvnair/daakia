@@ -20,7 +20,7 @@
  * panes following two pods means two streams, two filters and two tails, and
  * the single-pod store has one of each.
  */
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { IconSize, SplitPanelView, type SplitDirection } from '@salilvnair/dui';
 import {
   CloseIcon, ChevronLeftIcon, ColumnsIcon, RowsIcon, LayoutGridIcon, ClockIcon,
@@ -34,8 +34,10 @@ import {
 } from '../../store/dk8s-split-store';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import { useTabsStore } from '../../store/tabs-store';
-import { severityColor, severityOf, workloadColor } from './pod-view';
+import { severityOf } from './pod-view';
 import { ACCENT } from './tone';
+import { replicaHue } from './pod-hue';
+import { FOLLOW, tint } from './follow-tone';
 
 /**
  * The arrangements a selection can be opened in.
@@ -75,7 +77,16 @@ function Pane({ pane, focused, sharedRange }: {
     p => p.name === pane.pod && p.namespace === pane.namespace,
   ));
 
-  const color = pod ? severityColor(severityOf(pod)) : 'var(--color-text-muted)';
+  /*
+    The replica's colour, not its health: in a split the question is which of
+    three near-identical pods a line is on, and red, amber, blue in the order
+    they were opened is what Follow and the search rail call them too. Health
+    is on the title, for whoever hovers the pod's name.
+  */
+  const color = replicaHue(pane.pod, panes.map(p => p.pod));
+  const health = pod ? severityOf(pod) : undefined;
+  /* Whether this pane's gutter is down to ticks — only the gutter knows its height. */
+  const [compact, setCompact] = useState(false);
 
   /*
     A pod-shaped stand-in for the view's own uses — export, Analyze, the
@@ -159,6 +170,7 @@ function Pane({ pane, focused, sharedRange }: {
     closeLogExport: () => {},
     /* The view's own "back" closes this pane rather than the whole split. */
     closeDetail: () => closePane(pane.id),
+    onGutterCompact: setCompact,
   } as unknown as LogSource), [pane, asPod, logLineNumbers, patch, refetch, closePane, sharedRange]);
 
   return (
@@ -184,32 +196,31 @@ function Pane({ pane, focused, sharedRange }: {
         border: `1px solid ${focused && panes.length > 1
           ? `color-mix(in srgb, ${ACCENT} 45%, transparent)`
           : 'var(--color-surface-border)'}`,
-        borderRadius: 6,
-        background: 'var(--color-panel)',
+        borderRadius: 8,
+        background: 'var(--color-surface)',
       }}
     >
-      <div className="flex items-center gap-2 px-2.5 py-1.5 shrink-0"
-           style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        <span style={{
-          width: 6, height: 6, borderRadius: 6, background: color, flexShrink: 0,
-        }} />
-        <span className="text-[11.5px] font-mono truncate"
-              style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
+      {/* The pod, and what its gutter is doing: a count of lines, or — once
+          the pane is too short for density — "compact", so a column of ticks
+          is not read as a quiet log. */}
+      <div className="flex items-center shrink-0"
+           style={{ gap: 8, height: 26, padding: '0 10px', borderBottom: '1px solid var(--color-surface-border)', fontSize: 11 }}>
+        <span style={{ width: 7, height: 7, borderRadius: 2, background: color, flexShrink: 0 }} />
+        <span className="truncate" style={{ color: 'var(--color-text-secondary)' }}
+              title={[pane.pod, pane.namespace, pod?.workload?.kind, health].filter(Boolean).join(' · ')}>
           {pane.pod}
         </span>
-        {pod?.workload && (
-          <span className="text-[9px] px-1 py-px rounded uppercase tracking-wide shrink-0"
-                style={{
-                  color: workloadColor(pod.workload.kind),
-                  background: `color-mix(in srgb, ${workloadColor(pod.workload.kind)} 14%, transparent)`,
-                }}>
-            {pod.workload.kind}
+        <span className="flex-1" />
+        {compact ? (
+          <span style={{ padding: '0 6px', borderRadius: 999, fontSize: 10, color: FOLLOW, background: tint(FOLLOW, 16) }}
+                title="Too short for density — errors and warnings as ticks">
+            compact
+          </span>
+        ) : (
+          <span style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+            {pane.logs.length.toLocaleString()}
           </span>
         )}
-        <span className="text-[10px] truncate" style={{ color: 'var(--color-text-muted)' }}>
-          {pane.namespace}
-        </span>
-        <span className="flex-1" />
         {/* The one destructive control in the strip, and it says so on the way
             in rather than after the fact — see `.dk-close-btn`. `currentColor`
             so the icon travels with it. */}

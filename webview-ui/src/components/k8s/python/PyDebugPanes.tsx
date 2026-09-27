@@ -171,13 +171,15 @@ function VarRow({ v, depth }: { v: PyVar; depth: number }) {
   const kids = v.children ?? [];
   return (
     <div>
-      <Row depth={depth} expandable={kids.length > 0} open={open} onToggle={() => setOpen(!open)} title={v.value}>
+      <Row depth={depth} expandable={kids.length > 0} open={open} onToggle={() => setOpen(!open)} title={v.value}
+           attrs={{ 'data-py-var': v.name, 'data-py-value': v.value }}>
         <span className="font-mono shrink-0" style={{ color: 'var(--color-debug-key)' }}>{v.name}</span>
         <span className="shrink-0" style={{ color: 'var(--color-text-muted)' }}>:</span>
         <span className="font-mono truncate" style={{ color: valueColor(v.type) }}>{summary(v)}</span>
       </Row>
       {open && kids.map(k => (
-        <Row key={k.name} depth={depth + 1} title={k.value}>
+        <Row key={k.name} depth={depth + 1} title={k.value}
+             attrs={{ 'data-py-var': `${v.name}[${JSON.stringify(k.name)}]`, 'data-py-value': k.value }}>
           <span className="font-mono shrink-0" style={{ color: 'var(--color-debug-key)' }}>{k.name}</span>
           <span className="shrink-0" style={{ color: 'var(--color-text-muted)' }}>:</span>
           <span className="font-mono truncate" style={{ color: valueColor(k.type) }}>{k.value}</span>
@@ -191,12 +193,15 @@ function VarRow({ v, depth }: { v: PyVar; depth: number }) {
  * One line of a tree. The caret is a toggle only where there is something to
  * open, and the whole row is the target — a 10px caret is a hard thing to hit.
  */
-function Row({ depth, expandable, open, onToggle, title, children }: {
+function Row({ depth, expandable, open, onToggle, title, children, attrs }: {
   depth: number; expandable?: boolean; open?: boolean; onToggle?: () => void; title?: string;
   children: React.ReactNode;
+  /** `data-py-*`, for the right-click menu to read. */
+  attrs?: Record<string, string>;
 }) {
   return (
     <div
+      {...attrs}
       role={expandable ? 'button' : undefined}
       tabIndex={expandable ? 0 : undefined}
       aria-expanded={expandable ? open : undefined}
@@ -241,7 +246,8 @@ function WatchSection() {
         {watches.map(expr => {
           const r = results.find(w => w.expr === expr);
           return (
-            <div key={expr} className="py-watch flex items-center gap-1.5 min-h-[20px]">
+            <div key={expr} className="py-watch flex items-center gap-1.5 min-h-[20px]"
+                 data-py-watch={expr} data-py-value={paused && !r?.error ? r?.value ?? '' : ''}>
               <span className="truncate flex-1" style={{ color: 'var(--color-debug-key)' }} title={expr}>{expr}</span>
               <span className="truncate shrink-0" style={{ maxWidth: '55%', color: r?.error ? 'var(--color-text-muted)' : 'var(--color-text-primary)' }}
                     title={r?.error ?? r?.value}>
@@ -286,7 +292,7 @@ function CallStackSection() {
         <div className="flex flex-col font-mono text-[11.5px]" style={{ padding: '6px 6px 10px', lineHeight: '20px' }}>
           {frames.map((f, i) => (
             <div key={`${f.file}:${f.line}:${i}`} className="flex items-center gap-2 rounded-[5px]"
-                 title={`${f.file}:${f.line}`}
+                 title={`${f.file}:${f.line}`} data-py-frame={`${f.file}:${f.line}`}
                  style={{
                    padding: '2px 8px',
                    background: i === 0 ? 'color-mix(in srgb, var(--color-warning) 14%, transparent)' : undefined,
@@ -317,7 +323,7 @@ function BreakpointsSection({ scriptId, scriptName }: { scriptId?: string; scrip
       {!scriptId || lines.length === 0 ? <Muted>Click the gutter to set one</Muted> : (
         <div className="flex flex-col" style={{ padding: '4px 10px 10px' }}>
           {lines.map(line => (
-            <div key={line} className="py-bp flex items-center gap-2 text-[12px] min-h-[24px]"
+            <div key={line} className="py-bp flex items-center gap-2 text-[12px] min-h-[24px]" data-py-bp={line}
                  style={{ opacity: off.includes(line) ? 0.5 : 1 }}>
               <CheckboxView size="xs" checked={!off.includes(line)} onChange={() => toggle(scriptId, line)}
                             accentColor="var(--color-error)" testId={`bp-${line}`} />

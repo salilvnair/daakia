@@ -317,6 +317,76 @@ export function answerText(a: AskAnswer, numbered: Map<number, LogLine>): string
 }
 
 /**
+ * What kind of thing a run of the answer's text is, for drawing it.
+ *
+ *   - `id`    an id the log carries — `A-4470`, `C-991`, a uuid — in teal,
+ *             monospaced: the same colour as a link, because it is one thing
+ *             you could go and follow;
+ *   - `value` a value the log wrote — `capture_timeout`, `card_declined` — in
+ *             amber, monospaced: the words a tester would search for;
+ *   - `time`  a clock time — `14:02:15` — monospaced, at full strength;
+ *   - `code`  anything else the model quoted, or a dotted name like
+ *             `order.rejected`, monospaced and otherwise plain;
+ *   - `count` "14 of 22", at full strength in a paragraph that is not;
+ *   - `text`  the rest.
+ */
+export type AnswerSpanKind = 'text' | 'id' | 'value' | 'time' | 'code' | 'count';
+export interface AnswerSpan { kind: AnswerSpanKind; text: string }
+
+const SPAN_TIME = /^\d{1,2}:\d{2}:\d{2}(?:[.,]\d{1,3})?$/;
+const SPAN_ID = /^(?:[A-Za-z]{1,8}[-_]\d{2,}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+const SPAN_VALUE = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/;
+const SPANS = new RegExp([
+  /`([^`\n]+)`/.source,
+  /\b\d{1,2}:\d{2}:\d{2}(?:[.,]\d{1,3})?\b/.source,
+  /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/.source,
+  /\b[A-Za-z]{1,8}[-_]\d{2,}\b/.source,
+  /\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/.source,
+  /\b[a-z][a-z0-9]+(?:\.[a-z][a-z0-9]+)+\b/.source,
+  /\b\d[\d,]*\s+of\s+\d[\d,]*\b/.source,
+].join('|'), 'gi');
+
+/**
+ * The answer's sentences, cut where the board colours them.
+ *
+ * The model writes plain sentences, and the ids and values in them are what
+ * a reader's eye goes looking for — so they are found here rather than asked
+ * for: a prompt that says "wrap ids in backticks" is obeyed some of the time,
+ * and a colour that comes and goes reads as a meaning that comes and goes.
+ * Backticks, when the model does send them, are taken off and what was inside
+ * is classified the same way as everything else.
+ */
+export function answerSpans(text: string): AnswerSpan[] {
+  const out: AnswerSpan[] = [];
+  const push = (kind: AnswerSpanKind, t: string) => {
+    if (!t) return;
+    const last = out[out.length - 1];
+    if (last && last.kind === kind && kind === 'text') last.text += t;
+    else out.push({ kind, text: t });
+  };
+  const classify = (t: string): AnswerSpanKind => {
+    if (SPAN_TIME.test(t)) return 'time';
+    if (SPAN_ID.test(t)) return 'id';
+    if (SPAN_VALUE.test(t)) return 'value';
+    return 'code';
+  };
+  let at = 0;
+  for (const m of text.matchAll(SPANS)) {
+    const start = m.index ?? 0;
+    push('text', text.slice(at, start));
+    if (m[1] !== undefined) push(classify(m[1]), m[1]);
+    else if (/\sof\s/i.test(m[0])) push('count', m[0]);
+    /* Case-insensitive as a whole, so a snake_case value is checked again
+       for its lower case here: `Capture_Timeout` is a word, not a value. */
+    else if (/^[A-Z]/.test(m[0]) && /_/.test(m[0]) && !SPAN_ID.test(m[0])) push('text', m[0]);
+    else push(classify(m[0]), m[0]);
+    at = start + m[0].length;
+  }
+  push('text', text.slice(at));
+  return out;
+}
+
+/**
  * A filter that shows exactly the cited lines — "Open all in Logs".
  *
  * The Logs filter takes `/regex/`, so the lines go as an alternation of their
