@@ -33,15 +33,20 @@ export interface Dk8sAiProgress {
 }
 
 interface State {
-  progress?: Dk8sAiProgress;
+  /** One search in progress per Daakia AI tab. */
+  byTab: Record<string, Dk8sAiProgress>;
   apply: (msg: Record<string, unknown>) => void;
 }
 
-export const useDk8sAiProgress = create<State>((set, get) => ({
-  progress: undefined,
+export const useDk8sAiProgress = create<State>((setAll, get) => ({
+  byTab: {},
   apply: (msg) => {
     const tabId = String(msg.tabId ?? '');
-    const cur = get().progress;
+    const cur = get().byTab[tabId];
+    const set = ({ progress }: { progress?: Dk8sAiProgress }) => setAll(s => {
+      const { [tabId]: _old, ...rest } = s.byTab;
+      return { byTab: progress ? { ...rest, [tabId]: progress } : rest };
+    });
     switch (msg.type) {
       case 'ai:dk8sSearchStarted':
         set({ progress: {

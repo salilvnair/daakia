@@ -81,6 +81,8 @@ export interface RequestTab {
   protocol: Protocol;
   /** `dk8s-logfile` only: which pod's log. The download itself lives in a temp file named after the tab. */
   logFile?: LogFileTarget;
+  /** `daakia-ai` only: the conversation this tab has open, so a restart brings it back. */
+  aiChatId?: string;
   /** `dk8s-payload` only: the payload it shows. */
   payloadView?: PayloadView;
   name: string;
@@ -596,7 +598,11 @@ interface TabsState {
   focusDk8sResultsTab: () => boolean;
   openDkghTab: () => void;
   openWorkspaceTab: () => void;
-  openDaakiaAiTab: () => void;
+  /**
+   * The Daakia AI tab — the existing one, or a new one. With `chatId`, a new
+   * tab opened on that conversation, beside the others.
+   */
+  openDaakiaAiTab: (opts?: { chatId?: string; title?: string }) => void;
   /**
    * @param page  A wiki page id to land on. The wiki keeps its own
    *              selection, so a deep link has to say where to go; it is
@@ -774,8 +780,19 @@ export const useTabsStore = create<TabsState>((set, get) => {
       }
     },
 
-    openDaakiaAiTab: () => {
+    openDaakiaAiTab: (opts) => {
       const { tabs, activeTabId } = get();
+      if (opts?.chatId) {
+        /* Already open in a tab: go there rather than open it twice. */
+        const showing = tabs.find(t => t.type === 'daakia-ai' && t.aiChatId === opts.chatId);
+        if (showing) { set({ activeTabId: showing.id, previousTabId: activeTabId }); return; }
+        const title = opts.title ?? 'Daakia AI';
+        const tab = createDefaultTab({ type: 'daakia-ai', name: title.length > 28 ? `${title.slice(0, 28)}…` : title });
+        tab.aiSystemPrompts = [DAAKIA_ASSISTANT_SYSTEM_PROMPT];
+        tab.aiChatId = opts.chatId;
+        set(s => ({ tabs: [...s.tabs, tab], activeTabId: tab.id, previousTabId: activeTabId }));
+        return;
+      }
       const existing = tabs.find(t => t.type === 'daakia-ai');
       if (existing) {
         set({ activeTabId: existing.id, previousTabId: activeTabId });

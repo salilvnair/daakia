@@ -34,6 +34,21 @@ import { GrpcPanel } from './components/grpc';
 import { SoapPanel } from './components/soap';
 import { AiPanel } from './components/ai/AiPanel';
 import { DaakiaAiPanel } from './components/ai/DaakiaAiPanel';
+import { useTabsStore as useTabsForAi } from './store/tabs-store';
+
+/* One panel per Daakia AI tab, each kept mounted: a conversation answering in one tab keeps streaming while another is on screen. */
+function DaakiaAiTabs({ activeId }: { activeId?: string }) {
+  const ids = useTabsForAi(s => s.tabs.filter(t => t.type === 'daakia-ai').map(t => t.id).join(','));
+  return (
+    <>
+      {ids.split(',').filter(Boolean).map(id => (
+        <div key={id} className="flex-1 flex min-w-0 min-h-0" style={{ display: id === activeId ? 'flex' : 'none' }}>
+          <DaakiaAiPanel tabId={id} />
+        </div>
+      ))}
+    </>
+  );
+}
 import { McpPanel } from './components/mcp/McpPanel';
 import { CommandPaletteView } from './components/shared/command-palette/CommandPaletteView';
 import { ApiMonitor } from './components/power/ApiMonitor';
@@ -862,7 +877,7 @@ export default function App() {
             className="flex-1 flex flex-col min-w-0 overflow-hidden"
             style={{ display: activeTab?.type === 'daakia-ai' ? 'flex' : 'none' }}
           >
-            <DaakiaAiPanel />
+            <DaakiaAiTabs activeId={activeTab?.id} />
           </div>
         )}
 

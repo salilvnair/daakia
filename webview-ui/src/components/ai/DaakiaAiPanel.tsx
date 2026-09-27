@@ -36,7 +36,7 @@ import { AiChatHeader } from './AiChatHeader';
 import { AiLandingPortal } from './AiLanding';
 import { PromptPalette } from './PromptPalette';
 import { BUILD_PROMPTS, logPrompts } from './ai-prompts';
-import { chatActions } from './ai-chat-actions';
+import { chatActionsFor } from './ai-chat-actions';
 import { toUiMessages } from './ai-display';
 import { copyText } from '../../utils/clipboard';
 import { useDocTheme } from './use-doc-theme';
@@ -45,6 +45,7 @@ import './daakia-ai.css';
 
 const ACCENT = 'var(--color-ai-accent, #D97757)';
 const RAIL_SPLIT_PREF = 'ai.chat.railSplit';
+const EMPTY_MESSAGES: import('../../store/tabs-store').AiMessage[] = [];
 
 // ─── MdViewer renderer provider ───────────────────────────────────────────────
 
@@ -312,8 +313,10 @@ function DaakiaAvatar() {
  * System prompts are injected via tab.aiSystemPrompts; the dk8s one is added
  * by the bridge at send time.
  */
-export function DaakiaAiPanel() {
-  const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
+export function DaakiaAiPanel({ tabId }: { tabId: string }) {
+  /* This panel's own tab: each Daakia AI tab is a conversation of its own. */
+  const thisTab = useTabsStore(s => s.tabs.find(t => t.id === tabId));
+  const onScreen = useTabsStore(s => s.activeTabId === tabId);
   const updateTab = useTabsStore(s => s.updateTab);
 
   // ── AI Conversation Context (4.5.4) ──────────────────────────────────────
@@ -341,19 +344,19 @@ export function DaakiaAiPanel() {
   // without them (tabs-store rehydration doesn't re-run openDaakiaAiTab logic).
   // Also inject context block as second system prompt.
   useEffect(() => {
-    if (!activeTab || activeTab.type !== 'daakia-ai') return;
+    if (!thisTab) return;
     const basePrompt = DAAKIA_ASSISTANT_SYSTEM_PROMPT;
     const contextBlock = showContextBar && contextTab
       ? buildContextBlock(contextTab, contextEnv?.name ?? null, contextEnv?.variables?.length ?? 0)
       : '';
     const newPrompts = contextBlock ? [basePrompt, contextBlock] : [basePrompt];
-    const currentPrompts = activeTab.aiSystemPrompts ?? [];
+    const currentPrompts = thisTab.aiSystemPrompts ?? [];
     const needsUpdate =
       currentPrompts.length !== newPrompts.length ||
       currentPrompts[0] !== newPrompts[0] ||
       currentPrompts[1] !== newPrompts[1];
-    if (needsUpdate) updateTab(activeTab.id, { aiSystemPrompts: newPrompts });
-  }, [activeTab?.id, showContextBar, contextTab?.url, contextTab?.response?.status, contextEnv?.name]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (needsUpdate) updateTab(tabId, { aiSystemPrompts: newPrompts });
+  }, [tabId, showContextBar, contextTab?.url, contextTab?.response?.status, contextEnv?.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [showCollectionModal, setShowCollectionModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -364,28 +367,18 @@ export function DaakiaAiPanel() {
   /* The rail's width, as the split's percentage — dragged once, kept. */
   const railSplitPref = Number(useUiStateStore(s => s.prefs[RAIL_SPLIT_PREF]));
   const railSplit = railSplitPref > 0 && railSplitPref < 60 ? railSplitPref : 20;
-  const epoch = useAiChatSessions(s => s.epoch);
-  const seed = useAiChatSessions(s => s.seed);
-  const conversations = useAiChatSessions(s => s.conversations);
-  const activeId = useAiChatSessions(s => s.activeId);
-  const modelMessages = useAiConversationStore(s => s.messages);
-  const modelLoaded = useAiConversationStore(s => s.loaded);
-
   /*
-    The thread that was open when Daakia closed comes back on screen.
-
-    The model's history of it is restored from the database on start
-    (aiConversation:load); until now the chat itself started empty beside it,
-    so the model remembered a conversation the screen did not show.
+    This tab's thread. `ensure` creates the session the first time and asks
+    for the conversation the tab keeps, so a restart puts each tab's thread
+    back on screen — the model's history and the chat together.
   */
-  const restored = useRef(false);
-  useEffect(() => {
-    if (restored.current || !modelLoaded) return;
-    restored.current = true;
-    if (epoch === 0 && seed.length === 0 && modelMessages.length > 0) {
-      useAiChatSessions.setState(s => ({ seed: modelMessages, epoch: s.epoch + 1 }));
-    }
-  }, [modelLoaded, modelMessages, epoch, seed.length]);
+  useEffect(() => { useAiChatSessions.getState().ensure(tabId); }, [tabId]);
+  const session = useAiChatSessions(s => s.byTab[tabId]);
+  const epoch = session?.epoch ?? 0;
+  const seed = useMemo(() => session?.seed ?? [], [session?.seed]);
+  const activeId = session?.activeId ?? '';
+  const conversations = useAiChatSessions(s => s.conversations);
+  const modelMessages = useAiConversationStore(s => s.byTab[tabId]?.messages) ?? EMPTY_MESSAGES;
 
   const title = useMemo(() => {
     const row = conversations.find(c => c.id === activeId);
@@ -397,7 +390,7 @@ export function DaakiaAiPanel() {
   // ── dk8s: may the assistant search the watched pods? ─────────────────────
   const [dk8sPref, setDk8sPref] = usePersistedPref(DK8S_CHAT_PREF, 'on', ['on', 'off'] as const);
   /* ✕ on the pill is for this conversation; the header's switch is for the tab. */
-  const chatId = activeId || currentId();
+  const chatId = activeId || currentId(tabId);
   const offHere = dk8sOffChats(useUiStateStore(s => s.prefs[DK8S_OFF_CHATS_PREF])).includes(chatId);
   const dk8sOn = dk8sPref === 'on' && !offHere;
   const k8sContext = useK8sStore(s => s.context);
@@ -440,23 +433,21 @@ export function DaakiaAiPanel() {
   }, [offHere, chatId, dk8sPref]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── While an answer is on its way, Send is Stop ──────────────────────────
-  const aiTabId = useTabsStore(s => s.tabs.find(t => t.type === 'daakia-ai')?.id);
-  const streaming = useTabsStore(s => !!s.tabs.find(t => t.type === 'daakia-ai')?.aiStreaming);
-  const stop = useCallback(() => { if (aiTabId) postMsg({ type: 'ai:cancel', tabId: aiTabId }); }, [aiTabId]);
+  const streaming = !!thisTab?.aiStreaming;
+  const stop = useCallback(() => postMsg({ type: 'ai:cancel', tabId }), [tabId]);
 
   /* Ctrl N (⌘N) is New chat, as the button says — while this tab is the one on screen. */
-  const onScreen = activeTab?.type === 'daakia-ai';
   useEffect(() => {
     if (!onScreen) return;
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'n') return;
       e.preventDefault();
       e.stopPropagation();
-      useAiChatSessions.getState().newChat();
+      useAiChatSessions.getState().newChat(tabId);
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [onScreen]);
+  }, [onScreen, tabId]);
 
   const logPromptList = useMemo(() => logPrompts(templates), [templates]);
   const palettePrompts = useMemo(
@@ -479,8 +470,10 @@ export function DaakiaAiPanel() {
   useEffect(() => {
     if (lastTheme.current === docTheme) return;
     lastTheme.current = docTheme;
-    useAiChatSessions.setState(s => ({ seed: useAiConversationStore.getState().messages, epoch: s.epoch + 1 }));
-  }, [docTheme]);
+    useAiChatSessions.setState(s => s.byTab[tabId] ? {
+      byTab: { ...s.byTab, [tabId]: { ...s.byTab[tabId], seed: useAiConversationStore.getState().messagesOf(tabId), epoch: s.byTab[tabId].epoch + 1 } },
+    } : s);
+  }, [docTheme, tabId]);
 
   // ── AI Suggestion Chips (4.5.5) ──────────────────────────────────────────
   const [showChips, setShowChips] = useState(false);
@@ -503,9 +496,9 @@ export function DaakiaAiPanel() {
   }, []);
   const handleDismissAllActions = useCallback(() => setPendingActions([]), []);
 
-  // A stable conversationId: the bridge resolves 'daakia-ai-panel' to this tab.
-  // Switching threads remounts the chat (key = epoch) instead.
-  const conversationId = 'daakia-ai-panel';
+  // The conversation id the bridge reads is this tab's id — which tab a question
+  // and its answer belong to. Switching threads remounts the chat (key = epoch).
+  const conversationId = tabId;
   const initialMessages = useMemo(() => toUiMessages(seed), [seed]);
   const icons = useMemo(() => ({ AgentIcon: DaakiaAvatar }), []);
 
@@ -606,10 +599,11 @@ export function DaakiaAiPanel() {
         accentColor={ACCENT}
         onResizeEnd={v => useUiStateStore.getState().setPref(RAIL_SPLIT_PREF, String(Math.round(v * 10) / 10))}
         style={{ flex: 1, minWidth: 0, minHeight: 0 }}
-        first={<AiHistoryRail />}
+        first={<AiHistoryRail tabId={tabId} />}
         second={
       <div className="dai-main">
         <AiChatHeader
+          tabId={tabId}
           title={title}
           dk8s={watchedPods > 0 ? { on: dk8sOn, toggle: toggleDk8s, where } : undefined}
           railOpen={railPref === 'open'}
@@ -637,7 +631,7 @@ export function DaakiaAiPanel() {
             mode="fullscreen"
             config={chatConfig}
             theme={chatTheme}
-            actionsRef={chatActions}
+            actionsRef={chatActionsFor(tabId)}
           />
           <AiLandingPortal
             root={chatRoot}
@@ -646,7 +640,7 @@ export function DaakiaAiPanel() {
             buildPrompts={BUILD_PROMPTS}
           />
           <PromptPalette root={chatRoot} prompts={palettePrompts} />
-          <Dk8sSearchProgressPortal root={chatRoot} />
+          <Dk8sSearchProgressPortal root={chatRoot} tabId={tabId} />
           {dk8sActive && <Dk8sPodPickerPortal root={chatRoot} pods={podsOnScreen} />}
           {streaming && stopSlot && createPortal(
             <button type="button" className="ce-composer-send dai-stop" onClick={stop}

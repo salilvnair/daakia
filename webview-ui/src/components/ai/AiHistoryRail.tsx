@@ -14,9 +14,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ContextMenuView, IconButtonView, SearchInputView, type ContextMenuItem } from '@salilvnair/dui';
 import { useAiChatSessions, currentId, type ConversationRow } from '../../store/ai-chat-sessions-store';
+import { useTabsStore } from '../../store/tabs-store';
 import { buildGroups, formatFullTimestamp, type SubGroup, type TopGroup } from '../../services/history';
 import {
-  ChevronRightIcon, ClockIcon, CollapseAllIcon, ExpandAllIcon, MoreVerticalIcon, SearchIcon, TrashIcon,
+  ChevronRightIcon, ClockIcon, CollapseAllIcon, ExpandAllIcon, ExternalLinkIcon, MoreVerticalIcon, SearchIcon, TrashIcon,
 } from '../../icons';
 
 type Row = ConversationRow & { created_at: string };
@@ -35,11 +36,16 @@ function when(iso: string): string {
 const count = (g: SubGroup<Row>): number =>
   g.items.length + (g.subGroups ?? []).reduce((n, s) => n + count(s), 0);
 
-export function AiHistoryRail() {
+export function AiHistoryRail({ tabId }: { tabId: string }) {
   const conversations = useAiChatSessions(s => s.conversations);
-  const activeId = useAiChatSessions(s => s.activeId);
-  const opening = useAiChatSessions(s => s.opening);
-  const { refresh, open, remove } = useAiChatSessions.getState();
+  const activeId = useAiChatSessions(s => s.byTab[tabId]?.activeId ?? '');
+  const opening = useAiChatSessions(s => s.byTab[tabId]?.opening);
+  /* Conversations open in other Daakia AI tabs, so the rail can say so. */
+  const elsewhereIds = useTabsStore(s => s.tabs.filter(t => t.type === 'daakia-ai' && t.id !== tabId && t.aiChatId).map(t => t.aiChatId!).join(','));
+  const elsewhere = useMemo(() => new Set(elsewhereIds.split(',').filter(Boolean)), [elsewhereIds]);
+  const { refresh, remove } = useAiChatSessions.getState();
+  const open = (id: string) => useAiChatSessions.getState().open(tabId, id);
+  const openInNewTab = (row: ConversationRow) => useTabsStore.getState().openDaakiaAiTab({ chatId: row.id, title: row.title });
   const [q, setQ] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [menu, setMenu] = useState<{ position: { x: number; y: number }; items: ContextMenuItem[] } | null>(null);
@@ -67,7 +73,7 @@ export function AiHistoryRail() {
   });
   const topKeys = (g: TopGroup<Row>) => [g.label, ...g.subGroups.filter(s => s.label).flatMap(s => keysUnder(s, `${g.label}::${s.label}`))];
 
-  const active = activeId || currentId();
+  const active = activeId || currentId(tabId);
 
   const rowMenu = (e: React.MouseEvent, row: Row) => {
     e.preventDefault();
@@ -76,6 +82,8 @@ export function AiHistoryRail() {
       position: { x: e.clientX, y: e.clientY },
       items: [
         { id: 'open', label: 'Open', onClick: () => { open(row.id); setMenu(null); } },
+        { id: 'open-tab', label: elsewhere.has(row.id) ? 'Go to its tab' : 'Open in new tab',
+          icon: <ExternalLinkIcon size={14} />, onClick: () => { openInNewTab(row); setMenu(null); } },
         { id: 's', label: '', separator: true },
         { id: 'delete', label: 'Delete conversation', danger: true, icon: <TrashIcon size={14} />,
           onClick: () => { remove(row.id); setMenu(null); } },
@@ -112,6 +120,7 @@ export function AiHistoryRail() {
         <div className="dai-conv-sub">
           {row.id === opening ? 'Opening…' : when(row.updated_at)}
           {row.model ? <span>· {row.model}</span> : null}
+          {elsewhere.has(row.id) ? <span style={{ color: 'var(--dai-accent)' }}>· open in another tab</span> : null}
         </div>
       </div>
     );

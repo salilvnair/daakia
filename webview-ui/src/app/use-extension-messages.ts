@@ -31,7 +31,6 @@ import { useDbStatusStore } from '../store/db-status-store';
 import { useAppSettingsStore } from '../store/app-settings-store';
 import { useAiHistoryStore } from '../store/ai-history-store';
 import { useAiPromptTemplatesStore, AI_PROMPT_TEMPLATE_DEFAULTS } from '../store/prompt-template';
-import { useAiConversationStore } from '../store/ai-conversation-store';
 import { getVsCodeApi } from '../vscode';
 import { sendRequest, saveRequest } from '../services/request';
 import type { SidebarSection } from '../components/sidebar';
@@ -83,8 +82,7 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
         case 'init': {
           setSqliteStatus({ ok: msg.sqliteOk, error: msg.sqliteError });
           useDbStatusStore.getState().setDbStatus({ dbPath: msg.dbPath, sqliteOk: msg.sqliteOk, sqliteError: msg.sqliteError });
-          // Load persisted Daakia AI conversation on startup
-          useAiConversationStore.getState().loadFromDb();
+          // Each Daakia AI tab loads its own conversation (by the id it keeps) when it mounts.
           // Load persisted General/Encoding/Proxy settings once — Settings panel reads/writes
           // through this store instead of each sub-tab independently re-fetching on mount.
           useAppSettingsStore.getState().load();
@@ -108,7 +106,7 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
           break;
         }
         case 'aiConversation:data': {
-          useAiConversationStore.getState().setMessages(msg.messages || []);
+          /* The old single-thread restore. Tabs now reopen their own conversation from the conversations table. */
           break;
         }
         case 'settingsData': {

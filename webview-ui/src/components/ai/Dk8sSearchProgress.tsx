@@ -24,8 +24,8 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .dk8s-spinner { animation: none; } }
 `;
 
-export function Dk8sSearchProgressPortal({ root }: { root: HTMLElement | null }) {
-  const progress = useDk8sAiProgress(s => s.progress);
+export function Dk8sSearchProgressPortal({ root, tabId }: { root: HTMLElement | null; tabId: string }) {
+  const progress = useDk8sAiProgress(s => s.byTab[tabId]);
   const slot = useLibrarySlot(root, '.ce-message-content:has(> .ce-thinking-strip)', 'dk8s-progress-slot', !!progress);
   if (!progress || !slot) return null;
   return createPortal(<Dk8sSearchProgress progress={progress} />, slot);

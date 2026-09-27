@@ -1,12 +1,15 @@
 /**
- * The Daakia AI tab's conversations — the history rail.
+ * The Daakia AI tabs' conversations — which one each tab has open.
  *
- * The chat library keeps one thread in memory; `ai-conversation-store` keeps
- * the model's history of that thread. This keeps the list of threads, which
- * one is open, and moves between them: each answer saves the open thread to
- * the `ai_conversations` table, and opening one loads its messages back into
- * both — the model's history, and (through `epoch`) a fresh chat seeded with
- * what was on screen, cards included.
+ * Every Daakia AI tab is a conversation of its own: the rail's "Open in new
+ * tab" opens one beside the others. This keeps, per tab, the thread on screen
+ * and moves between threads: each answer saves the tab's thread to the
+ * `ai_conversations` table, and opening one loads its messages back into both
+ * the model's history (ai-conversation-store) and — through `epoch` — a fresh
+ * chat seeded with what was on screen, cards included.
+ *
+ * The tab keeps its conversation's id (`aiChatId`), so a restart brings each
+ * tab's thread back; a tab from before that existed takes the last one used.
  */
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
@@ -26,13 +29,13 @@ export interface ConversationRow {
   dk8s?: number | boolean;
 }
 
+/** The last conversation any tab used — where a tab with none of its own starts. */
 const ACTIVE_PREF = 'ai.chat.active';
 
-interface State {
-  conversations: ConversationRow[];
-  /** The thread on screen. Saved under this id. */
+export interface TabSession {
+  /** The thread on screen in this tab. Saved under this id. */
   activeId: string;
-  /** Bumped to remount the chat — a new thread, or one reopened. */
+  /** Bumped to remount the tab's chat — a new thread, or one reopened. */
   epoch: number;
   /** What the remounted chat starts with. */
   seed: AiMessage[];
@@ -40,74 +43,113 @@ interface State {
   opening?: string;
   /** Who answered the last message, as the host resolved it. */
   answeredBy?: { provider: string; model: string };
+}
 
+interface State {
+  conversations: ConversationRow[];
+  byTab: Record<string, TabSession>;
+
+  /** The tab's session, created — and its thread asked for — the first time. */
+  ensure: (tabId: string) => TabSession;
   refresh: () => void;
-  open: (id: string) => void;
-  newChat: () => void;
-  /** Save the open thread — called after every answer. */
-  save: () => void;
+  open: (tabId: string, id: string) => void;
+  newChat: (tabId: string) => void;
+  /** Save the tab's thread — after every question and every answer. */
+  save: (tabId: string) => void;
   remove: (id: string) => void;
-  setAnsweredBy: (a: { provider: string; model: string }) => void;
+  setAnsweredBy: (tabId: string, a: { provider: string; model: string }) => void;
 }
 
 function newId(): string {
   return crypto.randomUUID();
 }
 
-export const useAiChatSessions = create<State>((set, get) => ({
-  conversations: [],
-  /* Empty until first needed: the saved preference is only readable once the
-     UI state has loaded, which is after this module is. */
-  activeId: '',
-  epoch: 0,
-  seed: [],
+const TITLE_MAX = 28;
+/** A tab is named after its conversation, so two of them can be told apart. */
+function nameTab(tabId: string, title?: string) {
+  const name = title ? (title.length > TITLE_MAX ? `${title.slice(0, TITLE_MAX)}…` : title) : 'Daakia AI';
+  const tab = useTabsStore.getState().tabs.find(t => t.id === tabId);
+  if (tab && tab.name !== name) useTabsStore.getState().updateTab(tabId, { name });
+}
 
-  refresh: () => postMsg({ type: 'ai:loadConversations' }),
+export const useAiChatSessions = create<State>((set, get) => {
+  const patch = (tabId: string, p: Partial<TabSession>) => set(s => (
+    s.byTab[tabId] ? { byTab: { ...s.byTab, [tabId]: { ...s.byTab[tabId], ...p } } } : s
+  ));
 
-  open: (id) => {
-    if (id === currentId()) return;
-    set({ opening: id });
+  const load = (tabId: string, id: string) => {
+    patch(tabId, { opening: id });
     postMsg({ type: 'ai:loadConversation', id });
-  },
+  };
 
-  newChat: () => {
-    /* An answer still on its way belongs to the thread being left: stop it rather than let it land in the new one. */
-    const running = useTabsStore.getState().tabs.find(t => t.type === 'daakia-ai' && t.aiStreaming);
-    if (running) postMsg({ type: 'ai:cancel', tabId: running.id });
-    const activeId = newId();
-    useAiConversationStore.getState().clearMessages();
-    useUiStateStore.getState().setPref(ACTIVE_PREF, activeId);
-    set(s => ({ activeId, seed: [], epoch: s.epoch + 1, opening: undefined }));
-  },
+  return {
+    conversations: [],
+    byTab: {},
 
-  save: () => {
-    const messages = useAiConversationStore.getState().messages;
-    if (!messages.some(m => m.role === 'user')) return;
-    const activeId = currentId();
-    const { answeredBy } = get();
-    useUiStateStore.getState().setPref(ACTIVE_PREF, activeId);
-    postMsg({
-      type: 'ai:saveConversation', id: activeId, messages,
-      provider: answeredBy?.provider ?? '', model: answeredBy?.model ?? '',
-    });
-  },
+    ensure: (tabId) => {
+      const have = get().byTab[tabId];
+      if (have) return have;
+      const tabs = useTabsStore.getState().tabs;
+      const tab = tabs.find(t => t.id === tabId);
+      /* The first Daakia AI tab picks up the last conversation used; any other starts from its own. */
+      const firstAi = tabs.find(t => t.type === 'daakia-ai')?.id === tabId;
+      const stored = tab?.aiChatId || (firstAi ? (useUiStateStore.getState().prefs[ACTIVE_PREF] as string | undefined) : undefined);
+      const session: TabSession = { activeId: stored || newId(), epoch: 0, seed: [] };
+      set(s => ({ byTab: { ...s.byTab, [tabId]: session } }));
+      if (tab && tab.aiChatId !== session.activeId) useTabsStore.getState().updateTab(tabId, { aiChatId: session.activeId });
+      if (stored) load(tabId, stored);
+      return session;
+    },
 
-  remove: (id) => {
-    postMsg({ type: 'ai:deleteConversation', id });
-    set(s => ({ conversations: s.conversations.filter(c => c.id !== id) }));
-    if (id === currentId()) get().newChat();
-  },
+    refresh: () => postMsg({ type: 'ai:loadConversations' }),
 
-  setAnsweredBy: (answeredBy) => set({ answeredBy }),
-}));
+    open: (tabId, id) => {
+      if (get().byTab[tabId]?.activeId === id) return;
+      get().ensure(tabId);
+      load(tabId, id);
+    },
 
-/** The open thread's id: the one on screen, else the one open last session, else a new one. */
-export function currentId(): string {
-  const s = useAiChatSessions.getState();
-  if (s.activeId) return s.activeId;
-  const id = (useUiStateStore.getState().prefs[ACTIVE_PREF] as string | undefined) || newId();
-  useAiChatSessions.setState({ activeId: id });
-  return id;
+    newChat: (tabId) => {
+      /* An answer still on its way belongs to the thread being left: stop it rather than let it land in the new one. */
+      const tab = useTabsStore.getState().tabs.find(t => t.id === tabId);
+      if (tab?.aiStreaming) postMsg({ type: 'ai:cancel', tabId });
+      const activeId = newId();
+      useAiConversationStore.getState().clearMessages(tabId);
+      useUiStateStore.getState().setPref(ACTIVE_PREF, activeId);
+      useTabsStore.getState().updateTab(tabId, { aiChatId: activeId });
+      nameTab(tabId);
+      set(s => ({
+        byTab: { ...s.byTab, [tabId]: { activeId, seed: [], epoch: (s.byTab[tabId]?.epoch ?? 0) + 1 } },
+      }));
+    },
+
+    save: (tabId) => {
+      const messages = useAiConversationStore.getState().messagesOf(tabId);
+      const firstUser = messages.find(m => m.role === 'user');
+      if (!firstUser) return;
+      const session = get().ensure(tabId);
+      useUiStateStore.getState().setPref(ACTIVE_PREF, session.activeId);
+      nameTab(tabId, firstUser.content.trim());
+      postMsg({
+        type: 'ai:saveConversation', id: session.activeId, messages,
+        provider: session.answeredBy?.provider ?? '', model: session.answeredBy?.model ?? '',
+      });
+    },
+
+    remove: (id) => {
+      postMsg({ type: 'ai:deleteConversation', id });
+      set(s => ({ conversations: s.conversations.filter(c => c.id !== id) }));
+      /* Any tab showing it starts afresh. */
+      for (const [tabId, sess] of Object.entries(get().byTab)) if (sess.activeId === id) get().newChat(tabId);
+    },
+
+    setAnsweredBy: (tabId, answeredBy) => patch(tabId, { answeredBy }),
+  };
+});
+
+/** The tab's open thread id, creating the tab's session if it has none yet. */
+export function currentId(tabId: string): string {
+  return useAiChatSessions.getState().ensure(tabId).activeId;
 }
 
 /* The host's answers, wherever they came from. Registered once, at import. */
@@ -120,22 +162,47 @@ if (typeof window !== 'undefined') {
   window.addEventListener('ai:conversation', ((e: CustomEvent) => {
     const conv = e.detail?.conversation as (ConversationRow & { messages: AiMessage[] }) | null;
     const s = useAiChatSessions.getState();
-    if (!conv || conv.id !== s.opening) return;
-    /* The model's history becomes this thread's, and the chat is remounted on it. */
-    useAiConversationStore.getState().setMessages(conv.messages);
-    useAiConversationStore.getState().saveToDb();
-    useUiStateStore.getState().setPref(ACTIVE_PREF, conv.id);
-    useAiChatSessions.setState(st => ({
-      activeId: conv.id, seed: conv.messages, epoch: st.epoch + 1, opening: undefined,
-    }));
+    const waiting = Object.entries(s.byTab).filter(([, sess]) => sess.opening && (!conv || sess.opening === conv.id));
+    if (!conv) {
+      /* Not in the table — never answered, or deleted: the tab keeps the id and starts empty. */
+      for (const [tabId, sess] of waiting) {
+        useAiChatSessions.setState(st => ({ byTab: { ...st.byTab, [tabId]: { ...sess, activeId: sess.opening!, opening: undefined } } }));
+      }
+      return;
+    }
+    for (const [tabId] of waiting) {
+      /* The model's history becomes this thread's, and the tab's chat is remounted on it. */
+      useAiConversationStore.getState().setMessages(tabId, conv.messages);
+      useUiStateStore.getState().setPref(ACTIVE_PREF, conv.id);
+      useTabsStore.getState().updateTab(tabId, { aiChatId: conv.id });
+      nameTab(tabId, conv.title);
+      useAiChatSessions.setState(st => ({
+        byTab: { ...st.byTab, [tabId]: { ...st.byTab[tabId], activeId: conv.id, seed: conv.messages, epoch: st.byTab[tabId].epoch + 1, opening: undefined } },
+      }));
+    }
   }) as EventListener);
 
   window.addEventListener('message', (evt: MessageEvent) => {
     const msg = evt.data as Record<string, unknown> | undefined;
     if (!msg || typeof msg !== 'object') return;
     if (msg.type === 'ai:conversationSaved') useAiChatSessions.getState().refresh();
-    if (msg.type === 'ai:resolved' && typeof msg.model === 'string') {
-      useAiChatSessions.getState().setAnsweredBy({ provider: String(msg.provider ?? ''), model: msg.model });
+    if (msg.type === 'ai:resolved' && typeof msg.model === 'string' && typeof msg.tabId === 'string') {
+      useAiChatSessions.getState().setAnsweredBy(msg.tabId, { provider: String(msg.provider ?? ''), model: msg.model });
     }
+  });
+
+  /* A Daakia AI tab that closes takes its in-memory thread with it; the saved conversation stays in the rail. */
+  let known = new Set<string>();
+  useTabsStore.subscribe(st => {
+    const now = new Set(st.tabs.filter(t => t.type === 'daakia-ai').map(t => t.id));
+    for (const id of known) {
+      if (now.has(id)) continue;
+      useAiConversationStore.getState().dropTab(id);
+      useAiChatSessions.setState(s => {
+        const { [id]: _gone, ...rest } = s.byTab;
+        return { byTab: rest };
+      });
+    }
+    known = now;
   });
 }

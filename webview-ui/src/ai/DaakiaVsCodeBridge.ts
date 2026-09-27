@@ -22,7 +22,7 @@ import { useUiStateStore } from '../store/ui-state-store';
 import { DK8S_CHAT_SYSTEM, fillDk8sSystem, dk8sChatOn, dk8sScoped, DK8S_EXCLUDED_PREF } from '../components/ai/dk8s-chat-prompts';
 import { useDk8sAiProgress } from '../store/dk8s-ai-progress-store';
 import { displayEnvelope, forModel, noticeEnvelope } from '../components/ai/ai-display';
-import { currentId } from '../store/ai-chat-sessions-store';
+import { currentId, useAiChatSessions } from '../store/ai-chat-sessions-store';
 import { getVsCodeApi } from '../vscode';
 import { useTabsStore } from '../store/tabs-store';
 import { useAiProvidersStore } from '../store/ai-providers-store';
@@ -248,8 +248,8 @@ function handleExtensionMessage(evt: MessageEvent) {
  * and the tool was not offered, so the model described a search instead of
  * running one.
  */
-function dk8sChatContext(): { prompt: string; targets: Dk8sTarget[] } | undefined {
-  if (!dk8sChatOn(currentId())) return undefined;
+function dk8sChatContext(tabId: string): { prompt: string; targets: Dk8sTarget[] } | undefined {
+  if (!dk8sChatOn(currentId(tabId))) return undefined;
   const k8s = useK8sStore.getState();
   /* The pods on screen, less the ones the picker in the pill leaves out. */
   const shown = dk8sScoped(k8s.pods
@@ -332,7 +332,7 @@ export function installDaakiaBridges() {
     if (reset) {
       const resetTab = useTabsStore.getState().tabs.find(t => t.id === tabId);
       if (resetTab?.type === 'daakia-ai') {
-        useAiConversationStore.getState().clearMessages();
+        useAiConversationStore.getState().clearMessages(tabId);
       } else {
         useTabsStore.getState().updateTab(tabId, { aiConversation: [] });
       }
@@ -379,9 +379,11 @@ export function installDaakiaBridges() {
       let currentHistory: import('../store/tabs-store').AiMessage[];
       if (tab.type === 'daakia-ai') {
         // Global persisted conversation store for Daakia AI tab
-        currentHistory = useAiConversationStore.getState().messages;
-        useAiConversationStore.getState().addUserMessage(userMsg);
-        useAiConversationStore.getState().setStreaming(true);
+        /* Each Daakia AI tab its own thread: the history is this tab's, and the question is saved with it. */
+        currentHistory = useAiConversationStore.getState().messagesOf(tabId);
+        useAiConversationStore.getState().addUserMessage(tabId, userMsg);
+        useAiConversationStore.getState().setStreaming(tabId, true);
+        useAiChatSessions.getState().save(tabId);
       } else {
         currentHistory = tab.aiConversation ?? [];
         useTabsStore.getState().updateTab(tabId, {
@@ -407,7 +409,7 @@ export function installDaakiaBridges() {
       /* With dk8s on and pods watched, the model is told where it is looking
          and when (and when not) to search — the Prompt Library's
          `dk8s.chat.system`, filled with the context, namespace and pods. */
-      const dk8s = dk8sChatContext();
+      const dk8s = dk8sChatContext(tabId);
       sendAiRequest({
         tabId,
         stage: 'ai.chat',

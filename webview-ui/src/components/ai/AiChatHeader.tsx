@@ -35,8 +35,10 @@ const Dk8sGlyph = () => (
 );
 
 export function AiChatHeader({
-  title, dk8s, onToggleRail, railOpen, onCollection, onExport,
+  tabId, title, dk8s, onToggleRail, railOpen, onCollection, onExport,
 }: {
+  /** The Daakia AI tab this header belongs to — each has its own conversation. */
+  tabId: string;
   title: string;
   /** Present when pods are watched: whether search is on, and how to flip it. */
   dk8s?: { on: boolean; toggle: () => void; where: string };
@@ -50,9 +52,10 @@ export function AiChatHeader({
   const defaultModelId = useAiProvidersStore(s => s.defaultModelId);
   const tab = useTabsStore(s => s.tabs.find(t => t.type === 'daakia-ai'));
   const updateTab = useTabsStore(s => s.updateTab);
-  const answeredBy = useAiChatSessions(s => s.answeredBy);
-  const activeId = useAiChatSessions(s => s.activeId);
-  const { newChat, remove } = useAiChatSessions.getState();
+  const answeredBy = useAiChatSessions(s => s.byTab[tabId]?.answeredBy);
+  const activeId = useAiChatSessions(s => s.byTab[tabId]?.activeId);
+  const { remove } = useAiChatSessions.getState();
+  const newChat = () => useAiChatSessions.getState().newChat(tabId);
   const moreRef = useRef<HTMLSpanElement>(null);
   const [menu, setMenu] = useState(false);
   /* Deleting a thread cannot be undone, so the menu asks twice. */
