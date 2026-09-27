@@ -37,11 +37,12 @@ import { buildFacets, filterTermFor } from './log-facets';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { logLineSettings, onLadder, tailLabel, contextLabel } from './log-settings';
 import { findPayload, payloadNote, type LogPayload } from './log-payload';
-import { compileMarks, markOf, type MarkHit } from './logger-marks';
+import { markOf, keepMarked, nextMarked, type MarkHit } from './logger-marks';
+import { useMarkIndex, MarkedBar, MarkMapStrip, MarkedRail, MarkedFooter } from './LogMarks';
 import { LineFieldsView } from './LineFieldsView';
 import { useDeterminantsFor } from './use-determinants';
 import { SummaryPanel } from './SummaryPanel';
-import { usePatternsFor, MARK_COLORS } from '../../store/dk8s-logger-store';
+import { usePatternsFor, MARK_COLORS, clearMarks } from '../../store/dk8s-logger-store';
 import { scopeOf } from './LoggersTab';
 import { payloadPrefs, openLoggers, setOpenLogger, setPayloadPref, PAYLOAD_MODE_PREF, type PayloadMode } from './log-payload-prefs';
 import { LogPayloadView } from './LogPayloadView';
@@ -745,6 +746,14 @@ export function LogViewer() {
      the Summary panel answers, so the button never offers an empty panel. */
   const determinants = useDeterminantsFor(detail).enabled;
   const [summaryOpen, setSummaryOpen] = useState(false);
+  /* The marks over the whole buffer — the map, the rail, Only marked. See LogMarks. */
+  const markIdx = useMarkIndex(catalogue, logs);
+  const marks = markIdx.marks;
+  const [onlyMarked, setOnlyMarked] = useState(false);
+  const [markField, setMarkField] = useState<{ field: string; value: string } | undefined>();
+  useEffect(() => {
+    if (!marks.length) { setOnlyMarked(false); setMarkField(undefined); }
+  }, [marks.length]);
   /*
     The first moment after asking, when an empty view means nothing yet.
 
@@ -798,7 +807,8 @@ export function LogViewer() {
     So it is opened by what is there, and the preference only decides whether to
     show a rail that has something in it.
   */
-  const hasFacets = useMemo(() => buildFacets(logs).length > 0, [logs]);
+  /* Marks open it too: their holes are facets no format had to name. */
+  const hasFacets = useMemo(() => buildFacets(logs).length > 0, [logs]) || marks.length > 0;
 
   /*
     ── And only when there is room for it ──
@@ -1054,11 +1064,15 @@ export function LogViewer() {
   }, [lineSettings.contextLadder, contextCap]);
 
   const visible = useMemo(
-    () => filterLines(logs, {
-      query: logFilter, levels: logLevels, fields: logFieldFilters,
-      contextLines: findContext,
-    }),
-    [logs, logFilter, logLevels, logFieldFilters, findContext],
+    () => {
+      const shown = filterLines(logs, {
+        query: logFilter, levels: logLevels, fields: logFieldFilters,
+        contextLines: findContext,
+      });
+      /* Only marked, or one hole's value from the rail: the marked lines and their frames. */
+      return (onlyMarked || markField) && marks.length ? keepMarked(shown, markIdx.index, markField) : shown;
+    },
+    [logs, logFilter, logLevels, logFieldFilters, findContext, onlyMarked, markField, marks.length, markIdx.index],
   );
 
   /* The hits themselves, for the counter and for stepping between them. */
@@ -1226,17 +1240,38 @@ export function LogViewer() {
     the row's edge rather than filtering anything, and it is computed here,
     beside the payloads, because both are questions about what is on screen.
   */
-  const marks = useMemo(() => compileMarks(catalogue), [catalogue]);
   const markHits = useMemo(() => {
     const found = new Map<number, MarkHit>();
     if (!marks.length) return found;
     for (const row of slice) {
-      const hit = markOf(displayText(row.line), marks);
+      /* The buffer's index has most of them already; a line it has not seen
+         yet (it arrived this render) is matched here. */
+      const hit = markIdx.index.get(row.line.seq) ?? markOf(displayText(row.line), marks);
       if (hit) found.set(row.line.seq, hit);
     }
     return found;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [first, last, rows, marks]);
+  }, [first, last, rows, marks, markIdx.index]);
+
+  /* How many of the lines in view a mark claims, and the jump between them. */
+  const markedInView = useMemo(
+    () => (marks.length ? visible.reduce((n, l) => n + (markIdx.index.has(l.seq) ? 1 : 0), 0) : 0),
+    [visible, marks.length, markIdx.index],
+  );
+  const jumpToRow = useCallback((rowIndex: number) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setLogFollow(false);
+    el.scrollTop = Math.max(0, offsets[rowIndex] - el.clientHeight / 3);
+  }, [offsets, setLogFollow]);
+  /* From the row a jump lands on — a third of the way down — so pressing it
+     again moves on rather than finding the same line. */
+  const jumpToNextMark = useCallback((markId?: string) => {
+    const el = scrollRef.current;
+    const from = el ? rowAt(el.scrollTop + el.clientHeight / 3) : 0;
+    const next = nextMarked(rows, markIdx.index, from, markId);
+    if (next !== undefined) jumpToRow(next);
+  }, [rows, markIdx.index, rowAt, jumpToRow]);
 
   /* Opened by the reader, keyed on seq so new lines above do not shift it. */
   /*
@@ -1665,6 +1700,17 @@ export function LogViewer() {
 
         <LevelChips />
 
+        {marks.length > 0 && (
+          <MarkedBar
+            count={marks.length}
+            onlyMarked={onlyMarked}
+            onOnlyMarked={setOnlyMarked}
+            onClear={() => clearMarks(scopeOf(detail))}
+            field={markField}
+            onClearField={() => setMarkField(undefined)}
+          />
+        )}
+
         {/* Takes whatever is left between the chips and the controls, rather
             than a fixed width with dead space after it. */}
         <div className="flex-1" style={{ minWidth: 180, paddingRight: 8 }}>
@@ -1887,12 +1933,13 @@ export function LogViewer() {
         ) : (
         <SelectInputView
           value={logSince}
-          onChange={v => setLogSince(v as 'all' | 'restart' | '15m' | '1h' | '6h')}
+          onChange={v => setLogSince(v as 'all' | 'restart' | '15m' | '1h' | '2h' | '6h')}
           options={[
             { value: 'all', label: 'all time' },
             { value: 'restart', label: 'since last restart' },
             { value: '15m', label: 'last 15 min' },
             { value: '1h', label: 'last hour' },
+            { value: '2h', label: 'last 2 hours' },
             { value: '6h', label: 'last 6 hours' },
           ]}
           size={CTL_SIZE}
@@ -2117,6 +2164,14 @@ export function LogViewer() {
           style={{ flex: 1, minWidth: 0, minHeight: 0 }}
           first={
             <div className="flex flex-col h-full min-h-0">
+          <MarkedRail
+            patterns={catalogue}
+            idx={markIdx}
+            field={markField}
+            onNext={id => jumpToNextMark(id)}
+            onField={(field, value) => setMarkField(f =>
+              (f?.field === field && f.value === value ? undefined : { field, value }))}
+          />
           <FacetRail
             lines={logs}
             filters={logFieldFilters}
@@ -2490,6 +2545,10 @@ export function LogViewer() {
         />
 
 
+        {marks.length > 0 && (
+          <MarkMapStrip rows={rows} offsets={offsets} contentHeight={contentHeight}
+                        index={markIdx.index} onJump={jumpToRow} />
+        )}
         <DensityRibbon
           lines={visible}
           sharedRange={sharedRange}
@@ -2615,7 +2674,17 @@ export function LogViewer() {
             linked line · clear
           </button>
         )}
+        {marks.length > 0 && <MarkedFooter inView={markedInView} onNext={() => jumpToNextMark()} />}
         <span>select any text to ask AI about it</span>
+        {/* The window on screen, asked about as a whole — the Ask the log tab. */}
+        {!isSnapshot && (
+          <ButtonView variant="secondary" size="xs" accentColor={AI_ACCENT} color={AI_ACCENT}
+                      disabled={!logs.length}
+                      title="Ask a question of this pod's log over a window, with the lines behind every answer"
+                      onClick={() => useK8sStore.getState().setDetailTab('ask')}>
+            Ask AI about this window
+          </ButtonView>
+        )}
         <ButtonView variant="secondary" size="xs" accentColor={ACCENT}
                     title="Settings → DK8S → Logs: payloads, stack traces and what the counters count"
                     onClick={() => useTabsStore.getState().openSettingsTab('dk8s-logs')}>
