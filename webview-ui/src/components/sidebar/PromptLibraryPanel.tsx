@@ -8,7 +8,7 @@
  * E6.86 — merged AI Templates into Prompt Library (single source of truth).
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { systemKeyFor } from '../../store/prompt-template';
+import { systemKeyFor, whereUsed } from '../../store/prompt-template';
 import { EditorView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { TrashIcon, ChevronRightIcon, SparkleIcon, SearchIcon, CloseIcon } from '../../icons';
@@ -609,7 +609,7 @@ export function PromptLibraryPanel({ externalTarget, onTargetConsumed }: { exter
                   })()}
                   {(isTpl || isMock) && activeKey && (() => {
                     const flagKey = TEMPLATE_TO_FEATURE_KEY[activeKey];
-                    const gates = flagKey ? AI_FEATURE_LABELS[flagKey]?.gates : undefined;
+                    const gates = whereUsed(activeKey, flagKey ? AI_FEATURE_LABELS[flagKey]?.gates : undefined);
                     return gates ? (
                       <p className="text-[9.5px] mt-1 leading-relaxed" style={{ color: `color-mix(in srgb, ${editorColor} 65%, var(--color-text-muted))` }}>
                         ↳ {gates}

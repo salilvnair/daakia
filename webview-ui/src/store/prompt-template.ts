@@ -86,25 +86,46 @@ export const AGENT_SCENARIO_VARIABLES: Record<AgentScenario, ScenarioVarMap> = {
 
 // ─── Default System Prompts ───────────────────────────────────────────────────
 
+/*
+  System and user, split the way every prompt in the library is: the system
+  prompt is the instruction — who the agent is, what to do, what to return —
+  and the user prompt carries the values of this one call. A value in the
+  system prompt made the instruction change on every call and left the user
+  half empty.
+*/
 export function getDefaultSystemPrompt(scenario: AgentScenario): string {
   switch (scenario) {
     case 'request':
-      return `You are a REST API request builder for the Daakia API client.\n\nThe user wants: {{userIntent}}\nActive URL: {{currentUrl}}\nHTTP Method: {{currentMethod}}\nEnvironment variables: {{envVars}}\nCurrent headers: {{headers}}\n\nYour task:\n1. Determine the correct HTTP method, URL, headers, and body\n2. Return a structured JSON response with the request configuration\n3. Use environment variable references like {{baseUrl}} where appropriate\n4. Include Content-Type headers when a body is present\n5. Provide a brief explanation of what the request does\n\nReturn valid JSON with keys: method, url, headers, body, explanation`;
+      return `You are a REST API request builder for the Daakia API client.\n\nFrom what the user wants and the context they give you:\n1. Determine the correct HTTP method, URL, headers, and body\n2. Use environment variable references like {{baseUrl}} where appropriate\n3. Include Content-Type headers when a body is present\n4. Provide a brief explanation of what the request does\n\nReturn valid JSON with keys: method, url, headers, body, explanation`;
     case 'mock':
-      return `You are a mock API server designer for the Daakia mock server.\n\nUser request: {{userIntent}}\nExisting routes: {{existingRoutes}}\nData schema hint: {{dataSchema}}\n\nYour task:\n1. Design realistic mock endpoint(s) that match the user's intent\n2. Generate realistic sample data that looks like real production data\n3. Include proper HTTP status codes and headers\n4. Consider edge cases (empty arrays, pagination, errors)\n\nDesign endpoints that feel like a real API — use realistic names, IDs, timestamps, and values.`;
+      return `You are a mock API server designer for the Daakia mock server.\n\nFrom the user's request and the routes that already exist:\n1. Design realistic mock endpoint(s) that match the user's intent\n2. Generate realistic sample data that looks like real production data\n3. Include proper HTTP status codes and headers\n4. Consider edge cases (empty arrays, pagination, errors)\n\nDesign endpoints that feel like a real API — use realistic names, IDs, timestamps, and values.`;
     case 'test':
-      return `You are a test script generator for Daakia's built-in test framework.\n\nRequest: {{requestMethod}} {{requestUrl}}\nResponse status: {{responseStatus}}\nResponse body: {{responseBody}}\nContent-Type: {{contentType}}\n\nGenerate dk.* assertions to verify:\n1. Status code is correct\n2. Response body structure matches expectations\n3. Required fields are present with correct types\n4. Business logic constraints are satisfied\n\nUse the dk.* API:\n- dk.expect(value).toBe(expected)\n- dk.expect(value).toMatchSchema({ type: 'string'|'number'|'boolean'|'array'|'object' })\n- dk.expect(value).toContain(substring)\n- dk.expect(status).toBe(200)\n- dk.env.set('name', value)\n\nWrite clear, readable tests with descriptive messages.`;
+      return `You are a test script generator for Daakia's built-in test framework.\n\nGenerate dk.* assertions for the request and response you are given, to verify:\n1. Status code is correct\n2. Response body structure matches expectations\n3. Required fields are present with correct types\n4. Business logic constraints are satisfied\n\nUse the dk.* API:\n- dk.expect(value).toBe(expected)\n- dk.expect(value).toMatchSchema({ type: 'string'|'number'|'boolean'|'array'|'object' })\n- dk.expect(value).toContain(substring)\n- dk.expect(status).toBe(200)\n- dk.env.set('name', value)\n\nWrite clear, readable tests with descriptive messages.`;
     case 'curl':
-      return `You are a cURL command converter for the Daakia API client.\n\ncURL command: {{curlCommand}}\nEnvironment variables: {{envVars}}\n\nConvert this cURL command to a structured Daakia request:\n1. Extract the HTTP method (from -X flag or infer from -d)\n2. Parse all headers (-H flags)\n3. Extract the request body (-d, --data, --data-raw)\n4. Identify the URL\n5. Replace hardcoded values with environment variable references where sensible\n\nReturn JSON with: method, url, headers (key-value pairs), body, and notes about assumptions.`;
+      return `You are a cURL command converter for the Daakia API client.\n\nConvert the cURL command you are given to a structured Daakia request:\n1. Extract the HTTP method (from -X flag or infer from -d)\n2. Parse all headers (-H flags)\n3. Extract the request body (-d, --data, --data-raw)\n4. Identify the URL\n5. Replace hardcoded values with environment variable references where sensible\n\nReturn JSON with: method, url, headers (key-value pairs), body, and notes about assumptions.`;
     case 'explain':
-      return `You are an HTTP and API expert assistant for the Daakia API client.\n\nRequest: {{requestMethod}} {{requestUrl}}\nStatus: {{responseStatus}}\nContent-Type: {{contentType}}\nResponse body: {{responseBody}}\n\nExplain this API response in plain English:\n1. What the status code means in this context\n2. What data is returned and what each key/field means\n3. Notable patterns, conventions, or design decisions\n4. Any potential issues or things to watch for\n5. Common follow-up actions or related endpoints to try\n\nBe conversational, clear, and avoid unnecessary jargon.`;
+      return `You are an HTTP and API expert assistant for the Daakia API client.\n\nExplain the API response you are given in plain English:\n1. What the status code means in this context\n2. What data is returned and what each key/field means\n3. Notable patterns, conventions, or design decisions\n4. Any potential issues or things to watch for\n5. Common follow-up actions or related endpoints to try\n\nBe conversational, clear, and avoid unnecessary jargon.`;
     case 'general':
-      return `You are a helpful assistant built into the Daakia API client — a VS Code extension for API development and testing.\n\nUser message: {{userMessage}}\nContext: {{context}}\n\nHelp the user with:\n- HTTP methods, status codes, and headers\n- REST API design and best practices\n- Authentication patterns (Bearer, Basic, OAuth, API keys)\n- API testing strategies\n- JSON structure and data formats\n- WebSocket and GraphQL concepts\n- Daakia-specific features and capabilities\n\nBe concise, practical, and provide code examples when helpful.`;
+      return `You are a helpful assistant built into the Daakia API client — a VS Code extension for API development and testing.\n\nHelp the user with:\n- HTTP methods, status codes, and headers\n- REST API design and best practices\n- Authentication patterns (Bearer, Basic, OAuth, API keys)\n- API testing strategies\n- JSON structure and data formats\n- WebSocket and GraphQL concepts\n- Daakia-specific features and capabilities\n\nBe concise, practical, and provide code examples when helpful.`;
   }
 }
 
-export function getDefaultUserPrompt(_scenario: AgentScenario): string {
-  return '';
+/** The values of one call — what the system prompt's instruction is applied to. */
+export function getDefaultUserPrompt(scenario: AgentScenario): string {
+  switch (scenario) {
+    case 'request':
+      return `What I want: {{userIntent}}\n\nActive URL: {{currentUrl}}\nHTTP method: {{currentMethod}}\nEnvironment variables: {{envVars}}\nCurrent headers: {{headers}}`;
+    case 'mock':
+      return `What I need mocked: {{userIntent}}\n\nExisting routes: {{existingRoutes}}\nData schema hint: {{dataSchema}}`;
+    case 'test':
+      return `Request: {{requestMethod}} {{requestUrl}}\nResponse status: {{responseStatus}}\nContent-Type: {{contentType}}\n\nResponse body:\n{{responseBody}}`;
+    case 'curl':
+      return `cURL command:\n{{curlCommand}}\n\nEnvironment variables: {{envVars}}`;
+    case 'explain':
+      return `Request: {{requestMethod}} {{requestUrl}}\nStatus: {{responseStatus}}\nContent-Type: {{contentType}}\n\nResponse body:\n{{responseBody}}`;
+    case 'general':
+      return `{{userMessage}}\n\nContext: {{context}}`;
+  }
 }
 
 // ─── Display Order & Categories ───────────────────────────────────────────────
@@ -439,7 +460,60 @@ const DK8S_USER = DK8S_USER_PROMPTS as Record<string, string>;
  * Renaming the odd ones out was the alternative and is worse: edited prompts
  * are stored against these keys, so a rename orphans a user's edits.
  */
+/**
+ * Where a prompt is used, for the ones no feature flag describes — the Prompt
+ * Library's "↳" line. A prompt with a flag takes its line from the flag
+ * (AI_FEATURE_LABELS.gates); every other one is here, so none is shown without
+ * saying which button sends it.
+ */
+export const PROMPT_WHERE_USED: Partial<Record<AiPromptTemplateKey, string>> = {
+  'history.filter.parse': '"Filter" (the "Describe it: …" box) in REST sidebar → History → Filter history popup → Request tab',
+  'rest.collection.search': '"Search with AI" sparkle, or Enter in the Search… box, in REST sidebar → Collections',
+  'dk8s.describe.explain': 'Not called from any screen yet — kept so it can be edited before a feature uses it',
+  'dk8s.file.explain': '"Ask AI" in dk8s → pod → Explorer tab → an open file (also from the Logs/Files search dialog)',
+  'dk8s.format.detect': '"Detect with AI" in Settings → DK8S → Logs → Log formats editor',
+  'dk8s.heap.explain': '"Ask AI" on a Class histogram or Heap dump result card in dk8s → pod → Doctor tab',
+  'dk8s.heap.explainOne': '✦ Ask on a suspect, finding or class row, or on a Retention graph node, in the Heap Dump analyzer',
+  'dk8s.heap.investigate': '"Investigate" in the Heap Dump analyzer → Explain tab',
+  'dk8s.log.askWhy': '"Ask AI why" on a selection in dk8s → pod → Logs · "Ask AI" in pod → Terminal · Doctor result cards without a prompt of their own',
+  'dk8s.log.explainError': '"Ask AI" chip on a folded stack trace in dk8s → pod → Logs · "Explain" in the log right-click menu',
+  'dk8s.log.explainShape': 'Not called from any screen yet — kept so it can be edited before a feature uses it',
+  'dk8s.log.summarise': '"Analyze" in the dk8s → pod → Logs toolbar → confirm in the Analyze dialog',
+  'dk8s.pod.crashloop': 'Not called from any screen yet — kept so it can be edited before a feature uses it',
+  'dk8s.terminal.theme': '"Generate" under "Generate with AI" in Settings → DK8S → Terminal → Import a theme',
+  'dk8s.threads.explain': '"Ask AI" on a Thread dump, SIGQUIT dump, Flight recording or Python stack card in dk8s → pod → Doctor · "Analyze" in the Thread Dump analyzer',
+  'dk8s.threads.explainLock': '✦ Ask on a lock in the Thread Dump analyzer → Locks graph',
+  'dk8s.threads.explainOne': '✦ on a thread row in the Thread Dump analyzer · "Ask AI" on a stack-shape finding card',
+  'dkgh.compose': '"Generate with AI" in dkgh → New issue',
+  'import.api.discovery': '"Analyze with AI" in REST sidebar → Collections → AI Auto-Discovery Agent',
+  'mock.traffic.enrich': '"Generate Variations" in Mock Server → Traffic tab → a record → "AI Enrich ✦"',
+  'platform.schema.diff': '"Analyse anomalies" in Settings → Power Features → Schema Diff ✦',
+  'platform.schema.migration': '"Generate migration" in Settings → Power Features → Schema Diff ✦',
+  'mock.graphql.generate': '"Generate with AI" in Mock Server → GraphQL server → GraphQL Operations',
+  'mock.grpc.generate': '"Generate with AI" in Mock Server → gRPC server → gRPC Services',
+  'mock.mqtt.generate': '"Generate with AI" in Mock Server → MQTT server → MQTT Topics',
+  'mock.soap.generate': '"Generate with AI" in Mock Server → SOAP server → SOAP Operations',
+  'mock.socketio.generate': '"Generate with AI" in Mock Server → Socket.IO server → Socket.IO Events',
+  'mock.sse.generate': '"Generate with AI" in Mock Server → SSE server → SSE Events',
+  'mock.websocket.generate': '"Generate with AI" in Mock Server → WebSocket server → WebSocket Handlers',
+  'rest.code.import': '"Extract with AI" in REST URL bar → ⋮ → Import cURL → Import Request → Code tab',
+  'rest.curl.explain': '"Explain with AI" in REST URL bar → ⋮ → Import cURL → Import Request → cURL tab',
+  'rest.docs.generate': '"Write with AI" in a REST request → Docs tab',
+  'rest.fuzz.analyze': '"Analyze Results" in the AI fuzzer — opened from "Fuzz" in a REST body, the GraphQL editor, a gRPC request, a SOAP request, or MCP → Tools',
+};
+
+/** The "↳ where it is used" line for a library entry, from its flag or from PROMPT_WHERE_USED. */
+export function whereUsed(key: AiPromptTemplateKey, flagGates?: string): string | undefined {
+  if (flagGates) return flagGates;
+  if (key.startsWith('dk8s.chat.')) {
+    return 'Daakia AI tab → "Ask the logs" starters on the landing, and the / prompt palette — sent with "Ask the logs — system"';
+  }
+  return PROMPT_WHERE_USED[key];
+}
+
 export function systemKeyFor(key: AiPromptTemplateKey): AiPromptTemplateKey | undefined {
+  /* Every "Ask the logs" starter is sent with the one dk8s system prompt: that is its System tab. */
+  if (key.startsWith('dk8s.chat.') && key !== 'dk8s.chat.system') return 'dk8s.chat.system' as AiPromptTemplateKey;
   const candidates = key.includes('.generate')
     ? [key.replace('.generate', '.system'), `${key}.system`]
     : [`${key}.system`];
@@ -1489,7 +1563,8 @@ export const AI_TEMPLATE_CATEGORIES: {
     id: 'dk8s-chat',
     label: 'dk8s · Ask the logs',
     kind: 'mock',
-    keys: [...DK8S_CHAT_KEYS] as AiPromptTemplateKey[],
+    /* The shared system prompt is each starter's System tab, not an entry of its own — alone it had no user half. */
+    keys: DK8S_CHAT_KEYS.filter(k => k !== 'dk8s.chat.system') as AiPromptTemplateKey[],
   },
   {
     id: 'dk8s',
