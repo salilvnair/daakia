@@ -4,7 +4,7 @@
  * out of it must be checked like any other input.
  */
 import { describe, it, expect } from 'vitest';
-import { pickDk8sPrefs, readTeamEntry, DK8S_SHARED_PREF_KEYS } from './dk8s-shared-prefs';
+import { pickDk8sPrefs, readTeamEntry, shareable, DK8S_SHARED_PREF_KEYS } from './dk8s-shared-prefs';
 
 describe('what a shared workspace carries', () => {
   it('is the catalogue and the custom field readers', () => {
@@ -54,5 +54,19 @@ describe('reading a kept entry back', () => {
 
   it('names an owner who gave no name by the start of their id', () => {
     expect(readTeamEntry({ ...entry, ownerName: '' })?.ownerName).toBe('alice-id'.slice(0, 8));
+  });
+});
+
+describe('what leaves this machine', () => {
+  it('keeps the catalogue but not the project folders it was read from', () => {
+    const raw = JSON.stringify({ patterns: [{ id: 'p' }], loggers: [], projects: [{ scope: 's', path: 'C:/work/orders' }] });
+    const out = JSON.parse(pickDk8sPrefs({ 'dk8s.loggers': raw })['dk8s.loggers']);
+    expect(out.projects).toBeUndefined();
+    expect(out.patterns).toEqual([{ id: 'p' }]);
+  });
+
+  it('passes a value it cannot parse as it was', () => {
+    expect(shareable('dk8s.loggers', 'not json')).toBe('not json');
+    expect(shareable('dk8s.fields.custom', '[]')).toBe('[]');
   });
 });

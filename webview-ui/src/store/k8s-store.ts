@@ -380,8 +380,7 @@ export interface PodAction {
   mutatesPod?: boolean;
 }
 
-export type DetailTab = 'overview' | 'logs' | 'loggers' | 'terminal' | 'doctor' | 'python' | 'explorer' | 'yaml' | 'describe' | 'access';
-export type DetailTab = 'overview' | 'logs' | 'loggers' | 'ask' | 'terminal' | 'doctor' | 'explorer' | 'yaml' | 'describe' | 'access';
+export type DetailTab = 'overview' | 'logs' | 'loggers' | 'ask' | 'terminal' | 'doctor' | 'python' | 'explorer' | 'yaml' | 'describe' | 'access';
 
 export interface MemoryProfile {
   limitBytes?: number;

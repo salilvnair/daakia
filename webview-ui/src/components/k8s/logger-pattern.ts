@@ -51,6 +51,7 @@ export interface LoggerPattern {
    * for the pattern; matching never reads it.
    */
   regex?: string;
+  /**
    * Fields the call carries BESIDE the message rather than inside it — pino's
    * `log.info({ orderId }, "…")`, slog's `"order", id` pairs. They are not
    * holes: the message does not contain them, a structured format parses them
@@ -390,9 +391,11 @@ export function compilePattern(pattern: LoggerPattern): CompiledPattern {
         anywhere: new RegExp(pattern.regex),
         holes,
         named: true,
+        /* A regex's fixed words are not known without parsing it; no pre-check. */
+        needle: '',
       };
     } catch {
-      return { whole: NEVER, anywhere: NEVER, holes: [], named: true };
+      return { whole: NEVER, anywhere: NEVER, holes: [], named: true, needle: '' };
     }
   }
 

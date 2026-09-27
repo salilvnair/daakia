@@ -371,10 +371,10 @@ export function setSummary(
 export function updatePattern(
   id: string, patch: Partial<Omit<CataloguePattern, 'id' | 'added'>>,
 ): void {
-  const catalogue = read();
-  write({
-    patterns: catalogue.patterns.map(p => (p.id === id ? { ...p, ...patch, id: p.id, added: p.added } : p)),
-  });
+  update(c => ({
+    ...c,
+    patterns: c.patterns.map(p => (p.id === id ? { ...p, ...patch, id: p.id, added: p.added } : p)),
+  }));
 }
 
 export function clearMarks(scope: string): void {

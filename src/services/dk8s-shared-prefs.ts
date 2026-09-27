@@ -46,10 +46,33 @@ export function pickDk8sPrefs(prefs: unknown): Record<string, string> {
   const out: Record<string, string> = {};
   if (!prefs || typeof prefs !== 'object') return out;
   for (const key of DK8S_SHARED_PREF_KEYS) {
-    const value = (prefs as Record<string, unknown>)[key];
-    if (typeof value === 'string' && value.length > 0 && value.length <= MAX_VALUE_CHARS) out[key] = value;
+    const raw = (prefs as Record<string, unknown>)[key];
+    const value = typeof raw === 'string' ? shareable(key, raw) : undefined;
+    if (value && value.length <= MAX_VALUE_CHARS) out[key] = value;
   }
   return out;
+}
+
+/**
+ * A pref's value as it may leave this machine.
+ *
+ * The catalogue also remembers which project folder each workload was read
+ * from — a path on this disk, which says something about this machine and
+ * means nothing on anybody else's. It stays here; the loggers, patterns and
+ * determinants go. A value that does not parse is passed as it was: the
+ * webview's own reader decides what it can use.
+ */
+export function shareable(key: string, value: string): string | undefined {
+  if (!value) return undefined;
+  if (key !== 'dk8s.loggers') return value;
+  try {
+    const v = JSON.parse(value) as Record<string, unknown>;
+    if (!v || typeof v !== 'object' || !('projects' in v)) return value;
+    const { projects: _local, ...rest } = v;
+    return JSON.stringify(rest);
+  } catch {
+    return value;
+  }
 }
 
 /** One teammate's shared workspace, as the webview is handed it. */
