@@ -514,6 +514,17 @@ export const usePyStore = create<PyState>((set, get) => ({
       case 'py:debug:state':
         patchDebug(String(msg.debugId), { state: msg.state as PyDebugState, path: msg.path as string });
         break;
+      case 'py:debug:evalResult': {
+        const done = pendingEval.get(String(msg.reqId));
+        if (!done) break;
+        pendingEval.delete(String(msg.reqId));
+        done({
+          type: typeof msg.valueType === 'string' ? msg.valueType : undefined,
+          value: typeof msg.value === 'string' ? msg.value : undefined,
+          error: typeof msg.error === 'string' ? msg.error : undefined,
+        });
+        break;
+      }
       case 'py:debug:console': {
         const d = get().debug;
         if (!d || d.debugId !== msg.debugId) break;
@@ -586,6 +597,40 @@ export function uniqueName(scripts: { name: string }[], want: string): string {
   be the first mounted; a listener per component would apply every reply
   twice while both are.
 */
+/* ── Hover values ──────────────────────────────────────────────────────────── */
+
+export interface PyEvalResult { type?: string; value?: string; error?: string }
+
+const pendingEval = new Map<string, (r: PyEvalResult) => void>();
+/* One answer per expression per stop: the state object is new on every stop,
+   so a value read at line 4 is never shown at line 9. */
+const evalCache = new WeakMap<PyDebugState, Map<string, Promise<PyEvalResult>>>();
+
+/**
+ * One name or attribute chain's value in the paused frame — what the editor
+ * shows on hover. Answers "not paused" rather than asking when there is
+ * nothing to ask, and gives up after a few seconds rather than leaving a hover
+ * waiting on an answer that will not come.
+ */
+export function evaluateInDebugger(expr: string): Promise<PyEvalResult> {
+  const d = usePyStore.getState().debug;
+  if (!d || d.ended || d.state.status !== 'paused') return Promise.resolve({ error: 'not paused' });
+  let cache = evalCache.get(d.state);
+  if (!cache) { cache = new Map(); evalCache.set(d.state, cache); }
+  const known = cache.get(expr);
+  if (known) return known;
+  const reqId = newId('ev-');
+  const answer = new Promise<PyEvalResult>((resolve) => {
+    pendingEval.set(reqId, resolve);
+    setTimeout(() => {
+      if (pendingEval.delete(reqId)) resolve({ error: 'no answer from pdb' });
+    }, 4000);
+  });
+  postMsg({ type: 'py:debug:eval', debugId: d.debugId, reqId, expr });
+  cache.set(expr, answer);
+  return answer;
+}
+
 let listening = false;
 export function ensurePyListener(): void {
   if (listening || typeof window === 'undefined') return;

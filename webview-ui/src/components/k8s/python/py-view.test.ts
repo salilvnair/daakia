@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   formatDuration, sessionClock, shortPythonVersion, podShort, relativeAge, filterScripts, groupScripts,
-  statusFromExit, summarizeRuns, compareOutputs, inlineValues, newId,
+  statusFromExit, summarizeRuns, compareOutputs, inlineValues, newId, hoverExprAt, ghostPrompt, cleanGhost,
 } from './py-view';
 
 describe('time', () => {
@@ -112,5 +112,53 @@ describe('inlineValues', () => {
   });
   it('truncates a long value', () => {
     expect(inlineValues('data', [{ name: 'data', value: 'x'.repeat(100) }], 3, 10)).toBe(`data = ${'x'.repeat(9)}…`);
+  });
+});
+
+describe('what a hover is over', () => {
+  const line = 'print(socket.gethostname(), os.environ.get("HOSTNAME", ""))  # host';
+  const at = (col: number) => hoverExprAt(line, col)?.expr;
+
+  it('is the name under the pointer, with the chain that leads to it', () => {
+    expect(at(line.indexOf('socket') + 2)).toBe('socket');
+    expect(at(line.indexOf('gethostname') + 3)).toBe('socket.gethostname');
+    expect(at(line.indexOf('environ') + 2)).toBe('os.environ');
+  });
+
+  it('is nothing inside a string, a comment, a keyword or a number', () => {
+    expect(at(line.indexOf('HOSTNAME') + 2)).toBeUndefined();
+    expect(at(line.lastIndexOf('host') + 1)).toBeUndefined();
+    expect(hoverExprAt('import os, socket', 2)).toBeUndefined();
+    expect(hoverExprAt('x = 42', 6)).toBeUndefined();
+  });
+
+  it('gives Monaco the range to underline', () => {
+    const r = hoverExprAt('a = os.environ', 10)!;
+    expect(r).toEqual({ expr: 'os.environ', start: 5, end: 15 });
+  });
+});
+
+describe('ghost text', () => {
+  it('asks with the code either side of the cursor', () => {
+    const text = 'import os\nprint(os.en)\n';
+    const at = text.indexOf('en)') + 2;
+    expect(ghostPrompt(text, at)).toEqual({ prefix: 'import os\nprint(os.en', suffix: ')\n' });
+  });
+
+  it('asks on the empty line after a comment, but not while the comment is typed', () => {
+    const text = 'import os\n# print every env var sorted\n';
+    expect(ghostPrompt(text, text.length)?.prefix.endsWith('sorted\n')).toBe(true);
+    expect(ghostPrompt(text, text.indexOf('sorted'))).toBeUndefined();
+    expect(ghostPrompt('   ', 3)).toBeUndefined();
+  });
+
+  it('takes off fences and an echo of what was already typed', () => {
+    expect(cleanGhost('```python\nfor k in sorted(os.environ):\n    print(k)\n```', '')).toBe('for k in sorted(os.environ):\n    print(k)');
+    expect(cleanGhost('print(os.environ)', 'print(os.')).toBe('environ)');
+    expect(cleanGhost('   \n', 'x = ')).toBe('');
+  });
+
+  it('never offers more than twelve lines', () => {
+    expect(cleanGhost(Array.from({ length: 30 }, (_, i) => `x${i} = ${i}`).join('\n'), '').split('\n')).toHaveLength(12);
   });
 });

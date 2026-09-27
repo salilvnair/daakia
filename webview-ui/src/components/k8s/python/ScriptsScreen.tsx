@@ -21,12 +21,14 @@ import { useK8sStore } from '../../../store/k8s-store';
 import { useWorkspaceStore } from '../../../store/workspace-store';
 import { usePyStore, ensurePyListener, targetKey, type PyTarget } from '../../../store/dk8s-python-store';
 import { ScriptLibrary } from './ScriptLibrary';
-import { ScriptHeader } from './ScriptHeader';
+import { ScriptTitle, ScriptSave, ScriptMenu } from './ScriptHeader';
+import { RunSetup } from './RunSetup';
+import { AskPyAi } from './AskPyAi';
 import { PyEditor } from './PyEditor';
 import { OutputPane, ConsolePane } from './PyBottomPanel';
 import { PyDebugPanes } from './PyDebugPanes';
 import { DebugBar } from './PythonTab';
-import { newId, podShort, summarizeRuns, compareOutputs } from './py-view';
+import { newId, podShort, summarizeRuns, compareOutputs, PY_HEADER_HEIGHT } from './py-view';
 import { ACCENT, ACCENT_SOFT, OK, BAD, WARN, MUTED } from '../tone';
 
 interface PickablePod {
@@ -226,7 +228,7 @@ export function ScriptsScreen() {
           Check python3
         </ButtonView>
         <span className="flex-1" />
-        <ButtonView size="sm" variant="primary" accentColor={ACCENT}
+        <ButtonView size="sm" variant="secondary" accentColor="var(--color-success)" color="var(--color-success)"
                     iconLeft={<PlayIcon size={IconSize.action} />}
                     disabled={!script || !pyTargets.length || running}
                     loading={running}
@@ -260,25 +262,36 @@ export function ScriptsScreen() {
             </div>
           ) : (
             <>
-              <ScriptHeader scriptId={script.id} />
+              {/* The open script and how it runs, in one row — the pods and the run
+                  buttons are in the row above, for every script alike. */}
+              <div className="flex items-center gap-2 px-3 flex-shrink-0 min-w-0"
+                   style={{ height: PY_HEADER_HEIGHT, borderBottom: '1px solid var(--color-surface-border)' }}>
+                <ScriptTitle scriptId={script.id} />
+                <ScriptSave scriptId={script.id} />
+                <span className="flex-1" />
+                <RunSetup
+                  args={args}
+                  onArgs={(a) => selectedId && setArgs(selectedId, a)}
+                  onEnter={onRunAll}
+                />
+                <AskPyAi scriptId={script.id}
+                         target={firstPod && !firstBlocked ? pyTargets[0] : undefined}
+                         pythonVersion={pyTargets[0] ? probes[targetKey(pyTargets[0])]?.verdict?.version?.text : undefined}
+                         lastRun={shownRun} />
+                <ScriptMenu scriptId={script.id} />
+              </div>
               {debugLive && (
                 <div className="flex items-center gap-2 px-3 flex-shrink-0"
                      style={{ minHeight: 40, borderBottom: '1px solid var(--color-surface-border)' }}>
                   <DebugBar />
                 </div>
               )}
-              <div className="flex items-center gap-2 px-3 py-1.5 flex-shrink-0"
-                   style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-                <span className="text-[11px]" style={{ color: MUTED }}>Args</span>
-                <TextInputView size="xs" value={args} placeholder="--pool --json" aria-label="Script arguments"
-                               onChange={(e) => selectedId && setArgs(selectedId, e.target.value)}
-                               inputStyle={{ fontFamily: 'var(--font-mono, ui-monospace, monospace)' }}
-                               style={{ width: 240 }} />
-              </div>
               <div className="flex-1 min-h-0">
                 <SplitPanelView
                   direction="vertical" defaultSplit={60} minFirst={120} minSecond={120} accentColor={ACCENT}
-                  first={<PyEditor scriptId={script.id} />}
+                  first={<PyEditor scriptId={script.id}
+                                   target={firstPod && !firstBlocked ? pyTargets[0] : undefined}
+                                   pythonVersion={pyTargets[0] ? probes[targetKey(pyTargets[0])]?.verdict?.version?.text : undefined} />}
                   second={(
                     <div className="flex flex-col h-full min-h-0" style={{ borderTop: '1px solid var(--color-surface-border)' }}>
                       <div className="flex items-center gap-2 px-2.5 flex-shrink-0"

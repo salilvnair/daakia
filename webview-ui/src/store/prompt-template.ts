@@ -430,6 +430,10 @@ export type AiPromptTemplateKey =
   | 'dk8s.format.detect'
   | 'dk8s.format.detect.system'
   | 'dk8s.terminal.theme'
+  | 'dk8s.python.complete'
+  | 'dk8s.python.complete.system'
+  | 'dk8s.python.ask'
+  | 'dk8s.python.ask.system'
   | 'dk8s.terminal.theme.system'
   // ── dk8s · asking Daakia AI about the watched pods ──
   | Dk8sChatKey;
@@ -486,6 +490,8 @@ export const PROMPT_WHERE_USED: Partial<Record<AiPromptTemplateKey, string>> = {
   'dk8s.log.askTheLog': '"Ask" (or a "try" chip, a follow-up, or a saved check) in dk8s → pod → Ask the log tab — also reached from "Ask AI about this window" in the Logs footer',
   'dk8s.pod.crashloop': 'Not called from any screen yet — kept so it can be edited before a feature uses it',
   'dk8s.terminal.theme': '"Generate" under "Generate with AI" in Settings → DK8S → Terminal → Import a theme',
+  'dk8s.python.complete': 'Grey ghost text while typing in dk8s → pod → Python (Tab accepts) — and the code after a comment line, on the next line',
+  'dk8s.python.ask': '"Ask AI" in the dk8s → pod → Python toolbar, and in the Scripts screen',
   'dk8s.threads.explain': '"Ask AI" on a Thread dump, SIGQUIT dump, Flight recording or Python stack card in dk8s → pod → Doctor · "Analyze" in the Thread Dump analyzer',
   'dk8s.threads.explainLock': '✦ Ask on a lock in the Thread Dump analyzer → Locks graph',
   'dk8s.threads.explainOne': '✦ on a thread row in the Thread Dump analyzer · "Ask AI" on a stack-shape finding card',
@@ -576,6 +582,59 @@ What the reporter wrote:
 {{description}}
 `;
 
+/**
+ * The Python tab's two prompts — ghost text as you type, and Ask AI.
+ *
+ * The system halves are the instructions, and take the two facts the
+ * instructions depend on: which Python, in which container. Everything about
+ * this one call — the code either side of the cursor, the question, the last
+ * run — is the user half.
+ */
+const DK8S_PY_COMPLETE_SYSTEM = `You write inline code suggestions in a Python editor, the grey text an IDE offers at the cursor.
+
+The script runs inside a Kubernetes pod, in container {{container}}, with Python {{pythonVersion}} and only the packages installed in that container.
+
+Rules:
+- Reply with ONLY the text to insert at the cursor. No explanation, no markdown fences, and nothing that is already before the cursor.
+- When the line above the cursor is a comment saying what to do next, write the code that does it, starting at the cursor.
+- Otherwise finish the current statement, or write the next few lines at most — never more than 12.
+- Keep the file's indentation and style. Use the standard library and the modules the script already imports; add an import only when a comment asks for something they cannot do.
+- Never invent hostnames, credentials, service names or file paths in the pod — read them from the environment or leave a clearly named placeholder.
+- If there is nothing worth suggesting, reply with an empty string.`;
+
+const DK8S_PY_COMPLETE_USER = `Code before the cursor:
+{{prefix}}
+
+Code after the cursor:
+{{suffix}}
+
+Modules the script imports, as this container has them: {{imports}}`;
+
+const DK8S_PY_ASK_SYSTEM = `You help write, fix and explain a Python script that runs inside a Kubernetes pod, in container {{container}}, with Python {{pythonVersion}} and only the packages installed there.
+
+Answer as a JSON object and nothing else:
+{"answer": "<markdown: what you changed or found, and why — short>", "code": "<the whole updated script, or an empty string when no change is needed>"}
+
+Rules:
+- When asked to change or fix the script, return the complete script in "code", keeping everything the request did not ask to change.
+- When asked a question, answer it in "answer" and leave "code" empty.
+- Use the standard library and what the container has; if a package is missing, say so rather than importing it.
+- Read the last run's output and the problems the container's Python found — fix those first when asked to fix.
+- Never invent hostnames, credentials, service names or paths in the pod.`;
+
+const DK8S_PY_ASK_USER = `{{question}}
+
+Script {{scriptName}}:
+\`\`\`python
+{{script}}
+\`\`\`
+
+Selected lines: {{selection}}
+
+Last run: {{lastRun}}
+
+Problems the container's Python found: {{problems}}`;
+
 export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = {
   ...(DK8S_CHAT_DEFAULTS as Record<Dk8sChatKey, string>),
   'dkgh.compose': DKGH_COMPOSE_USER,
@@ -612,6 +671,10 @@ export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = 
   'dk8s.format.detect.system': DK8S_SYSTEM['dk8s.format.detect'] ?? '',
   'dk8s.terminal.theme': DK8S_USER['dk8s.terminal.theme'] ?? '',
   'dk8s.terminal.theme.system': DK8S_SYSTEM['dk8s.terminal.theme'] ?? '',
+  'dk8s.python.complete': DK8S_PY_COMPLETE_USER,
+  'dk8s.python.complete.system': DK8S_PY_COMPLETE_SYSTEM,
+  'dk8s.python.ask': DK8S_PY_ASK_USER,
+  'dk8s.python.ask.system': DK8S_PY_ASK_SYSTEM,
   // ── Response & Diagnostics — system prompts ───────────────────────────────
   'askAiWhy.system':
     `You are a precise HTTP error diagnosis assistant. Analyze the status code, response body, and request context to identify the root cause and provide actionable fix steps. Be concise and technical. Format with numbered steps.`,
@@ -1103,6 +1166,10 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   'dk8s.format.detect': { label: 'Detect a log format', description: 'Infer a parser from sample lines' },
   'dk8s.format.detect.system': { label: 'Detect a log format — system', description: 'Instruction block: who the model is and how it must answer' },
   'dk8s.terminal.theme': { label: 'Design a terminal theme', description: 'Fill in a palette from a description of the look wanted' },
+  'dk8s.python.complete': { label: 'Python ghost text', description: 'The code either side of the cursor — the suggestion to insert, or the code a comment asks for' },
+  'dk8s.python.complete.system': { label: 'Python ghost text — system', description: 'Instruction block: insert-only text, short, the container\u2019s Python and packages' },
+  'dk8s.python.ask': { label: 'Ask AI (Python)', description: 'A question or a change for the script, with the script, the selection, the last run and the problems found' },
+  'dk8s.python.ask.system': { label: 'Ask AI (Python) — system', description: 'Instruction block: answer as JSON — what and why, and the whole script when it changes' },
   'dk8s.terminal.theme.system': { label: 'Design a terminal theme — system', description: 'Instruction block: who the model is and how it must answer' },
   askAiWhy:               { label: 'Ask AI Why (Error Diagnosis)', description: 'Prompt used when "Ask AI why" is clicked on a failed HTTP response' },
   explainWithAi:          { label: 'Explain with AI',              description: 'Prompt used when "Explain" is clicked on a successful HTTP response' },
@@ -1307,6 +1374,11 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'dk8s.file.explain.system': [],
   'dk8s.format.detect': [...DK8S_USER_VARIABLES],
   'dk8s.terminal.theme': [...DK8S_USER_VARIABLES],
+  'dk8s.python.complete': ['prefix', 'suffix', 'imports'],
+  /* The instructions depend on which Python and which container, so those two are the system half's. */
+  'dk8s.python.complete.system': ['pythonVersion', 'container'],
+  'dk8s.python.ask': ['question', 'scriptName', 'script', 'selection', 'lastRun', 'problems'],
+  'dk8s.python.ask.system': ['pythonVersion', 'container'],
   'dk8s.terminal.theme.system': [],
   'dk8s.format.detect.system': [],
   askAiWhy:               ['{method}', '{url}', '{status}', '{statusText}', '{body}'],
@@ -1598,6 +1670,8 @@ export const AI_TEMPLATE_CATEGORIES: {
       'dk8s.file.explain',
       'dk8s.format.detect',
       'dk8s.terminal.theme',
+      'dk8s.python.complete',
+      'dk8s.python.ask',
     ],
   },
   // ── MCP & Platform AI ─────────────────────────────────────────────────────
@@ -1652,6 +1726,10 @@ export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
   'dk8s.file.explain.system': '#22d3ee',
   'dk8s.format.detect': '#10b981',
   'dk8s.terminal.theme': '#a78bfa',
+  'dk8s.python.complete': '#4B8BBE',
+  'dk8s.python.complete.system': '#4B8BBE',
+  'dk8s.python.ask': '#4B8BBE',
+  'dk8s.python.ask.system': '#4B8BBE',
   'dk8s.format.detect.system': '#10b981',
   'dk8s.terminal.theme.system': '#a78bfa',
   askAiWhy:               '#ef4444',

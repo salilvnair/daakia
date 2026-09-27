@@ -24,10 +24,10 @@ export function ThisPodPanel({ probe, execAllowed, onRefresh, title = 'THIS POD'
   const exec = execAllowed && probe?.execAllowed !== false;
 
   return (
-    <div className="px-3 py-2.5 flex flex-col gap-1.5"
-         style={{ borderTop: '1px solid var(--color-surface-border)' }}>
+    <div className="flex flex-col"
+         style={{ padding: '10px 12px', borderTop: '1px solid var(--color-surface-border)' }}>
       <div className="flex items-center">
-        <span className="text-[10px] font-bold tracking-wider flex-1" style={{ color: 'var(--color-text-secondary)' }}>
+        <span className="text-[10.5px] font-bold flex-1" style={{ letterSpacing: '0.06em', marginBottom: 7, color: 'var(--color-text-secondary)' }}>
           {title}
         </span>
         {onRefresh && (
@@ -42,7 +42,7 @@ export function ThisPodPanel({ probe, execAllowed, onRefresh, title = 'THIS POD'
           <Fact label="python3"
                 value={probe?.python3Version?.replace(/^Python\s+/i, '')
                   ?? (probe?.pythonVersion ? `none (python ${probe.pythonVersion.replace(/^Python\s+/i, '')})` : probe ? 'none' : '—')}
-                tone={v?.ok ? OK : probe ? BAD : MUTED} />
+                tone={v?.ok ? 'var(--color-text-primary)' : probe ? BAD : MUTED} />
           <Fact label="/tmp writable"
                 value={!probe ? '—' : tmp ? 'yes' : probe.base ? `no — using ${probe.base}` : 'no — streamed on stdin'}
                 tone={!probe ? MUTED : tmp ? OK : WARN} />
@@ -64,9 +64,9 @@ export function ThisPodPanel({ probe, execAllowed, onRefresh, title = 'THIS POD'
 
 function Fact({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 text-[11.5px]">
+    <div className="flex items-center justify-between gap-3 text-[11.5px]" style={{ lineHeight: 1.9 }}>
       <span style={{ color: 'var(--color-text-secondary)' }}>{label}</span>
-      <span className="font-mono truncate" style={{ color: tone }} title={value}>{value}</span>
+      <span className={label === 'python3' ? 'font-mono truncate' : 'truncate'} style={{ color: tone }} title={value}>{value}</span>
     </div>
   );
 }

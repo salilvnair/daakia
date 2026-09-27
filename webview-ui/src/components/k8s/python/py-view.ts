@@ -7,6 +7,12 @@
  */
 
 /** `1.4s`, `850ms`, `2m 03s` — the Output panel's footer and the Runs list. */
+/**
+ * The height of the tab's three top rows — the library's heading, the toolbar
+ * and Run and Debug — so the line under them runs straight across.
+ */
+export const PY_HEADER_HEIGHT = 44;
+
 export function formatDuration(ms: number | undefined): string {
   if (ms === undefined || !Number.isFinite(ms) || ms < 0) return '';
   if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -214,3 +220,79 @@ export const NEW_SCRIPT = [
   'print(socket.gethostname(), os.environ.get("HOSTNAME", ""))',
   '',
 ].join('\n');
+
+const PY_KEYWORDS = new Set([
+  'False', 'None', 'True', 'and', 'as', 'assert', 'async', 'await', 'break', 'class', 'continue', 'def', 'del',
+  'elif', 'else', 'except', 'finally', 'for', 'from', 'global', 'if', 'import', 'in', 'is', 'lambda', 'nonlocal',
+  'not', 'or', 'pass', 'raise', 'return', 'try', 'while', 'with', 'yield',
+]);
+
+/**
+ * The expression a hover at `column` (1-based, Monaco's) is over: the word
+ * under the pointer and the attribute chain leading to it — hovering
+ * `environ` in `os.environ.get` means `os.environ`, not `environ` alone and
+ * not the call after it. Nothing inside a string or a comment, nothing that is
+ * a keyword or a number.
+ */
+export function hoverExprAt(line: string, column: number): { expr: string; start: number; end: number } | undefined {
+  const i = column - 1;
+  if (i < 0 || i > line.length) return undefined;
+  const isWord = (c: string | undefined) => !!c && /[A-Za-z0-9_]/.test(c);
+  let ws = i;
+  let we = i;
+  if (!isWord(line[ws])) { if (isWord(line[ws - 1])) { ws--; we--; } else return undefined; }
+  while (isWord(line[ws - 1])) ws--;
+  while (isWord(line[we])) we++;
+  /* Inside a comment or a string: count the quotes and the hash before it. */
+  const before = line.slice(0, ws);
+  let inStr: string | undefined;
+  for (let k = 0; k < before.length; k++) {
+    const c = before[k];
+    if (inStr) { if (c === '\\') k++; else if (c === inStr) inStr = undefined; continue; }
+    if (c === '#') return undefined;
+    if (c === '"' || c === "'") inStr = c;
+  }
+  if (inStr) return undefined;
+  let start = ws;
+  while (start > 0 && line[start - 1] === '.' && isWord(line[start - 2])) {
+    start--;
+    while (isWord(line[start - 1])) start--;
+  }
+  const expr = line.slice(start, we);
+  const head = expr.split('.')[0];
+  if (/^\d/.test(head) || PY_KEYWORDS.has(line.slice(ws, we))) return undefined;
+  return { expr, start: start + 1, end: we + 1 };
+}
+
+/**
+ * What the ghost text is asked with: the code before the cursor and after it.
+ *
+ * Bounded both ways — the model needs the function it is in and the imports,
+ * not a thousand lines above. Nothing is asked while a comment is being typed
+ * (that is prose, and suggesting the rest of a sentence is noise), or in an
+ * empty file, where there is nothing yet to go on.
+ */
+export function ghostPrompt(text: string, offset: number): { prefix: string; suffix: string } | undefined {
+  const prefix = text.slice(Math.max(0, offset - 4000), offset);
+  if (!prefix.trim()) return undefined;
+  const lineStart = prefix.lastIndexOf('\n') + 1;
+  if (/^\s*#/.test(prefix.slice(lineStart))) return undefined;
+  return { prefix, suffix: text.slice(offset, offset + 1500) };
+}
+
+/**
+ * The model's answer as text to insert at the cursor.
+ *
+ * Models fence code even when told not to, and often start by repeating the
+ * line being typed; both are taken off. Twelve lines at most — a suggestion
+ * longer than a screenful is not a suggestion.
+ */
+export function cleanGhost(answer: string, linePrefix: string): string {
+  let t = answer.replace(/^\s*```[a-zA-Z]*\s*\n?/, '').replace(/\n?```\s*$/, '');
+  const typed = linePrefix.trimStart();
+  if (typed && t.startsWith(typed)) t = t.slice(typed.length);
+  else if (typed && t.trimStart().startsWith(typed)) t = t.trimStart().slice(typed.length);
+  t = t.replace(/\s+$/, '');
+  if (!t.trim()) return '';
+  return t.split('\n').slice(0, 12).join('\n');
+}

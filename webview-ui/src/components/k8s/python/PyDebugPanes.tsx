@@ -13,13 +13,50 @@
  */
 import { useState } from 'react';
 import {
-  CollapsibleSectionView, CheckboxView, IconButtonView, TextInputView, IconSize,
+  CheckboxView, IconButtonView, TextInputView, IconSize,
 } from '@salilvnair/dui';
 import {
-  ChevronRightIcon, DbgContinueIcon, DbgStepOverIcon, DbgStepIntoIcon, DbgStepOutIcon,
+  ChevronRightIcon, ChevronDownIcon, DbgContinueIcon, DbgStepOverIcon, DbgStepIntoIcon, DbgStepOutIcon,
   DbgRestartIcon, DbgStopIcon, RunDebugIcon, PlusIcon, CloseIcon,
 } from '../../../icons';
 import { usePyStore, type PyVar } from '../../../store/dk8s-python-store';
+import { PY_HEADER_HEIGHT } from './py-view';
+
+/*
+  One empty list for every selector that has nothing to return. A selector
+  that answers `?? []` hands zustand a new array on every read, which it takes
+  for a change, re-renders, reads again — until React stops it and the whole
+  page goes blank.
+*/
+const NONE: never[] = [];
+
+/**
+ * One pane's heading, as the plan draws it: a chevron and the name in grey
+ * capitals on a faint band, a rule above — no coloured pill. An action (Watch's
+ * +) sits beside the heading rather than inside it, so it is its own button.
+ */
+function Section({ title, open, onToggle, action, children }: {
+  title: string; open: boolean; onToggle: () => void; action?: React.ReactNode; children: React.ReactNode;
+}) {
+  return (
+    <div style={{ borderTop: '1px solid var(--color-surface-border)' }}>
+      <div className="flex items-center" style={{ background: 'var(--color-surface-hover)' }}>
+        <button type="button" onClick={onToggle} aria-expanded={open}
+                className="flex items-center gap-1.5 flex-1 min-w-0 text-left cursor-pointer border-none bg-transparent"
+                style={{ padding: '7px 10px' }}>
+          {open
+            ? <ChevronDownIcon size={11} color="var(--color-text-secondary)" />
+            : <ChevronRightIcon size={11} color="var(--color-text-muted)" />}
+          <span className="text-[10.5px] font-bold" style={{ letterSpacing: '0.06em', color: 'var(--color-text-secondary)' }}>
+            {title.toUpperCase()}
+          </span>
+        </button>
+        {action && <span className="pr-2 inline-flex">{action}</span>}
+      </div>
+      {open && children}
+    </div>
+  );
+}
 
 /** Colour by Python type, through the debugger's own theme tokens. */
 function valueColor(type: string): string {
@@ -68,20 +105,21 @@ export function PyDebugPanes({ scriptId, scriptName }: { scriptId?: string; scri
   const live = !!debug && !debug.ended;
   return (
     <div className="flex flex-col min-h-0">
-      <div className="flex items-center gap-2 px-3 py-2"
-           style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+      <div className="flex items-center gap-2 px-3 flex-shrink-0"
+           style={{ height: PY_HEADER_HEIGHT, borderBottom: '1px solid var(--color-surface-border)' }}>
         <RunDebugIcon size={IconSize.action} />
         <span className="text-[10.5px] font-bold tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
           RUN AND DEBUG
         </span>
-        <span className="flex-1" />
-        <DebugToolbar compact />
+        {/* The step buttons live in the bar over the editor while a session is on —
+            the same six here too were two toolbars for one debugger. */}
       </div>
       {!live && (
-        <div className="px-3 py-2.5 text-[11px] leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+        <div className="text-[11.5px]" style={{ padding: '8px 10px', lineHeight: 1.6, color: 'var(--color-text-muted)' }}>
           {debug?.ended
             ? `Session ended: ${debug.ended}`
-            : <>Not debugging. Press <b>Debug</b> to run under <code>pdb</code> in the pod.</>}
+            : <>Not debugging. Press <span style={{ color: 'var(--color-text-primary)' }}>Debug</span> to run under{' '}
+                <span className="font-mono" style={{ color: 'var(--color-text-primary)' }}>pdb</span> in the pod.</>}
         </div>
       )}
       <VariablesSection />
@@ -93,25 +131,26 @@ export function PyDebugPanes({ scriptId, scriptName }: { scriptId?: string; scri
 }
 
 function VariablesSection() {
-  const [open, setOpen] = useState(true);
   const debug = usePyStore(s => s.debug);
   const paused = !!debug && !debug.ended && debug.state.status === 'paused';
+  /* Closed while there is nothing to show, open at a stop — until the reader says otherwise. */
+  const [manual, setOpen] = useState<boolean | undefined>();
+  const open = manual ?? paused;
   const locals = debug?.state.locals ?? [];
   const globals = debug?.state.globals ?? [];
   return (
-    <CollapsibleSectionView title="Variables" expanded={open} onToggle={() => setOpen(!open)}
-                            accentColor="var(--color-debug-key)">
+    <Section title="Variables" open={open} onToggle={() => setOpen(!open)}>
       {!paused ? (
         <Muted>{debug && !debug.ended ? 'Running…' : 'Not debugging'}</Muted>
       ) : locals.length + globals.length === 0 ? (
         <Muted>No variables in this frame</Muted>
       ) : (
-        <div className="flex flex-col pb-1">
+        <div className="flex flex-col font-mono text-[11.5px]" style={{ padding: '6px 10px 10px', lineHeight: '20px' }}>
           <Scope label="Locals" vars={locals} initiallyOpen />
           {globals.length > 0 && <Scope label="Globals" vars={globals} initiallyOpen={locals.length === 0} />}
         </div>
       )}
-    </CollapsibleSectionView>
+    </Section>
   );
 }
 
@@ -120,7 +159,7 @@ function Scope({ label, vars, initiallyOpen }: { label: string; vars: PyVar[]; i
   return (
     <div>
       <Row depth={0} onToggle={() => setOpen(!open)} open={open} expandable>
-        <span className="text-[11px] font-semibold" style={{ color: 'var(--color-debug-scope)' }}>{label}</span>
+        <span style={{ color: 'var(--color-text-muted)' }}>{label}</span>
       </Row>
       {open && vars.map(v => <VarRow key={v.name} v={v} depth={1} />)}
     </div>
@@ -164,8 +203,8 @@ function Row({ depth, expandable, open, onToggle, title, children }: {
       title={title}
       onClick={expandable ? onToggle : undefined}
       onKeyDown={expandable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle?.(); } } : undefined}
-      className="flex items-center gap-1 pr-2 py-[1px] min-h-[18px] text-[11px]"
-      style={{ paddingLeft: depth * 12 + 8, cursor: expandable ? 'pointer' : 'default' }}
+      className="flex items-center gap-1.5 pr-1 min-h-[20px]"
+      style={{ paddingLeft: depth * 12, cursor: expandable ? 'pointer' : 'default' }}
     >
       {expandable
         ? <ChevronRightIcon size={10} style={{ transform: open ? 'rotate(90deg)' : 'none', flexShrink: 0, color: 'var(--color-text-muted)' }} />
@@ -176,46 +215,48 @@ function Row({ depth, expandable, open, onToggle, title, children }: {
 }
 
 function WatchSection() {
-  const [open, setOpen] = useState(true);
+  const [manual, setOpen] = useState<boolean | undefined>();
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
   const watches = usePyStore(s => s.watches);
   const add = usePyStore(s => s.addWatch);
   const remove = usePyStore(s => s.removeWatch);
-  const results = usePyStore(s => s.debug?.state.watches ?? []);
+  const results = usePyStore(s => s.debug?.state.watches ?? NONE);
   const paused = usePyStore(s => !!s.debug && !s.debug.ended && s.debug.state.status === 'paused');
+  const open = manual ?? (paused || adding);
 
   const commit = () => { add(draft); setDraft(''); setAdding(false); };
 
   return (
-    <CollapsibleSectionView
-      title="Watch" expanded={open} onToggle={() => setOpen(!open)}
-      accentColor="var(--color-warning)" badge={watches.length || undefined}
-      headerRight={
+    <Section
+      title="Watch" open={open} onToggle={() => setOpen(!open)}
+      action={
         <IconButtonView size="xs" icon={<PlusIcon size={IconSize.inline} />} tooltip="Add expression"
                         aria-label="Add watch expression"
-                        onClick={(e) => { e.stopPropagation(); setAdding(true); setOpen(true); }} />
+                        onClick={() => { setAdding(true); setOpen(true); }} />
       }
     >
-      <div className="flex flex-col pb-1">
+      <div className="flex flex-col font-mono text-[11.5px]" style={{ padding: '6px 10px 10px', lineHeight: '20px' }}>
         {watches.length === 0 && !adding && <Muted>Expressions evaluated in the paused frame</Muted>}
         {watches.map(expr => {
           const r = results.find(w => w.expr === expr);
           return (
-            <div key={expr} className="group flex items-center gap-1.5 px-3 py-[2px] text-[11px] min-h-[20px]">
-              <span className="font-mono shrink-0" style={{ color: 'var(--color-debug-key)' }}>{expr}</span>
-              <span className="font-mono truncate flex-1"
-                    style={{ color: r?.error ? 'var(--color-text-muted)' : 'var(--color-debug-object)' }}
+            <div key={expr} className="py-watch flex items-center gap-1.5 min-h-[20px]">
+              <span className="truncate flex-1" style={{ color: 'var(--color-debug-key)' }} title={expr}>{expr}</span>
+              <span className="truncate shrink-0" style={{ maxWidth: '55%', color: r?.error ? 'var(--color-text-muted)' : 'var(--color-text-primary)' }}
                     title={r?.error ?? r?.value}>
                 {!paused ? '' : r?.error ? `<${r.error}>` : r?.value ?? ''}
               </span>
-              <IconButtonView size="xs" icon={<CloseIcon size={IconSize.inline} />} tooltip="Remove"
-                              aria-label={`Remove watch ${expr}`} onClick={() => remove(expr)} />
+              <span className="py-watch-x inline-flex">
+                <IconButtonView size="xs" icon={<CloseIcon size={IconSize.inline} />} tooltip="Remove"
+                                aria-label={`Remove watch ${expr}`} onClick={() => remove(expr)} />
+              </span>
             </div>
           );
         })}
+        <style>{'.py-watch .py-watch-x { visibility: hidden } .py-watch:hover .py-watch-x { visibility: visible }'}</style>
         {adding && (
-          <div className="px-3 py-1">
+          <div className="py-1">
             <TextInputView
               autoFocus size="xs" value={draft} placeholder="Expression to watch"
               onChange={(e) => setDraft(e.target.value)}
@@ -228,74 +269,77 @@ function WatchSection() {
           </div>
         )}
       </div>
-    </CollapsibleSectionView>
+    </Section>
   );
 }
 
 function CallStackSection() {
-  const [open, setOpen] = useState(true);
   const debug = usePyStore(s => s.debug);
   const paused = !!debug && !debug.ended && debug.state.status === 'paused';
+  const [manual, setOpen] = useState<boolean | undefined>();
+  const open = manual ?? paused;
   const frames = debug?.state.frames ?? [];
   const base = (f: string) => f.slice(f.lastIndexOf('/') + 1);
   return (
-    <CollapsibleSectionView title="Call Stack" expanded={open} onToggle={() => setOpen(!open)}
-                            accentColor="var(--color-debug-scope)">
+    <Section title="Call Stack" open={open} onToggle={() => setOpen(!open)}>
       {!paused ? <Muted>Not paused</Muted> : (
-        <div className="flex flex-col font-mono text-[11px] pb-1">
+        <div className="flex flex-col font-mono text-[11.5px]" style={{ padding: '6px 6px 10px', lineHeight: '20px' }}>
           {frames.map((f, i) => (
-            <div key={`${f.file}:${f.line}:${i}`} className="flex items-center gap-1.5 px-3 py-[3px]"
+            <div key={`${f.file}:${f.line}:${i}`} className="flex items-center gap-2 rounded-[5px]"
                  title={`${f.file}:${f.line}`}
-                 style={{ background: i === 0 ? 'color-mix(in srgb, var(--color-warning) 8%, transparent)' : undefined }}>
-              <span style={{
-                width: 6, height: 6, borderRadius: 6, flexShrink: 0,
-                background: i === 0 ? 'var(--color-warning)' : 'transparent',
-              }} />
-              <span className="shrink-0" style={{ color: 'var(--color-text-primary)' }}>{f.fn}()</span>
-              <span className="truncate flex-1 text-right" style={{ color: 'var(--color-text-muted)' }}>
+                 style={{
+                   padding: '2px 8px',
+                   background: i === 0 ? 'color-mix(in srgb, var(--color-warning) 14%, transparent)' : undefined,
+                   color: i === 0 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                 }}>
+              <span className="flex-1 truncate">{f.fn === '<module>' ? '<module>' : `${f.fn}()`}</span>
+              <span className="shrink-0" style={{ color: 'var(--color-text-muted)' }}>
                 {base(f.file)}:{f.line}
               </span>
             </div>
           ))}
         </div>
       )}
-    </CollapsibleSectionView>
+    </Section>
   );
 }
 
 function BreakpointsSection({ scriptId, scriptName }: { scriptId?: string; scriptName: string }) {
   const [open, setOpen] = useState(true);
-  const lines = usePyStore(s => (scriptId ? s.breakpoints[scriptId] : undefined) ?? []);
-  const off = usePyStore(s => (scriptId ? s.disabledBreakpoints[scriptId] : undefined) ?? []);
+  const lines = usePyStore(s => (scriptId ? s.breakpoints[scriptId] : undefined) ?? NONE);
+  const off = usePyStore(s => (scriptId ? s.disabledBreakpoints[scriptId] : undefined) ?? NONE);
   const toggle = usePyStore(s => s.toggleBreakpointEnabled);
   const remove = usePyStore(s => s.removeBreakpoint);
   const here = usePyStore(s => (s.debug && !s.debug.ended && s.debug.scriptId === scriptId
     && s.debug.state.status === 'paused' ? s.debug.state.location?.line : undefined));
   return (
-    <CollapsibleSectionView title="Breakpoints" expanded={open} onToggle={() => setOpen(!open)}
-                            accentColor="var(--color-error)" badge={lines.length || undefined}>
+    <Section title="Breakpoints" open={open} onToggle={() => setOpen(!open)}>
       {!scriptId || lines.length === 0 ? <Muted>Click the gutter to set one</Muted> : (
-        <div className="flex flex-col pb-1">
+        <div className="flex flex-col" style={{ padding: '4px 10px 10px' }}>
           {lines.map(line => (
-            <div key={line} className="flex items-center gap-2 px-3 py-[2px] text-[11px] min-h-[22px]"
+            <div key={line} className="py-bp flex items-center gap-2 text-[12px] min-h-[24px]"
                  style={{ opacity: off.includes(line) ? 0.5 : 1 }}>
               <CheckboxView size="xs" checked={!off.includes(line)} onChange={() => toggle(scriptId, line)}
-                            testId={`bp-${line}`} />
-              <span className="truncate flex-1" style={{ color: 'var(--color-text-primary)' }}>{scriptName}</span>
-              <span className="font-mono" style={{ color: 'var(--color-text-muted)' }}>{line}</span>
+                            accentColor="var(--color-error)" testId={`bp-${line}`} />
+              <span className="font-mono truncate" style={{ color: 'var(--color-text-primary)' }}>{scriptName}</span>
+              <span style={{ color: 'var(--color-text-muted)' }}>{line}</span>
               {here === line && (
-                <span className="text-[9.5px] font-bold uppercase" style={{ color: 'var(--color-warning)' }}>here</span>
+                <span className="text-[10px] rounded-full" style={{ padding: '0 6px', color: 'var(--color-warning)', background: 'color-mix(in srgb, var(--color-warning) 16%, transparent)' }}>here</span>
               )}
-              <IconButtonView size="xs" icon={<CloseIcon size={IconSize.inline} />} tooltip="Remove breakpoint"
-                              aria-label={`Remove breakpoint at line ${line}`} onClick={() => remove(scriptId, line)} />
+              <span className="flex-1" />
+              <span className="py-bp-x inline-flex">
+                <IconButtonView size="xs" icon={<CloseIcon size={IconSize.inline} />} tooltip="Remove breakpoint"
+                                aria-label={`Remove breakpoint at line ${line}`} onClick={() => remove(scriptId, line)} />
+              </span>
             </div>
           ))}
+          <style>{'.py-bp .py-bp-x { visibility: hidden } .py-bp:hover .py-bp-x { visibility: visible }'}</style>
         </div>
       )}
-    </CollapsibleSectionView>
+    </Section>
   );
 }
 
 function Muted({ children }: { children: React.ReactNode }) {
-  return <div className="px-4 py-2 text-[11px] italic" style={{ color: 'var(--color-text-muted)' }}>{children}</div>;
+  return <div className="text-[11.5px]" style={{ padding: '6px 10px 10px', fontFamily: 'var(--font-sans, system-ui)', color: 'var(--color-text-muted)' }}>{children}</div>;
 }

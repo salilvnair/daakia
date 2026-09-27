@@ -29,13 +29,18 @@ import {
   usePyStore, ensurePyListener, targetKey, type PyTarget,
 } from '../../../store/dk8s-python-store';
 import { ScriptLibrary } from './ScriptLibrary';
-import { ScriptHeader } from './ScriptHeader';
+import { ScriptTitle, ScriptSave, ScriptMenu } from './ScriptHeader';
+import { RunSetup } from './RunSetup';
+import { AskPyAi } from './AskPyAi';
 import { PyEditor } from './PyEditor';
 import { PyBottomPanel, type BottomTab } from './PyBottomPanel';
 import { PyDebugPanes, DebugToolbar } from './PyDebugPanes';
 import { ThisPodPanel } from './ThisPodPanel';
-import { newId } from './py-view';
+import { newId, PY_HEADER_HEIGHT } from './py-view';
 import { ACCENT, WARN, MUTED, BAD } from '../tone';
+
+/** Run's colour: the same green as Send and Run elsewhere in Daakia. */
+const RUN = 'var(--color-success)';
 
 /** `/tmp/daakia/check_db.py` — what the host's `podFileName` will make of a name. */
 export function plannedPath(base: string | undefined, name: string): string | undefined {
@@ -146,73 +151,25 @@ export function PythonTab() {
       <ScriptLibrary heading="SCRIPTS" footer="Saved in this workspace — Git Sync carries them." />
 
       <div className="flex flex-col flex-1 min-w-0 min-h-0">
-        {/* ── Toolbar, or the debug bar while paused ── */}
-        <div className="flex items-center gap-2 px-3 flex-shrink-0 flex-wrap"
-             style={{ minHeight: 44, borderBottom: '1px solid var(--color-surface-border)' }}>
+        {/*
+          One row: what is open on the left; how it runs, Debug and Run on the
+          right. Container, arguments and the path in the pod live in the
+          "runs in" chip's popover, and the file verbs behind the ⋯ — a second
+          row of inputs for things set once per script was the clutter.
+          The debug bar takes the row while a session is live.
+        */}
+        <div className="flex items-center gap-2 px-3 flex-shrink-0 min-w-0"
+             style={{ height: PY_HEADER_HEIGHT, borderBottom: '1px solid var(--color-surface-border)' }}>
           {debugLive ? (
             <DebugBar />
           ) : (
             <>
-              <ButtonView
-                size="sm" variant="primary" accentColor={ACCENT}
-                iconLeft={<PlayIcon size={IconSize.action} />}
-                disabled={!script || blocked || running}
-                loading={running}
-                onClick={onRun}
-                title={blocked ? verdict?.reason ?? 'Checking this container…' : 'Copy into the pod and run it'}
-              >
-                Run
-              </ButtonView>
-              {running && shown && (
-                <ButtonView size="sm" variant="ghost" iconLeft={<StopSquareIcon size={IconSize.action} />}
-                            onClick={() => stop(shown.runId)}>
-                  Stop
-                </ButtonView>
-              )}
-              <ButtonView
-                size="sm" variant="secondary"
-                iconLeft={<BugIcon size={IconSize.action} color={WARN} />}
-                disabled={!script || blocked || !!noFile || running || (!!debug && !debug.ended)}
-                onClick={onDebug}
-                title={noFile ? 'pdb needs a file, and nothing in this container is writable'
-                  : debug && !debug.ended ? 'A debugger is already running — stop it first'
-                    : 'Run under pdb, stopping at the gutter\'s breakpoints'}
-              >
-                Debug
-              </ButtonView>
-              <span className="w-px h-5 mx-1" style={{ background: 'var(--color-surface-border)' }} />
-              <span className="text-[11px]" style={{ color: MUTED }}>Container</span>
-              <SelectInputView
-                size="sm" value={container ?? ''} width={150}
-                options={containers.map(c => ({ value: c, label: c }))}
-                onChange={setLogContainer}
-                disabled={containers.length < 2}
-              />
-              <span className="text-[11px]" style={{ color: MUTED }}>Args</span>
-              <TextInputView
-                size="sm" value={args} placeholder="--pool --json" aria-label="Script arguments"
-                onChange={(e) => selectedId && setArgs(selectedId, e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !blocked && !running) onRun(); }}
-                inputStyle={{ fontFamily: 'var(--font-mono, ui-monospace, monospace)' }}
-                style={{ width: 180 }}
-              />
+              {script
+                ? <><ScriptTitle scriptId={script.id} /><ScriptSave scriptId={script.id} /></>
+                : <span className="text-[12px] px-2" style={{ color: MUTED }}>No script open</span>}
               <span className="flex-1" />
-              {path && (
-                <span className="text-[11px] flex items-center gap-1.5" style={{ color: MUTED }}>
-                  {shown?.path ? 'copied to' : 'copies to'}
-                  <code style={{ color: 'var(--color-text-secondary)' }}>{path}</code>
-                  {pyProbe?.base && pyProbe.base !== '/tmp' && (
-                    <BadgeChipView tone={WARN} size="xs" title="/tmp is read-only in this container">/tmp read-only</BadgeChipView>
-                  )}
-                </span>
-              )}
-              {!path && pyProbe?.verdict?.ok && (
-                <BadgeChipView tone={WARN} size="xs" title="Nothing in this container is writable">
-                  streamed on stdin
-                </BadgeChipView>
-              )}
               {myDebug?.ended && (
-                <span className="flex items-center gap-1" title={myDebug.ended}>
+                <span className="flex items-center gap-1 shrink-0" title={myDebug.ended}>
                   <BadgeChipView tone={myDebug.failed ? BAD : MUTED} size="xs">
                     debug {myDebug.failed ? 'failed' : 'ended'}
                   </BadgeChipView>
@@ -220,6 +177,52 @@ export function PythonTab() {
                                   tooltip="Dismiss" aria-label="Dismiss debug session" onClick={dismissDebug} />
                 </span>
               )}
+              {script && (
+                <RunSetup
+                  container={container}
+                  containers={containers}
+                  onContainer={setLogContainer}
+                  args={args}
+                  onArgs={(a) => selectedId && setArgs(selectedId, a)}
+                  onEnter={() => { if (!blocked && !running) onRun(); }}
+                  path={path}
+                  copied={!!shown?.path}
+                  tmpReadOnly={!!pyProbe?.base && pyProbe.base !== '/tmp'}
+                  streamed={!path && !!pyProbe?.verdict?.ok}
+                />
+              )}
+              <AskPyAi scriptId={script?.id} target={blocked ? undefined : target}
+                       pythonVersion={verdict?.version?.text} lastRun={shown} />
+              <ButtonView
+                size="md" variant="secondary"
+                iconLeft={<BugIcon size={IconSize.action} color={WARN} />}
+                disabled={!script || blocked || !!noFile || running || (!!debug && !debug.ended)}
+                onClick={onDebug}
+                title={noFile ? 'pdb needs a file, and nothing in this container is writable'
+                  : debug && !debug.ended ? 'A debugger is already running — stop it first'
+                    : 'Run under pdb, stopping at the gutter’s breakpoints'}
+              >
+                Debug
+              </ButtonView>
+              {running && shown ? (
+                <ButtonView size="md" variant="secondary" accentColor={BAD} color={BAD}
+                            iconLeft={<StopSquareIcon size={IconSize.action} />}
+                            onClick={() => stop(shown.runId)}>
+                  Stop
+                </ButtonView>
+              ) : (
+                /* Green like every other Run and Send in Daakia, tinted rather than filled. */
+                <ButtonView
+                  size="md" variant="secondary" accentColor={RUN} color={RUN}
+                  iconLeft={<PlayIcon size={IconSize.action} />}
+                  disabled={!script || blocked}
+                  onClick={onRun}
+                  title={blocked ? verdict?.reason ?? 'Checking this container…' : 'Copy into the pod and run it'}
+                >
+                  Run
+                </ButtonView>
+              )}
+              {script && <ScriptMenu scriptId={script.id} />}
             </>
           )}
         </div>
@@ -247,7 +250,6 @@ export function PythonTab() {
           </div>
         ) : (
           <>
-            <ScriptHeader scriptId={script.id} />
             <div className="flex-1 min-h-0">
               <SplitPanelView
                 direction="vertical"
@@ -255,7 +257,8 @@ export function PythonTab() {
                 minFirst={120}
                 minSecond={90}
                 accentColor={ACCENT}
-                first={<PyEditor scriptId={script.id} reveal={reveal} />}
+                first={<PyEditor scriptId={script.id} reveal={reveal}
+                                 target={blocked ? undefined : target} pythonVersion={verdict?.version?.text} />}
                 second={(
                   <PyBottomPanel
                     runs={myRuns}
@@ -279,10 +282,10 @@ export function PythonTab() {
         <PyDebugPanes scriptId={script?.id} scriptName={name} />
         <div className="flex-1" />
         {debugLive ? (
-          <div className="px-3 py-2.5 text-[10.5px] leading-relaxed"
-               style={{ borderTop: '1px solid var(--color-surface-border)', color: MUTED }}>
-            Stepping runs <code>python3 -m pdb</code> inside the container. Nothing is exposed on the
-            network. Ending the session kills the process and removes the copy from the pod.
+          <div className="text-[11px]"
+               style={{ padding: '10px 12px', lineHeight: 1.6, borderTop: '1px solid var(--color-surface-border)', color: MUTED }}>
+            Ending the session kills the process and removes{' '}
+            <span className="font-mono" style={{ color: 'var(--color-text-secondary)' }}>{pyProbe?.base ?? '/tmp'}/daakia/</span> from the pod.
           </div>
         ) : (
           <ThisPodPanel probe={pyProbe} execAllowed={access.exec} onRefresh={() => probe(target, true)} />

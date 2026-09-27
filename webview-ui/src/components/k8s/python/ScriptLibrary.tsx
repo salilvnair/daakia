@@ -8,11 +8,11 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import {
-  IconButtonView, SearchInputView, SettingsNavView, IconSize, type SettingsNavGroup,
+  IconButtonView, SearchInputView, IconSize,
 } from '@salilvnair/dui';
-import { PlusIcon, SearchIcon } from '../../../icons';
+import { PlusIcon, SearchIcon, FileTextIcon } from '../../../icons';
 import { usePyStore, ensurePyListener } from '../../../store/dk8s-python-store';
-import { filterScripts, groupScripts, relativeAge } from './py-view';
+import { filterScripts, groupScripts, relativeAge, PY_HEADER_HEIGHT } from './py-view';
 import { ACCENT } from '../tone';
 
 export function ScriptLibrary({ heading, footer, width = 208 }: {
@@ -33,7 +33,7 @@ export function ScriptLibrary({ heading, footer, width = 208 }: {
     if (!loaded) usePyStore.getState().loadScripts();
   }, [loaded]);
 
-  const groups: SettingsNavGroup[] = useMemo(() => {
+  const groups = useMemo(() => {
     const now = Date.now();
     const filed = scripts.some(s => !!s.folder);
     return groupScripts(filterScripts(scripts, query)).map(g => ({
@@ -42,11 +42,12 @@ export function ScriptLibrary({ heading, footer, width = 208 }: {
       title: g.folder ? g.folder.toUpperCase() : (filed ? 'UNFILED' : undefined),
       items: g.scripts.map(s => ({
         id: s.id,
+        name: drafts[s.id]?.name ?? s.name,
         /* An unsaved edit is marked on the row, not only in the editor: the
            library is where you go to switch scripts, and switching is when
            an unsaved edit is easiest to forget. */
-        label: drafts[s.id] ? `${drafts[s.id].name ?? s.name} •` : s.name,
-        badge: relativeAge(s.updatedAt, now) || undefined,
+        dirty: !!drafts[s.id],
+        age: relativeAge(s.updatedAt, now),
       })),
     }));
   }, [scripts, query, drafts]);
@@ -54,7 +55,8 @@ export function ScriptLibrary({ heading, footer, width = 208 }: {
   return (
     <div className="flex flex-col h-full min-h-0 flex-shrink-0"
          style={{ width, borderRight: '1px solid var(--color-surface-border)', background: 'var(--color-surface)' }}>
-      <div className="flex items-center justify-between px-3 pt-2.5 pb-1.5">
+      <div className="flex items-center justify-between px-3 flex-shrink-0"
+           style={{ height: PY_HEADER_HEIGHT, borderBottom: '1px solid var(--color-surface-border)' }}>
         <span className="text-[10.5px] font-bold tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
           {heading}
         </span>
@@ -65,7 +67,7 @@ export function ScriptLibrary({ heading, footer, width = 208 }: {
           onClick={() => newScript()}
         />
       </div>
-      <div className="px-2.5 pb-2">
+      <div className="px-2.5 py-2">
         <SearchInputView
           value={query} onChange={setQuery} placeholder="Search" size="sm"
           prefix={<SearchIcon size={IconSize.inline} />}
@@ -82,13 +84,35 @@ export function ScriptLibrary({ heading, footer, width = 208 }: {
             Nothing matches &ldquo;{query}&rdquo;.
           </div>
         ) : (
-          <SettingsNavView
-            groups={groups}
-            activeId={selectedId}
-            onSelect={select}
-            accentColor={ACCENT}
-            size="sm"
-          />
+          <div className="flex flex-col pb-2">
+            {groups.map((g, gi) => (
+              <div key={g.title ?? `g${gi}`} className="flex flex-col" style={{ gap: 1 }}>
+                {g.title && (
+                  <div className="text-[10px] font-bold" style={{ padding: gi ? '10px 6px 4px' : '4px 6px', letterSpacing: '0.06em', color: 'var(--color-text-muted)' }}>
+                    {g.title}
+                  </div>
+                )}
+                {g.items.map(it => {
+                  const on = it.id === selectedId;
+                  return (
+                    <button key={it.id} type="button" onClick={() => select(it.id)}
+                            className="py-lib-row flex items-center gap-2 w-full text-left cursor-pointer border-none rounded-md"
+                            style={{
+                              padding: '6px 8px', fontSize: 12.5,
+                              background: on ? `color-mix(in srgb, ${ACCENT} 16%, transparent)` : 'transparent',
+                              color: on ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                            }}>
+                      <FileTextIcon size={12} color={on ? ACCENT : 'var(--color-text-muted)'} />
+                      <span className="flex-1 truncate">{it.name}</span>
+                      {it.dirty && <span title="Unsaved" style={{ width: 6, height: 6, borderRadius: 6, background: 'var(--color-warning)', flexShrink: 0 }} />}
+                      {it.age && <span className="text-[10.5px] shrink-0" style={{ color: 'var(--color-text-muted)' }}>{it.age}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+            <style>{'.py-lib-row:hover { background: var(--color-surface-hover) }'}</style>
+          </div>
         )}
       </div>
       <div className="px-3 py-2.5 text-[10.5px] leading-relaxed"
