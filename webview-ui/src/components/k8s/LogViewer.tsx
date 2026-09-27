@@ -39,7 +39,7 @@ import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { buildFacets, filterTermFor } from './log-facets';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { logLineSettings, onLadder, tailLabel, contextLabel } from './log-settings';
-import { findPayload, payloadNote, type LogPayload } from './log-payload';
+import { findPayload, payloadNote, sentenceWithout, type LogPayload } from './log-payload';
 import { markOf, keepMarked, nextMarked, type MarkHit } from './logger-marks';
 import { useMarkIndex, MarkedBar, MarkMapStrip, MarkedRail, MarkedCount, MarkedJump } from './LogMarks';
 import { OUTLINE_BUTTON } from './asklog-tone';
@@ -2854,13 +2854,7 @@ export function LogViewer() {
  * that is nothing but its payload.
  */
 function sentenceOf(line: MatchedLine, payload: LogPayload | undefined): string {
-  const full = displayText(line);
-  if (!payload || payload.shape === 'yaml' || !payload.prefix) return full;
-  const at = full.indexOf(payload.source);
-  if (at < 0) return full;
-  if (line.hits?.some(([, to]) => to > at)) return full;
-  const after = full.slice(at + payload.source.length).trim();
-  return after ? `${full.slice(0, at).trimEnd()} ${after}` : full.slice(0, at).trimEnd();
+  return sentenceWithout(displayText(line), payload, at => !!line.hits?.some(([, to]) => to > at));
 }
 
 function ContainerChip({ name }: { name: string }) {

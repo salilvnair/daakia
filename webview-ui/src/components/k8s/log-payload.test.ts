@@ -1,5 +1,20 @@
 import { describe, it, expect } from 'vitest';
-import { findPayload, maskSecrets, isSecretKey, prettyXml, HIDDEN } from './log-payload';
+import { findPayload, maskSecrets, isSecretKey, prettyXml, HIDDEN, sentenceWithout } from './log-payload';
+
+describe('sentenceWithout — the line with its chip standing for the payload', () => {
+  const line = 'Sending request {"orderId":42,"amount":10} to billing';
+  const p = findPayload(line)!;
+  it('takes the payload out and keeps what came after it', () => {
+    expect(sentenceWithout(line, p)).toBe('Sending request to billing');
+  });
+  it('keeps the whole line when a search hit is inside the payload', () => {
+    expect(sentenceWithout(line, p, at => line.indexOf('orderId') > at)).toBe(line);
+  });
+  it('keeps a line that is nothing but its payload', () => {
+    const bare = '{"orderId":42}';
+    expect(sentenceWithout(bare, findPayload(bare))).toBe(bare);
+  });
+});
 
 describe('findPayload — JSON', () => {
   it('splits the sentence from the body', () => {

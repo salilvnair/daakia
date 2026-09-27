@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  threadOf, groupByThread, failureMatcher, maskForModel, toModelText, runDk8sSearch,
+  threadOf, groupByThread, failureMatcher, maskForModel, toModelText, runDk8sSearch, foldAndRead,
   type Dk8sSearchResult,
 } from './dk8s-search';
 import type { SearchMatch, SearchOptions } from '../../services/k8s/k8s-log-search';
@@ -191,6 +191,23 @@ describe('what leaves the machine', () => {
       .toBe('"card":{"last4":"4471","token":"••••••"}');
     expect(maskForModel('Authorization: Bearer abc.def.ghi')).toBe('Authorization: Bearer ••••••');
     expect(maskForModel('password=hunter2 user=salil')).toBe('password=•••••• user=salil');
+  });
+
+  it("carries a JSON line's MDC to the card, masked like the line", () => {
+    const text = JSON.stringify({
+      ts: '2026-09-23T09:15:06.749Z', level: 'error', logger: 'c.z.Pay', thread: 'exec-4',
+      msg: 'charge failed', traceId: 'abc123', token: 'tok_live_9Qa',
+    });
+    const [line] = foldAndRead([{ text, level: 'error', role: 'failure', n: 1 }]);
+    expect(line.fields?.traceId).toBe('abc123');
+    expect(line.fields?.token).toBe('••••••');
+    expect(JSON.stringify(line.fields)).not.toContain('tok_live_9Qa');
+    const model = toModelText({
+      query: 'abc123', around: 20, errors: [], truncated: false, elapsedMs: 5,
+      scanned: { pods: 1, lines: 1, archivePods: 0 },
+      groups: [{ pod: 'p', namespace: 'n', context: 'c', source: 'live', failures: 1, lines: [line] }],
+    });
+    expect(model).not.toContain('tok_live_9Qa');
   });
 
   it('tells the model plainly when nothing matched', () => {

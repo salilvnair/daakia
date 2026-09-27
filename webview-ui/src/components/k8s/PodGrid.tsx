@@ -36,7 +36,7 @@ import { logLineSettings } from './log-settings';
 import { useMetricsAuto, METRICS_AUTO_KEY } from '../settings/metrics-refresh';
 import { postMsg } from '../../vscode';
 import { HIDE_CRONJOBS_PREF } from '../settings/cronjob-visibility';
-import { useUiStateStore } from '../../store/ui-state-store';
+import { useUiStateStore, usePersistedPref } from '../../store/ui-state-store';
 import { ExportLogsModal } from './ExportLogsModal';
 import { LogSearchModal } from './LogSearchModal';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
@@ -226,6 +226,46 @@ function readable(ms: number): string {
  * reading there is nothing to put in them, and an empty column is worse than
  * no column.
  */
+/**
+ * Which pods the grid is about: the service's pods, the runs of its jobs, or
+ * both.
+ *
+ * A namespace with a CronJob firing every few minutes fills with finished
+ * runs — one pod each, Completed, never coming back — and they crowd out the
+ * pods somebody opened the grid to read. So the grid starts on Pod, and the
+ * runs are one click away under CronJob. The counts above follow it.
+ */
+type PodKind = 'all' | 'pod' | 'cronjob';
+const POD_KINDS: readonly PodKind[] = ['all', 'pod', 'cronjob'];
+const POD_KIND_PREF = 'dk8s.pods.kind';
+
+function isJobRun(p: PodSummary): boolean {
+  const k = p.workload?.kind;
+  return k === 'CronJob' || k === 'Job';
+}
+
+function ofKind(p: PodSummary, kind: PodKind): boolean {
+  return kind === 'all' ? true : kind === 'cronjob' ? isJobRun(p) : !isJobRun(p);
+}
+
+function PodKindControl() {
+  const [kind, setKind] = usePersistedPref<PodKind>(POD_KIND_PREF, 'pod', POD_KINDS);
+  return (
+    <SegmentedControlView
+      value={kind}
+      onChange={v => setKind(v as PodKind)}
+      options={[
+        { value: 'all', label: 'All' },
+        { value: 'pod', label: 'Pod' },
+        { value: 'cronjob', label: 'CronJob' },
+      ]}
+      size="md"
+      variant="rounded"
+      accentColor={ACCENT}
+    />
+  );
+}
+
 function UsageControl() {
   const live = useMetricsAuto();
   const setPref = useUiStateStore(s => s.setPref);
@@ -360,6 +400,7 @@ function Pulse({ pods }: { pods: PodSummary[] }) {
       {/* When it was read, beside the controls that read it — the right-hand
           end of the row, where the things you act on live. */}
       <WatchIndicator />
+      <PodKindControl />
       <UsageControl />
       {/*
         Searching across pods, where the pods are.
@@ -1044,6 +1085,11 @@ export function PodGrid() {
     toggleSelectMode, selectAllVisible, openExport, closeExport,
   } = useK8sStore();
 
+  /* The kind picked beside refresh — Pod by default, so a CronJob's finished
+     runs do not crowd out the service's own pods. */
+  const [podKind] = usePersistedPref<PodKind>(POD_KIND_PREF, 'pod', POD_KINDS);
+  const kindPods = useMemo(() => pods.filter(p => ofKind(p, podKind)), [pods, podKind]);
+
   /*
     ── When to stop waiting ──
 
@@ -1210,13 +1256,13 @@ export function PodGrid() {
   const splitPrefs = useUiStateStore(s2 => s2.prefs);
   const lineSettings = useMemo(() => logLineSettings(splitPrefs), [splitPrefs]);
   const visible = useMemo(() => {
-    const matched = pods.filter(p => matchesFilter(p, filter));
+    const matched = kindPods.filter(p => matchesFilter(p, filter));
     const scoped = scope === 'fav'
       ? matched.filter(p => favKeys.includes(favoriteKey(p)))
       : matched;
     const narrowed = scoped.filter(p => matchesPodFilter(p, podFilter));
     return favoritesFirst(sortPods(narrowed, now), favKeys);
-  }, [pods, filter, now, scope, favKeys, podFilter]);
+  }, [kindPods, filter, now, scope, favKeys, podFilter]);
 
   /*
     What the facets get to choose from.
@@ -1226,11 +1272,11 @@ export function PodGrid() {
     or each facet would only ever offer the value already chosen.
   */
   const filterable = useMemo(() => {
-    const matched = pods.filter(p => matchesFilter(p, filter));
+    const matched = kindPods.filter(p => matchesFilter(p, filter));
     return scope === 'fav'
       ? matched.filter(p => favKeys.includes(favoriteKey(p)))
       : matched;
-  }, [pods, filter, scope, favKeys]);
+  }, [kindPods, filter, scope, favKeys]);
 
   const chips = useMemo(() => filterChips(podFilter), [podFilter]);
   const filterOn = !isEmptyFilter(podFilter);
@@ -1272,7 +1318,7 @@ export function PodGrid() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-      <Pulse pods={pods} />
+      <Pulse pods={kindPods} />
 
       <div className="flex items-center gap-2 px-4 py-2 flex-shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
@@ -1864,7 +1910,25 @@ export function PodGrid() {
                                   collapsed={collapsed.has(groupKey(g))}
                                   onToggle={() => toggle(groupKey(g))} />
             ))}
-            {!visible.length && (
+            {!kindPods.length ? (
+              /* Pods, just none of the kind picked beside refresh — said as
+                 that, with the way back, not as a search that found nothing. */
+              <div className="grid place-items-center px-8 py-10">
+                <EmptyStateView
+                  variant="medallion"
+                  icon={<LayersIcon size={IconSize.medallion} />}
+                  title={podKind === 'cronjob' ? 'No CronJob runs' : 'Only CronJob runs here'}
+                  message={podKind === 'cronjob'
+                    ? 'None of the pods in the namespaces being watched were started by a CronJob or Job.'
+                    : `All ${pods.length} pods in the namespaces being watched were started by a CronJob or Job.`}
+                  accentColor={MUTED}
+                  action={{
+                    label: 'Show all pods',
+                    onClick: () => useUiStateStore.getState().setPref(POD_KIND_PREF, 'all'),
+                  }}
+                />
+              </div>
+            ) : !visible.length && (
               /* The filter is echoed in the match colour, so the reader can
                  see the typo without looking back up at the box. */
               <div className="grid place-items-center px-8 py-10">

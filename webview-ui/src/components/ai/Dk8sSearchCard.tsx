@@ -13,7 +13,11 @@
  *
  * Lines are drawn the way the Logs tab draws them — time, level, message —
  * and wrap: a payload line is the one most worth reading, and a card that
- * scrolls sideways hides exactly that one.
+ * scrolls sideways hides exactly that one. The same chips sit on the same
+ * rows: a payload is a chip that opens as Tree / Pretty / Raw, a line that
+ * names anything has `fields`, a stack trace folds its frames — and all of
+ * them follow the Logs settings, so the card and the tab never disagree
+ * about what a line holds.
  */
 import { useMemo, useRef, useState } from 'react';
 import { MdViewer } from '../shared/display/MdViewer';
@@ -26,6 +30,15 @@ import { prefill } from './ai-chat-actions';
 import { KubectlRunCard, isKubectlResult, type KubectlRunResult } from './KubectlRunCard';
 import { ButtonView, IconButtonView, SegmentedControlView, ChipView } from '@salilvnair/dui';
 import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
+import { findPayload, sentenceWithout, type LogPayload } from '../k8s/log-payload';
+import { usePayloadPrefs } from '../k8s/log-payload-prefs';
+import { LogPayloadView } from '../k8s/LogPayloadView';
+import { LineFieldsView } from '../k8s/LineFieldsView';
+import { LogSourceProvider, type LogSource } from '../k8s/log-source';
+import { readFields } from '../k8s/field-readers';
+import { useFieldReaders } from '../k8s/follow-prefs';
+import { ACCENT } from '../k8s/tone';
+import type { LogLine, LogLevel } from '../../store/k8s-store';
 
 const DK8S = 'var(--color-ai-accent, #D97757)';
 const MONO = 'ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace';
@@ -54,6 +67,8 @@ interface ResultLine {
   alarm?: boolean;
   msg?: string;
   logger?: string;
+  /** MDC a structured layout carried, masked on the host. */
+  fields?: Record<string, string>;
   frames?: string[];
   /** `text` with credentials masked, for a line no layout reads. */
   masked?: string;
@@ -469,18 +484,21 @@ function GroupView({ group }: { group: ThreadGroup }) {
       /* The file lives inside the pod: the Explorer opens on its folder, with the file picked out. */
       const pod = k8s.pods.find(p => p.name === group.pod && p.namespace === group.namespace && (p.context ?? '') === group.context);
       if (!pod) { podGone(); return; }
+      /* Back from the pod returns to this conversation. */
+      const from = { kind: 'app' as const, tabId: useTabsStore.getState().activeTabId };
       useTabsStore.getState().openDk8sTab();
       k8s.openExplorerAt({ path: group.file.slice(0, group.file.lastIndexOf('/')) || '/', highlight: group.file });
-      k8s.openDetail(pod);
+      k8s.openDetail(pod, { from });
       /* openDetail brings back the tab last read on that pod — the Explorer is asked for after it. */
-      useK8sStore.getState().setDetailTab('explorer');
+      useK8sStore.getState().setDetailTab('explorer', { noHistory: true });
       return;
     }
+    const from = { kind: 'app' as const, tabId: useTabsStore.getState().activeTabId };
     useTabsStore.getState().openDk8sTab();
     const how = k8s.openPodLink({
       context: group.context, namespace: group.namespace, pod: group.pod,
       ts: anchor.ts, text: anchor.text,
-    });
+    }, { from });
     if (how === 'no-pod') podGone();
   };
 
@@ -495,10 +513,11 @@ function GroupView({ group }: { group: ThreadGroup }) {
 
   const openReplacement = (pod: string) => {
     if (!anchor) return;
+    const from = { kind: 'app' as const, tabId: useTabsStore.getState().activeTabId };
     useTabsStore.getState().openDk8sTab();
     useK8sStore.getState().openPodLink({
       context: group.context, namespace: group.namespace, pod, ts: anchor.ts, text: anchor.text,
-    });
+    }, { from });
   };
 
   const copyLink = async () => {
@@ -512,6 +531,29 @@ function GroupView({ group }: { group: ThreadGroup }) {
   };
 
   const fileName = group.file?.split('/').pop();
+
+  /*
+    What the fields box under a line reads. On the Logs tab it counts the
+    pod's buffer and Follow filters it; here the buffer is this thread's lines,
+    and Follow opens the pod's Logs at this line with that filter on — the one
+    place a filter can do what it says.
+  */
+  const logLines = useMemo(() => group.lines.map((l, i) => asLogLine(l, i, group.thread)), [group.lines, group.thread]);
+  const source = useMemo((): LogSource => ({
+    ...(useK8sStore.getState() as unknown as LogSource),
+    logs: logLines,
+    addFieldFilter: f => {
+      const k8s = useK8sStore.getState();
+      const from = { kind: 'app' as const, tabId: useTabsStore.getState().activeTabId };
+      useTabsStore.getState().openDk8sTab();
+      const how = k8s.openPodLink({
+        context: group.context, namespace: group.namespace, pod: group.pod, ts: anchor?.ts, text: anchor?.text ?? '',
+      }, { from });
+      if (how === 'no-pod') { podGone(); return; }
+      useK8sStore.getState().addFieldFilter(f);
+    },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [logLines, group, anchor]);
 
   return (
     <div style={{ padding: '10px 16px 8px' }}>
@@ -553,7 +595,11 @@ function GroupView({ group }: { group: ThreadGroup }) {
         {hiddenBefore > 0 && (
           <FoldButton onClick={() => setExpanded(true)}>··· {plural(hiddenBefore, 'earlier line')} on this thread</FoldButton>
         )}
-        {shown.map((line, i) => <LineRow key={i} line={line} />)}
+        <LogSourceProvider value={source}>
+          {shown.map((line, i) => (
+            <LineRow key={i} line={line} logLine={logLines[group.lines.indexOf(line)]} pod={group.pod} />
+          ))}
+        </LogSourceProvider>
         {hiddenAfter > 0 && (
           <FoldButton onClick={() => setExpanded(true)}>··· {plural(hiddenAfter, 'later line')} on this thread</FoldButton>
         )}
@@ -598,13 +644,72 @@ function levelLabel(level: string): string {
   return l === 'warning' ? 'WARN' : l.toUpperCase();
 }
 
-function LineRow({ line }: { line: ResultLine }) {
+/** A result line as the Logs tab's views read one. */
+function asLogLine(l: ResultLine, seq: number, thread?: string): LogLine {
+  const level = l.level.toLowerCase();
+  return {
+    seq, ts: l.ts,
+    level: (level === 'warning' ? 'warn' : level === 'fatal' ? 'error' : level) as LogLevel,
+    text: l.masked ?? l.text,
+    ...(l.msg !== undefined ? { message: l.msg } : {}),
+    ...(l.logger ? { logger: l.logger } : {}),
+    ...(thread ? { thread } : {}),
+    ...(l.fields ? { fields: l.fields } : {}),
+  };
+}
+
+/** The Logs tab's row chip: a small tinted button with a chevron, the same size beside its neighbours. */
+function RowChip({ open, tone, onClick, title, children }: {
+  open: boolean; tone: string; onClick: () => void; title: string; children: React.ReactNode;
+}) {
+  return (
+    <button type="button" onClick={onClick} title={title}
+            className="shrink-0 flex items-center gap-1 px-1.5 rounded cursor-pointer border-none self-start"
+            style={{
+              marginTop: 2.5,
+              background: tone === 'muted' ? 'var(--color-surface-hover)' : `color-mix(in srgb, ${tone} 16%, transparent)`,
+              color: tone === 'muted' ? 'var(--color-text-muted)' : tone,
+              fontFamily: 'var(--font-sans, system-ui)', fontSize: 10, lineHeight: '15px', whiteSpace: 'nowrap',
+            }}>
+      <ChipChevron open={open} />
+      {children}
+    </button>
+  );
+}
+
+function ChipChevron({ open }: { open: boolean }) {
+  return (
+    <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"
+         strokeLinecap="round" strokeLinejoin="round" aria-hidden
+         style={{ transform: open ? 'rotate(90deg)' : undefined, transition: 'transform 120ms' }}>
+      <path d="M6 3l5 5-5 5" />
+    </svg>
+  );
+}
+
+function LineRow({ line, logLine, pod }: { line: ResultLine; logLine: LogLine; pod: string }) {
   const [framesOpen, setFramesOpen] = useState(false);
+  const [payloadOpen, setPayloadOpen] = useState<boolean>();
+  const [fieldsOpen, setFieldsOpen] = useState(false);
+  const prefs = usePayloadPrefs();
+  const readers = useFieldReaders();
   const failure = line.role === 'failure';
   const hit = line.role === 'hit';
   const time = line.ts !== undefined ? new Date(line.ts).toISOString().slice(11, 23) : '';
   const level = levelLabel(line.level);
   const parsed = line.msg !== undefined;
+  const full = parsed ? line.msg! : line.masked ?? line.text;
+
+  /* The payload, found the way the Logs tab finds it and under its settings — off there, off here. */
+  const payload: LogPayload | undefined = useMemo(
+    () => prefs.shapes.length ? findPayload(full, { shapes: prefs.shapes, maxChars: prefs.maxChars }) : undefined,
+    [full, prefs.shapes, prefs.maxChars],
+  );
+  const sentence = sentenceWithout(full, payload);
+  /* "Collapsed" in the Logs settings means a payload is a chip until clicked; off, it is drawn open. */
+  const showPayload = payload ? (payloadOpen ?? !prefs.collapsed) : false;
+  const hasFields = Object.keys(line.fields ?? {}).length > 0 || payload?.value !== undefined
+    || readFields(logLine, readers).length > 0;
 
   const color = failure ? 'color-mix(in srgb, var(--color-error) 22%, var(--color-text-primary))'
     : hit ? 'var(--color-text-primary)'
@@ -625,29 +730,60 @@ function LineRow({ line }: { line: ResultLine }) {
     >
       <div className="flex" style={{ gap: 10 }}>
         <span className="shrink-0 select-none" style={{ width: 28, color: DK8S, fontWeight: 600 }}>{line.n ? `[${line.n}]` : ''}</span>
-        {parsed ? (
+        {parsed && (
           <>
             <span className="shrink-0" style={{ color: failure || hit ? 'var(--color-text-secondary)' : C.dim, fontVariantNumeric: 'tabular-nums' }}>{time}</span>
             <span className="shrink-0" style={{ width: 44, color: LEVEL_COLOR[line.level.toLowerCase()] ?? C.dim, fontWeight: failure ? 600 : 400 }}>{level}</span>
-            <span className="flex-1 min-w-0" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontWeight: failure ? 600 : 400,
-                                                     color: line.alarm && !failure ? 'color-mix(in srgb, var(--color-error) 55%, var(--color-text-muted))' : undefined }}>
-              {line.msg}
-            </span>
           </>
-        ) : (
-          <span className="flex-1 min-w-0" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{line.masked ?? line.text}</span>
         )}
-        {line.frames?.length ? (
-          <span className="shrink-0 self-start" style={{ marginTop: 1, fontFamily: 'var(--font-sans, inherit)' }}>
-            <ChipView size="xs" label={framesOpen ? 'hide frames' : plural(line.frames.length, 'frame')}
-                      active={framesOpen} color={DK8S} onClick={() => setFramesOpen(o => !o)}
-                      title={framesOpen ? 'Hide the stack frames' : 'Show the stack frames under this line'} />
+        <span className="flex-1 min-w-0 flex flex-wrap items-start" style={{ columnGap: 6, rowGap: 2 }}>
+          <span className="min-w-0" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontWeight: failure ? 600 : 400,
+                                              color: line.alarm && !failure ? 'color-mix(in srgb, var(--color-error) 55%, var(--color-text-muted))' : undefined }}>
+            {sentence}
           </span>
-        ) : null}
+          {/* The chips the Logs tab puts on the same row, in the same order. */}
+          {line.frames?.length ? (
+            <RowChip open={framesOpen} tone="muted" onClick={() => setFramesOpen(o => !o)}
+                     title={framesOpen ? 'Fold the stack frames' : 'Show the stack frames under this line'}>
+              {plural(line.frames.length, 'frame')}
+            </RowChip>
+          ) : null}
+          {payload && (
+            <RowChip open={showPayload} tone={ACCENT} onClick={() => setPayloadOpen(!showPayload)}
+                     title={showPayload ? 'Fold this payload back into the line' : `Draw this ${payload.shape.toUpperCase()} payload`}>
+              {payload.shape.toUpperCase()} · {payload.summary}
+            </RowChip>
+          )}
+          {hasFields && (
+            <RowChip open={fieldsOpen} tone="muted" onClick={() => setFieldsOpen(o => !o)}
+                     title={fieldsOpen ? 'Hide the fields' : 'What this line names, and what to follow'}>
+              fields
+            </RowChip>
+          )}
+        </span>
       </div>
       {framesOpen && line.frames && (
         <div style={{ margin: '2px 0 4px 38px', paddingLeft: 10, borderLeft: `1px solid ${C.border}`, color: C.dim, fontSize: 11 }}>
           {line.frames.map((f, i) => <div key={i} style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{f}</div>)}
+        </div>
+      )}
+      {/* Under the message, the way the Logs tab indents them — the card's gutter is the [n] column. */}
+      {fieldsOpen && (
+        <div style={{ fontFamily: 'var(--font-sans, system-ui)' }}>
+          <LineFieldsView line={logLine} payload={payload} indent={38} />
+        </div>
+      )}
+      {payload && showPayload && (
+        <div style={{ fontFamily: 'var(--font-sans, system-ui)' }}>
+          <LogPayloadView
+            payload={payload}
+            mode={prefs.mode}
+            depth={prefs.depth}
+            hideSecrets={prefs.hideSecrets}
+            keepRaw={prefs.keepRaw}
+            indent={38}
+            title={[line.logger, time || undefined, pod].filter(Boolean).join(' · ')}
+          />
         </div>
       )}
     </div>

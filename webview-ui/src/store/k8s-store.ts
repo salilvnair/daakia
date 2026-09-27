@@ -246,6 +246,24 @@ export interface ContainerSummary {
   lastReason?: string;
 }
 
+/** The same pod — by name, namespace and cluster, never by uid, which a restart keeps but a rename does not. */
+function samePod(a: { name: string; namespace: string; context?: string }, b: { name: string; namespace: string; context?: string }): boolean {
+  return a.name === b.name && a.namespace === b.namespace && (a.context ?? '') === (b.context ?? '');
+}
+
+/**
+ * A place Back can return to.
+ *
+ * `pod` — a pod, on one of its tabs; `pods` — the grid; `search` — the log
+ * search results the pod was opened from; `app` — another Daakia tab (Daakia
+ * AI's "Open in dk8s") that sent the reader here.
+ */
+export type NavEntry =
+  | { kind: 'pod'; pod: PodSummary; tab: DetailTab }
+  | { kind: 'pods' }
+  | { kind: 'search' }
+  | { kind: 'app'; tabId: string };
+
 export interface PodSummary {
   name: string;
   namespace: string;
@@ -673,12 +691,18 @@ interface K8sState {
   detail?: PodSummary;
   detailTab: DetailTab;
   /**
-   * The tab that sent the reader to this one — Ask the log's cited line opens
-   * Logs, and Back should return to the answer, not to the pod list. Set only
-   * by a tab that hands over (`setDetailTab(tab, { from })`); choosing a tab
-   * yourself clears it.
+   * Where Back goes, newest last: every move records the place it left — a
+   * pod's tab, another pod, the grid, the search results, another Daakia tab
+   * — so Back walks the way the reader came, not straight to the pod grid.
    */
-  detailReturnTab?: DetailTab;
+  navBack: NavEntry[];
+  pushNav: (entry: NavEntry) => void;
+  /**
+   * Take the newest place off the history and go there. A pod or the grid is
+   * opened here; `search` and `app` are returned for the caller to open, since
+   * they live in other stores.
+   */
+  popNav: () => NavEntry | undefined;
   /**
    * Where the Explorer should open, when something already knows.
    *
@@ -837,7 +861,12 @@ interface K8sState {
   setFilter: (v: string) => void;
   setView: (v: 'cards' | 'table') => void;
   selectPod: (name?: string) => void;
-  openDetail: (pod: PodSummary) => void;
+  /**
+   * Open a pod. The place being left goes on the Back history — or `from`,
+   * when the caller knows better (a search result, another Daakia tab);
+   * `noHistory` for Back itself.
+   */
+  openDetail: (pod: PodSummary, opts?: { from?: NavEntry; noHistory?: boolean }) => void;
   /**
    * Open a pod somebody sent you a link to, and find the line they meant.
    *
@@ -846,14 +875,15 @@ interface K8sState {
    * here but the line has rotated out of the window; the pod is not here at
    * all. Silently opening the nearest thing would be the worst of them.
    */
-  openPodLink: (t: LogTarget) => 'opened' | 'no-line' | 'no-pod';
+  openPodLink: (t: LogTarget, opts?: { from?: NavEntry }) => 'opened' | 'no-line' | 'no-pod';
   /** The line a link asked for, once it has been found in the log. */
   linkedLine?: { seq: number; text: string };
   /** What a link is still waiting to find, once its log arrives. */
   pendingLink?: LogTarget;
   clearLinkedLine: () => void;
   closeDetail: () => void;
-  setDetailTab: (tab: DetailTab, opts?: { from?: DetailTab }) => void;
+  /** Switch the pod's tab; the tab left goes on the Back history unless `noHistory`. */
+  setDetailTab: (tab: DetailTab, opts?: { noHistory?: boolean }) => void;
   setExplorerPath: (path?: string) => void;
   openExplorerAt: (a: { path?: string; highlight?: string; fromSearch?: boolean }) => void;
   clearExplorerHighlight: () => void;
@@ -1125,7 +1155,31 @@ export const useK8sStore = create<K8sState>((set, get) => ({
 
   clearExplorerHighlight: () => set({ explorerHighlight: undefined }),
 
-  openDetail: (pod) => {
+  navBack: [],
+  pushNav: (entry) => set(s => ({ navBack: [...s.navBack, entry].slice(-40) })),
+  popNav: () => {
+    const list = get().navBack;
+    const top = list[list.length - 1];
+    if (!top) return undefined;
+    set({ navBack: list.slice(0, -1) });
+    if (top.kind === 'pod') {
+      const cur = get().detail;
+      if (!cur || !samePod(cur, top.pod)) get().openDetail(top.pod, { noHistory: true });
+      get().setDetailTab(top.tab, { noHistory: true });
+    } else if (top.kind === 'pods') {
+      get().closeDetail();
+    }
+    return top;
+  },
+
+  openDetail: (pod, opts) => {
+    if (!opts?.noHistory) {
+      const cur = get().detail;
+      if (opts?.from) get().pushNav(opts.from);
+      else if (!cur || !samePod(cur, pod)) {
+        get().pushNav(cur ? { kind: 'pod', pod: cur, tab: get().detailTab } : { kind: 'pods' });
+      }
+    }
     // Reset every per-pod field. Carrying the last pod's logs into this one's
     // panel for the moment before the first frame arrives is the kind of bug
     // that gets someone reading the wrong pod's stack trace.
@@ -1181,18 +1235,19 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   },
 
   closeDetail: () => {
-    set({ detailReturnTab: undefined });
     postMsg({ type: 'dk8s:closeLogs' });
     set({ detail: undefined, logs: [], logStatus: 'idle', logSelection: undefined });
   },
 
   setDetailTab: (detailTab, opts) => {
     const pod = get().detail;
+    const left = get().detailTab;
+    if (pod && !opts?.noHistory && left !== detailTab) get().pushNav({ kind: 'pod', pod, tab: left });
     if (pod) {
       useUiStateStore.getState()
         .setScopedPref(DETAIL_TAB_PREF, `${pod.namespace}/${pod.name}`, detailTab);
     }
-    set({ detailTab, detailReturnTab: opts?.from !== detailTab ? opts?.from : undefined });
+    set({ detailTab });
 
     /*
       The screens that need to look inside the container ask when they open.
@@ -1505,7 +1560,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     tab is set after it rather than before — the same ordering the context
     menu's other destinations use.
   */
-  openPodLink: (t) => {
+  openPodLink: (t, opts) => {
     const pod = get().pods.find(
       p => p.name === t.pod && p.namespace === t.namespace
         && (!t.context || (p.context ?? '') === t.context),
@@ -1517,7 +1572,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     */
     if (!pod) return 'no-pod';
 
-    get().openDetail(pod);
+    get().openDetail(pod, { from: opts?.from });
     set({ detailTab: 'logs', linkedLine: undefined, pendingLink: undefined });
     if (t.ts === undefined && !t.text) return 'opened';
 

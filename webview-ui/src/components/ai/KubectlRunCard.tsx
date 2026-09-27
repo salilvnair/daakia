@@ -64,8 +64,10 @@ export function KubectlRunCard({ result }: { result: KubectlRunResult }) {
       : { label: `failed · exit ${result.code ?? '?'}`, color: 'var(--color-error)' };
 
   const openPod = (pod: string) => {
+    /* Back from the pod returns to this conversation. */
+    const from = { kind: 'app' as const, tabId: useTabsStore.getState().activeTabId };
     useTabsStore.getState().openDk8sTab();
-    useK8sStore.getState().openPodLink({ context: result.context, namespace: result.namespace, pod });
+    useK8sStore.getState().openPodLink({ context: result.context, namespace: result.namespace, pod }, { from });
   };
 
   return (

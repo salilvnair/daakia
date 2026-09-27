@@ -245,6 +245,22 @@ function unquote(raw: string): string {
  * wants the four lines they can already almost read. Every character of the
  * original survives — this only decides where the newlines go.
  */
+/**
+ * The line as a sentence: the payload taken out, since the chip beside it
+ * stands for it. `keepFrom` is where the first search hit starts — a hit
+ * inside the payload keeps the whole line, because a match the reader cannot
+ * see is a match they will think is wrong. A line that is nothing but its
+ * payload keeps it too.
+ */
+export function sentenceWithout(full: string, payload: LogPayload | undefined, keepFrom?: (at: number) => boolean): string {
+  if (!payload || payload.shape === 'yaml' || !payload.prefix) return full;
+  const at = full.indexOf(payload.source);
+  if (at < 0) return full;
+  if (keepFrom?.(at)) return full;
+  const after = full.slice(at + payload.source.length).trim();
+  return after ? `${full.slice(0, at).trimEnd()} ${after}` : full.slice(0, at).trimEnd();
+}
+
 export function prettyXml(source: string): string[] {
   const parts = source.replace(/>\s*</g, '>\n<').split('\n');
   const out: string[] = [];

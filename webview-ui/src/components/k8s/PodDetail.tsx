@@ -16,6 +16,7 @@ import { usePatternsFor, useLoggersFor } from '../../store/dk8s-logger-store';
 import { LOGGERS } from './tone';
 import { CopyButtonView, IconSize, TableSkeletonView } from '@salilvnair/dui';
 import { useK8sStore, type DetailTab } from '../../store/k8s-store';
+import { useTabsStore } from '../../store/tabs-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { severityOf, severityColor, shortAge, restartLabel } from './pod-view';
@@ -243,16 +244,33 @@ export function PodDetail() {
   const access = useK8sStore(s => s.access);
   const cameFromSearch = useDk8sSearchStore(s => s.cameFromSearch);
   const returnToSearch = useDk8sSearchStore(s => s.returnToSearch);
-  /* A tab that handed the reader over — Ask the log to Logs — gets them back first. */
-  const returnTab = useK8sStore(s => s.detailReturnTab);
+  /* Back walks the way the reader came — see `navBack`. */
+  const navTop = useK8sStore(s => s.navBack[s.navBack.length - 1]);
+  const appTabs = useTabsStore(s => s.tabs);
   const goBack = useCallback(() => {
-    if (returnTab && returnTab !== detailTab) {
-      setDetailTab(returnTab);
-      return;
+    for (;;) {
+      const entry = useK8sStore.getState().popNav();
+      if (!entry) {
+        closeDetail();
+        if (cameFromSearch) returnToSearch();
+        return;
+      }
+      if (entry.kind === 'search') { closeDetail(); returnToSearch(); return; }
+      if (entry.kind === 'app') {
+        const tabs = useTabsStore.getState();
+        if (tabs.tabs.some(t => t.id === entry.tabId)) { tabs.setActiveTab(entry.tabId); return; }
+        continue; /* that Daakia tab has since been closed — the place before it */
+      }
+      return; /* a pod or the grid — popNav opened it */
     }
-    closeDetail();
-    if (cameFromSearch) returnToSearch();
-  }, [returnTab, detailTab, setDetailTab, closeDetail, cameFromSearch, returnToSearch]);
+  }, [closeDetail, cameFromSearch, returnToSearch]);
+  const backTitle = !navTop ? (cameFromSearch ? 'Back to search results' : 'Back to pods')
+    : navTop.kind === 'pods' ? 'Back to pods'
+    : navTop.kind === 'search' ? 'Back to search results'
+    : navTop.kind === 'app' ? `Back to ${appTabs.find(t => t.id === navTop.tabId)?.name ?? 'the previous tab'}`
+    : detail && navTop.pod.name === detail.name && navTop.pod.namespace === detail.namespace
+      ? `Back to ${TAB_NAME[navTop.tab]}`
+      : `Back to ${navTop.pod.name} · ${TAB_NAME[navTop.tab]}`;
 
   const aiOpen = useDk8sAiStore(s => s.open);
   const openAi = useDk8sAiStore(s => s.openPanel);
@@ -299,8 +317,7 @@ export function PodDetail() {
              background: `linear-gradient(to right, color-mix(in srgb, ${color} 8%, transparent), transparent 60%)`,
            }}>
         <button type="button" onClick={goBack}
-                title={returnTab && returnTab !== detailTab ? `Back to ${TAB_NAME[returnTab]}`
-                  : cameFromSearch ? 'Back to search results' : 'Back to pods'}
+                title={backTitle}
                 className="p-1 rounded cursor-pointer border-none bg-transparent">
           <ChevronLeftIcon size={IconSize.nav} color="var(--color-text-secondary)" />
         </button>

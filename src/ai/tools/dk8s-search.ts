@@ -153,6 +153,13 @@ export interface ResultLine {
    */
   msg?: string;
   logger?: string;
+  /**
+   * What a structured layout carried beside the message — MDC, in practice:
+   * `traceId`, `orderId`, `tenant`. Values masked like the message. The card
+   * offers them the way the Logs tab does, under the line's `fields` chip;
+   * the model reads the line itself (see `toModelText`), not this.
+   */
+  fields?: Record<string, string>;
   /** Stack frames and continuations that belong to this line, folded under it. */
   frames?: string[];
   /**
@@ -226,12 +233,17 @@ export function threadOf(text: string): string | undefined {
 }
 
 /** The line read through the first known layout that reads it. */
-export function readLine(text: string): { ts?: number; message: string; logger?: string } | undefined {
+export function readLine(text: string): {
+  ts?: number; message: string; logger?: string; fields?: Record<string, string>;
+} | undefined {
   compiled ??= BUILTIN_FORMATS.map(f => compileFormat(f));
   for (const format of compiled) {
     const parsed = format.parse(text);
     if (parsed && (parsed.thread || parsed.logger || parsed.ts)) {
-      return { ts: parsed.ts, message: parsed.message, logger: parsed.logger };
+      return {
+        ts: parsed.ts, message: parsed.message, logger: parsed.logger,
+        ...(parsed.fields && Object.keys(parsed.fields).length ? { fields: parsed.fields } : {}),
+      };
     }
   }
   return undefined;
@@ -259,6 +271,7 @@ export function foldAndRead(lines: ResultLine[]): ResultLine[] {
     out.push(read ? {
       ...line, ts: line.ts ?? read.ts, msg: maskForModel(read.message.trim()),
       ...(read.logger ? { logger: read.logger } : {}),
+      ...(read.fields ? { fields: maskFields(read.fields) } : {}),
     } : { ...line, ...(masked !== line.text ? { masked } : {}) });
   }
   return out;
@@ -292,6 +305,16 @@ export function failureMatcher(spec?: string): RegExp {
  * is sent to the model is masked.
  */
 const SECRET = /((?:"|')?(?:token|password|passwd|secret|authorization|api[_-]?key|cookie)(?:"|')?\s*[:=]\s*(?:"|')?(?:Bearer\s+)?)([^\s"',}]+)/gi;
+
+/** A line's MDC, masked the way its message is — by key as well as by value, since `password=…` is the key's doing. */
+function maskFields(fields: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(fields)) {
+    const byKey = maskForModel(`${k}=${v}`);
+    out[k] = byKey === `${k}=${v}` ? maskForModel(v) : byKey.slice(k.length + 1);
+  }
+  return out;
+}
 
 export function maskForModel(text: string): string {
   return text.replace(SECRET, '$1••••••');

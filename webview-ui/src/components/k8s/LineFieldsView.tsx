@@ -32,10 +32,12 @@ import { copyText } from '../../utils/clipboard';
 import { ACCENT } from './tone';
 import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
-export function LineFieldsView({ line, payload, mark }: {
+export function LineFieldsView({ line, payload, mark, indent = 92 }: {
   line: LogLine;
   payload?: LogPayload;
   mark?: MarkHit;
+  /** How far in the box sits: under the message on a Logs row, less on a narrower card. */
+  indent?: number;
 }) {
   const { logs, addFieldFilter } = useLogSource();
   const searchEverywhere = useDk8sSearchStore(s => s.searchEverywhere);
@@ -55,8 +57,9 @@ export function LineFieldsView({ line, payload, mark }: {
 
   if (!fields.length) {
     return (
-      <div className="my-1 ml-[92px] px-2.5 py-2 rounded-md text-[11px]"
+      <div className="my-1 px-2.5 py-2 rounded-md text-[11px]"
            style={{
+             marginLeft: indent,
              border: '1px solid var(--color-surface-border)',
              background: 'var(--color-elevated, var(--color-panel))',
              color: 'var(--color-text-muted)',
@@ -68,8 +71,9 @@ export function LineFieldsView({ line, payload, mark }: {
   }
 
   return (
-    <div className="my-1 ml-[92px] rounded-md overflow-hidden"
+    <div className="my-1 rounded-md overflow-hidden"
          style={{
+           marginLeft: indent,
            border: '1px solid var(--color-surface-border)',
            borderLeft: `2px solid ${ACCENT}`,
            background: 'var(--color-elevated, var(--color-panel))',
