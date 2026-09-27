@@ -28,7 +28,7 @@
  * deliberate: a pattern that is wrong here costs a highlight, not a stream.
  */
 
-export type PatternSource = 'paste' | 'line' | 'scan' | 'manual';
+export type PatternSource = 'paste' | 'line' | 'scan' | 'manual' | 'regex';
 
 export interface LoggerPattern {
   /** The message with its holes named: `checking bcbl api for request:{reqId}`. */
@@ -41,6 +41,16 @@ export interface LoggerPattern {
   level?: string;
   /** Where the pattern came from, because it decides how much to trust it. */
   source: PatternSource;
+  /**
+   * A regular expression instead of a template, when somebody wrote one.
+   *
+   * For the line whose shape `{}` cannot say — a value that is optional, two
+   * spellings of one message, a number that is sometimes followed by a unit.
+   * Its NAMED groups are the holes, so `(?<status>\d{3})` fills `status` the
+   * way `{status}` would. With this set the template is only the text shown
+   * for the pattern; matching never reads it.
+   */
+  regex?: string;
 }
 
 /** A hole in a template: `{name}`. Names are identifier-ish, never empty. */
@@ -277,6 +287,37 @@ export function fromLogLine(message: string): LoggerPattern {
   return { template, holes, source: 'line' };
 }
 
+// ── Writing a regex instead ─────────────────────────────────────────────────
+
+/** A named group: `(?<status>…)`. The name is what the hole is called. */
+const NAMED_GROUP = /\(\?<([A-Za-z_][\w]*)>/g;
+
+/**
+ * A pattern from a regular expression somebody typed.
+ *
+ * The last resort, and treated as one: it is the only way in that can be
+ * wrong in a way the reader cannot see, so a regex that does not compile is
+ * an error with the engine's own words rather than a pattern that silently
+ * matches nothing. A regex with no named group is allowed — it can be counted
+ * — but it has no holes, so there is nothing in it to group by.
+ */
+export function fromRegex(source: string): LoggerPattern | { error: string } {
+  const text = source.trim();
+  if (!text) return { error: 'Write the expression first.' };
+  try {
+    new RegExp(text);
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  const holes: string[] = [];
+  NAMED_GROUP.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = NAMED_GROUP.exec(text)) !== null) {
+    if (!holes.includes(m[1])) holes.push(m[1]);
+  }
+  return { template: text, holes, source: 'regex', regex: text };
+}
+
 // ── Matching ────────────────────────────────────────────────────────────────
 
 export interface CompiledPattern {
@@ -285,7 +326,12 @@ export interface CompiledPattern {
   /** Unanchored, for finding the shape inside a line that carries more. */
   anywhere: RegExp;
   holes: string[];
+  /** Holes come from named groups rather than from group positions. */
+  named?: boolean;
 }
+
+/** Matches nothing, ever — what a regex that does not compile becomes. */
+const NEVER = /(?!)/;
 
 /**
  * Compile once, match many.
@@ -297,6 +343,28 @@ export interface CompiledPattern {
  * goes here".
  */
 export function compilePattern(pattern: LoggerPattern): CompiledPattern {
+  /*
+    A written regex is used as written. Its groups are read by NAME, because
+    somebody writing `(GET|POST) (?<path>\S+)` has an unnamed group in front of
+    the one they care about, and reading by position would hand them the verb.
+    One that no longer compiles — a catalogue synced from a build with a
+    different engine — matches nothing rather than taking the view down.
+  */
+  if (pattern.regex !== undefined) {
+    const read = fromRegex(pattern.regex);
+    const holes = 'error' in read ? [] : read.holes;
+    try {
+      return {
+        whole: new RegExp(`^\\s*(?:${pattern.regex})\\s*$`),
+        anywhere: new RegExp(pattern.regex),
+        holes,
+        named: true,
+      };
+    } catch {
+      return { whole: NEVER, anywhere: NEVER, holes: [], named: true };
+    }
+  }
+
   const holes: string[] = [];
   let body = '';
   let last = 0;
@@ -346,7 +414,7 @@ export function matchPattern(compiled: CompiledPattern, message: string): Patter
 function hitOf(compiled: CompiledPattern, m: RegExpExecArray, message: string): PatternHit {
   const fields: Record<string, string> = {};
   compiled.holes.forEach((name, i) => {
-    const value = m[i + 1];
+    const value = compiled.named ? m.groups?.[name] : m[i + 1];
     if (value !== undefined) fields[name] = value.trim();
   });
   const start = m.index + (m[0].length - m[0].trimStart().length);

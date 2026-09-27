@@ -4,8 +4,12 @@
  * number against four hundred lines.
  */
 import { describe, it, expect } from 'vitest';
-import { summarise, asNumber, numericHoles, holeSpread, determinantsIn } from './determinants';
-import { fromLoggerCall } from './logger-pattern';
+import {
+  summarise, asNumber, numericHoles, holeSpread, determinantsIn, enabledDeterminants,
+  podScope, scopeApplies, determinantsFor, scopeLabel, showOf, describeSpec, determinantName,
+  previewWindow, matchStrip,
+} from './determinants';
+import { fromLoggerCall, fromRegex } from './logger-pattern';
 import type { CataloguePattern } from '../../store/dk8s-logger-store';
 import type { LogLine } from '../../store/k8s-store';
 
@@ -127,5 +131,128 @@ describe('what the builder offers', () => {
     expect(spread.method).toBe(2);
     // `took` is different on nearly every line: grouping by it is a list.
     expect(spread.took).toBe(5);
+  });
+});
+
+describe('which determinants a window answers', () => {
+  it('leaves out the ones switched off, but Settings still lists them', () => {
+    const on = { ...api({ groupBy: ['path'] }), id: 'on' };
+    const off = { ...api({ groupBy: ['path'], off: true }), id: 'off' };
+    expect(enabledDeterminants([on, off]).map(p => p.id)).toEqual(['on']);
+    expect(determinantsIn([on, off]).map(p => p.id)).toEqual(['on', 'off']);
+  });
+});
+
+describe('where a determinant applies', () => {
+  const pod = { name: 'payments-7d9f2', namespace: 'pay', context: 'prod' };
+  const target = { workload: 'prod/pay/Deployment/payments', pod: podScope(pod) };
+
+  it('writes a pod scope that cannot be mistaken for a workload one', () => {
+    expect(podScope(pod)).toBe('prod/pay/Pod/payments-7d9f2');
+  });
+
+  it('applies everywhere with *, even with no pod open', () => {
+    expect(scopeApplies('*', target)).toBe(true);
+    expect(scopeApplies('*', undefined)).toBe(true);
+  });
+
+  it('applies to every pod of its workload', () => {
+    expect(scopeApplies('prod/pay/Deployment/payments', target)).toBe(true);
+    expect(scopeApplies('prod/pay/Deployment/ledger', target)).toBe(false);
+  });
+
+  it('applies to its own pod and no other replica', () => {
+    expect(scopeApplies('prod/pay/Pod/payments-7d9f2', target)).toBe(true);
+    expect(scopeApplies('prod/pay/Pod/payments-4b218', target)).toBe(false);
+  });
+
+  it('never matches a workload whose name only starts the same', () => {
+    expect(scopeApplies('prod/pay/Deployment/pay', target)).toBe(false);
+  });
+
+  it('keeps only the ones that apply', () => {
+    const everywhere = { ...api({ groupBy: ['path'] }), id: 'a' };
+    const elsewhere = { ...api({ groupBy: ['path'] }), id: 'b', scope: 'prod/pay/Deployment/ledger' };
+    expect(determinantsFor([everywhere, elsewhere], target).map(p => p.id)).toEqual(['a']);
+  });
+
+  it('reads a scope out the way the picker set it', () => {
+    expect(scopeLabel('*')).toBe('every workload');
+    expect(scopeLabel('prod/pay/Deployment/payments')).toBe('payments only');
+    expect(scopeLabel('prod/pay/Pod/payments-7d9f2')).toBe('pod payments-7d9f2');
+    expect(scopeLabel('prod/pay/Pod')).toBe('unowned pods in pay');
+  });
+});
+
+describe('summarise as', () => {
+  it('keeps the columns a summary always had when nothing was chosen', () => {
+    expect(showOf({ groupBy: ['path'], measure: 'took' })).toEqual({ count: true, worst: true, seen: true, draw: false });
+  });
+
+  it('never shows a worst without a measure to take it of', () => {
+    expect(showOf({ groupBy: ['path'], show: { count: true, worst: true, seen: false, draw: false } }).worst).toBe(false);
+  });
+
+  it('says what it groups by and what it answers', () => {
+    expect(describeSpec({
+      groupBy: ['method', 'path'], mix: 'status', measure: 'took',
+      show: { count: true, worst: true, seen: false, draw: false },
+    })).toEqual({ grouping: 'method + path', answer: 'how many, status mix, worst took' });
+  });
+
+  it('is named by its name, or by its template when it has none', () => {
+    expect(determinantName(api({ groupBy: ['path'], name: '  API calls ' }))).toBe('API calls');
+    expect(determinantName(api({ groupBy: ['path'] }))).toBe('{method} {path} -> {status} in {took}ms');
+  });
+});
+
+describe('the window a preview reads', () => {
+  const MIN = 60_000;
+  const at = (m: number, text = 'GET /a -> 200 in 5ms') => line(text, m * MIN);
+
+  it('is the last N minutes back from the newest line, not from now', () => {
+    const w = previewWindow([at(0), at(30), at(61), at(100)], 40);
+    expect(w.lines.map(l => l.ts! / MIN)).toEqual([61, 100]);
+    expect([w.from! / MIN, w.to! / MIN]).toEqual([61, 100]);
+    expect(w.wholeBuffer).toBe(false);
+  });
+
+  it('leaves out lines with no time, and counts them', () => {
+    const w = previewWindow([at(0), line('no time'), at(10)], 40);
+    expect(w.lines).toHaveLength(2);
+    expect(w.untimed).toBe(1);
+  });
+
+  it('is the whole buffer, flagged, when no line has a time at all', () => {
+    const w = previewWindow([line('a'), line('b')], 40);
+    expect(w.lines).toHaveLength(2);
+    expect(w.wholeBuffer).toBe(true);
+  });
+
+  it('is empty, not an error, with nothing open', () => {
+    expect(previewWindow([], 40).lines).toEqual([]);
+  });
+});
+
+describe('drawing it over the window', () => {
+  it('puts each match in the slot of time it fell in', () => {
+    const { counts } = matchStrip(calls, api({ groupBy: ['path'] }), 5);
+    // Five calls at 10..50, and a heartbeat at 60 that is not one of them.
+    expect(counts.reduce((a, b) => a + b, 0)).toBe(5);
+    expect(counts[0]).toBe(1);
+  });
+
+  it('draws nothing for lines with no timestamps', () => {
+    expect(matchStrip([line('GET /a -> 200 in 5ms')], api({ groupBy: ['path'] }), 5).from).toBeUndefined();
+  });
+});
+
+describe('a determinant written as a regex', () => {
+  it('summarises by its named groups, the same as by holes', () => {
+    const p = fromRegex('(GET|POST) (?<path>\\S+) -> (?<status>\\d{3})');
+    if ('error' in p) throw new Error(p.error);
+    const [summary] = summarise(calls, [{ ...p, id: 'r', scope: '*', added: 1, summary: { groupBy: ['path'], mix: 'status' } }]);
+    expect(summary.rows.map(r => [r.key, r.count])).toEqual([[['/ledger/entries'], 3], [['/orders/{id}'], 2]]);
+    expect(summary.rows[0].mix).toEqual([['201', 2], ['504', 1]]);
   });
 });

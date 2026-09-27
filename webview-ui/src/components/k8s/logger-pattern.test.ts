@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  fromLoggerCall, fromLogLine, compilePattern, matchPattern, templateParts,
+  fromLoggerCall, fromLogLine, fromRegex, compilePattern, matchPattern, templateParts,
 } from './logger-pattern';
 
 const match = (call: string, line: string) => {
@@ -180,5 +180,42 @@ describe('showing a template', () => {
 
   it('handles a template that is only a hole', () => {
     expect(templateParts('{body}')).toEqual([{ text: 'body', hole: true }]);
+  });
+});
+
+describe('a written regex', () => {
+  it('takes its holes from the named groups, in order', () => {
+    const p = fromRegex('cache (?<outcome>hit|miss) for key (?<key>\\S+) in (?<took>\\d+)ms');
+    expect('error' in p).toBe(false);
+    if ('error' in p) return;
+    expect(p.holes).toEqual(['outcome', 'key', 'took']);
+    expect(p.source).toBe('regex');
+  });
+
+  it('fills a hole by its name, not its position, past an unnamed group', () => {
+    const p = fromRegex('(GET|POST) (?<path>\\S+)');
+    if ('error' in p) throw new Error(p.error);
+    const hit = matchPattern(compilePattern(p), 'POST /ledger/entries');
+    expect(hit?.fields).toEqual({ path: '/ledger/entries' });
+  });
+
+  it('matches inside a longer line, as a template does', () => {
+    const p = fromRegex('active=(?<active>\\d+)');
+    if ('error' in p) throw new Error(p.error);
+    expect(matchPattern(compilePattern(p), 'HikariPool-1 - active=10 idle=0')?.fields).toEqual({ active: '10' });
+  });
+
+  it('says what is wrong with one that does not compile, in the engine\'s words', () => {
+    const p = fromRegex('(?<open');
+    expect('error' in p && p.error.length > 0).toBe(true);
+  });
+
+  it('refuses an empty one rather than matching every line', () => {
+    expect('error' in fromRegex('   ')).toBe(true);
+  });
+
+  it('matches nothing, rather than throwing, when a saved one no longer compiles', () => {
+    const compiled = compilePattern({ template: '(', holes: [], source: 'regex', regex: '(' });
+    expect(matchPattern(compiled, 'anything at all')).toBeUndefined();
   });
 });

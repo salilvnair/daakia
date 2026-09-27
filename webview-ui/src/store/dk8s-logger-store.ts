@@ -190,6 +190,22 @@ export function setSummary(
   });
 }
 
+/**
+ * Change a pattern in place — its scope, or the pattern itself.
+ *
+ * What Settings → Determinants' Edit does: the question keeps its id, so the
+ * mark it may also be and the windows that have it ticked are still pointing
+ * at it afterwards. The id and the date it was added are not patchable.
+ */
+export function updatePattern(
+  id: string, patch: Partial<Omit<CataloguePattern, 'id' | 'added'>>,
+): void {
+  const catalogue = read();
+  write({
+    patterns: catalogue.patterns.map(p => (p.id === id ? { ...p, ...patch, id: p.id, added: p.added } : p)),
+  });
+}
+
 export function clearMarks(scope: string): void {
   const catalogue = read();
   write({
