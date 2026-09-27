@@ -432,6 +432,8 @@ export type AiPromptTemplateKey =
   | 'dk8s.terminal.theme'
   | 'dk8s.python.complete'
   | 'dk8s.python.complete.system'
+  | 'dk8s.log.askScope'
+  | 'dk8s.log.askScope.system'
   | 'dk8s.python.ask'
   | 'dk8s.python.ask.system'
   | 'dk8s.terminal.theme.system'
@@ -490,6 +492,7 @@ export const PROMPT_WHERE_USED: Partial<Record<AiPromptTemplateKey, string>> = {
   'dk8s.log.askTheLog': '"Ask" (or a "try" chip, a follow-up, or a saved check) in dk8s → pod → Ask the log tab — also reached from "Ask AI about this window" in the Logs footer',
   'dk8s.pod.crashloop': 'Not called from any screen yet — kept so it can be edited before a feature uses it',
   'dk8s.terminal.theme': '"Generate" under "Generate with AI" in Settings → DK8S → Terminal → Import a theme',
+  'dk8s.log.askScope': '"Ask" in dk8s → pod → Ask the log, when the question names its time in a way the tab does not read itself — turns it into what kubectl logs is given',
   'dk8s.python.complete': 'Grey ghost text while typing in dk8s → pod → Python (Tab accepts) — and the code after a comment line, on the next line',
   'dk8s.python.ask': '"Ask AI" in the dk8s → pod → Python toolbar, and in the Scripts screen',
   'dk8s.threads.explain': '"Ask AI" on a Thread dump, SIGQUIT dump, Flight recording or Python stack card in dk8s → pod → Doctor · "Analyze" in the Thread Dump analyzer',
@@ -602,6 +605,27 @@ Rules:
 - Never invent hostnames, credentials, service names or file paths in the pod — read them from the environment or leave a clearly named placeholder.
 - If there is nothing worth suggesting, reply with an empty string.`;
 
+/*
+ * Ask the log's scope: the question's own words about time and amount, as
+ * kubectl logs flags. Asked only when the tab's own reading of the question
+ * (`ask-scope.ts`) found none — "last 100 lines" and "since yesterday" never
+ * reach a model.
+ */
+const DK8S_ASK_SCOPE_SYSTEM = `You turn a question about a Kubernetes pod's log into how much of that log to read — what kubectl logs would be given as --tail, --since and --since-time.
+
+Answer with one JSON object and nothing else:
+{"tail": <how many of the newest lines, or null>, "head": <how many of the first lines, or null>, "sinceMinutes": <minutes back from now, or null>, "from": "<ISO 8601 local time the window starts, or null>", "to": "<ISO 8601 local time it ends, or null>", "label": "<the window as a person would say it: last 30 minutes, since 14:00, the last 500 lines>"}
+
+Rules:
+- Use only what the question itself says about time or amount. A question that names neither gets every field null — do not guess a window for it.
+- Resolve words like yesterday, this morning, after lunch or since the deploy at 3 against now, in the reader's time zone. A time with no date is today's, or yesterday's if it has not happened yet today.
+- One way of choosing lines: tail, head, sinceMinutes, or from/to — not two.`;
+
+const DK8S_ASK_SCOPE_USER = `Now: {{now}} ({{timezone}})
+Pod: {{pod}}
+
+Question: {{question}}`;
+
 const DK8S_PY_COMPLETE_USER = `Code before the cursor:
 {{prefix}}
 
@@ -673,6 +697,8 @@ export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = 
   'dk8s.terminal.theme.system': DK8S_SYSTEM['dk8s.terminal.theme'] ?? '',
   'dk8s.python.complete': DK8S_PY_COMPLETE_USER,
   'dk8s.python.complete.system': DK8S_PY_COMPLETE_SYSTEM,
+  'dk8s.log.askScope': DK8S_ASK_SCOPE_USER,
+  'dk8s.log.askScope.system': DK8S_ASK_SCOPE_SYSTEM,
   'dk8s.python.ask': DK8S_PY_ASK_USER,
   'dk8s.python.ask.system': DK8S_PY_ASK_SYSTEM,
   // ── Response & Diagnostics — system prompts ───────────────────────────────
@@ -1166,6 +1192,8 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   'dk8s.format.detect': { label: 'Detect a log format', description: 'Infer a parser from sample lines' },
   'dk8s.format.detect.system': { label: 'Detect a log format — system', description: 'Instruction block: who the model is and how it must answer' },
   'dk8s.terminal.theme': { label: 'Design a terminal theme', description: 'Fill in a palette from a description of the look wanted' },
+  'dk8s.log.askScope': { label: 'Ask the log — what to read', description: 'The question, and now — turned into how much of the log to fetch: the newest lines, or a window of time' },
+  'dk8s.log.askScope.system': { label: 'Ask the log — what to read — system', description: 'Instruction block: kubectl logs flags as JSON, only from what the question says' },
   'dk8s.python.complete': { label: 'Python ghost text', description: 'The code either side of the cursor — the suggestion to insert, or the code a comment asks for' },
   'dk8s.python.complete.system': { label: 'Python ghost text — system', description: 'Instruction block: insert-only text, short, the container\u2019s Python and packages' },
   'dk8s.python.ask': { label: 'Ask AI (Python)', description: 'A question or a change for the script, with the script, the selection, the last run and the problems found' },
@@ -1374,6 +1402,8 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'dk8s.file.explain.system': [],
   'dk8s.format.detect': [...DK8S_USER_VARIABLES],
   'dk8s.terminal.theme': [...DK8S_USER_VARIABLES],
+  'dk8s.log.askScope': ['now', 'timezone', 'pod', 'question'],
+  'dk8s.log.askScope.system': [],
   'dk8s.python.complete': ['prefix', 'suffix', 'imports'],
   /* The instructions depend on which Python and which container, so those two are the system half's. */
   'dk8s.python.complete.system': ['pythonVersion', 'container'],
@@ -1672,6 +1702,7 @@ export const AI_TEMPLATE_CATEGORIES: {
       'dk8s.terminal.theme',
       'dk8s.python.complete',
       'dk8s.python.ask',
+      'dk8s.log.askScope',
     ],
   },
   // ── MCP & Platform AI ─────────────────────────────────────────────────────
@@ -1728,6 +1759,8 @@ export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
   'dk8s.terminal.theme': '#a78bfa',
   'dk8s.python.complete': '#4B8BBE',
   'dk8s.python.complete.system': '#4B8BBE',
+  'dk8s.log.askScope': '#2dd4bf',
+  'dk8s.log.askScope.system': '#2dd4bf',
   'dk8s.python.ask': '#4B8BBE',
   'dk8s.python.ask.system': '#4B8BBE',
   'dk8s.format.detect.system': '#10b981',

@@ -65,7 +65,8 @@ export function ScriptTitle({ scriptId, size = 'md' }: { scriptId: string; size?
         )}
       </button>
       <style>{'.py-title:hover { background: var(--color-surface-hover) !important; }'}</style>
-      <PopoverView open={open} onClose={() => setOpen(false)} anchorEl={anchor.current} placement="bottom" borderRadius={10}>
+      <PopoverView open={open} onClose={() => setOpen(false)} anchorEl={anchor.current} placement="bottom" borderRadius={10}
+                   className="dk-pop-flush">
         <div className="flex flex-col gap-2.5 p-3" style={{ width: 300 }}>
           <div className="flex flex-col gap-1">
             <span style={label}>name</span>
@@ -162,10 +163,10 @@ export function ScriptMenu({ scriptId, size = 'md' }: { scriptId: string; size?:
       />
       {/* Save as needs a name, so it is a small form of its own. */}
       <PopoverView open={open && asName !== undefined} onClose={() => { setOpen(false); setAsName(undefined); }}
-                   anchorEl={anchor.current} placement="bottom" borderRadius={10}>
-        <div className="flex flex-col p-1.5" style={{ width: 260 }}>
+                   anchorEl={anchor.current} placement="bottom" borderRadius={10} className="dk-pop-flush">
+        <div className="flex flex-col" style={{ width: 260 }}>
           {asName !== undefined && (
-            <div className="flex flex-col gap-2 p-1.5">
+            <div className="flex flex-col gap-2 p-3">
               <span style={label}>save a copy as</span>
               <TextInputView autoFocus size="md" value={asName} aria-label="New script name"
                              onChange={(e) => setAsName(e.target.value)}

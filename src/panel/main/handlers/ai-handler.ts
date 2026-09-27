@@ -335,6 +335,22 @@ export async function handleAiSend(
 
       if (signal.aborted || stoppedTabs.has(tabId)) return;
       cleanupAiRequest(tabId);
+      /*
+        No text, and every token of the budget spent: a thinking model
+        reasoned until it ran out and never wrote the answer. Completing with
+        an empty message left each screen to say "Nothing came back", which
+        reads as if the model had nothing to say — say what happened instead.
+      */
+      const spent = result.tokens?.completion ?? 0;
+      if (!result.message.content?.trim() && !result.message.toolCalls?.length
+          && payload.settings.maxTokens > 0 && spent >= payload.settings.maxTokens) {
+        postMessage({
+          type: 'ai:error', tabId,
+          message: `The model spent its whole budget of ${payload.settings.maxTokens.toLocaleString()} tokens thinking and wrote no answer. `
+            + 'Ask something narrower, or choose a model that does not think first in Settings → LLM Provider.',
+        });
+        return;
+      }
       postMessage({ type: 'ai:complete', ...result });
 
       // AI calls are tracked in the AI Audit panel — not in HTTP request history

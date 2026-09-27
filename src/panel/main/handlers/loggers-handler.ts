@@ -165,6 +165,10 @@ export async function handleDk8sAskLog(msg: Record<string, unknown>, postMessage
     stage: key,
     provider: msg.provider,
     model: msg.model,
+    /* An answer with a timeline and its citations is long, and a thinking
+       model spent the default 2,048 tokens reasoning and answered nothing —
+       "Nothing came back". Room to write it, and no thinking first. */
+    settings: { maxTokens: 6000, thinking: 'off' },
   }, postMessage);
 }
 

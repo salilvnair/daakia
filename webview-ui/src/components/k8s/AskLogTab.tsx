@@ -32,22 +32,27 @@
  * it stands for, so this file and the board can be read against each other.
  */
 import { useMemo, useRef, useState } from 'react';
-import { ButtonView, ChipView, ContextMenuView, IconSize } from '@salilvnair/dui';
+import { ButtonView, ChipView, IconSize } from '@salilvnair/dui';
 import { useK8sStore, type LogLine } from '../../store/k8s-store';
 import { useDk8sAskLogStore, type AskRun } from '../../store/dk8s-ask-log-store';
 import {
   usePatternsFor, useLoggersFor, useChecksFor, saveCheck, removeCheck,
 } from '../../store/dk8s-logger-store';
 import {
-  askWindowLines, buildEvidence, catalogueBlock, windowBlock, windowRange, citeLabel, citedLines,
-  answerText, answerSpans, filterForLines, suggestions, ASK_WINDOW_NAME, type AskWindow,
+  buildEvidence, catalogueBlock, windowBlock, citeLabel, citedLines,
+  answerText, answerSpans, filterForLines, suggestions,
 } from './ask-log';
+import {
+  parseScope, scopeFromPlan, defaultScope, linesInScope, bufferCovers, MAX_SCOPE_LINES, type AskScope,
+} from './ask-scope';
+import { askOnce } from '../../services/ai/ai-once';
+import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { buildRows, shortName } from './logger-catalogue';
 import { useMarkIndex } from './LogMarks';
 import { formatLogTime } from './log-view';
 import { scopeOf } from './LoggersTab';
 import {
-  SparkleIcon, ClockIcon, ChevronDownIcon, CheckIcon, CloseIcon, WarningTriangleIcon,
+  SparkleIcon, ClockIcon, CheckIcon, CloseIcon, WarningTriangleIcon,
   SpinnerIcon, StopSquareIcon, ExternalLinkIcon, FilterIcon, SendIcon, PencilIcon, SaveIcon,
 } from '../../icons';
 import { useSurfaceMenu, copyItem, selectionItems, textInputAt, SEP, type ContextMenuItem } from './surface-menu';
@@ -55,8 +60,6 @@ import {
   PANEL, CARD, DIVIDER, EDGE, TEXT, LABEL, QUIET, ASK, ASK_INK, ASK_LINK, ASK_ID, ASK_VALUE,
   ASK_ERROR, ASK_WARN, ASK_ERROR_ROW, ASK_YES, ASK_NO, MONO, OUTLINE_BUTTON, OUTLINE_PILL,
 } from './asklog-tone';
-
-const WINDOWS: AskWindow[] = ['10m', '30m', '1h', '2h', 'all'];
 
 /** The small caps the board heads every section with. */
 const HEAD = { fontSize: 11, fontWeight: 700, letterSpacing: '0.05em' } as const;
@@ -86,44 +89,100 @@ export function AskLogTab() {
   /* The box holds the question the answer below is for — coming back to the
      tab shows the pair, not an answer under an empty box. */
   const [question, setQuestion] = useState(() => run?.question ?? '');
-  const [win, setWin] = useState<AskWindow>(() => run?.window ?? '10m');
-  const [winOpen, setWinOpen] = useState(false);
-  const winRef = useRef<HTMLButtonElement>(null);
   const boxRef = useRef<HTMLInputElement>(null);
-
-  /* The window's clock times, for the button and its menu. */
-  const ranges = useMemo(() => Object.fromEntries(WINDOWS.map(w => {
-    const lw = askWindowLines(logs, w);
-    return [w, windowRange(lw.from, lw.to)];
-  })) as Record<AskWindow, string>, [logs]);
+  const resolvePrompt = useAiPromptTemplatesStore(s => s.resolve);
+  /* Between Ask and the answer starting: working out the scope, fetching it. */
+  const [preparing, setPreparing] = useState<string>();
+  /* Why there is nothing to ask about — the scope held no lines. */
+  const [note, setNote] = useState<string>();
+  /* The last scope asked over: a follow-up with no time of its own reads it again. */
+  const lastScope = useRef<AskScope | undefined>(undefined);
+  const busyRef = useRef(0);
 
   /* An id to offer from the marks: the commonest value of the first hole
      any marked pattern has filled. */
   const markIdx = useMarkIndex(patterns, logs);
   const idFacet = markIdx.facets[0];
-  const tries = suggestions({ idField: idFacet?.field, idValue: idFacet?.values[0]?.[0], win });
+  const tries = suggestions({ idField: idFacet?.field, idValue: idFacet?.values[0]?.[0] });
 
-  const send = (q: string, w: AskWindow = win) => {
+  /*
+    Ask: the question says what to read. "last 100 lines", "since 09:30",
+    "what went wrong in the last hour" are read off it here; anything else is
+    put to the model as kubectl logs flags (`dk8s.log.askScope`); a question
+    with no time in it reads the last half hour. What is not already in the
+    Logs tab's buffer is fetched through it — the same read-only kubectl
+    logs, with --tail or --since-time — and then the lines go to the answer.
+  */
+  const send = async (q: string, given?: AskScope) => {
     const text = q.trim();
-    if (!text || !logs.length) return;
-    const lw = askWindowLines(logs, w);
-    const evidence = buildEvidence(lw.lines, text);
-    const rows = buildRows(stored, patterns, logs, lw.lines);
+    if (!text || !detail) return;
+    const turn = ++busyRef.current;
+    const stale = () => turn !== busyRef.current;
+    setQuestion(text);
+    setNote(undefined);
+
+    let target = parseScope(text) ?? given;
+    if (!target) {
+      setPreparing('Working out what part of the log that is about…');
+      target = await planScope(text) ?? defaultScope();
+      if (stale()) return;
+    }
+
+    const k = useK8sStore.getState();
+    if (!bufferCovers(k.logs, target, { direction: k.logDirection, since: k.logSince, tail: k.logTail })) {
+      setPreparing(`Reading the ${target.label} from ${detail.name}…`);
+      await fetchScope(target);
+      if (stale()) return;
+    }
+    setPreparing(undefined);
+
+    const buffer = useK8sStore.getState().logs;
+    const lines = linesInScope(buffer, target);
+    if (!lines.length) {
+      const newest = [...buffer].reverse().find(l => l.ts !== undefined)?.ts;
+      setNote(`The pod wrote nothing in the ${target.label}${newest !== undefined ? ` — its newest line is from ${formatLogTime(newest).slice(0, 8)}` : ''}. Ask over a longer stretch, or "the last 200 lines".`);
+      return;
+    }
+    lastScope.current = target;
+    const stamped = lines.filter(l => l.ts !== undefined);
+    const from = stamped[0]?.ts;
+    const to = stamped[stamped.length - 1]?.ts;
+    const evidence = buildEvidence(lines, text);
+    const rows = buildRows(stored, patterns, buffer, lines);
     ask({
-      question: text, window: w, from: lw.from, to: lw.to, scope,
+      question: text, window: target.label, from, to, scope,
       evidence,
-      windowBlock: windowBlock(w, lw.from, lw.to, evidence),
+      windowBlock: windowBlock(target.label, from, to, evidence),
       catalogue: catalogueBlock(rows),
       loggersKnown: rows.filter(r => r.key).length,
       podContext: {
         pod: detail?.name, namespace: detail?.namespace, container: logContainer, runtime: runtime?.runtime,
       },
     });
-    setQuestion(text);
-    setWin(w);
   };
 
-  const canAsk = !!question.trim() && logs.length > 0;
+  /* The model's reading of the question's time, when the tab has none. */
+  const planScope = async (text: string): Promise<AskScope | undefined> => {
+    try {
+      const call = askOnce({
+        stage: 'dk8s.log.askScope',
+        screen: 'dk8s · Logs',
+        systemPrompts: [resolvePrompt('dk8s.log.askScope.system', {})],
+        userPrompt: resolvePrompt('dk8s.log.askScope', {
+          now: new Date().toString(),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'local',
+          pod: detail?.name ?? '',
+          question: text,
+        }),
+        settings: { temperature: 0, maxTokens: 300, responseFormat: 'json_object', thinking: 'off' },
+      }, 15_000);
+      return scopeFromPlan(await call.text);
+    } catch {
+      return undefined;
+    }
+  };
+
+  const canAsk = !!question.trim() && !!detail && !preparing;
 
   /* Put a question in the box to be edited, rather than asked as it stands. */
   const draft = (q: string) => {
@@ -186,8 +245,8 @@ export function AskLogTab() {
       const c = checks.find(x => x.id === check.dataset.askCheck);
       if (!c) return sel;
       return [
-        { id: 'ask-check', label: 'Ask this again', disabled: !logs.length, icon: <SendIcon size={14} />, iconColor: ASK, onClick: () => send(c.question, c.window as AskWindow) },
-        { id: 'edit-check', label: 'Edit before asking', icon: <PencilIcon size={14} />, iconColor: 'var(--color-ctx-rename)', onClick: () => { setWin(c.window as AskWindow); draft(c.question); } },
+        { id: 'ask-check', label: 'Ask this again', icon: <SendIcon size={14} />, iconColor: ASK, onClick: () => void send(c.question) },
+        { id: 'edit-check', label: 'Edit before asking', icon: <PencilIcon size={14} />, iconColor: 'var(--color-ctx-rename)', onClick: () => draft(c.question) },
         copyItem('copy-check', 'Copy question', c.question),
         SEP('check-sep'),
         { id: 'forget', label: 'Forget this check', danger: true, icon: <CloseIcon size={14} />, onClick: () => removeCheck(c.id) },
@@ -197,9 +256,9 @@ export function AskLogTab() {
     const q = target.closest('[data-ask-q]') as HTMLElement | null;
     if (q) {
       const text = q.dataset.askQ!;
-      const same = q.dataset.askSame === 'true' && run ? run.window : undefined;
+      const same = q.dataset.askSame === 'true' ? lastScope.current : undefined;
       return [
-        { id: 'ask-q', label: 'Ask this', disabled: !logs.length, icon: <SendIcon size={14} />, iconColor: ASK, onClick: () => send(text, same) },
+        { id: 'ask-q', label: 'Ask this', icon: <SendIcon size={14} />, iconColor: ASK, onClick: () => void send(text, same) },
         { id: 'edit-q', label: 'Edit before asking', icon: <PencilIcon size={14} />, iconColor: 'var(--color-ctx-rename)', onClick: () => draft(text) },
         copyItem('copy-q', 'Copy question', text),
       ];
@@ -212,7 +271,7 @@ export function AskLogTab() {
         ...(cited.length ? [{ id: 'open-all', label: `Show the ${cited.length} cited line${cited.length === 1 ? '' : 's'} in Logs`, icon: <FilterIcon size={14} />, iconColor: ASK_LINK, onClick: () => openLines(cited) }] : []),
         ...(run.question ? [
           SEP('ans-sep'),
-          { id: 'again', label: 'Ask it again', disabled: !logs.length || !!activeId, icon: <SendIcon size={14} />, iconColor: ASK, onClick: () => send(run.question, run.window) },
+          { id: 'again', label: 'Ask it again', disabled: !!activeId || !!preparing, icon: <SendIcon size={14} />, iconColor: ASK, onClick: () => void send(run.question, lastScope.current) },
           { id: 'save-check', label: 'Save as a check', icon: <SaveIcon size={14} />, iconColor: 'var(--color-info)', onClick: () => saveCheck(run.scope, run.question, run.window) },
         ] : []),
       ]);
@@ -236,51 +295,17 @@ export function AskLogTab() {
             aria-label="Ask about this window"
             value={question}
             onChange={e => setQuestion(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') send(question); }}
+            onKeyDown={e => { if (e.key === 'Enter' && canAsk) void send(question); }}
+            placeholder="what went wrong in the last hour · the last 200 lines · orderId A-4470 since 09:30"
             className="flex-1 min-w-0"
             style={{ border: 'none', background: 'none', color: TEXT, fontSize: 13, outline: 'none', padding: 0 }}
           />
-          <span className="shrink-0" style={{ fontSize: 11, color: QUIET }}>an id, or a question</span>
+          <span className="shrink-0" style={{ fontSize: 11, color: QUIET }}>say how far back — or it reads the last 30 minutes</span>
         </div>
 
-        {/* The window: a clock, the clock times it covers, and a menu of the
-            others — the times rather than "last 10 minutes", because a pod
-            that went quiet an hour ago has its last ten minutes at 13:00. */}
-        <button
-          ref={winRef}
-          type="button"
-          onClick={() => setWinOpen(o => !o)}
-          title={ASK_WINDOW_NAME[win]}
-          aria-haspopup="menu"
-          aria-expanded={winOpen}
-          className="inline-flex items-center shrink-0 cursor-pointer"
-          style={{
-            gap: 6, height: 34, padding: '0 11px', border: `1px solid ${EDGE}`, borderRadius: 8,
-            background: CARD, color: TEXT, fontSize: 12, whiteSpace: 'nowrap',
-          }}
-        >
-          <ClockIcon size={12} color={QUIET} strokeWidth={2} />
-          {ranges[win]}
-          <ChevronDownIcon size={11} color={QUIET} />
-        </button>
-        <ContextMenuView
-          anchorEl={winRef.current}
-          open={winOpen}
-          onClose={() => setWinOpen(false)}
-          align="right"
-          width="md"
-          items={WINDOWS.map(w => ({
-            id: w,
-            label: ranges[w],
-            description: ASK_WINDOW_NAME[w],
-            icon: w === win ? <CheckIcon size={IconSize.action} /> : <ClockIcon size={IconSize.action} strokeWidth={2} />,
-            iconColor: w === win ? ASK : undefined,
-            onClick: () => { setWin(w); setWinOpen(false); },
-          }))}
-        />
 
-        {activeId ? (
-          <ButtonView variant="secondary" onClick={cancel}
+        {activeId || preparing ? (
+          <ButtonView variant="secondary" onClick={() => { busyRef.current++; setPreparing(undefined); if (activeId) cancel(); }}
                       iconLeft={<StopSquareIcon size={IconSize.action} />}
                       style={{ ...OUTLINE_BUTTON, height: 34, padding: '0 14px', borderRadius: 8, background: CARD, color: TEXT, fontSize: 12.5 }}>
             Stop
@@ -301,7 +326,7 @@ export function AskLogTab() {
         <span style={{ fontSize: 11, color: QUIET }}>try</span>
         {tries.map(t => (
           <span key={t} className="contents" data-ask-q={t}>
-            <ChipView label={t} size="sm" onClick={() => send(t)} title="Ask this" style={{ ...OUTLINE_PILL, height: 24 }} />
+            <ChipView label={t} size="sm" onClick={() => void send(t)} title="Ask this" style={{ ...OUTLINE_PILL, height: 24 }} />
           </span>
         ))}
         {checks.length > 0 && (
@@ -309,25 +334,30 @@ export function AskLogTab() {
         )}
         {checks.map(c => (
           <span key={c.id} className="contents" data-ask-check={c.id}>
-            <ChipView label={`${c.question} · ${ASK_WINDOW_NAME[c.window as AskWindow] ?? c.window}`} size="sm"
-                      onClick={() => send(c.question, c.window as AskWindow)}
+            <ChipView label={c.question} size="sm"
+                      onClick={() => void send(c.question)}
                       onRemove={() => removeCheck(c.id)} removeLabel="Forget this check" title="Ask this again"
                       style={{ ...OUTLINE_PILL, height: 24, color: ASK }} />
           </span>
         ))}
-        {!logs.length && (
-          <span className="basis-full" style={{ fontSize: 11.5, color: QUIET }}>
-            There is no log in view to ask about — open the Logs tab and fetch a window first.
-          </span>
-        )}
+
       </div>
 
       <div className="flex flex-1 min-h-0" style={{ borderTop: `1px solid ${EDGE}` }}>
-        {run ? <Answer run={run} logs={logs} onAsk={q => send(q, run.window)} /> : (
+        {preparing || note ? (
+          <div className="flex-1 flex items-start" style={{ padding: '18px 16px' }}>
+            <span className="flex items-center" style={{ gap: 8, fontSize: 12.5, color: note ? ASK_WARN : QUIET, maxWidth: 640, lineHeight: 1.6 }}>
+              {preparing && <SpinnerIcon size={IconSize.action} color={ASK} />}
+              {note && <ClockIcon size={13} color={ASK_WARN} strokeWidth={2} style={{ flexShrink: 0 }} />}
+              {preparing ?? note}
+            </span>
+          </div>
+        ) : run ? <Answer run={run} logs={logs} onAsk={q => void send(q, lastScope.current)} /> : (
           <div className="flex-1 flex items-center justify-center px-8">
             <span className="leading-relaxed text-center" style={{ fontSize: 12, color: QUIET, maxWidth: 520 }}>
-              Ask by id or in words over a time window. Every claim in the answer carries the lines it came from,
-              each a click away in the Logs tab — evidence, not a summary you must trust.
+              Ask by id or in words, and say how far back — &ldquo;the last 200 lines&rdquo;, &ldquo;since 09:30&rdquo;,
+              &ldquo;in the last hour&rdquo;. What is not loaded yet is read from the pod first. Every claim in the answer
+              carries the lines it came from, each a click away in the Logs tab — evidence, not a summary you must trust.
             </span>
           </div>
         )}
@@ -340,6 +370,54 @@ export function AskLogTab() {
 function openLine(line: LogLine) {
   useK8sStore.setState({ linkedLine: { seq: line.seq, text: line.text }, pendingLink: undefined });
   useK8sStore.getState().setDetailTab('logs');
+}
+
+/**
+ * Fetch what a scope needs through the Logs tab — `kubectl logs` with --tail,
+ * --since or --since-time, read-only — and wait for the lines to arrive.
+ *
+ * The Logs tab shows the same read afterwards, so what the answer cites is
+ * what is on screen there; it stops following, since a window with an end
+ * cannot also be live.
+ */
+function fetchScope(target: AskScope): Promise<void> {
+  const k = useK8sStore;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const local = (ms: number) => {
+    const d = new Date(ms);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+      + `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  };
+  const tail = k.getState().logTail;
+  switch (target.kind) {
+    case 'tail':
+      k.setState({ logDirection: 'last', logLive: false, logSince: 'all', logTail: Math.max(target.n, 200) });
+      break;
+    case 'head':
+      k.setState({ logDirection: 'first', logLive: false, logSince: 'all', logTail: target.n });
+      break;
+    case 'restart':
+      k.setState({ logDirection: 'last', logLive: false, logSince: 'restart', logTail: MAX_SCOPE_LINES });
+      break;
+    case 'all':
+      k.setState({ logDirection: 'last', logLive: false, logSince: 'all', logTail: MAX_SCOPE_LINES });
+      break;
+    case 'range':
+      k.setState({
+        logDirection: 'between', logLive: false,
+        logFrom: local(target.fromMs), logTo: local(target.toMs ?? Date.now()),
+        logTail: Math.max(tail, MAX_SCOPE_LINES),
+      });
+      break;
+  }
+  k.getState().reloadLogs();
+  return new Promise(resolve => {
+    const done = () => { clearTimeout(timer); unsub(); resolve(); };
+    const unsub = k.subscribe(s => {
+      if (s.logStatus === 'ended' || s.logStatus === 'error' || s.logStatus === 'idle') done();
+    });
+    const timer = setTimeout(done, 90_000);
+  });
 }
 
 /** Show exactly these lines in the Logs tab, as one filter. */
@@ -437,7 +515,7 @@ function Answer({ run, logs, onAsk }: { run: AskRun; logs: LogLine[]; onAsk: (q:
         <div className="flex items-center shrink-0" style={{ gap: 8 }}>
           <span style={{ ...HEAD, color: ASK }}>ANSWER</span>
           <span style={{ fontSize: 11, color: QUIET }}>
-            read {run.total.toLocaleString()} lines · {hms(run.from)}&ndash;{hms(run.to)}
+            <span style={{ color: ASK }}>{run.window}</span> · read {run.total.toLocaleString()} lines · {hms(run.from)}&ndash;{hms(run.to)}
             {seconds ? ` · ${seconds}s` : ''}
           </span>
           <div className="flex-1" />

@@ -210,10 +210,10 @@ export function catalogueBlock(rows: CatalogueRow[], limit = 150): string {
 }
 
 /** The window block. */
-export function windowBlock(win: AskWindow, from: number | undefined, to: number | undefined, ev: Evidence): string {
+export function windowBlock(label: string, from: number | undefined, to: number | undefined, ev: Evidence): string {
   const iso = (ts?: number) => (ts === undefined ? '?' : new Date(ts).toISOString());
   return [
-    `${ASK_WINDOW_NAME[win]} of what the pod has written: ${iso(from)} to ${iso(to)}`,
+    `${label} of what the pod has written: ${iso(from)} to ${iso(to)}`,
     `${ev.total} lines in the window, ${ev.sent} sent below`,
   ].join('\n');
 }
@@ -403,11 +403,12 @@ export function filterForLines(lines: LogLine[]): string {
  * The "try" chips: one question that always makes sense, an id to follow if
  * the marks have filled a hole with one, and the two the catalogue answers.
  */
-export function suggestions(opts: { idField?: string; idValue?: string; win: AskWindow }): string[] {
+export function suggestions(opts: { idField?: string; idValue?: string; win?: AskWindow }): string[] {
   return [
-    `what went wrong in the ${ASK_WINDOW_NAME[opts.win]}`,
+    `what went wrong in the ${ASK_WINDOW_NAME[opts.win ?? '10m']}`,
     ...(opts.idField && opts.idValue ? [`${opts.idField} ${opts.idValue}`] : []),
     'which loggers went quiet',
     'anything new since yesterday',
+    'summarise the last 500 lines',
   ];
 }

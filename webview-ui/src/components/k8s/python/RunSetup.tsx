@@ -50,9 +50,10 @@ export function RunSetup({
                   style={{ maxWidth: 280 }}>
         <span className="font-mono truncate text-[11.5px]">{summary}</span>
       </ButtonView>
-      <PopoverView open={open} onClose={() => setOpen(false)} anchorEl={anchor.current} placement="bottom" borderRadius={10}>
-        <div className="flex flex-col gap-3 p-3.5" style={{ width: 340 }}>
-          <span className="text-[12.5px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>How it runs</span>
+      <PopoverView open={open} onClose={() => setOpen(false)} anchorEl={anchor.current} placement="bottom" borderRadius={10}
+                   className="dk-pop-flush">
+        <div className="flex flex-col gap-2.5 p-3" style={{ width: 320 }}>
+          <span className="text-[12px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>How it runs</span>
 
           {containers && onContainer && (
             <div className="flex flex-col gap-1">

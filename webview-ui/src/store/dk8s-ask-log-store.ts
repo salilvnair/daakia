@@ -13,7 +13,7 @@ import { create } from 'zustand';
 import { postMsg } from '../vscode';
 import { logUiEvent } from './ui-audit-store';
 import type { LogLine } from './k8s-store';
-import { parseAnswer, type AskAnswer, type AskWindow, type Evidence } from '../components/k8s/ask-log';
+import { parseAnswer, type AskAnswer, type Evidence } from '../components/k8s/ask-log';
 
 /** Fixed on the host too — see `DK8S_ASK_LOG_TAB` in loggers-handler.ts. */
 export const ASK_LOG_TAB = 'dk8s-ask-log';
@@ -21,7 +21,8 @@ export const ASK_LOG_TAB = 'dk8s-ask-log';
 export interface AskRun {
   id: string;
   question: string;
-  window: AskWindow;
+  /** What was read, as the question put it — "last 100 lines", "since 09:30". */
+  window: string;
   from?: number;
   to?: number;
   pod?: string;
@@ -44,7 +45,7 @@ export interface AskRun {
 
 export interface AskRequest {
   question: string;
-  window: AskWindow;
+  window: string;
   from?: number;
   to?: number;
   scope: string;

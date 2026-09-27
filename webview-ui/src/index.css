@@ -1191,6 +1191,14 @@ input[type="number"] {
   background: color-mix(in srgb, var(--editor-accent, var(--color-accent)) 90%, transparent) !important;
 }
 
+/* ─── A dui popover whose content pads itself ───
+   PopoverView pads its content by its size's paddingY (12–16px). Panels that
+   already pad themselves — or draw a header edge to edge — got that and their
+   own, and read as a box floating in a box. */
+.dui_popover.dk-pop-flush {
+  padding: 0 !important;
+}
+
 /* ─── Monaco Find/Replace Widget ─── */
 
 .monaco-editor .find-widget {

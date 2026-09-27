@@ -215,7 +215,7 @@ export function ScriptsScreen() {
             )}
           </ButtonView>
         </span>
-        <PopoverView open={pickerOpen} onClose={() => setPickerOpen(false)} anchorEl={pickerRef.current} placement="bottom">
+        <PopoverView open={pickerOpen} onClose={() => setPickerOpen(false)} anchorEl={pickerRef.current} placement="bottom" className="dk-pop-flush">
           <PodPicker pods={pods} picked={picked} onChange={setPicked} error={podsError} onDone={() => setPickerOpen(false)} />
         </PopoverView>
         {containers.length > 1 && (

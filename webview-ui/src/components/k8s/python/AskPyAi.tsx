@@ -183,7 +183,7 @@ export function AskPyAi({ scriptId, target, pythonVersion, lastRun, size = 'md',
         <div className="flex flex-col"
              style={docked
                ? { width: '100%', height: '100%', minHeight: 0, background: 'var(--color-surface-secondary, var(--color-surface))' }
-               : { width: POP_W, maxHeight: 620 }}>
+               : { width: POP_W, maxHeight: 620, overflow: 'hidden', borderRadius: 'inherit' }}>
           <div className="flex items-center gap-2 px-3.5 py-2.5 flex-shrink-0"
                style={{
                  borderBottom: '1px solid var(--color-surface-border)',
@@ -319,7 +319,7 @@ export function AskPyAi({ scriptId, target, pythonVersion, lastRun, size = 'md',
       {docked
         ? (open && dock.el ? createPortal(body, dock.el) : null)
         : (
-          <PopoverView open={open} onClose={() => setOpen(false)} anchorEl={popAnchor.current} placement="bottom" borderRadius={12}>
+          <PopoverView open={open} onClose={() => setOpen(false)} anchorEl={popAnchor.current} placement="bottom" borderRadius={12} className="dk-pop-flush">
             {body}
           </PopoverView>
         )}

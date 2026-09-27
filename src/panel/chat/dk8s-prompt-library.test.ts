@@ -24,6 +24,14 @@ import {
 
 const KEYS = Object.keys(DK8S_PROMPTS);
 
+/*
+  dk8s prompts the webview resolves and sends itself, through the Prompt
+  Library's own `resolve` — so they have no host registry entry to match.
+  Python's ghost text and Ask AI, and Ask the log's reading of a question's
+  time into kubectl logs flags.
+*/
+const WEBVIEW_KEYS = ['dk8s.python.complete', 'dk8s.python.ask', 'dk8s.log.askScope'];
+
 /** The library derives the system key this way — see toSystemKey. */
 const systemKey = (k: string) => `${k}.system`;
 
@@ -83,7 +91,7 @@ describe('dk8s prompts in the Prompt Library', () => {
   it('lists exactly the host registry under the dk8s category', () => {
     const cat = AI_TEMPLATE_CATEGORIES.find(c => c.id === 'dk8s');
     expect(cat).toBeDefined();
-    expect([...cat!.keys].sort()).toEqual([...KEYS].sort());
+    expect([...cat!.keys].sort()).toEqual([...KEYS, ...WEBVIEW_KEYS].sort());
   });
 
   /*
