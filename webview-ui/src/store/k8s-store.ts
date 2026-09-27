@@ -381,6 +381,7 @@ export interface PodAction {
 }
 
 export type DetailTab = 'overview' | 'logs' | 'loggers' | 'terminal' | 'doctor' | 'python' | 'explorer' | 'yaml' | 'describe' | 'access';
+export type DetailTab = 'overview' | 'logs' | 'loggers' | 'ask' | 'terminal' | 'doctor' | 'explorer' | 'yaml' | 'describe' | 'access';
 
 export interface MemoryProfile {
   limitBytes?: number;
@@ -728,7 +729,7 @@ interface K8sState {
   /** Which end of the log — the tail, or what the pod said on startup. */
   logDirection: 'last' | 'first' | 'between';
   /** Range pushed down to kubectl. */
-  logSince: 'all' | 'restart' | '15m' | '1h' | '6h';
+  logSince: 'all' | 'restart' | '15m' | '1h' | '2h' | '6h';
   /**
    * The two ends of a `between` window, as the reader's own clock reads them.
    *
@@ -860,7 +861,7 @@ interface K8sState {
   setLogLive: (v: boolean) => void;
   setLogTail: (n: number) => void;
   setLogDirection: (d: 'last' | 'first' | 'between') => void;
-  setLogSince: (v: 'all' | 'restart' | '15m' | '1h' | '6h') => void;
+  setLogSince: (v: 'all' | 'restart' | '15m' | '1h' | '2h' | '6h') => void;
   fetchLogs: () => void;
   openLogExport: () => void;
   closeLogExport: () => void;
@@ -1333,7 +1334,9 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     };
 
     const SINCE: Record<string, number | undefined> = {
-      all: undefined, '15m': 900, '1h': 3600, '6h': 21600,
+      /* Two hours is the Loggers tab's window — "EVENTS 2H" — and its Read
+         button asks for exactly that. */
+      all: undefined, '15m': 900, '1h': 3600, '2h': 7200, '6h': 21600,
       // "Since the last restart" is the most useful of these and the only one
       // that needs the pod's own history rather than a fixed window.
       restart: detail.lastRestartAt

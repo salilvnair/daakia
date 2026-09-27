@@ -51,6 +51,20 @@ export interface LoggerPattern {
    * for the pattern; matching never reads it.
    */
   regex?: string;
+   * Fields the call carries BESIDE the message rather than inside it — pino's
+   * `log.info({ orderId }, "…")`, slog's `"order", id` pairs. They are not
+   * holes: the message does not contain them, a structured format parses them
+   * off the line, and the pattern only says they are there to be found.
+   */
+  objectFields?: string[];
+  /**
+   * The message was glued together from strings — `"user " + u + " logged in"`.
+   * It still has a shape, but one somebody can break by editing either half,
+   * so a scan offers it switched off.
+   */
+  glued?: boolean;
+  /** The last argument is the exception: its stack trace follows the line. */
+  exception?: boolean;
 }
 
 /** A hole in a template: `{name}`. Names are identifier-ish, never empty. */
@@ -111,6 +125,13 @@ export function fromLoggerCall(code: string): LoggerPattern | undefined {
   }
 
   const holes = countHoles(message);
+  /* SLF4J's rule: an argument left over after the holes are filled, when it
+     is a Throwable, is printed as a stack trace under the line. The name is
+     all there is to go on, and `e`, `ex`, `err` and friends are what people
+     call one. */
+  const trailing = args.length > holes ? args[args.length - 1] : undefined;
+  const exception = !!trailing && /^(?:e|ex|exc|err|error|t|th|throwable|exception|cause)$/i.test(trailing.trim())
+    ? true : undefined;
   if (holes === 0) {
     return {
       template: message,
@@ -118,6 +139,7 @@ export function fromLoggerCall(code: string): LoggerPattern | undefined {
       logger: loggerOf(receiver),
       level: levelOf(method),
       source: 'paste',
+      ...(exception ? { exception } : {}),
     };
   }
 
@@ -141,6 +163,7 @@ export function fromLoggerCall(code: string): LoggerPattern | undefined {
     logger: loggerOf(receiver),
     level: levelOf(method),
     source: 'paste',
+    ...(exception ? { exception } : {}),
   };
 }
 
@@ -328,6 +351,14 @@ export interface CompiledPattern {
   holes: string[];
   /** Holes come from named groups rather than from group positions. */
   named?: boolean;
+  /**
+   * The longest fixed piece of the template, checked with `includes` before
+   * either regex runs. A catalogue of four hundred patterns counted over a
+   * twenty-thousand-line buffer is eight million regex runs; almost every one
+   * of them is a line that does not contain the words at all, and a substring
+   * test says so for a fraction of the cost.
+   */
+  needle: string;
 }
 
 /** Matches nothing, ever — what a regex that does not compile becomes. */
@@ -368,21 +399,27 @@ export function compilePattern(pattern: LoggerPattern): CompiledPattern {
   const holes: string[] = [];
   let body = '';
   let last = 0;
+  let needle = '';
+  const literal = (text: string) => {
+    body += escapeRe(text);
+    if (text.trim().length > needle.length) needle = text.trim();
+  };
 
   HOLE.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = HOLE.exec(pattern.template)) !== null) {
-    body += escapeRe(pattern.template.slice(last, m.index));
+    literal(pattern.template.slice(last, m.index));
     body += '(.+?)';
     holes.push(m[1]);
     last = m.index + m[0].length;
   }
-  body += escapeRe(pattern.template.slice(last));
+  literal(pattern.template.slice(last));
 
   return {
     whole: new RegExp(`^\\s*${body}\\s*$`),
     anywhere: new RegExp(body),
     holes,
+    needle,
   };
 }
 
@@ -402,6 +439,7 @@ export interface PatternHit {
  * a prefix the format did not take off.
  */
 export function matchPattern(compiled: CompiledPattern, message: string): PatternHit | undefined {
+  if (compiled.needle && !message.includes(compiled.needle)) return undefined;
   const whole = compiled.whole.exec(message);
   if (whole) return hitOf(compiled, whole, message);
 
