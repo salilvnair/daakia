@@ -109,7 +109,9 @@ export function FacetRail({ lines, filters, onToggle, onClear, onSearchEverywher
         */
         width: '100%',
         height: '100%',
-        background: 'color-mix(in srgb, var(--color-surface) 55%, transparent)',
+        /* The rail's column paints the surface (LogViewer), so marks above and
+           fields below read as one panel. */
+        background: 'transparent',
       }}
     >
       {/*

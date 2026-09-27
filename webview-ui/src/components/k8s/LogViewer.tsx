@@ -1684,49 +1684,9 @@ export function LogViewer() {
       <div className="flex flex-col shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
       <div className="flex items-center gap-3 px-4 py-2.5 flex-wrap shrink-0">
-        {/* Before the level chips, because it governs the panel beside them
-            rather than the rows — and because a control that hides a whole
-            column should not be buried at the end of a toolbar. */}
-        <button
-          type="button"
-          onClick={toggleFacets}
-          title={!hasFacets
-            ? 'No fields on these lines — the panel appears when a log format names some'
-            : facetsOpen ? 'Hide the field panel' : 'Show the field panel'}
-          aria-pressed={facetsOpen}
-          disabled={!hasFacets}
-          className="flex items-center justify-center rounded shrink-0 border-none cursor-pointer"
-          /* Sized to the chips beside it rather than to its glyph. It was the
-             smallest control in the toolbar and it governs a whole column. */
-          style={{
-            width: 30, height: 26, borderRadius: 6,
-            color: facetsOpen ? ACCENT : 'var(--color-text-muted)',
-            background: facetsOpen
-              ? 'color-mix(in srgb, var(--color-dk8s) 16%, transparent)' : 'transparent',
-            border: facetsOpen
-              ? '1px solid color-mix(in srgb, var(--color-dk8s) 34%, transparent)'
-              : '1px solid transparent',
-          }}
-        >
-          <SidebarLeftIcon size={15} />
-        </button>
-
-        <LevelChips />
-
-        {marks.length > 0 && (
-          <MarkedBar
-            count={marks.length}
-            onlyMarked={onlyMarked}
-            onOnlyMarked={setOnlyMarked}
-            onClear={() => clearMarks(scopeOf(detail))}
-            field={markField}
-            onClearField={() => setMarkField(undefined)}
-          />
-        )}
-
-        {/* Takes whatever is left between the chips and the controls, rather
-            than a fixed width with dead space after it. */}
-        <div className="flex-1" style={{ minWidth: 180, paddingRight: 8 }}>
+        {/* The filter first, as on the board — it is the control used most, and
+            what it finds decides everything to its right. */}
+        <div className="shrink-0" style={{ width: 260, maxWidth: '100%' }}>
           <FilterInputView
             value={logFilter}
             onChange={(v: string) => setLogFilter(v)}
@@ -1760,6 +1720,47 @@ export function LogViewer() {
             ) : undefined}
           />
         </div>
+
+        {/* Then the field panel's switch: it governs the rail beside the lines
+            rather than the rows, and a control that hides a whole column should
+            not be buried at the end of a toolbar. */}
+        <button
+          type="button"
+          onClick={toggleFacets}
+          title={!hasFacets
+            ? 'No fields on these lines — the panel appears when a log format names some'
+            : facetsOpen ? 'Hide the field panel' : 'Show the field panel'}
+          aria-pressed={facetsOpen}
+          disabled={!hasFacets}
+          className="flex items-center justify-center rounded shrink-0 border-none cursor-pointer"
+          /* Sized to the chips beside it rather than to its glyph. It was the
+             smallest control in the toolbar and it governs a whole column. */
+          style={{
+            width: 30, height: 26, borderRadius: 6,
+            color: facetsOpen ? ACCENT : 'var(--color-text-muted)',
+            background: facetsOpen
+              ? 'color-mix(in srgb, var(--color-dk8s) 16%, transparent)' : 'transparent',
+            border: facetsOpen
+              ? '1px solid color-mix(in srgb, var(--color-dk8s) 34%, transparent)'
+              : '1px solid transparent',
+          }}
+        >
+          <SidebarLeftIcon size={15} />
+        </button>
+
+        <LevelChips />
+
+        {marks.length > 0 && <Sep />}
+        {marks.length > 0 && (
+          <MarkedBar
+            count={marks.length}
+            onlyMarked={onlyMarked}
+            onOnlyMarked={setOnlyMarked}
+            onClear={() => clearMarks(scopeOf(detail))}
+            field={markField}
+            onClearField={() => setMarkField(undefined)}
+          />
+        )}
 
         {/*
           How much of each hit's surroundings to keep, and how many there are.
@@ -1812,6 +1813,9 @@ export function LogViewer() {
             {containers.map(c => <ContainerChip key={c.name} name={c.name} />)}
           </div>
         )}
+
+        {/* Everything above reads the lines; everything after acts on them. */}
+        <div className="flex-1" />
 
         {/*
           Grouped by what each control does, not by the order they were added.
@@ -2176,7 +2180,9 @@ export function LogViewer() {
           accentColor={ACCENT}
           style={{ flex: 1, minWidth: 0, minHeight: 0 }}
           first={
-            <div className="flex flex-col h-full min-h-0">
+            /* The raised surface, as on the board — the rail reads as one panel
+               beside the lines, marks and fields alike. */
+            <div className="flex flex-col h-full min-h-0" style={{ background: 'var(--color-elevated)' }}>
           {railLead}
           <MarkedRail
             patterns={catalogue}
@@ -2315,11 +2321,9 @@ export function LogViewer() {
                             ? `color-mix(in srgb, ${ACCENT} 22%, transparent)`
                             : line.seq === selectedSeq
                               ? `color-mix(in srgb, ${ACCENT} 12%, transparent)`
-                            /* A mark tints the row it claimed, under the level
-                               tint, so a marked INFO is findable without an
-                               error's weight. */
-                            : markColor
-                              ? `color-mix(in srgb, ${markColor} 10%, transparent)`
+                            /* A mark is drawn on the message it matched (below),
+                               not across the row — so the row keeps its level
+                               tint, and the time, level and logger stay plain. */
                             : line.level === 'error'
                               ? 'color-mix(in srgb, var(--color-error) 7%, transparent)'
                               : line.level === 'warn'
@@ -2327,10 +2331,8 @@ export function LogViewer() {
                                 : 'transparent',
                           borderLeft: `2px solid ${
                             line.seq === linkedSeq || line.seq === selectedSeq ? ACCENT
-                            : markColor ?? (
-                              line.level === 'error' ? 'var(--color-error)'
-                              : line.level === 'warn' ? 'var(--color-warning)' : 'transparent'
-                            )
+                            : line.level === 'error' ? 'var(--color-error)'
+                            : line.level === 'warn' ? 'var(--color-warning)' : 'transparent'
                           }`,
                           paddingLeft: row.isFrame ? 22 : 6,
                           opacity: row.isFrame ? 0.75 : 1,
@@ -2383,7 +2385,16 @@ export function LogViewer() {
                         })}
 
                         <span style={{
-                          color: line.level === 'error' ? 'var(--color-error)'
+                          /* A marked message: its pattern's colour at 16% behind it
+                             and a 2px edge in that colour, the text in the plain
+                             text colour so the mark, not the level, is what reads. */
+                          ...(markColor ? {
+                            background: `color-mix(in srgb, ${markColor} 16%, transparent)`,
+                            borderLeft: `2px solid ${markColor}`,
+                            paddingLeft: 5, marginLeft: -5,
+                          } : {}),
+                          color: markColor ? 'var(--color-text-primary)'
+                            : line.level === 'error' ? 'var(--color-error)'
                             : line.level === 'warn' ? 'var(--color-warning)'
                             : line.level === 'debug' ? 'var(--color-text-muted)'
                             : 'var(--color-text-primary)',
