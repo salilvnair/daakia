@@ -99,6 +99,7 @@ import { archiveHistoryEntry, archiveHistoryBatch } from '../src/services/bin';
 import {
   handleGitSyncGetSettings, handleGitSyncSaveSettings, handleGitSyncGetStatus, handleGitSyncInit,
   handleGitSyncNow, handleGitSyncExportOnly, handleGitSyncImportOnly, handleGitSyncSetIdentity,
+  handleDk8sTeamPrefs,
 } from '../src/panel/main/handlers/git-sync-handler';
 import {
   handleGetWorkspaces, handleSwitchWorkspace, handleCreateWorkspace,
@@ -200,6 +201,7 @@ export function broadcastSyncedData(post: PostMessage) {
   handleGetEnvironments(post);
   handleGetThemes(post);
   handleGetWorkspaces(post);
+  handleDk8sTeamPrefs(post);
 }
 
 /** Mirrors MainPanel.refreshInitialState() for the subsystems wired here. */
@@ -271,6 +273,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'gitSync:setIdentity':
       handleGitSyncSetIdentity(msg as { id?: string }, post);
+      break;
+    case 'gitSync:dk8sTeamPrefs':
+      handleDk8sTeamPrefs(post);
       break;
     case 'themes:save':
       handleSaveTheme(msg, post);

@@ -93,6 +93,7 @@ import { handleSaveUiState, handleGetUiState, handleSaveWorkspaceSnapshot, handl
 import {
   handleGitSyncGetSettings, handleGitSyncSaveSettings, handleGitSyncGetStatus,
   handleGitSyncInit, handleGitSyncNow, handleGitSyncExportOnly, handleGitSyncImportOnly, handleGitSyncSetIdentity,
+  handleDk8sTeamPrefs,
 } from './handlers/git-sync-handler';
 import {
   handleVaultGetStatus, handleVaultSetPassphrase, handleVaultUnlock, handleVaultLock, handleVaultClear,
@@ -350,6 +351,8 @@ export class MainPanel {
     handleGetThemes(this._post);
     /* Teammates' shared workspaces arrive, change and leave with a sync. */
     handleGetWorkspaces(this._post);
+    /* And the dk8s questions that travel with them. */
+    handleDk8sTeamPrefs(this._post);
   }
 
   // ────────────────── Message Router ──────────────────
@@ -1778,6 +1781,9 @@ export class MainPanel {
         break;
       case 'gitSync:setIdentity':
         handleGitSyncSetIdentity(msg as { id?: string }, this._post);
+        break;
+      case 'gitSync:dk8sTeamPrefs':
+        handleDk8sTeamPrefs(this._post);
         break;
 
       // ── Vault (Environments secret encryption) ──

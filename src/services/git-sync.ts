@@ -26,6 +26,7 @@ import {
   getHistory, insertHistoryIfNew, findAll, upsert,
   getAllEnvironments, upsertEnvironment, deleteEnvironment, getDb,
   getAllPrompts, upsertPrompt, getAiFeatures, setAiFeatures, getSetting, setSetting,
+  findById, remove,
 } from '../storage/db';
 import {
   listWorkspaces, getWorkspace, ensureWorkspace, setWorkspaceShared, deleteWorkspace, withWorkspace,
@@ -35,6 +36,7 @@ import {
 import { redactHistoryRow, REDACTED } from './sync-redact';
 import { loadSavedConfigs, saveConfigs } from '../mock/mock-server-manager';
 import { scriptsForSync, importSyncedScripts } from './py-scripts';
+import { pickDk8sPrefs, readTeamEntry, type TeamDk8sPrefs } from './dk8s-shared-prefs';
 
 const execFile = promisify(execFileCb);
 
@@ -636,9 +638,57 @@ interface SharedWorkspaceDoc {
   workspace: { id: string; name: string; color: string | null; docs: string | null };
   collections: Record<string, CollectionTreeNode[]>;
   environments: SyncEnvironment[];
+  /**
+   * The owner's dk8s prefs that travel with a workspace — the logger catalogue
+   * with its determinants, and the custom field readers. See
+   * `dk8s-shared-prefs.ts`. Optional: a file written before this existed has
+   * none, and reads as a workspace that shares no dk8s questions.
+   */
+  dk8s?: Record<string, string>;
 }
 
 const SHARED_FILE = 'workspace.daakia.json';
+
+// ─── dk8s prefs that travel with a shared workspace ─────────────────────────
+//
+// Read from the webview's saved prefs on the way out; kept beside the
+// teammate's read-only copy of the workspace on the way in, never written into
+// their prefs (see `dk8s-shared-prefs.ts` for why). The panel's `ui_state`
+// row is the only place these live, and it is global rather than per
+// workspace, so every workspace you share carries the same ones.
+
+const UI_STATE_COLLECTION = 'ui_state';
+const UI_STATE_ID = 'layout';
+const TEAM_DK8S_COLLECTION = 'dk8s_team_prefs';
+
+function ownDk8sPrefs(): Record<string, string> {
+  return pickDk8sPrefs(findById<{ prefs?: unknown }>(UI_STATE_COLLECTION, UI_STATE_ID)?.prefs);
+}
+
+function keepTeamDk8sPrefs(localId: string, doc: SharedWorkspaceDoc, ownerName: string): void {
+  const prefs = pickDk8sPrefs(doc.dk8s);
+  if (!Object.keys(prefs).length) { remove(TEAM_DK8S_COLLECTION, localId); return; }
+  upsert<TeamDk8sPrefs>(TEAM_DK8S_COLLECTION, localId, {
+    workspaceId: localId,
+    workspaceName: doc.workspace.name || 'Shared workspace',
+    ownerId: doc.owner.id,
+    ownerName,
+    prefs,
+  });
+}
+
+/**
+ * Every teammate's shared dk8s prefs, for the workspaces you still follow.
+ *
+ * Filtered by the workspace still being here: a copy removed from the
+ * workspace menu goes without passing through a sync, and its questions go
+ * with it rather than lingering until the next one.
+ */
+export function listTeamDk8sPrefs(): TeamDk8sPrefs[] {
+  return findAll<unknown>(TEAM_DK8S_COLLECTION)
+    .map(readTeamEntry)
+    .filter((e): e is TeamDk8sPrefs => !!e && !!getWorkspace(e.workspaceId));
+}
 
 function exportSharedWorkspace(ws: WorkspaceRow, me: SyncIdentity): void {
   const doc = withWorkspace(ws.id, (): SharedWorkspaceDoc => {
@@ -654,6 +704,7 @@ function exportSharedWorkspace(ws: WorkspaceRow, me: SyncIdentity): void {
       workspace: { id: ws.id, name: ws.name, color: ws.color, docs: ws.docs },
       collections,
       environments: readEnvironments(),
+      dk8s: ownDk8sPrefs(),
     };
   });
   writeJson(path.join(sharedDir(me.id), ws.id, SHARED_FILE), doc);
@@ -714,6 +765,9 @@ function importSharedWorkspace(doc: SharedWorkspaceDoc, ownerName: string): stri
     }
     mergeEnvironments(envs, idOf);
   });
+  /* Their dk8s questions, rebuilt with the rest: what they stopped sharing
+     goes, what they changed arrives changed. */
+  keepTeamDk8sPrefs(localId, doc, ownerName);
   return localId;
 }
 
@@ -821,7 +875,7 @@ export function importSharedFromTeam(): number {
     const prefix = `shared-${ws.owner_id}-`;
     const found = ws.id.startsWith(prefix) ? readSharedDoc(ws.owner_id, ws.id.slice(prefix.length)) : undefined;
     if (found && importSharedWorkspace(found.doc, found.ownerName)) refreshed++;
-    else deleteWorkspace(ws.id);
+    else { deleteWorkspace(ws.id); remove(TEAM_DK8S_COLLECTION, ws.id); }
   }
   return refreshed;
 }
