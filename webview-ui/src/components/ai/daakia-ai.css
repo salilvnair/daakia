@@ -126,11 +126,6 @@
 .dai--streaming .ce-composer-send:not(.dai-stop) { visibility: hidden; }
 .dai .ce-composer-send.dai-stop { background: var(--dai-surface2); color: var(--color-text-primary); border: 1px solid var(--dai-line); box-shadow: none; }
 .dai .ce-composer-send.dai-stop:hover { background: var(--dai-accent-tint); border-color: var(--dai-accent-line); }
-.dai .ce-avatar--agent {
-  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--dai-accent) 26%, transparent), color-mix(in srgb, var(--dai-accent) 10%, var(--color-panel))) !important;
-  border: 1px solid var(--dai-accent-line);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--dai-accent) 18%, transparent);
-}
 
 /* ── Landing ──────────────────────────────────────────────────────────── */
 .dai-landing { width: min(820px, calc(100% - 32px)); margin: 0 auto; display: flex; flex-direction: column; gap: 26px; padding: 24px 0; }

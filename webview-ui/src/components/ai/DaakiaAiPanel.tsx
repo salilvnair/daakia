@@ -14,7 +14,6 @@ import { ConvEngineChat } from '@salilvnair/convengine-chat';
 import type { RendererComponentProps } from '@salilvnair/convengine-chat';
 import { useTabsStore, DAAKIA_ASSISTANT_SYSTEM_PROMPT, type ResponseData } from '../../store/tabs-store';
 import { useEnvStore, GLOBAL_ENV_ID } from '../../store/env-store';
-import { DaakiaMarkIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { Dk8sSearchCard, isDk8sSearchPayload } from './Dk8sSearchCard';
 import { AiNoticeCard, isAiNoticePayload } from './AiNoticeCard';
@@ -295,10 +294,6 @@ function AiContextBar({
 
 // ─── Panel ────────────────────────────────────────────────────────────────────
 
-/** Where an AI agent's avatar goes: Daakia's own mark, in the tab's clay. */
-function DaakiaAvatar() {
-  return <DaakiaMarkIcon size={16} tint={ACCENT} />;
-}
 
 /**
  * DaakiaAiPanel — the Daakia AI tab.
@@ -500,7 +495,6 @@ export function DaakiaAiPanel({ tabId }: { tabId: string }) {
   // and its answer belong to. Switching threads remounts the chat (key = epoch).
   const conversationId = tabId;
   const initialMessages = useMemo(() => toUiMessages(seed), [seed]);
-  const icons = useMemo(() => ({ AgentIcon: DaakiaAvatar }), []);
 
   const chatConfig = useMemo(() => ({
     apiHost: '',
@@ -525,12 +519,11 @@ export function DaakiaAiPanel({ tabId }: { tabId: string }) {
     landingChips: [],
     initialMessages,
     replyContext,
-    icons,
     stream: { enabled: true, transport: 'sse' as const },
     renderers: DAAKIA_RENDERER_PROVIDERS,
     onMessage: handleMessage,
     onResponse: handleResponse,
-  }), [handleMessage, handleResponse, dk8sActive, initialMessages, replyContext, icons, docTheme]);
+  }), [handleMessage, handleResponse, dk8sActive, initialMessages, replyContext, docTheme]);
 
   const chatTheme = useMemo(() => ({
     'color-accent': 'var(--color-ai-accent, #D97757)',
