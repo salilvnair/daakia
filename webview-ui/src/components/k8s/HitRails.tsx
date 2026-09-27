@@ -35,7 +35,7 @@
  */
 import { useMemo, useState } from 'react';
 import { ButtonView, ModalView, IconSize } from '@salilvnair/dui';
-import { CopyIcon, CheckIcon, CloseIcon } from '../../icons';
+import { CloseIcon } from '../../icons';
 import { copyText } from '../../utils/clipboard';
 import { useTabsStore } from '../../store/tabs-store';
 import type { ResultLine } from './search-results';
@@ -46,6 +46,7 @@ import { correlateFor, removeView, type CorrelateKey, type SavedFollow } from '.
 import { replicaHue, podTail } from './pod-hue';
 import { FOLLOW, FIELD_KEY, FIELD_VALUE, FIELD_NUMBER, AMBER, GOOD, tint } from './follow-tone';
 import { LineButton, FillButton, railLabel, mono } from './follow-ui';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 /* ── Left ── */
 
@@ -410,11 +411,11 @@ function Reveal({ children }: { children: React.ReactNode }) {
 
 /** The square copy button beside the selected card's Follow. */
 function CopyButton({ value }: { value: string }) {
-  const [done, setDone] = useState(false);
+  const { copied: done, flash } = useCopyTick();
   return (
     <LineButton title={done ? 'Copied' : 'Copy value'} aria-label="Copy value"
                 style={{ width: 26, padding: 0, color: done ? GOOD : 'var(--color-text-secondary)' }}
-                iconLeft={done ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
-                onClick={async () => { if (await copyText(value)) { setDone(true); setTimeout(() => setDone(false), 1400); } }} />
+                iconLeft={<CopyGlyph copied={done} size={12} />}
+                onClick={async () => { if (await copyText(value)) flash(); }} />
   );
 }

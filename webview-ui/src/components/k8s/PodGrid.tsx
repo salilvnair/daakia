@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   SparklineView, SearchInputView, SegmentedControlView, CheckSquareIcon, EmptySquareIcon,
   ModalView, ButtonView, IconSize, EmptyStateView,
-  LoadingStateView } from '@salilvnair/dui';
+  LoadingStateView, SkeletonView } from '@salilvnair/dui';
 import { useLongPress } from './use-long-press';
 import { PodContextMenu } from './PodContextMenu';
 import { PvCheckModal } from './PvCheckModal';
@@ -483,6 +483,25 @@ function FavoriteStar({ pod, size = 13 }: { pod: PodSummary; size?: number }) {
   );
 }
 
+/** A card's shape while the pod list is read again: name, owner, status, restarts. */
+function PodCardSkeleton() {
+  return (
+    <div className="flex flex-col gap-2 p-3 rounded-lg relative overflow-hidden" aria-busy
+         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)', minWidth: 0 }}>
+      <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: 'var(--color-surface-border)' }} />
+      <div className="flex flex-col pl-2" style={{ gap: 9 }}>
+        <SkeletonView variant="block" width="78%" height={12} />
+        <span className="flex items-center" style={{ gap: 6 }}>
+          <SkeletonView variant="block" width={70} height={12} />
+          <SkeletonView variant="block" width="34%" height={10} />
+        </span>
+        <SkeletonView variant="block" width="46%" height={10} />
+        <SkeletonView variant="block" width="30%" height={10} />
+      </div>
+    </div>
+  );
+}
+
 function PodCard({ pod, onOpen, onMenu }: {
   pod: PodSummary;
   onOpen: () => void;
@@ -650,6 +669,7 @@ function PodTable({ pods, onOpen, onMenu }: {
     if (held.current) beginSelection(held.current.uid);
   });
   const togglePodSelected = useK8sStore(s => s.togglePodSelected);
+  const refreshing = useK8sStore(s => s.refreshing === true);
 
   // No Namespace column: the group heading above the table already says which
   // namespace and cluster these rows belong to, so repeating it on every row
@@ -693,7 +713,21 @@ function PodTable({ pods, onOpen, onMenu }: {
           </tr>
         </thead>
         <tbody>
-          {pods.map((pod, i) => {
+          {refreshing && pods.map((pod, i) => (
+            /* One skeleton row per row that was there, each cell a bar its
+               column's width — the table keeps its height while it is read. */
+            <tr key={`${pod.namespace}/${pod.name}`} aria-busy>
+              {cols.map((h, c) => (
+                <td key={h} className="px-3" style={{ height: 31, borderBottom: '1px solid var(--color-surface-border)' }}>
+                  {h === SELECT_COL ? null : (
+                    <SkeletonView variant="block" height={10}
+                                  width={c === (selectMode ? 1 : 0) ? `${58 + ((i * 17) % 30)}%` : h === 'Type' ? 72 : '60%'} />
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+          {!refreshing && pods.map((pod, i) => {
             const sev = severityOf(pod);
             const color = severityColor(sev);
             const u = usage[pod.name];
@@ -946,6 +980,9 @@ function NamespaceGroup({ group, onOpen, onMenu, collapsed, onToggle }: {
   collapsed: boolean;
   onToggle: () => void;
 }) {
+  /* A refresh turns each card into its own skeleton, in its own place — so the
+     grid keeps its shape, and every namespace shows it is being read again. */
+  const refreshing = useK8sStore(s => s.refreshing === true);
   return (
     <div className="flex flex-col gap-2 rounded-lg p-3"
          style={{ border: `1px solid ${group.tint.border}`, background: group.tint.wash }}>
@@ -957,9 +994,9 @@ function NamespaceGroup({ group, onOpen, onMenu, collapsed, onToggle }: {
           {/* Keyed by name: a card drawn from a table row has no uid yet, and
               a key that changes when the full list lands remounts the card
               under the reader. */}
-          {group.pods.map(p => (
-            <PodCard key={`${p.namespace}/${p.name}`} pod={p} onOpen={() => onOpen(p)} onMenu={onMenu} />
-          ))}
+          {group.pods.map(p => (refreshing
+            ? <PodCardSkeleton key={`${p.namespace}/${p.name}`} />
+            : <PodCard key={`${p.namespace}/${p.name}`} pod={p} onOpen={() => onOpen(p)} onMenu={onMenu} />))}
         </div>
       )}
     </div>

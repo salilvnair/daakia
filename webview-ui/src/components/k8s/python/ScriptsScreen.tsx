@@ -15,7 +15,7 @@ import {
   ButtonView, SelectInputView, TextInputView, SplitPanelView, EmptyStateView, BadgeChipView,
   PopoverView, UnderlineTabsView, IconSize,
 } from '@salilvnair/dui';
-import { PlayIcon, BugIcon, PythonIcon, CodeIcon, ChevronRightIcon, RefreshIcon } from '../../../icons';
+import { PlayIcon, BugIcon, PythonIcon, PythonFileIcon, CodeIcon, ChevronRightIcon, RefreshIcon } from '../../../icons';
 import { postMsg } from '../../../vscode';
 import { useK8sStore } from '../../../store/k8s-store';
 import { useWorkspaceStore } from '../../../store/workspace-store';
@@ -27,6 +27,7 @@ import { AskPyAi } from './AskPyAi';
 import { usePythonMenu } from './py-menu';
 import { PodPicker, type PickablePod } from './PodPicker';
 import { GhostToggle } from './ghost-toggle';
+import { NoPython } from './NoPython';
 import { PyEditor } from './PyEditor';
 import { OutputPane, ConsolePane } from './PyBottomPanel';
 import { PyDebugPanes } from './PyDebugPanes';
@@ -281,7 +282,39 @@ export function ScriptsScreen() {
           second={<div ref={setAiEl} className="h-full w-full min-w-0 min-h-0" />}
           first={
         <div className="flex flex-col h-full min-w-0 min-h-0">
-          {!script ? (
+          {/* Every pod picked has answered, and none has Python: that is the
+              screen — not an editor, and not "pick a script". */}
+          {/* Nothing picked yet: the first thing to do is choose where it runs. */}
+          {pyTargets.length === 0 ? (
+            <div className="flex-1 grid place-items-center">
+              <EmptyStateView
+                variant="medallion"
+                icon={<PythonFileIcon size={30} />}
+                title="Pick a pod that has Python"
+                message="A script runs inside the pods you pick, with each container's own python3, environment and network. Choose them above — each is checked for Python 3 as you pick it."
+                accentColor={ACCENT}
+                action={pods.length ? { label: 'Choose pods', onClick: () => setPickerOpen(true) } : undefined}
+              />
+            </div>
+          ) : checking ? (
+            <div className="flex-1 grid place-items-center">
+              <EmptyStateView
+                variant="medallion"
+                icon={<PythonFileIcon size={30} />}
+                title={`Checking python3 on ${pyTargets.length === 1 ? 'the pod' : `${pyTargets.length} pods`}…`}
+                message="Asking each container which Python it has before anything runs there."
+                accentColor={ACCENT}
+              />
+            </div>
+          ) : pyTargets.length > 0 && withPy === 0 ? (
+            <NoPython
+              reason={found.find(p => p?.verdict && !p.verdict.ok)?.verdict?.reason ?? 'No Python in these pods'}
+              containers={[]}
+              onContainer={() => {}}
+              pods={picked}
+              onCheck={() => checkAll(true)}
+            />
+          ) : !script ? (
             <div className="flex-1 grid place-items-center">
               <EmptyStateView
                 variant="medallion"

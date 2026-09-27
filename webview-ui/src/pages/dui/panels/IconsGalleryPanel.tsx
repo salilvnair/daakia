@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import * as Icons from '../../../icons/daakia-icons';
 import { TextInputView } from '@salilvnair/dui';
-import { SearchIcon, CopyIcon, CheckIcon } from '../../../icons';
+import { SearchIcon, CopyIcon } from '../../../icons';
+import { useCopyTick, CopyGlyph } from '../../../components/shared/CopyTick';
 
 type IconEntry = {
   name: string;
@@ -135,7 +136,6 @@ const ALL_ENTRIES = buildEntries();
 export function IconsGalleryPanel() {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
-  const [copied, setCopied] = useState<string | null>(null);
 
   const categories = ['All', ...ICON_CATEGORIES.map(c => c.label)];
 
@@ -144,12 +144,6 @@ export function IconsGalleryPanel() {
     const matchesCat = activeCategory === 'All' || e.category === activeCategory;
     return matchesSearch && matchesCat;
   });
-
-  const copyName = (name: string) => {
-    navigator.clipboard?.writeText(name).catch(() => {});
-    setCopied(name);
-    setTimeout(() => setCopied(null), 1400);
-  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -196,60 +190,7 @@ export function IconsGalleryPanel() {
         gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
         gap: '6px',
       }}>
-        {filtered.map(entry => {
-          const isCopied = copied === entry.name;
-          const IconComp = entry.component;
-          return (
-            <button
-              key={entry.name}
-              type="button"
-              title={`${entry.name} — click to copy`}
-              onClick={() => copyName(entry.name)}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '10px 6px',
-                borderRadius: '7px',
-                border: `1px solid ${isCopied ? 'var(--color-success)' : 'var(--color-surface-border)'}`,
-                background: isCopied
-                  ? 'color-mix(in srgb, var(--color-success) 10%, var(--color-surface))'
-                  : 'var(--color-surface)',
-                cursor: 'pointer',
-                transition: 'all 120ms',
-                position: 'relative',
-              }}
-              onMouseEnter={e => {
-                if (!isCopied) (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-primary)';
-              }}
-              onMouseLeave={e => {
-                if (!isCopied) (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-surface-border)';
-              }}
-            >
-              <div style={{ color: isCopied ? 'var(--color-success)' : 'var(--color-text-secondary)', fontSize: '18px' }}>
-                {isCopied ? <CheckIcon size={18} /> : <IconComp size={18} />}
-              </div>
-              <div style={{
-                fontSize: '9px',
-                color: isCopied ? 'var(--color-success)' : 'var(--color-text-muted)',
-                textAlign: 'center',
-                lineHeight: 1.3,
-                wordBreak: 'break-all',
-                fontFamily: 'monospace',
-              }}>
-                {isCopied ? 'Copied!' : entry.name.replace('Icon', '')}
-              </div>
-              {/* Hover copy hint */}
-              <div
-                className="absolute inset-0 rounded-[7px] flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
-                style={{ background: 'color-mix(in srgb, var(--color-primary) 8%, transparent)' }}
-              >
-                <CopyIcon size={12} style={{ color: 'var(--color-primary)' }} />
-              </div>
-            </button>
-          );
-        })}
+        {filtered.map(entry => <IconTile key={entry.name} entry={entry} />)}
       </div>
 
       {filtered.length === 0 && (
@@ -262,5 +203,61 @@ export function IconsGalleryPanel() {
         Click any icon to copy its name. All icons are in <code style={{ fontFamily: 'monospace', background: 'color-mix(in srgb, var(--color-text-primary) 8%, transparent)', padding: '1px 4px', borderRadius: 3 }}>webview-ui/src/icons/daakia-icons.tsx</code>
       </div>
     </div>
+  );
+}
+
+/** One icon; a click copies its name, and the green tick stands in for the icon meanwhile. */
+function IconTile({ entry }: { entry: IconEntry }) {
+  const { copied: isCopied, flash } = useCopyTick();
+  const IconComp = entry.component;
+  const copy = () => { navigator.clipboard?.writeText(entry.name).then(flash, () => {}); };
+  return (
+    <button
+      type="button"
+      title={`${entry.name} — click to copy`}
+      onClick={copy}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '10px 6px',
+        borderRadius: '7px',
+        border: `1px solid ${isCopied ? 'var(--color-success)' : 'var(--color-surface-border)'}`,
+        background: isCopied
+          ? 'color-mix(in srgb, var(--color-success) 10%, var(--color-surface))'
+          : 'var(--color-surface)',
+        cursor: 'pointer',
+        transition: 'all 120ms',
+        position: 'relative',
+      }}
+      onMouseEnter={e => {
+        if (!isCopied) (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-primary)';
+      }}
+      onMouseLeave={e => {
+        if (!isCopied) (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-surface-border)';
+      }}
+    >
+      <div style={{ color: isCopied ? 'var(--color-success)' : 'var(--color-text-secondary)', fontSize: '18px' }}>
+        {isCopied ? <CopyGlyph copied size={18} /> : <IconComp size={18} />}
+      </div>
+      <div style={{
+        fontSize: '9px',
+        color: isCopied ? 'var(--color-success)' : 'var(--color-text-muted)',
+        textAlign: 'center',
+        lineHeight: 1.3,
+        wordBreak: 'break-all',
+        fontFamily: 'monospace',
+      }}>
+        {entry.name.replace('Icon', '')}
+      </div>
+      {/* Hover copy hint */}
+      <div
+        className="absolute inset-0 rounded-[7px] flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
+        style={{ background: 'color-mix(in srgb, var(--color-primary) 8%, transparent)' }}
+      >
+        <CopyIcon size={12} style={{ color: 'var(--color-primary)' }} />
+      </div>
+    </button>
   );
 }

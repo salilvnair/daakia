@@ -6,7 +6,7 @@ import {
   SelectInputView, EditorView, ResizablePanelView, ButtonView, IconButtonView,
   ToggleSwitchView, TextInputView, TabView, type SelectOption, type TabItem,
 } from '@salilvnair/dui';
-import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern } from '../../../icons';
+import { TrashIcon, DiagonalLinesPattern } from '../../../icons';
 import { ConfirmDialog } from '../../shared';
 import { GRAPHQL_SAMPLES } from '../samples';
 import type { MockServer, MockRoute } from '../mock-types';
@@ -17,6 +17,7 @@ import { SequencePanel } from '../wiremock/SequencePanel';
 import { MatchBuilderPanel } from '../wiremock/MatchBuilderPanel';
 import { FaultInjectionPanel } from '../wiremock/FaultInjectionPanel';
 import { StateMachineTriggerSelect } from '../wiremock/StateMachinePanel';
+import { CopyUrlButton } from './CopyUrlButton';
 
 type GQLOpTab = 'response' | 'sequence' | 'matching' | 'advanced';
 
@@ -67,17 +68,9 @@ interface GraphQLConfigProps {
 export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
   const [selectedSample, setSelectedSample] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showDeleteAll, setShowDeleteAll] = useState(false);
 
   const gqlUrl = server.running && server.port ? `http://localhost:${server.port}/graphql` : '';
-
-  const copyEndpoint = (id: string) => {
-    if (!gqlUrl) return;
-    navigator.clipboard.writeText(gqlUrl);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 1500);
-  };
 
   const applySample = (sampleId: string) => {
     if (!sampleId) return;
@@ -182,9 +175,7 @@ export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
           key={op.id}
           op={op}
           gqlUrl={gqlUrl}
-          copiedId={copiedId}
           server={server}
-          onCopyEndpoint={copyEndpoint}
           onDelete={() => setDeleteConfirmId(op.id)}
           onUpdate={(patch) => {
             const ops = [...(server.graphqlOperations || [])];
@@ -232,14 +223,12 @@ export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
 interface GQLOperationCardProps {
   op: GraphQLMockOperation;
   gqlUrl: string;
-  copiedId: string | null;
   server: MockServer;
-  onCopyEndpoint: (id: string) => void;
   onDelete: () => void;
   onUpdate: (patch: Partial<GraphQLMockOperation>) => void;
 }
 
-function GQLOperationCard({ op, gqlUrl, copiedId, server, onCopyEndpoint, onDelete, onUpdate }: GQLOperationCardProps) {
+function GQLOperationCard({ op, gqlUrl, server, onDelete, onUpdate }: GQLOperationCardProps) {
   const [activeTab, setActiveTab] = useState<GQLOpTab>('response');
 
   return (
@@ -279,12 +268,7 @@ function GQLOperationCard({ op, gqlUrl, copiedId, server, onCopyEndpoint, onDele
           style={{ flex: 1, fontFamily: 'monospace' }}
         />
         {gqlUrl && op.enabled !== false && (
-          <IconButtonView
-            size="sm"
-            icon={copiedId === op.id ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
-            onClick={() => onCopyEndpoint(op.id)}
-            title="Copy endpoint URL"
-          />
+          <CopyUrlButton text={gqlUrl} title="Copy endpoint URL" />
         )}
         {op.enabled !== false && (
           <IconButtonView

@@ -33,7 +33,7 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  CheckIcon, CopyIcon, FilterIcon, FilterOffIcon, SparkleIcon,
+  CheckIcon, FilterIcon, FilterOffIcon, SparkleIcon,
 } from '../../../icons';
 import {
   ICON_SLOT, MENU_HINT, MENU_ROW, MENU_SURFACE, MenuSeparator, SectionHeading,
@@ -52,6 +52,7 @@ import {
 } from '../../../services/history-filter/filter-model';
 import { buildFacet, type MatchContext } from '../../../services/history-filter/matcher';
 import type { HistoryRowLike } from '../../../services/history-filter/history-facts';
+import { useCopyTick, CopyGlyph } from '../../shared/CopyTick';
 
 /*
   Wide enough for a condition row to breathe.
@@ -356,7 +357,7 @@ function AskBox({ rows, onChange }: {
 
 export function HistoryFilterBody({ rows, state, onChange, ctx, matched }: HistoryFilterProps) {
   const [tab, setTab] = useState<TabId>('request');
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
 
   const facets = useMemo(
     () => TAB_FACETS[tab].map(f => ({
@@ -374,10 +375,7 @@ export function HistoryFilterBody({ rows, state, onChange, ctx, matched }: Histo
   const query = formatQuery(state);
 
   const copy = () => {
-    navigator.clipboard?.writeText(query).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
-    }).catch(() => { /* a clipboard the host refused is not worth an error */ });
+    navigator.clipboard?.writeText(query).then(flash).catch(() => { /* a clipboard the host refused is not worth an error */ });
   };
 
   return (
@@ -545,7 +543,7 @@ export function HistoryFilterBody({ rows, state, onChange, ctx, matched }: Histo
           <button type="button" onClick={copy} title="Copy this filter"
                   className="border-none bg-transparent cursor-pointer p-0.5 flex shrink-0"
                   style={{ color: copied ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
-            <CopyIcon size={11} color="currentColor" />
+            <CopyGlyph copied={copied} size={11} color="currentColor" />
           </button>
         )}
       </div>

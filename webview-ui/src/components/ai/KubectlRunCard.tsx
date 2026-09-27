@@ -14,6 +14,7 @@ import { ButtonView, IconButtonView, ChipView } from '@salilvnair/dui';
 import { useTabsStore } from '../../store/tabs-store';
 import { useK8sStore } from '../../store/k8s-store';
 import { copyText } from '../../utils/clipboard';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 const ACCENT = 'var(--color-ai-accent, #D97757)';
 const MONO = 'ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace';
@@ -48,7 +49,7 @@ const Svg = ({ children, size = 13 }: { children: React.ReactNode; size?: number
 const FOLD_LINES = 24;
 
 export function KubectlRunCard({ result }: { result: KubectlRunResult }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
   const [all, setAll] = useState(false);
   const lines = result.output.split('\n');
   const folds = !all && lines.length > FOLD_LINES;
@@ -90,10 +91,8 @@ export function KubectlRunCard({ result }: { result: KubectlRunResult }) {
           aria-label="Copy command"
           active={copied}
           activeColor="var(--color-success)"
-          icon={copied
-            ? <Svg size={12}><path d="m5 12 5 5 9-10" /></Svg>
-            : <Svg size={12}><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></Svg>}
-          onClick={async () => { if (await copyText(result.command)) { setCopied(true); setTimeout(() => setCopied(false), 1400); } }}
+          icon={<CopyGlyph copied={copied} size={12} />}
+          onClick={async () => { if (await copyText(result.command)) flash(); }}
         />
       </div>
 

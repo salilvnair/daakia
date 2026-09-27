@@ -38,6 +38,7 @@ import { PyEditor } from './PyEditor';
 import { PyBottomPanel, type BottomTab } from './PyBottomPanel';
 import { PyDebugPanes, DebugToolbar } from './PyDebugPanes';
 import { ThisPodPanel } from './ThisPodPanel';
+import { NoPython } from './NoPython';
 import { newId, PY_HEADER_HEIGHT } from './py-view';
 import { ACCENT, WARN, MUTED, BAD } from '../tone';
 
@@ -157,6 +158,22 @@ export function PythonTab() {
 
   const containers = detail.containers.map(c => c.name);
   const path = shown?.path ?? plannedPath(pyProbe?.base, name);
+
+  /* The container has said it cannot run a script: the tab is that answer,
+     not an editor whose every button is greyed out. A session already
+     debugging keeps its screen. */
+  if (verdict && !verdict.ok && pyProbe && !pyProbe.busy && !debugLive) {
+    return (
+      <NoPython
+        reason={verdict.reason}
+        container={container}
+        containers={containers}
+        onContainer={(c) => useK8sStore.getState().setLogContainer(c)}
+        onCheck={() => probe(target, true)}
+        checking={pyProbe.busy}
+      />
+    );
+  }
 
   return (
     <div className="flex h-full min-h-0" data-context-menu="python" onContextMenu={menu.onContextMenu}>

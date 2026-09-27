@@ -8,7 +8,7 @@ import type { TabItem } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, GitHubIcon, LockIcon, TrashIcon, KeyboardIcon, Dk8sIcon, TerminalIcon,
          CookieIcon, NetworkIcon, ShieldIcon, UptimeIcon, FilterIcon, LayersIcon, BulkEditIcon, GaugeIcon,
-         DocumentIcon, ConnectIcon, ClipboardCompareIcon, FolderIcon, BugIcon, IssueOpenedIcon, InfoCircleIcon, SearchIcon, ChartBarIcon } from '../../icons';
+         DocumentIcon, ConnectIcon, ClipboardCompareIcon, FolderIcon, BugIcon, IssueOpenedIcon, InfoCircleIcon, SearchIcon, ChartBarIcon, DownloadIcon } from '../../icons';
 import { useAiFeaturesStore, type AiFeatureKey } from '../../store/ai-features-store';
 import { useTabsStore } from '../../store/tabs-store';
 import { AiSchemaDiffModal } from '../ai/AiSchemaDiffModal';
@@ -30,6 +30,7 @@ import { VaultSettings } from './VaultSettings';
 import { BinSettings } from './BinSettings';
 import { CodeScanSettings } from '../settings/CodeScanSettings';
 import { Dk8sLogSettings } from '../settings/Dk8sLogSettings';
+import { LOG_SETTINGS_PAGES, LOG_SETTINGS_IDS } from '../settings/LogsSettingsNav';
 import { FieldsSettings } from '../settings/FieldsSettings';
 import { DeterminantsSettings } from '../settings/DeterminantsSettings';
 import { KeymapSettings } from './KeymapSettings';
@@ -58,7 +59,7 @@ import { AboutPanel } from '../settings/AboutPanel';
 import { Dk8sGeneralSettings, DkghGeneralSettings } from '../settings/SurfaceGeneralSettings';
 import { Dk8sCommandsSection } from '../settings/Dk8sCommandsSection';
 
-type SettingsSection = 'general' | 'theme' | 'keymap' | 'about' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'code-scan' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-general' | 'dk8s-cluster' | 'dk8s-logs' | 'dk8s-fields' | 'dk8s-determinants' | 'dk8s-terminal' | 'dk8s-commands' | 'dkgh-general' | 'dkgh';
+type SettingsSection = 'general' | 'theme' | 'keymap' | 'about' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'code-scan' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-general' | 'dk8s-cluster' | 'dk8s-logs' | 'dk8s-logs-downloads' | 'dk8s-logs-formats' | 'dk8s-logs-archive' | 'dk8s-fields' | 'dk8s-determinants' | 'dk8s-terminal' | 'dk8s-commands' | 'dkgh-general' | 'dkgh';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
 type PowerSubtab = 'cookies' | 'proxy' | 'certs' | 'monitor' | 'interceptor' | 'diff' | 'bulk' | 'load'
   | 'schema-diff' | 'openapi' | 'security' | 'webhook' | 'postman' | 'clustering'
@@ -84,6 +85,9 @@ const SETTINGS_SECTION_META: Record<SettingsSection, { label: string; icon: Reac
   'dk8s-general':    { label: 'General',         icon: <SettingsIcon size={14} /> },
   'dk8s-cluster':    { label: 'Cluster',         icon: <Dk8sIcon size={14} /> },
   'dk8s-logs':       { label: 'Logs',            icon: <LayersIcon size={14} /> },
+  'dk8s-logs-downloads': { label: 'Downloads',   icon: <DownloadIcon size={14} /> },
+  'dk8s-logs-formats': { label: 'Log Formats',     icon: <CodeBracketsIcon size={14} /> },
+  'dk8s-logs-archive': { label: 'Archive',         icon: <FolderIcon size={14} /> },
   'dk8s-fields':     { label: 'Fields',          icon: <FilterIcon size={14} /> },
   'dk8s-determinants': { label: 'Determinants',  icon: <ChartBarIcon size={14} /> },
   'dk8s-terminal':   { label: 'Terminal',        icon: <TerminalIcon size={14} /> },
@@ -124,9 +128,12 @@ const SETTINGS_NAV_ITEMS: SideNavItem[] = [
   { id: 'g-dk8s', label: 'DK8S', isGroup: true, children: [
     { id: 'dk8s-general', label: SETTINGS_SECTION_META['dk8s-general'].label, icon: SETTINGS_SECTION_META['dk8s-general'].icon },
     { id: 'dk8s-cluster', label: SETTINGS_SECTION_META['dk8s-cluster'].label, icon: SETTINGS_SECTION_META['dk8s-cluster'].icon },
-    { id: 'dk8s-logs', label: SETTINGS_SECTION_META['dk8s-logs'].label, icon: SETTINGS_SECTION_META['dk8s-logs'].icon },
-    { id: 'dk8s-fields', label: SETTINGS_SECTION_META['dk8s-fields'].label, icon: SETTINGS_SECTION_META['dk8s-fields'].icon },
-    { id: 'dk8s-determinants', label: SETTINGS_SECTION_META['dk8s-determinants'].label, icon: SETTINGS_SECTION_META['dk8s-determinants'].icon },
+    /* Logs is a branch: its pages — General, Downloads, Log Formats, Archive,
+       Fields, Determinants — expand under it (LogsSettingsNav). */
+    {
+      id: 'dk8s-logs-branch', label: 'Logs', icon: SETTINGS_SECTION_META['dk8s-logs'].icon,
+      children: LOG_SETTINGS_PAGES.map(p => ({ id: p.id, label: p.label, icon: p.icon })),
+    },
     { id: 'dk8s-terminal', label: SETTINGS_SECTION_META['dk8s-terminal'].label, icon: SETTINGS_SECTION_META['dk8s-terminal'].icon },
     { id: 'dk8s-commands', label: SETTINGS_SECTION_META['dk8s-commands'].label, icon: SETTINGS_SECTION_META['dk8s-commands'].icon },
   ] },
@@ -141,7 +148,12 @@ const SETTINGS_NAV_ITEMS: SideNavItem[] = [
   ] },
 ];
 
-const ALL_SECTION_IDS = new Set<string>(SETTINGS_NAV_ITEMS.flatMap(g => (g.children ?? []).map(c => c.id)));
+const ALL_SECTION_IDS = new Set<string>([
+  ...SETTINGS_NAV_ITEMS.flatMap(g => (g.children ?? []).map(c => c.id)),
+  ...LOG_SETTINGS_IDS,
+]);
+/* A branch is not a page. */
+ALL_SECTION_IDS.delete('dk8s-logs-branch');
 
 export function SettingsPanel() {
   const [activeSection, setActiveSection] = usePersistedPref<ActiveNavId>(
@@ -188,7 +200,8 @@ export function SettingsPanel() {
           <SideNavView
             items={SETTINGS_NAV_ITEMS}
             activeId={activeSection}
-            onSelect={(id) => setActiveSection(id as ActiveNavId)}
+            /* A dui without branches draws Logs as a plain entry: it opens Logs → General. */
+            onSelect={(id) => setActiveSection((id === 'dk8s-logs-branch' ? 'dk8s-logs' : id) as ActiveNavId)}
             defaultOpenIds={['g-general', 'g-server', 'g-ai', 'g-dk8s', 'g-dkgh', 'g-advanced']}
             fillContainer
             collapsible={false}
@@ -239,12 +252,18 @@ export function SettingsPanel() {
               <Dk8sCommandsSection />
             ) : activeSection === 'dk8s-cluster' ? (
               <Dk8sClusterSettings />
-            ) : activeSection === 'dk8s-logs' ? (
-              <Dk8sLogSettings />
             ) : activeSection === 'dk8s-fields' ? (
               <FieldsSettings />
             ) : activeSection === 'dk8s-determinants' ? (
               <DeterminantsSettings />
+            ) : activeSection === 'dk8s-logs-downloads' ? (
+              <Dk8sLogSettings page="downloads" />
+            ) : activeSection === 'dk8s-logs-formats' ? (
+              <Dk8sLogSettings page="formats" />
+            ) : activeSection === 'dk8s-logs-archive' ? (
+              <Dk8sLogSettings page="archive" />
+            ) : activeSection === 'dk8s-logs' ? (
+              <Dk8sLogSettings page="general" />
             ) : activeSection === 'dk8s-terminal' ? (
               <TerminalSettings />
             ) : activeSection === 'dkgh' ? (

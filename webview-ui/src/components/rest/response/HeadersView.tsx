@@ -1,20 +1,13 @@
 import { useState, useCallback } from 'react';
-import { CopyIcon, CheckIcon } from '../../../icons';
+import { CopyIcon } from '../../../icons';
+import { useCopyTick, CopyGlyph } from '../../shared/CopyTick';
 
 export function HeadersView({ headers }: { headers: [string, string][] }) {
-  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   const copyAll = useCallback(() => {
     const text = headers.map(([k, v]) => `${k}: ${v}`).join('\n');
     navigator.clipboard.writeText(text);
-  }, [headers]);
-
-  const copyHeader = useCallback((idx: number) => {
-    const [k, v] = headers[idx];
-    navigator.clipboard.writeText(`${k}: ${v}`);
-    setCopiedIdx(idx);
-    setTimeout(() => setCopiedIdx(null), 1500);
   }, [headers]);
 
   return (
@@ -43,23 +36,27 @@ export function HeadersView({ headers }: { headers: [string, string][] }) {
           >
             <span className="text-[13px] font-medium text-[var(--color-text-primary)] min-w-[200px]">{key}</span>
             <span className="text-[13px] text-[var(--color-text-secondary)] flex-1 break-all">{value}</span>
-            <button
-              type="button"
-              onClick={() => copyHeader(idx)}
-              className={`p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer transition-all ${
-                hoveredIdx === idx || copiedIdx === idx ? 'opacity-100' : 'opacity-0'
-              }`}
-              title="Copy"
-            >
-              {copiedIdx === idx ? (
-                <CheckIcon size={14} style={{ stroke: 'var(--color-success)' }} />
-              ) : (
-                <CopyIcon size={14} />
-              )}
-            </button>
+            <CopyHeaderButton text={`${key}: ${value}`} hovered={hoveredIdx === idx} />
           </div>
         ))}
       </div>
     </div>
+  );
+}
+
+/** One header's copy — its own tick, and kept in view while the tick shows. */
+function CopyHeaderButton({ text, hovered }: { text: string; hovered: boolean }) {
+  const { copied, flash } = useCopyTick();
+  return (
+    <button
+      type="button"
+      onClick={() => { void navigator.clipboard.writeText(text).then(flash); }}
+      className={`p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer transition-all ${
+        hovered || copied ? 'opacity-100' : 'opacity-0'
+      }`}
+      title="Copy"
+    >
+      <CopyGlyph copied={copied} size={14} />
+    </button>
   );
 }

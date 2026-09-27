@@ -9,6 +9,7 @@
 import { useMemo, useEffect, useRef, useCallback } from 'react';
 import { marked, Renderer, type MarkedExtension } from 'marked';
 import hljs from 'highlight.js';
+import { COPY_TICK_MS } from '../CopyTick';
 
 // ─── Singleton guard ──────────────────────────────────────────────────────────
 
@@ -132,20 +133,20 @@ function parseMarkdown(content: string): string {
 // ─── Copy-button wiring ──────────────────────────────────────────────────────
 
 const COPY_ICON_HTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mdv-copy-icon"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span class="mdv-copy-label">Copy</span>`;
-const CHECK_ICON_HTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="mdv-copy-icon mdv-check-icon"><polyline points="20 6 9 17 4 12"/></svg><span class="mdv-copy-label">Copied</span>`;
+// The shared green tick (shared/CopyTick) as HTML: the same span, so index.css animates it the same way.
+const CHECK_ICON_HTML = `<span class="dk-copy-tick inline-flex" style="color: var(--color-success)" role="status" aria-label="Copied"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" class="mdv-copy-icon"><polyline points="20 6 9 17 4 12"/></svg></span><span class="mdv-copy-label">Copy</span>`;
 
 function wireCopyButtons(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('.mdv-copy-btn:not([data-wired])').forEach(btn => {
     btn.dataset.wired = '1';
+    let timer: ReturnType<typeof setTimeout> | undefined;
     btn.addEventListener('click', () => {
       const code = decodeURIComponent(btn.dataset.code ?? '');
-      navigator.clipboard?.writeText(code).catch(() => {});
-      btn.innerHTML = CHECK_ICON_HTML;
-      btn.classList.add('mdv-copied');
-      setTimeout(() => {
-        btn.innerHTML = COPY_ICON_HTML;
-        btn.classList.remove('mdv-copied');
-      }, 2000);
+      navigator.clipboard?.writeText(code).then(() => {
+        btn.innerHTML = CHECK_ICON_HTML;
+        clearTimeout(timer);
+        timer = setTimeout(() => { btn.innerHTML = COPY_ICON_HTML; }, COPY_TICK_MS);
+      }, () => {});
     });
   });
 }

@@ -11,9 +11,10 @@
  */
 import { useState, useRef, useEffect } from 'react';
 import { ButtonView, IconButtonView, TextInputView, SelectInputView, type SelectOption } from '@salilvnair/dui';
-import { PlusIcon, TrashIcon, CopyIcon, CheckIcon } from '../../icons';
+import { PlusIcon, TrashIcon } from '../../icons';
 import type { StateMachineConfig, StateNode, StateTransition } from './mock-types';
 import { logUiEvent } from '../../store/ui-audit-store';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 const ACCENT = 'var(--color-mock-server)';
 const SUCCESS = 'var(--color-success)';
@@ -113,7 +114,7 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
   const [connecting, setConnecting] = useState<{ fromId: string; mouseX: number; mouseY: number } | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
   const svgRef = useRef<SVGSVGElement>(null);
 
   // Sync positions when states are added externally
@@ -267,9 +268,7 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
 
   const exportJson = () => {
     logUiEvent('mock.sm_export', { stateCount: cfg.states.length, transitionCount: cfg.transitions.length });
-    navigator.clipboard.writeText(JSON.stringify(cfg, null, 2));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
+    void navigator.clipboard.writeText(JSON.stringify(cfg, null, 2)).then(flash);
   };
 
   const selectedStateData = selectedNode ? cfg.states.find(s => s.id === selectedNode) : null;
@@ -291,10 +290,10 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
             size="md"
             variant="ghost"
             accentColor="var(--color-text-muted)"
-            iconLeft={copied ? <CheckIcon size={10} /> : <CopyIcon size={10} />}
+            iconLeft={<CopyGlyph copied={copied} size={10} />}
             onClick={exportJson}
           >
-            {copied ? 'Copied!' : 'Export JSON'}
+            Export JSON
           </ButtonView>
         </div>
       </div>

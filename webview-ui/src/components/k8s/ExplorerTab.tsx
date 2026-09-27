@@ -951,7 +951,7 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
         </div>
       ) : mode === 'files' ? (
         <FileBrowserView
-          className="flex-1 min-h-0"
+          className="dk-fb-actions flex-1 min-h-0"
           // Tight rows, small chips, bare glyphs. A directory of 400 entries
           // is a list you scan, and a box around every icon on every row is
           // more border than content.
@@ -1011,7 +1011,7 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
         />
       ) : (
         <FileBrowserView
-          className="flex-1 min-h-0"
+          className="dk-fb-actions flex-1 min-h-0"
           dense
           entries={hitRows}
           actions={actions.filter(a => a.id !== 'saveDir')}
@@ -1299,7 +1299,7 @@ function ScopedSearch({
                background: 'var(--color-surface)',
              }}>
           <FileBrowserView
-            className="h-full"
+            className="dk-fb-actions h-full"
             style={{ ['--dui-file-badge' as string]: ACCENT } as React.CSSProperties}
             dense
             entries={rows}

@@ -16,7 +16,7 @@ import {
   ButtonView, IconButtonView, TextInputView, PopoverView, ContextMenuView, IconSize,
 } from '@salilvnair/dui';
 import {
-  TrashIcon, PythonIcon, MoreHorizontalIcon, SaveIcon, SaveCheckIcon, CopyIcon,
+  TrashIcon, PythonFileIcon, MoreHorizontalIcon, SaveIcon, SaveCheckIcon, CopyIcon,
 } from '../../../icons';
 import { ConfirmDialog } from '../../shared/modals/ConfirmDialog';
 import { usePyStore } from '../../../store/dk8s-python-store';
@@ -54,7 +54,7 @@ export function ScriptTitle({ scriptId, size = 'md' }: { scriptId: string; size?
               title="Rename, or file it in a folder"
               className="py-title inline-flex items-center gap-2 min-w-0 px-2 rounded-md cursor-pointer border-none bg-transparent"
               style={{ height: CONTROL_H[size] }}>
-        <PythonIcon size={IconSize.action} color="var(--color-success)" />
+        <PythonFileIcon size={15} style={{ flexShrink: 0 }} />
         <span className="font-mono text-[12.5px] truncate" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
           {name}
         </span>

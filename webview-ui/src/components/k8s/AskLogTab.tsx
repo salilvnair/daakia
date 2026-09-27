@@ -46,6 +46,10 @@ import {
   parseScope, scopeFromPlan, defaultScope, linesInScope, bufferCovers, MAX_SCOPE_LINES, type AskScope,
 } from './ask-scope';
 import { askOnce } from '../../services/ai/ai-once';
+import { capLines, ASK_LINE_CAP, ASK_SEND_MORE_PREF, type Capped } from './ask-cap';
+import { useUiStateStore } from '../../store/ui-state-store';
+import { useTabsStore } from '../../store/tabs-store';
+import type { LogLine as CapLine } from '../../store/k8s-store';
 import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { buildRows, shortName } from './logger-catalogue';
 import { useMarkIndex } from './LogMarks';
@@ -60,6 +64,7 @@ import {
   PANEL, CARD, DIVIDER, EDGE, TEXT, LABEL, QUIET, ASK, ASK_INK, ASK_LINK, ASK_ID, ASK_VALUE,
   ASK_ERROR, ASK_WARN, ASK_ERROR_ROW, ASK_YES, ASK_NO, MONO, OUTLINE_BUTTON, OUTLINE_PILL,
 } from './asklog-tone';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 /** The small caps the board heads every section with. */
 const HEAD = { fontSize: 11, fontWeight: 700, letterSpacing: '0.05em' } as const;
@@ -97,6 +102,9 @@ export function AskLogTab() {
   const [note, setNote] = useState<string>();
   /* The last scope asked over: a follow-up with no time of its own reads it again. */
   const lastScope = useRef<AskScope | undefined>(undefined);
+  /* What the cap did to the last question's scope, for the bar above the answer. */
+  const [capped, setCapped] = useState<Capped<CapLine> & { cap: number } | undefined>();
+  const sendMore = useUiStateStore(s => s.prefs[ASK_SEND_MORE_PREF] === 'on');
   const busyRef = useRef(0);
 
   /* An id to offer from the marks: the commonest value of the first hole
@@ -144,11 +152,17 @@ export function AskLogTab() {
       return;
     }
     lastScope.current = target;
-    const stamped = lines.filter(l => l.ts !== undefined);
+    /* At most 2,000 lines unless Settings says more: grepped for what the
+       question names, then the newest (ask-cap.ts). */
+    const cap = sendMore ? MAX_SCOPE_LINES : ASK_LINE_CAP;
+    const cut = capLines(lines, text, cap);
+    setCapped(cut.how ? { ...cut, cap } : undefined);
+    const sent = cut.lines;
+    const stamped = sent.filter(l => l.ts !== undefined);
     const from = stamped[0]?.ts;
     const to = stamped[stamped.length - 1]?.ts;
-    const evidence = buildEvidence(lines, text);
-    const rows = buildRows(stored, patterns, buffer, lines);
+    const evidence = buildEvidence(sent, text, { maxEvents: cap, maxChars: sendMore ? 360_000 : 160_000 });
+    const rows = buildRows(stored, patterns, buffer, sent);
     ask({
       question: text, window: target.label, from, to, scope,
       evidence,
@@ -323,25 +337,55 @@ export function AskLogTab() {
       </div>
 
       <div className="flex items-center flex-wrap shrink-0" style={{ gap: 6, padding: '0 14px 10px' }}>
-        <span style={{ fontSize: 11, color: QUIET }}>try</span>
         {tries.map(t => (
           <span key={t} className="contents" data-ask-q={t}>
-            <ChipView label={t} size="sm" onClick={() => void send(t)} title="Ask this" style={{ ...OUTLINE_PILL, height: 24 }} />
+            <AskChip text={t} onAsk={() => void send(t)} />
           </span>
         ))}
-        {checks.length > 0 && (
-          <span style={{ fontSize: 11, color: QUIET, marginLeft: 8 }}>your checks</span>
-        )}
+        {checks.length > 0 && <span className="self-stretch" style={{ width: 1, margin: '4px 4px', background: EDGE }} />}
         {checks.map(c => (
           <span key={c.id} className="contents" data-ask-check={c.id}>
-            <ChipView label={c.question} size="sm"
-                      onClick={() => void send(c.question)}
-                      onRemove={() => removeCheck(c.id)} removeLabel="Forget this check" title="Ask this again"
-                      style={{ ...OUTLINE_PILL, height: 24, color: ASK }} />
+            <AskChip text={c.question} saved onAsk={() => void send(c.question)} onRemove={() => removeCheck(c.id)} />
           </span>
         ))}
 
       </div>
+
+      {capped && run && !preparing && !note && (
+        <div className="flex items-start shrink-0" role="status"
+             style={{
+               gap: 9, padding: '8px 14px', borderTop: `1px solid ${EDGE}`,
+               background: `color-mix(in srgb, ${ASK_WARN} 9%, transparent)`,
+               color: TEXT, fontSize: 12, lineHeight: 1.55,
+             }}>
+          <WarningTriangleIcon size={14} color={ASK_WARN} style={{ flexShrink: 0, marginTop: 2 }} />
+          <span className="flex-1 min-w-0">
+            The {run.window} had <b>{capped.total.toLocaleString()}</b> lines — too many to send, so{' '}
+            {capped.how === 'grep'
+              ? <>only the {capped.lines.length.toLocaleString()} that mention {capped.terms.map(t => `“${t}”`).join(', ')} went</>
+              : capped.how === 'grep-newest'
+                ? <>the newest {capped.lines.length.toLocaleString()} that mention {capped.terms.map(t => `“${t}”`).join(', ')} went</>
+                : <>the newest {capped.lines.length.toLocaleString()} went — name an id or a word in the question to search for it instead</>}
+            .{' '}
+            <span style={{ color: LABEL }}>
+              {sendMore
+                ? 'That is the most one fetch holds.'
+                : <>Need more? Turn on sending more than {ASK_LINE_CAP.toLocaleString()} lines in Settings — it costs more AI tokens.</>}
+            </span>
+          </span>
+          {!sendMore && (
+            <button type="button" onClick={() => useTabsStore.getState().openSettingsTab('dk8s-logs')}
+                    className="shrink-0 border-none bg-transparent cursor-pointer p-0"
+                    style={{ color: ASK_LINK, fontSize: 12, fontWeight: 600 }}>
+              Settings ›
+            </button>
+          )}
+          <button type="button" onClick={() => setCapped(undefined)} aria-label="Dismiss"
+                  className="shrink-0 border-none bg-transparent cursor-pointer p-0 inline-flex" style={{ color: QUIET, marginTop: 2 }}>
+            <CloseIcon size={12} />
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-1 min-h-0" style={{ borderTop: `1px solid ${EDGE}` }}>
         {preparing || note ? (
@@ -363,6 +407,50 @@ export function AskLogTab() {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * A question to ask with one click — a suggestion, or a check you saved.
+ *
+ * A soft pill in the Ask colour with an icon saying what kind of question it
+ * is — something went wrong, a stretch of time, the loggers, a summary — so
+ * the row reads as things to ask rather than a line of grey outlines.
+ */
+function AskChip({ text, onAsk, onRemove, saved }: {
+  text: string; onAsk: () => void; onRemove?: () => void; saved?: boolean;
+}) {
+  const t = text.toLowerCase();
+  const [Icon, tone] = saved ? [CheckIcon, ASK]
+    : /wrong|error|fail|exception/.test(t) ? [WarningTriangleIcon, ASK_WARN]
+      : /since|last \d+ min|hour|yesterday|today/.test(t) ? [ClockIcon, ASK_LINK]
+        : [SparkleIcon, ASK];
+  return (
+    <span className="ask-chip inline-flex items-center"
+          style={{
+            height: 26, borderRadius: 999, gap: 6, padding: onRemove ? '0 4px 0 10px' : '0 11px',
+            background: `color-mix(in srgb, ${tone} 8%, ${CARD})`,
+            border: `1px solid color-mix(in srgb, ${tone} 26%, transparent)`,
+            ['--chip-tone' as string]: tone,
+          }}>
+      <button type="button" onClick={onAsk} title={saved ? 'Ask this saved check again' : 'Ask this'}
+              className="inline-flex items-center border-none bg-transparent cursor-pointer p-0"
+              style={{ gap: 6, color: LABEL, fontSize: 11.5, whiteSpace: 'nowrap' }}>
+        <Icon size={12} color={tone} style={{ flexShrink: 0 }} />
+        {text}
+      </button>
+      {onRemove && (
+        <button type="button" onClick={onRemove} aria-label="Forget this check" title="Forget this check"
+                className="ask-chip-x inline-flex items-center justify-center border-none bg-transparent cursor-pointer"
+                style={{ width: 18, height: 18, borderRadius: 999, color: QUIET, padding: 0 }}>
+          <CloseIcon size={10} />
+        </button>
+      )}
+      <style>{`.ask-chip { transition: background-color 120ms, border-color 120ms, transform 120ms; }
+.ask-chip:hover { background: color-mix(in srgb, var(--chip-tone) 16%, ${CARD}) !important; border-color: color-mix(in srgb, var(--chip-tone) 50%, transparent) !important; transform: translateY(-1px); }
+.ask-chip:hover > button:first-child { color: ${TEXT} !important; }
+.ask-chip-x:hover { color: var(--color-error) !important; }`}</style>
+    </span>
   );
 }
 
@@ -475,7 +563,7 @@ function LogLink({ children, title, onClick }: { children: React.ReactNode; titl
 
 function Answer({ run, logs, onAsk }: { run: AskRun; logs: LogLine[]; onAsk: (q: string) => void }) {
   const setVerdict = useDk8sAskLogStore(s => s.setVerdict);
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
   const a = run.answer;
   const cited = useMemo(() => (a ? citedLines(a) : []), [a]);
   const citedLog = useMemo(
@@ -499,9 +587,7 @@ function Answer({ run, logs, onAsk }: { run: AskRun; logs: LogLine[]; onAsk: (q:
   }, [logs, citedLog]);
 
   const copy = () => {
-    void navigator.clipboard?.writeText(a ? answerText(a, run.numbered) : run.text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    void navigator.clipboard?.writeText(a ? answerText(a, run.numbered) : run.text).then(flash);
   };
 
   const at = (n: number) => run.numbered.get(n);
@@ -520,8 +606,8 @@ function Answer({ run, logs, onAsk }: { run: AskRun; logs: LogLine[]; onAsk: (q:
           </span>
           <div className="flex-1" />
           <ButtonView variant="secondary" disabled={run.streaming || (!a && !run.text)} onClick={copy}
-                      style={OUTLINE_BUTTON}>
-            {copied ? 'Copied' : 'Copy'}
+                      iconLeft={<CopyGlyph copied={copied} size={12} />} style={OUTLINE_BUTTON}>
+            Copy
           </ButtonView>
           <ButtonView variant="secondary" disabled={!citedLog.length} onClick={() => openLines(citedLog)}
                       style={OUTLINE_BUTTON}>

@@ -2635,6 +2635,22 @@ export function PythonIcon(props: IconProps) {
   );
 }
 
+/**
+ * A Python file, in Python's own blue and yellow — the file icon VS Code's
+ * icon themes give a `.py`. Filled rather than stroked, and fixed in colour
+ * on purpose: it names the language, the way the logo does, in either theme.
+ */
+export function PythonFileIcon({ size = 14, ...rest }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden {...rest}>
+      <path fill="#3776AB" fillRule="evenodd"
+            d="M11.9 2C6.8 2 7.1 4.2 7.1 4.2v2.3h4.9v.7H5.2S2 6.8 2 12s2.9 5 2.9 5h1.7v-2.4s-.1-2.9 2.8-2.9h4.8s2.7 0 2.7-2.6V4.8S17.3 2 11.9 2Zm-2.7 1.5a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8Z" />
+      <path fill="#FFD43B" fillRule="evenodd"
+            d="M12.1 22c5.1 0 4.8-2.2 4.8-2.2v-2.3H12v-.7h6.8S22 17.2 22 12s-2.9-5-2.9-5h-1.7v2.4s.1 2.9-2.8 2.9H9.8s-2.7 0-2.7 2.6v4.3S6.7 22 12.1 22Zm2.7-1.5a.9.9 0 1 1 0-1.8.9.9 0 0 1 0 1.8Z" />
+    </svg>
+  );
+}
+
 /** A raised thumb — "this answer was right". */
 export function ThumbUpIcon(props: IconProps) {
   return (

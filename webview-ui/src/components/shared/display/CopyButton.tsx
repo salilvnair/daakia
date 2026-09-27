@@ -1,6 +1,5 @@
-import { useState } from 'react';
-import { CopyIcon, CheckIcon } from '../../../icons';
 import { copyText } from '../../../utils/clipboard';
+import { useCopyTick, CopyGlyph } from '../CopyTick';
 
 interface CopyButtonProps {
   text: string;
@@ -10,16 +9,14 @@ interface CopyButtonProps {
 }
 
 /**
- * Copy button with animated checkmark — toggles from CopyIcon to CheckIcon on click.
+ * Copy button — its glyph turns into the shared green tick once it has copied.
  */
 export function CopyButton({ text, size = 14, title = 'Copy', className = '' }: CopyButtonProps) {
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
 
   const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!(await copyText(text))) return;
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    if (await copyText(text)) flash();
   };
 
   return (
@@ -33,7 +30,7 @@ export function CopyButton({ text, size = 14, title = 'Copy', className = '' }: 
           : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)]'
       } ${className}`}
     >
-      {copied ? <CheckIcon size={size} /> : <CopyIcon size={size} />}
+      <CopyGlyph copied={copied} size={size} />
     </button>
   );
 }

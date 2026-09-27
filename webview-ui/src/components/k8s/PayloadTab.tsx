@@ -13,8 +13,9 @@ import { PayloadBody } from './LogPayloadView';
 import { maskSecrets } from './log-payload';
 import { usePayloadPrefs } from './log-payload-prefs';
 import { copyText } from '../../utils/clipboard';
-import { CopyIcon, CheckIcon, ExpandAllIcon, CollapseAllIcon } from '../../icons';
+import { ExpandAllIcon, CollapseAllIcon } from '../../icons';
 import { ACCENT } from './tone';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 type Mode = 'tree' | 'pretty' | 'raw';
 
@@ -24,7 +25,7 @@ export function PayloadTab({ tab }: { tab: RequestTab }) {
   const [mode, setMode] = useState<Mode>(prefs.mode === 'raw' && !prefs.keepRaw ? 'tree' : prefs.mode);
   const [all, setAll] = useState(false);
   const [revealed, setRevealed] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
 
   const value = useMemo(
     () => (view && prefs.hideSecrets && !revealed ? maskSecrets(view.payload.value) : view?.payload.value),
@@ -66,9 +67,9 @@ export function PayloadTab({ tab }: { tab: RequestTab }) {
           {all ? 'Collapse' : 'Expand all'}
         </ButtonView>
         <ButtonView variant="secondary" size="sm" accentColor={ACCENT} color={copied ? 'var(--color-success)' : ACCENT}
-                    iconLeft={copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
-                    onClick={async () => { if (await copyText(payload.source)) { setCopied(true); setTimeout(() => setCopied(false), 1400); } }}>
-          {copied ? 'Copied' : 'Copy'}
+                    iconLeft={<CopyGlyph copied={copied} size={12} />}
+                    onClick={async () => { if (await copyText(payload.source)) flash(); }}>
+          Copy
         </ButtonView>
       </div>
       <div className="flex-1 min-h-0 overflow-auto px-5 py-4">

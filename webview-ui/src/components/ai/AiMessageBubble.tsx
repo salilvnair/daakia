@@ -1,8 +1,9 @@
 import { useState, useMemo, useCallback } from 'react';
 import { type AiMessage } from '../../store/tabs-store';
-import { McpToolIcon, CopyIcon, ChevronDownIcon, ChevronRightIcon } from '../../icons';
+import { McpToolIcon, ChevronDownIcon, ChevronRightIcon } from '../../icons';
 import { JsonTreeViewer } from '../shared/display/JsonTreeViewer';
 import { copyText } from '../../utils/clipboard';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 interface Props {
   message: AiMessage;
@@ -152,11 +153,10 @@ function MarkdownTable({ lines }: { lines: string[] }) {
 }
 
 function CopyCodeButton({ text }: { text: string }) {
-  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const { copied, flash } = useCopyTick();
+  const { copied: failed, flash: flashFailed } = useCopyTick();
   const handleCopy = async () => {
-    const ok = await copyText(text);
-    setState(ok ? 'copied' : 'failed');
-    setTimeout(() => setState('idle'), 1500);
+    if (await copyText(text)) flash(); else flashFailed();
   };
   return (
     <button
@@ -166,8 +166,8 @@ function CopyCodeButton({ text }: { text: string }) {
       style={{ backgroundColor: 'var(--color-elevated)', color: 'var(--color-text-muted)', border: '1px solid var(--color-surface-border)' }}
       title="Copy code"
     >
-      <CopyIcon size={10} />
-      {state === 'copied' ? 'Copied!' : state === 'failed' ? "Couldn't copy" : 'Copy'}
+      <CopyGlyph copied={copied} size={10} />
+      {failed ? "Couldn't copy" : 'Copy'}
     </button>
   );
 }
@@ -219,16 +219,14 @@ function TokenBadge({ tokens }: { tokens: { prompt: number; completion: number; 
 // ─── Message Bubble ───
 
 export function AiMessageBubble({ message }: Props) {
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
   const isTool = message.role === 'tool';
 
   const handleCopy = useCallback(async () => {
-    if (!(await copyText(message.content))) return;
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }, [message.content]);
+    if (await copyText(message.content)) flash();
+  }, [message.content, flash]);
 
   const formatTime = (ts: number) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -256,7 +254,7 @@ export function AiMessageBubble({ message }: Props) {
             className="opacity-0 group-hover:opacity-100 transition-opacity h-[16px] w-[16px] flex items-center justify-center rounded cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
             title={copied ? 'Copied!' : 'Copy response'}
           >
-            <CopyIcon size={10} />
+            <CopyGlyph copied={copied} size={10} />
           </button>
         )}
       </div>
@@ -329,16 +327,14 @@ function ToolCallCard({ name, args }: { name: string; args: string }) {
 
 function ToolResponseContent({ content }: { content: string }) {
   const [viewMode, setViewMode] = useState<'json' | 'raw'>('json');
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
 
   const parsed = useMemo(() => {
     try { return JSON.parse(content); } catch { return null; }
   }, [content]);
 
   const handleCopy = async () => {
-    if (!(await copyText(content))) return;
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    if (await copyText(content)) flash();
   };
 
   if (!parsed) {
@@ -346,7 +342,7 @@ function ToolResponseContent({ content }: { content: string }) {
       <div className="font-mono text-[12px]">
         <div className="flex items-center gap-1 mb-1">
           <span className="text-[9px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded" style={{ backgroundColor: 'color-mix(in srgb, var(--color-protocol-mcp) 15%, transparent)', color: 'var(--color-protocol-mcp)' }}>Tool Result</span>
-          <button type="button" onClick={handleCopy} className="ml-auto h-[18px] w-[18px] flex items-center justify-center rounded cursor-pointer opacity-50 hover:opacity-100 transition-opacity text-[var(--color-text-muted)]"><CopyIcon size={10} /></button>
+          <button type="button" onClick={handleCopy} className="ml-auto h-[18px] w-[18px] flex items-center justify-center rounded cursor-pointer opacity-50 hover:opacity-100 transition-opacity text-[var(--color-text-muted)]"><CopyGlyph copied={copied} size={10} /></button>
         </div>
         {content}
       </div>
@@ -362,7 +358,7 @@ function ToolResponseContent({ content }: { content: string }) {
             <button key={m} type="button" onClick={() => setViewMode(m)} className={`h-[18px] px-1.5 text-[9px] rounded cursor-pointer transition-colors ${viewMode === m ? 'bg-[var(--color-protocol-ai)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'}`}>{m.toUpperCase()}</button>
           ))}
         </div>
-        <button type="button" onClick={handleCopy} className="ml-auto h-[18px] w-[18px] flex items-center justify-center rounded cursor-pointer opacity-50 hover:opacity-100 transition-opacity text-[var(--color-text-muted)]" title={copied ? 'Copied!' : 'Copy'}><CopyIcon size={10} /></button>
+        <button type="button" onClick={handleCopy} className="ml-auto h-[18px] w-[18px] flex items-center justify-center rounded cursor-pointer opacity-50 hover:opacity-100 transition-opacity text-[var(--color-text-muted)]" title={copied ? 'Copied!' : 'Copy'}><CopyGlyph copied={copied} size={10} /></button>
       </div>
       {viewMode === 'json' ? (
         <div className="text-[11px]"><JsonTreeViewer data={parsed} maxInitialDepth={3} /></div>

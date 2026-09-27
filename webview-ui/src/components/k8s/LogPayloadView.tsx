@@ -15,11 +15,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { IconButtonView, SegmentedControlView } from '@salilvnair/dui';
 import { JsonTreeViewer } from '../shared/display/JsonTreeViewer';
-import { CopyIcon, CheckIcon, ExpandAllIcon, CollapseAllIcon, ExternalLinkIcon, ChevronRightIcon } from '../../icons';
+import { ExpandAllIcon, CollapseAllIcon, ExternalLinkIcon, ChevronRightIcon } from '../../icons';
 import { copyText } from '../../utils/clipboard';
 import { prettyXml, maskSecrets, parseXmlTree, type LogPayload, type XmlNode } from './log-payload';
 import { useTabsStore } from '../../store/tabs-store';
 import { ACCENT } from './tone';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 type Mode = 'tree' | 'pretty' | 'raw';
 
@@ -50,7 +51,7 @@ export function LogPayloadView({ payload, mode, depth, hideSecrets, keepRaw = tr
     setOwnMode(undefined);
   }, [mode]);
   const [revealed, setRevealed] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
   /* Expand all remounts the tree at every level; pressing it again goes back to the tab's depth. */
   const [expandAll, setExpandAll] = useState(false);
   const shown = ownMode ?? (mode === 'raw' && !keepRaw ? 'tree' : mode);
@@ -66,8 +67,7 @@ export function LogPayloadView({ payload, mode, depth, hideSecrets, keepRaw = tr
   const copy = async () => {
     // The line as the pod wrote it, masked or not: Copy is for taking away.
     if (await copyText(payload.source)) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1400);
+      flash();
     }
   };
 
@@ -137,7 +137,7 @@ export function LogPayloadView({ payload, mode, depth, hideSecrets, keepRaw = tr
           aria-label="Copy the payload"
           active={copied}
           activeColor="var(--color-success)"
-          icon={copied ? <CheckIcon size={13} /> : <CopyIcon size={13} />}
+          icon={<CopyGlyph copied={copied} size={13} />}
           onClick={copy}
         />
       </div>

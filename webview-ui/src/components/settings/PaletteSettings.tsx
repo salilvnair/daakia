@@ -2,7 +2,6 @@ import { useMemo, useRef, useState } from 'react';
 import { ButtonView, BadgeChipView, SortableView, type SortableRow } from '@salilvnair/dui';
 import {
   PaletteIcon, FolderImportIcon, FolderExportIcon, TrashIcon, EyeIcon, EyeOffIcon, PencilIcon,
-  CopyIcon, CheckIcon,
 } from '../../icons';
 import { useAppThemeStore } from '../../store/app-theme-store';
 import {
@@ -14,6 +13,7 @@ import { seedsFromHost, hostThemeAvailable } from '../../services/theme/vscode-s
 import { ThemeBuilderModal } from './theme-builder/ThemeBuilderModal';
 import { appToDraft, draftToApp, type DraftPalette } from './theme-builder/fields';
 import { contrast } from '../../services/theme/colour';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 /**
  * Settings → Theme → the palette half.
@@ -43,7 +43,7 @@ export function PaletteSettings({ mode }: { mode: Half }) {
   const [error, setError] = useState<string | null>(null);
   /* Which row's copy button has just been pressed, so the tick lands on that
      row rather than on all of them. */
-  const [copied, setCopied] = useState<string | null>(null);
+  const { copied: exported, flash: flashExported } = useCopyTick();
   /* The palette the builder is open on, or null. A copy is edited — see the
      modal — so holding the original here is safe. */
   const [building, setBuilding] = useState<DraftPalette | null>(null);
@@ -70,15 +70,14 @@ export function PaletteSettings({ mode }: { mode: Half }) {
     setError(result.added === 0 ? 'Those are already here.' : null);
   };
 
-  const copy = async (palettes: AppPalette[], what: string) => {
+  const copy = async (palettes: AppPalette[]): Promise<boolean> => {
     try {
       await navigator.clipboard.writeText(serializeThemes(palettes));
-      setCopied(what);
-      setTimeout(() => setCopied(c => (c === what ? null : c)), 1600);
-    } catch { setError('Could not reach the clipboard.'); }
+      return true;
+    } catch { setError('Could not reach the clipboard.'); return false; }
   };
 
-  const exportAll = () => copy(store.custom.length > 0 ? store.custom : [current], 'all');
+  const exportAll = async () => { if (await copy(store.custom.length > 0 ? store.custom : [current])) flashExported(); };
 
   const matchEditor = () => {
     const seeds = seedsFromHost();
@@ -109,12 +108,11 @@ export function PaletteSettings({ mode }: { mode: Half }) {
         palette={p}
         half={half}
         active={p.id === current.id}
-        copied={copied === p.id}
         onHover={() => setPreview(p)}
         onLeave={() => setPreview(null)}
         onClick={() => choose(p)}
         onEdit={() => setBuilding(appToDraft(p))}
-        onCopy={() => void copy([p], p.id)}
+        onCopy={() => copy([p])}
         onHide={p.id === BUILT_IN_PALETTES[0].id ? undefined : () => store.setHidden(p.id, true)}
         onRemove={p.builtIn ? undefined : () => store.remove(p.id)}
       />
@@ -200,8 +198,8 @@ export function PaletteSettings({ mode }: { mode: Half }) {
           onClick={() => fileRef.current?.click()}>
           Import
         </ButtonView>
-        <ButtonView size="sm" variant="secondary" iconLeft={<FolderExportIcon size={13} />} onClick={exportAll}>
-          {copied === 'all' ? 'Copied' : 'Export all'}
+        <ButtonView size="sm" variant="secondary" iconLeft={exported ? <CopyGlyph copied size={13} /> : <FolderExportIcon size={13} />} onClick={exportAll}>
+          Export all
         </ButtonView>
         {hostAvailable && (
           <ButtonView size="sm" variant="secondary" onClick={matchEditor}>
@@ -261,20 +259,20 @@ export function PaletteSettings({ mode }: { mode: Half }) {
 // ── One card ────────────────────────────────────────────────────────────────
 
 function PaletteCard({
-  palette, half, active, copied, onHover, onLeave, onClick, onEdit, onCopy, onHide, onRemove,
+  palette, half, active, onHover, onLeave, onClick, onEdit, onCopy, onHide, onRemove,
 }: {
   palette: AppPalette;
   half: Half;
   active: boolean;
-  copied: boolean;
   onHover: () => void;
   onLeave: () => void;
   onClick: () => void;
   onEdit: () => void;
-  onCopy: () => void;
+  onCopy: () => Promise<boolean>;
   onHide?: () => void;
   onRemove?: () => void;
 }) {
+  const { copied, flash } = useCopyTick();
   const seeds = palette[half];
   const derived = half === 'light' && palette.lightDerived;
 
@@ -339,10 +337,10 @@ function PaletteCard({
           <button
             type="button"
             title="Copy this theme"
-            onClick={e => { e.stopPropagation(); onCopy(); }}
+            onClick={e => { e.stopPropagation(); void onCopy().then(ok => { if (ok) flash(); }); }}
             style={{ color: copied ? 'var(--color-success)' : 'var(--color-text-muted)' }}
           >
-            {copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
+            <CopyGlyph copied={copied} size={12} />
           </button>
           {onHide && (
             <button type="button" title="Hide" onClick={e => { e.stopPropagation(); onHide(); }}

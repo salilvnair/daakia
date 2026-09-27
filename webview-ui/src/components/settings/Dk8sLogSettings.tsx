@@ -27,6 +27,9 @@ import { LogFormatSettings } from './LogFormatSettings';
 import { LogPayloadSettings } from './LogPayloadSettings';
 import { PvLogSettings } from './PvLogSettings';
 import { PvPodCheck } from './PvPodCheck';
+import { ConfirmDialog } from '../shared/modals/ConfirmDialog';
+import { ASK_LINE_CAP, ASK_SEND_MORE_PREF } from '../../components/k8s/ask-cap';
+import { MAX_SCOPE_LINES } from '../../components/k8s/ask-scope';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -147,7 +150,34 @@ function Ladder({
   );
 }
 
-export function Dk8sLogSettings() {
+/** The Logs pages this file draws — Fields and Determinants have their own. */
+export type LogSettingsPage = 'general' | 'downloads' | 'formats' | 'archive';
+
+const PAGE_HEAD: Record<LogSettingsPage, { title: string; body: React.ReactNode }> = {
+  general: {
+    title: 'Logs',
+    body: <>
+      Every &ldquo;how many lines&rdquo; dropdown in dk8s offers the numbers set here.
+      Separate them with commas; they are sorted for you, and anything that is not a
+      number of lines is dropped. Nothing above {MAX_LINES.toLocaleString()} &mdash; one
+      fetch still has to be something a panel can hold.
+    </>,
+  },
+  downloads: {
+    title: 'Downloads',
+    body: <>A pod&rsquo;s whole log, downloaded to a temporary file and opened in a tab &mdash; how big one may get.</>,
+  },
+  formats: {
+    title: 'Log formats',
+    body: <>How a line is split into its time, level, logger, thread and message &mdash; the built-in formats, and your own.</>,
+  },
+  archive: {
+    title: 'Archive',
+    body: <>Where a pod&rsquo;s older, rotated logs live on a volume, so a search and a download can read past what the container still has.</>,
+  },
+};
+
+export function Dk8sLogSettings({ page = 'general' }: { page?: LogSettingsPage }) {
   const logLineNumbers = useK8sStore(s => s.logLineNumbers);
   const setLogLineNumbers = useK8sStore(s => s.setLogLineNumbers);
   const apply = useK8sStore(s => s.apply);
@@ -168,16 +198,18 @@ export function Dk8sLogSettings() {
     <div className="flex flex-col gap-6 px-5 py-5">
       <div className="flex flex-col gap-1.5">
         <h2 className="text-[15px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-          Logs
+          {PAGE_HEAD[page].title}
         </h2>
         <p className="text-[11.5px] leading-relaxed" style={{ color: 'var(--color-text-secondary)', maxWidth: '110ch' }}>
-          Every &ldquo;how many lines&rdquo; dropdown in dk8s offers the numbers set here.
-          Separate them with commas; they are sorted for you, and anything that is not a
-          number of lines is dropped. Nothing above {MAX_LINES.toLocaleString()} &mdash; one
-          fetch still has to be something a panel can hold.
+          {PAGE_HEAD[page].body}
         </p>
       </div>
 
+      {page === 'downloads' && <DownloadLimit />}
+      {page === 'formats' && <LogFormatSettings />}
+      {page === 'archive' && <><PvLogSettings /><PvPodCheck /></>}
+
+      {page === 'general' && <>
       <div className="flex flex-col gap-3">
         <SectionRule label="the log view" />
         <Ladder
@@ -227,11 +259,6 @@ export function Dk8sLogSettings() {
         />
       </div>
 
-      <div className="flex flex-col gap-3">
-        <SectionRule label="downloaded logs" />
-        <DownloadLimit />
-      </div>
-
       {/*
         The three that used to sit on Cluster. They are not about how dk8s
         behaves against a cluster — they are about how it reads what a pod
@@ -252,10 +279,49 @@ export function Dk8sLogSettings() {
 
       <LogPayloadSettings />
 
-      <LogFormatSettings />
-      <PvLogSettings />
-      <PvPodCheck />
+      <div className="flex flex-col gap-3">
+        <SectionRule label="ask the log" />
+        <SendMoreToAi />
+      </div>
+      </>}
     </div>
+  );
+}
+
+/**
+ * Ask the log sends at most 2,000 lines of a scope — grepped for what the
+ * question names, then the newest. This lifts that to what one fetch holds,
+ * and asks first: it is the reader's AI credits being spent.
+ */
+function SendMoreToAi() {
+  const on = useUiStateStore(s => s.prefs[ASK_SEND_MORE_PREF] === 'on');
+  const setPref = useUiStateStore(s => s.setPref);
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <>
+      <Toggle
+        on={on}
+        onChange={v => { if (v) setConfirming(true); else setPref(ASK_SEND_MORE_PREF, 'off'); }}
+        label={`Let Ask the log send more than ${ASK_LINE_CAP.toLocaleString()} lines`}
+        description={
+          `A question over a long stretch — “since yesterday” on a busy pod — is tens of thousands of lines. `
+          + `Off, Ask the log sends the ${ASK_LINE_CAP.toLocaleString()} newest of the lines that mention what the question names, `
+          + `and says so above the answer. On, it sends up to ${MAX_SCOPE_LINES.toLocaleString()}: fuller answers, and many more AI tokens.`
+        }
+      />
+      {confirming && (
+        <ConfirmDialog
+          title={`Send more than ${ASK_LINE_CAP.toLocaleString()} lines to the AI?`}
+          message={`Every line sent is paid for in AI tokens. A question over a long window can send up to `
+            + `${MAX_SCOPE_LINES.toLocaleString()} lines — many times the usual cost of one answer, and it can use up `
+            + 'your AI credits or rate limit quickly. You can turn it off here at any time.'}
+          confirmLabel="Turn it on"
+          danger
+          onConfirm={() => { setPref(ASK_SEND_MORE_PREF, 'on'); setConfirming(false); }}
+          onCancel={() => setConfirming(false)}
+        />
+      )}
+    </>
   );
 }
 

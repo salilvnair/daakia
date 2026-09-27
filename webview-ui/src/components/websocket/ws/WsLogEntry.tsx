@@ -3,11 +3,12 @@
  */
 import { useState } from 'react';
 import {
-  ChevronDownIcon, CopyIcon, CheckIcon, DownloadIcon,
+  ChevronDownIcon, DownloadIcon,
   WrapLinesIcon, InfoCircleIcon, WarningTriangleIcon,
   ArrowUpRightIcon, ArrowDownLeftIcon, CheckCircleFilledIcon,
 } from '../../../icons';
 import { CodeEditor } from '../../shared';
+import { useCopyTick, CopyGlyph } from '../../shared/CopyTick';
 
 // ────────── Types ──────────
 
@@ -49,13 +50,11 @@ function toHexDump(data: string, maxBytes = 512): string {
 // ────────── Copy Button ──────────
 
 export function CopyButton({ text, size = 13 }: { text: string; size?: number }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    void navigator.clipboard.writeText(text).then(flash);
   };
 
   return (
@@ -69,7 +68,7 @@ export function CopyButton({ text, size = 13 }: { text: string; size?: number })
       }`}
       title={copied ? 'Copied!' : 'Copy'}
     >
-      {copied ? <CheckIcon size={size} /> : <CopyIcon size={size} />}
+      <CopyGlyph copied={copied} size={size} />
     </button>
   );
 }

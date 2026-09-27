@@ -27,9 +27,10 @@ import { HIDDEN } from './log-payload';
 import type { LogPayload } from './log-payload';
 import type { MarkHit } from './logger-marks';
 import type { LogLine } from '../../store/k8s-store';
-import { CopyIcon, CheckIcon, SearchIcon } from '../../icons';
+import { SearchIcon } from '../../icons';
 import { copyText } from '../../utils/clipboard';
 import { ACCENT } from './tone';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 export function LineFieldsView({ line, payload, mark }: {
   line: LogLine;
@@ -106,14 +107,13 @@ function FieldRow({ field, count, revealed, onReveal, onFollow, onSearchEverywhe
   onFollow: () => void;
   onSearchEverywhere: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
   const exact = isExact(field);
   const hidden = field.secret && !revealed;
 
   const copy = async () => {
     if (await copyText(field.value)) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1400);
+      flash();
     }
   };
 
@@ -179,7 +179,7 @@ function FieldRow({ field, count, revealed, onReveal, onFollow, onSearchEverywhe
               title={copied ? 'Copied' : 'Copy the value'} aria-label="Copy the value"
               className="w-[22px] h-[19px] flex items-center justify-center rounded cursor-pointer border-none bg-transparent shrink-0"
               style={{ color: copied ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
-        {copied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}
+        <CopyGlyph copied={copied} size={11} />
       </button>
     </div>
   );

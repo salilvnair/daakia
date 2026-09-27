@@ -25,6 +25,7 @@ import { copyText } from '../../utils/clipboard';
 import { prefill } from './ai-chat-actions';
 import { KubectlRunCard, isKubectlResult, type KubectlRunResult } from './KubectlRunCard';
 import { ButtonView, IconButtonView, SegmentedControlView, ChipView } from '@salilvnair/dui';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 const DK8S = 'var(--color-ai-accent, #D97757)';
 const MONO = 'ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace';
@@ -382,7 +383,7 @@ function RunsView({ result }: { result: Dk8sSearchResult }) {
 }
 
 function RunRow({ run, first }: { run: Dk8sRun; first: boolean }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
   return (
     <div className="dk8s-row flex items-start gap-3"
          style={{ padding: '8px 12px', borderTop: first ? 'none' : `1px solid ${C.border}` }}>
@@ -407,8 +408,8 @@ function RunRow({ run, first }: { run: Dk8sRun; first: boolean }) {
         aria-label="Copy command"
         active={copied}
         activeColor="var(--color-success)"
-        icon={copied ? <CheckIcon /> : <CopyIcon />}
-        onClick={async () => { if (await copyText(run.command)) { setCopied(true); setTimeout(() => setCopied(false), 1400); } }}
+        icon={<CopyGlyph copied={copied} size={12} />}
+        onClick={async () => { if (await copyText(run.command)) flash(); }}
       />
     </div>
   );
@@ -667,8 +668,6 @@ const Svg = ({ size = 12, children, stroke = 'currentColor', sw = 2 }: { size?: 
 const SearchIcon = () => <Svg size={14} stroke="var(--color-ai-accent, #D97757)"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></Svg>;
 const ExternalIcon = () => <Svg size={11} sw={2.2}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><path d="M15 3h6v6M10 14 21 3" /></Svg>;
 const LinkIcon = () => <Svg size={12}><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></Svg>;
-const CopyIcon = () => <Svg size={12}><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></Svg>;
-const CheckIcon = () => <Svg size={12} sw={2.5}><path d="m5 12 5 5 9-10" /></Svg>;
 const TerminalIcon = () => <Svg size={12}><path d="m4 7 5 5-5 5M12 19h8" /></Svg>;
 const Chevron = ({ open }: { open: boolean }) => (
   <span style={{ display: 'inline-flex', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .12s' }}>

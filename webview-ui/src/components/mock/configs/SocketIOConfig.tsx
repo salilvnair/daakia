@@ -6,13 +6,14 @@ import {
   SelectInputView, EditorView, ResizablePanelView, ButtonView, IconButtonView,
   ToggleSwitchView, TextInputView, CheckboxView, type SelectOption,
 } from '@salilvnair/dui';
-import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern } from '../../../icons';
+import { TrashIcon, DiagonalLinesPattern } from '../../../icons';
 import { ConfirmDialog } from '../../shared';
 import { SOCKETIO_SAMPLES } from '../samples';
 import type { MockServer } from '../mock-types';
 import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
 import { logUiEvent } from '../../../store/ui-audit-store';
 import type { SocketIOMockHandler } from '../mock-types';
+import { CopyUrlButton } from './CopyUrlButton';
 
 const SOCKETIO_SAMPLE_OPTIONS: SelectOption[] = [
   { value: '', label: 'Load Sample...' },
@@ -28,17 +29,9 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
   const handlers = server.socketioHandlers || [];
   const [selectedSample, setSelectedSample] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showDeleteAll, setShowDeleteAll] = useState(false);
 
   const ioUrl = server.running && server.port ? `http://localhost:${server.port}` : '';
-
-  const copyIoUrl = (id: string) => {
-    if (!ioUrl) return;
-    navigator.clipboard.writeText(ioUrl);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 1500);
-  };
 
   const applySample = (sampleId: string) => {
     if (!sampleId) return;
@@ -185,12 +178,7 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
               />
             )}
             {ioUrl && handler.enabled && (
-              <IconButtonView
-                size="sm"
-                icon={copiedId === handler.id ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
-                onClick={() => copyIoUrl(handler.id)}
-                title="Copy Socket.IO URL"
-              />
+              <CopyUrlButton text={ioUrl} title="Copy Socket.IO URL" />
             )}
             {handler.enabled && (
               <IconButtonView

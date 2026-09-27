@@ -17,7 +17,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ButtonView, PopoverView, MarkdownView, IconSize } from '@salilvnair/dui';
-import { SparkleIcon, CopyIcon, CheckIcon, PythonIcon, CloseIcon } from '../../../icons';
+import { SparkleIcon, PythonIcon, CloseIcon } from '../../../icons';
 import { ColoredCode } from './ColoredCode';
 import { usePyStore, type PyRun, type PyTarget } from '../../../store/dk8s-python-store';
 import { usePyIntelStore } from '../../../store/dk8s-py-intel-store';
@@ -26,6 +26,7 @@ import { askOnce, type AiOnce } from '../../../services/ai/ai-once';
 import { copyText } from '../../../utils/clipboard';
 import { selectionOf } from './PyEditor';
 import { AI as AI_ACCENT, MUTED, BAD } from '../tone';
+import { useCopyTick, CopyGlyph } from '../../shared/CopyTick';
 
 /** Python's own green, for the proposed-script card. */
 const PY_GREEN = 'var(--color-success)';
@@ -109,7 +110,7 @@ export function AskPyAi({ scriptId, target, pythonVersion, lastRun, size = 'md',
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<{ answer: string; code: string; asked: string } | undefined>();
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
   const pending = useRef<AiOnce | null>(null);
   const anchor = useRef<HTMLSpanElement>(null);
   const popAnchor = useRef<HTMLSpanElement>(null);
@@ -269,9 +270,9 @@ export function AskPyAi({ scriptId, target, pythonVersion, lastRun, size = 'md',
                         )}
                         <span className="flex-1" />
                         <ButtonView size="xs" variant="secondary"
-                                    iconLeft={copied ? <CheckIcon size={IconSize.chip} /> : <CopyIcon size={IconSize.chip} />}
-                                    onClick={async () => { if (await copyText(result.code)) { setCopied(true); setTimeout(() => setCopied(false), 1400); } }}>
-                          {copied ? 'Copied' : 'Copy code'}
+                                    iconLeft={<CopyGlyph copied={copied} size={IconSize.chip} />}
+                                    onClick={async () => { if (await copyText(result.code)) flash(); }}>
+                          Copy code
                         </ButtonView>
                         {(change.added > 0 || change.removed > 0) && (
                           <ButtonView size="xs" variant="secondary" accentColor="var(--color-success)" color="var(--color-success)"

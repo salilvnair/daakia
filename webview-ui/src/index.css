@@ -1199,6 +1199,60 @@ input[type="number"] {
   padding: 0 !important;
 }
 
+/* ─── Copied: the green tick ───
+   Every copy in Daakia turns its glyph into a tick that pops in and draws
+   itself (components/shared/CopyTick.tsx). dui's CopyButtonView swaps to its
+   own tick and titles itself "Copied!" meanwhile — the second selector gives
+   it the same entrance, so the two read as one thing. */
+@keyframes dk-tick-pop {
+  0%   { transform: scale(0.4); opacity: 0; }
+  60%  { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes dk-tick-draw {
+  from { stroke-dashoffset: 24; }
+  to   { stroke-dashoffset: 0; }
+}
+.dk-copy-tick > svg,
+button[title="Copied!"] > svg {
+  animation: dk-tick-pop 360ms cubic-bezier(0.2, 1.3, 0.4, 1) both;
+}
+.dk-copy-tick > svg polyline,
+button[title="Copied!"] > svg polyline {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: dk-tick-draw 300ms 80ms ease-out forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dk-copy-tick > svg, button[title="Copied!"] > svg,
+  .dk-copy-tick > svg polyline, button[title="Copied!"] > svg polyline {
+    animation: none; stroke-dashoffset: 0;
+  }
+}
+
+/* ─── A glyph button that grows under the pointer ───
+   No box behind it: the glyph itself gets bigger, and takes its hover colour
+   (--hover) where it has one — close is grey until the pointer is on it,
+   then red. The file viewer's header uses .dk-icon-btn; the Explorer's row
+   actions are dui FileBrowserView buttons with no class of their own, so they
+   are reached through the class the Explorer puts on the browser. */
+.dk-icon-btn,
+.dk-fb-actions button[aria-label][style*="place-items"] {
+  transition: transform 120ms ease, color 120ms ease;
+}
+.dk-icon-btn:not(:disabled):hover,
+.dk-fb-actions button[aria-label][style*="place-items"]:not(:disabled):hover {
+  transform: scale(1.25);
+  background: transparent !important;
+}
+.dk-icon-btn:not(:disabled):hover {
+  color: var(--hover, var(--tone)) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dk-icon-btn:not(:disabled):hover,
+  .dk-fb-actions button[aria-label][style*="place-items"]:not(:disabled):hover { transform: none; }
+}
+
 /* ─── Monaco Find/Replace Widget ─── */
 
 .monaco-editor .find-widget {

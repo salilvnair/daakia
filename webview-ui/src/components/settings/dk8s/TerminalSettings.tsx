@@ -29,13 +29,13 @@ import {
   serializeTerminalThemes, type SortableRow,
 } from '@salilvnair/dui';
 import {
-  PaletteIcon, FolderImportIcon, FolderExportIcon, TrashIcon, CopyIcon,
-  CheckIcon, RefreshIcon, TerminalIcon, TypeIcon,
+  PaletteIcon, FolderImportIcon, FolderExportIcon, TrashIcon, RefreshIcon, TerminalIcon, TypeIcon,
 } from '../../../icons';
 import {
   useDk8sTerminalStore, MAX_SELECTED, DEFAULT_PREFS,
 } from '../../../store/dk8s-terminal-store';
 import { ACCENT, OK, WARN, MUTED, BAD } from '../../k8s/tone';
+import { useCopyTick, CopyGlyph } from '../../shared/CopyTick';
 
 /** The two verbs, in the colours collections already gives them. */
 const IMPORT = 'var(--color-accent)';
@@ -149,7 +149,7 @@ export function TerminalSettings() {
      handing it the stored one is safe. */
   const [building, setBuilding] = useState<DraftPalette | null>(null);
   const [refused, setRefused] = useState<string>();
-  const [copied, setCopied] = useState<string>();
+  const { copied: exported, flash: flashExported } = useCopyTick();
   /*
     Both destructive actions ask first, and neither asks in the abstract.
 
@@ -170,12 +170,6 @@ export function TerminalSettings() {
 
   const themes = s.themes();
   const bg = GROUND[ground];
-
-  const copy = (text: string, what: string) => {
-    void navigator.clipboard?.writeText(text);
-    setCopied(what);
-    window.setTimeout(() => setCopied(undefined), 1600);
-  };
 
   const rows: SortableRow[] = themes.map(t => {
     const on = s.selected.includes(t.id);
@@ -242,12 +236,7 @@ export function TerminalSettings() {
             style={{ flex: 1, minWidth: 0, padding: '5px 8px' }}
           />
 
-          <IconBtn label={`Copy ${t.label} as JSON`}
-                   onClick={() => copy(serializeTerminalThemes([t]), t.id)}>
-            {copied === t.id
-              ? <CheckIcon size={IconSize.item} color={OK} />
-              : <CopyIcon size={IconSize.item} />}
-          </IconBtn>
+          <CopyThemeButton label={t.label} text={() => serializeTerminalThemes([t])} />
           {/* Offered for built-ins too. Six palettes nobody uses are still six
               rows to read past — what differs is that a built-in comes back
               with Reset, which the confirmation says. */}
@@ -324,15 +313,15 @@ export function TerminalSettings() {
                         iconLeft={<FolderImportIcon size={IconSize.action} />}
                         onClick={() => setImporting(true)} />
             <ButtonView
-              label={copied === 'all' ? 'Copied' : 'Export all'}
+              label="Export all"
               size="sm" variant="secondary"
-              accentColor={copied === 'all' ? OK : EXPORT}
-              color={copied === 'all' ? OK : EXPORT}
-              style={softPrimary(copied === 'all' ? OK : EXPORT, true)}
-              iconLeft={copied === 'all'
-                ? <CheckIcon size={IconSize.action} />
+              accentColor={exported ? OK : EXPORT}
+              color={exported ? OK : EXPORT}
+              style={softPrimary(exported ? OK : EXPORT, true)}
+              iconLeft={exported
+                ? <CopyGlyph copied size={IconSize.action} />
                 : <FolderExportIcon size={IconSize.action} />}
-              onClick={() => copy(serializeTerminalThemes(themes), 'all')}
+              onClick={() => { void navigator.clipboard?.writeText(serializeTerminalThemes(themes)).then(flashExported); }}
             />
           </div>
 
@@ -580,6 +569,17 @@ export function TerminalSettings() {
         />
       )}
     </div>
+  );
+}
+
+/** One theme, copied as JSON. Each row keeps its own tick. */
+function CopyThemeButton({ label, text }: { label: string; text: () => string }) {
+  const { copied, flash } = useCopyTick();
+  return (
+    <IconBtn label={`Copy ${label} as JSON`}
+             onClick={() => { void navigator.clipboard?.writeText(text()).then(flash); }}>
+      <CopyGlyph copied={copied} size={IconSize.item} />
+    </IconBtn>
   );
 }
 

@@ -6,7 +6,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { nameForStage, screenForStage } from '../../store/ai-audit-events';
 import { postMsg } from '../../vscode';
-import { RefreshIcon, TrashIcon, CopyIcon, CheckIcon, ChevronLeftIcon, SparkleIcon } from '../../icons';
+import { RefreshIcon, TrashIcon, ChevronLeftIcon, SparkleIcon } from '../../icons';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -138,17 +139,12 @@ function stageColor(stage: string): string {
 // ─── Copy button (labeled — used in detail view) ─────────────────────────────
 
 function CopyBtn({ text, label = 'Copy' }: { text: string; label?: string }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
   return (
     <button
       type="button"
       title="Copy to clipboard"
-      onClick={() => {
-        navigator.clipboard.writeText(text).then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1500);
-        });
-      }}
+      onClick={() => { void navigator.clipboard.writeText(text).then(flash); }}
       className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-[10.5px] cursor-pointer transition-colors border"
       style={{
         color: copied ? 'var(--color-success)' : 'var(--color-text-muted)',
@@ -156,8 +152,8 @@ function CopyBtn({ text, label = 'Copy' }: { text: string; label?: string }) {
         background: copied ? 'color-mix(in srgb, var(--color-success) 8%, transparent)' : 'transparent',
       }}
     >
-      {copied ? <CheckIcon size={10} /> : <CopyIcon size={10} />}
-      {copied ? 'Copied' : label}
+      <CopyGlyph copied={copied} size={10} />
+      {label}
     </button>
   );
 }
@@ -165,17 +161,12 @@ function CopyBtn({ text, label = 'Copy' }: { text: string; label?: string }) {
 // ─── Icon-only copy button (used in table rows — matches TrashIcon button) ────
 
 function CopyIconBtn({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
   return (
     <button
       type="button"
       title="Copy to clipboard"
-      onClick={() => {
-        navigator.clipboard.writeText(text).then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1500);
-        });
-      }}
+      onClick={() => { void navigator.clipboard.writeText(text).then(flash); }}
       /* No box. A row of bordered squares reads as a toolbar of buttons
          competing with the data; the icon alone is enough, and hover says it
          is clickable. */
@@ -186,7 +177,7 @@ function CopyIconBtn({ text }: { text: string }) {
         background: 'transparent',
       }}
     >
-      {copied ? <CheckIcon size={10} /> : <CopyIcon size={10} />}
+      <CopyGlyph copied={copied} size={10} />
     </button>
   );
 }

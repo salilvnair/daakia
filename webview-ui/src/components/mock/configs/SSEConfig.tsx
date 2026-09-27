@@ -2,7 +2,7 @@
  * SSEConfig — SSE event config for mock server.
  */
 import { useState } from 'react';
-import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern } from '../../../icons';
+import { TrashIcon, DiagonalLinesPattern } from '../../../icons';
 import {
   ButtonView, IconButtonView, SelectInputView, CheckboxView,
   DurationInputView, EditorView, ResizablePanelView, ToggleSwitchView,
@@ -14,6 +14,7 @@ import type { MockServer } from '../mock-types';
 import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
 import { logUiEvent } from '../../../store/ui-audit-store';
 import type { SSEMockEvent } from '../mock-types';
+import { CopyUrlButton } from './CopyUrlButton';
 
 const SSE_SAMPLE_OPTIONS: SelectOption[] = [
   { value: '', label: 'Load Sample...' },
@@ -29,17 +30,9 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
   const events = server.sseEvents || [];
   const [selectedSample, setSelectedSample] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showDeleteAll, setShowDeleteAll] = useState(false);
 
   const sseUrl = server.running && server.port ? `http://localhost:${server.port}` : '';
-
-  const copySseUrl = (id: string) => {
-    if (!sseUrl) return;
-    navigator.clipboard.writeText(sseUrl);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 1500);
-  };
 
   const applySample = (sampleId: string) => {
     if (!sampleId) return;
@@ -181,12 +174,7 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
               />
             )}
             {sseUrl && event.enabled && (
-              <IconButtonView
-                size="sm"
-                icon={copiedId === event.id ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
-                title="Copy SSE URL"
-                onClick={() => copySseUrl(event.id)}
-              />
+              <CopyUrlButton text={sseUrl} title="Copy SSE URL" />
             )}
             {event.enabled && (
               <IconButtonView

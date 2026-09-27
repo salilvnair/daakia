@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   IconButtonView, SearchInputView, IconSize,
 } from '@salilvnair/dui';
-import { PlusIcon, SearchIcon, FileTextIcon } from '../../../icons';
+import { PlusIcon, SearchIcon, PythonFileIcon } from '../../../icons';
 import { usePyStore, ensurePyListener } from '../../../store/dk8s-python-store';
 import { filterScripts, groupScripts, relativeAge, PY_HEADER_HEIGHT } from './py-view';
 import { ACCENT } from '../tone';
@@ -102,7 +102,7 @@ export function ScriptLibrary({ heading, footer, width = 208 }: {
                               background: on ? `color-mix(in srgb, ${ACCENT} 16%, transparent)` : 'transparent',
                               color: on ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
                             }}>
-                      <FileTextIcon size={12} color={on ? ACCENT : 'var(--color-text-muted)'} />
+                      <PythonFileIcon size={14} style={{ flexShrink: 0, opacity: on ? 1 : 0.85 }} />
                       <span className="flex-1 truncate">{it.name}</span>
                       {it.dirty && <span title="Unsaved" style={{ width: 6, height: 6, borderRadius: 6, background: 'var(--color-warning)', flexShrink: 0 }} />}
                       {it.age && <span className="text-[10.5px] shrink-0" style={{ color: 'var(--color-text-muted)' }}>{it.age}</span>}

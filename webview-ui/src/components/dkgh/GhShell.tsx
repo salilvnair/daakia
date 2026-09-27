@@ -16,6 +16,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { postMsg } from '../../vscode';
 import { Ico, type IcoName } from './GhIcons';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 /**
  * dkgh's palette, where a dialog cannot carry it.
@@ -78,24 +79,17 @@ export function GhCommand({ text, prompt = '>' }: { text: string; prompt?: strin
   );
 }
 
-/** `copy`, and then `copied` for a moment — the mock's word, doing its job. */
+/** `copy` — the mock's word, and the glyph that turns into the green tick once it has. */
 export function CopyWord({ text, label = 'copy' }: { text: string; label?: string }) {
+  const { copied, flash } = useCopyTick();
   return (
     <button
       type="button"
       className="copy"
-      onClick={e => {
-        navigator.clipboard?.writeText(text);
-        const el = e.currentTarget;
-        el.textContent = 'copied';
-        el.classList.add('done');
-        window.setTimeout(() => {
-          el.textContent = label;
-          el.classList.remove('done');
-        }, 1400);
-      }}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+      onClick={() => { void navigator.clipboard?.writeText(text).then(flash); }}
     >
-      {label}
+      <CopyGlyph copied={copied} size={12} />{label}
     </button>
   );
 }

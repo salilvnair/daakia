@@ -2,20 +2,19 @@ import { useState } from 'react';
 import type { RequestTab, ResponseData } from '../../../store/tabs-store';
 import { formatBytes } from '../../../services/response';
 import { METHOD_COLORS } from '../../../colors';
-import { CopyIcon, CheckIcon, ChevronDownIcon, InfoCircleIcon, ArrowUpRightIcon, ArrowDownLeftIcon } from '../../../icons';
+import { ChevronDownIcon, InfoCircleIcon, ArrowUpRightIcon, ArrowDownLeftIcon } from '../../../icons';
 import { RequestBodyDisplay } from '../../shared/display/RequestBodyDisplay';
 import { SubRequestRow } from './SubRequestRow';
 import { TabView } from '@salilvnair/dui';
+import { useCopyTick, CopyGlyph } from '../../shared/CopyTick';
 
 type TimelineSubTab = 'request' | 'response' | 'network-logs';
 
 function TimelineCopyButton({ text, size = 12 }: { text: string; size?: number }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    void navigator.clipboard.writeText(text).then(flash);
   };
   return (
     <button
@@ -26,7 +25,7 @@ function TimelineCopyButton({ text, size = 12 }: { text: string; size?: number }
       }`}
       title={copied ? 'Copied!' : 'Copy'}
     >
-      {copied ? <CheckIcon size={size} /> : <CopyIcon size={size} />}
+      <CopyGlyph copied={copied} size={size} />
     </button>
   );
 }
