@@ -39,7 +39,7 @@ import { logLineSettings, onLadder, tailLabel, contextLabel } from './log-settin
 import { findPayload, payloadNote, type LogPayload } from './log-payload';
 import { compileMarks, markOf, type MarkHit } from './logger-marks';
 import { LineFieldsView } from './LineFieldsView';
-import { determinantsIn } from './determinants';
+import { useDeterminantsFor } from './use-determinants';
 import { SummaryPanel } from './SummaryPanel';
 import { usePatternsFor, MARK_COLORS } from '../../store/dk8s-logger-store';
 import { scopeOf } from './LoggersTab';
@@ -52,8 +52,8 @@ import {
   type FilterMenu, type FilterGroup,
 } from '../shared/menus/filter-provider';
 import {
-  filterLines, densityBuckets, describeBucket, levelCounts, levelColor, ribbonBands,
-  timeBuckets, ribbonTicks, COMPACT_RIBBON_PX,
+  filterLines, densityBuckets, levelCounts, levelColor, ribbonBands,
+  timeBuckets, ribbonTicks, COMPACT_RIBBON_PX, type DensityBucket, type RibbonTick,
   formatLogTime, selectionText, LEVEL_ORDER, foldStackTraces, bufferBytes,
   compactCount, grepTermFor, frameOrigin, type MatchedLine, type FieldFilter,
   displayText, ownFramesFirst,
@@ -64,6 +64,10 @@ import {
 import { ExportLogsModal } from './ExportLogsModal';
 
 import { ACCENT } from './tone';
+import {
+  BAND_FLOOR_PX, BAND_GAP_PX, markerBox, bandAt, hoverCardPlacement, type CardPlacement,
+} from './ribbon-layout';
+import { RibbonHover, HOVER_CARD_W } from './RibbonHover';
 /**
  * One size for every control in the toolbar.
  *
@@ -266,9 +270,9 @@ function FieldFilterStrip({ filters, onFlip, onRemove, onClearAll }: {
 
 // ── Density ribbon: vertical, on the right ──────────────────────────────────
 
-/** A band's smallest drawn height, and the gap under it. Both in px. */
-const BAND_MIN = 2;
-const BAND_GAP = 1;
+/** A band's smallest drawn height, and the gap under it. Both in px — see `ribbon-layout`. */
+const BAND_MIN = BAND_FLOOR_PX;
+const BAND_GAP = BAND_GAP_PX;
 
 function DensityRibbon({
   lines, scrollTop, contentHeight, viewportHeight, onJump, onScrollTo, onDragStart, onDragEnd,
@@ -351,36 +355,72 @@ function DensityRibbon({
   // Exactly what the scrollbar shows: how much of the content is visible, and
   // how far down it we are.
   const scrollable = Math.max(0, contentHeight - viewportHeight);
-  const visibleFraction = contentHeight > 0
-    ? Math.min(1, viewportHeight / contentHeight)
-    : 1;
-  const scrolledFraction = scrollable > 0 ? Math.min(1, scrollTop / scrollable) : 0;
 
   /*
     On a shared clock the bands are drawn by TIME, so the marker and the drag
     have to be as well. Left on scroll position, the box said "you are at 90%"
     of a strip whose 90% meant a different instant — two scales on one ribbon,
     each right about itself and wrong about the other.
-  */
-  const span = sharedRange ? Math.max(1, sharedRange.to - sharedRange.from) : 0;
-  const onClock = !!sharedRange && viewTimes?.from !== undefined && viewTimes.to !== undefined;
-  const clockTop = onClock
-    ? Math.min(1, Math.max(0, (viewTimes!.from! - sharedRange!.from) / span)) * height
-    : 0;
-  const clockBottom = onClock
-    ? Math.min(1, Math.max(0, (viewTimes!.to! - sharedRange!.from) / span)) * height
-    : 0;
 
-  // Never taller than the track: in a short pane a viewport that holds most of
-  // the buffer asked for a marker longer than the track it sits in.
-  const viewH = onClock
-    ? Math.min(height, Math.max(8, clockBottom - clockTop))
-    : Math.min(height, Math.max(8, visibleFraction * height));
-  // Travel is the track minus the marker, so at scrollTop = max the marker's
-  // BOTTOM lands on the track's bottom rather than its top overshooting it.
-  const viewTop = onClock
-    ? Math.min(Math.max(0, height - viewH), clockTop)
-    : Math.max(0, scrolledFraction * (height - viewH));
+    Clamped to this track and never thinner than 6px — see `markerBox`, which
+    is where the rule is tested at every height a pane can have.
+  */
+  const { top: viewTop, height: viewH } = markerBox({
+    trackPx: height, scrollTop, contentHeight, viewportHeight, range: sharedRange, viewTimes,
+  });
+
+  /*
+    The hover card, anchored to the pane.
+
+    Each band carried a `title`, which the browser places against the page:
+    in the right-hand panes of a split it opened past the edge and was
+    clipped, and it said the same thing at the same size whether the pane was
+    a whole screen or a sliver. The card is drawn inside this column instead,
+    measured against the pane's own body, on whichever side has room.
+  */
+  const columnRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [hover, setHover] = useState<{ y: number; bucket?: DensityBucket; tick?: RibbonTick }>();
+  const [card, setCard] = useState<CardPlacement>();
+
+  const hoverAt = (clientY: number) => {
+    const el = ref.current;
+    if (!el) return;
+    const y = clientY - el.getBoundingClientRect().top;
+    if (compact) {
+      /* The nearest tick within a few pixels — a tick is 3px tall and a
+         pointer that has to land on it exactly is a pointer that misses. */
+      let best: RibbonTick | undefined;
+      let bestDist = 6;
+      for (const t of ticks) {
+        const d = Math.abs(t.at * height - y);
+        if (d <= bestDist) { best = t; bestDist = d; }
+      }
+      setHover(best ? { y, tick: best } : undefined);
+      return;
+    }
+    const i = bandAt(y, height, buckets.length);
+    setHover(i >= 0 ? { y, bucket: buckets[i] } : undefined);
+  };
+
+  useLayoutEffect(() => {
+    const column = columnRef.current;
+    const body = column?.parentElement;
+    if (!hover || !column || !body) { setCard(undefined); return; }
+    const c = column.getBoundingClientRect();
+    const b = body.getBoundingClientRect();
+    const track = ref.current?.getBoundingClientRect();
+    setCard(hoverCardPlacement({
+      /* The track is inset in the column by its padding; the card is placed
+         against the column, so the pointer is too. */
+      pointerY: hover.y + (track ? track.top - c.top : 0),
+      columnPx: c.height,
+      cardHeight: cardRef.current?.offsetHeight ?? 56,
+      cardWidth: HOVER_CARD_W,
+      roomLeft: c.left - b.left,
+      roomRight: b.right - c.right,
+    }));
+  }, [hover]);
 
   /**
    * Drag like a scrollbar thumb.
@@ -426,7 +466,7 @@ function DensityRibbon({
   };
 
   return (
-    <div className="relative shrink-0 flex flex-col items-stretch py-1"
+    <div ref={columnRef} className="relative shrink-0 flex flex-col items-stretch py-1"
          style={{ width: RIBBON_W }}>
       <div
         ref={ref}
@@ -441,12 +481,13 @@ function DensityRibbon({
            bands fit, so there is nothing for a clip to catch. */
         className="relative flex-1 min-h-0 flex flex-col gap-px mx-auto"
         style={{ width: RIBBON_BAND_W, cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
-        onPointerDown={onPointerDown}
+        onPointerDown={e => { setHover(undefined); onPointerDown(e); }}
         onPointerMove={e => {
-          if (!dragging) return;
+          if (!dragging) { hoverAt(e.clientY); return; }
           movedRef.current = true;
           scrollToPointer(e.clientY);
         }}
+        onPointerLeave={() => setHover(undefined)}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
       >
@@ -457,7 +498,6 @@ function DensityRibbon({
             // precise gesture, kept alongside the coarse one. An empty slice
             // of time has nowhere to jump to.
             onClick={() => { if (!movedRef.current && b.startIndex >= 0) onJump(b.startIndex); }}
-            title={b.count ? describeBucket(b) : 'nothing logged in this slice'}
             className="transition-opacity hover:opacity-100"
             style={{
               flex: 1,
@@ -483,7 +523,6 @@ function DensityRibbon({
           <div
             key={t.startIndex}
             onClick={() => { if (!movedRef.current) onJump(t.startIndex); }}
-            title={`${t.count} ${t.level === 'error' ? 'error' : 'warning'}${t.count === 1 ? '' : 's'} here`}
             className="absolute cursor-pointer"
             style={{
               left: -1, right: -1,
@@ -514,6 +553,26 @@ function DensityRibbon({
           />
         )}
       </div>
+
+      {hover && !dragging && (
+        <div
+          ref={cardRef}
+          role="tooltip"
+          className="absolute pointer-events-none z-20 flex flex-col gap-0.5 px-2.5 py-1.5 rounded-md text-[11px]"
+          style={{
+            top: card?.top ?? 0,
+            ...(card?.side === 'right' ? { left: '100%' } : { right: '100%' }),
+            width: card ? card.maxWidth : HOVER_CARD_W,
+            visibility: card ? 'visible' : 'hidden',
+            background: 'var(--color-panel)',
+            border: '1px solid var(--color-surface-border)',
+            boxShadow: '0 4px 14px rgba(0,0,0,0.25)',
+            color: 'var(--color-text-secondary)',
+          }}
+        >
+          <RibbonHover bucket={hover.bucket} tick={hover.tick} lines={lines} />
+        </div>
+      )}
     </div>
   );
 }
@@ -682,7 +741,9 @@ export function LogViewer() {
   /* The patterns catalogued for this workload — the marked ones highlight,
      and the ones with a summary answer "what ran in this window". */
   const catalogue = usePatternsFor(scopeOf(detail));
-  const determinants = useMemo(() => determinantsIn(catalogue), [catalogue]);
+  /* Yours and your team's that apply to this pod and are on — the same set
+     the Summary panel answers, so the button never offers an empty panel. */
+  const determinants = useDeterminantsFor(detail).enabled;
   const [summaryOpen, setSummaryOpen] = useState(false);
   /*
     The first moment after asking, when an empty view means nothing yet.

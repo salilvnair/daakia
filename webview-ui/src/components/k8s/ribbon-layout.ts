@@ -1,0 +1,153 @@
+/**
+ * The ribbon's geometry, measured against the pane it is drawn in.
+ *
+ * ── Why this is its own file ──
+ *
+ * Everything the ribbon draws is a number derived from one other number: the
+ * height of its own track. The failures a split pane showed were all that
+ * number being taken from somewhere else — the viewport, once at mount, a
+ * floor of 60px — so a 190px pane drew to a 900px ruler, its bands ran past
+ * the bottom edge, and the one ERROR in a quiet pane rounded to nothing. The
+ * rules that keep those from coming back are pure arithmetic, so they live
+ * here, where they can be tested at every height a pane can have rather than
+ * at the one height somebody's window happened to be.
+ *
+ *   1. The track measures itself (a ResizeObserver in the view), and every
+ *      rule below takes that height as an argument, never a constant.
+ *   2. A band is never thinner than `BAND_FLOOR_PX`. The band count follows
+ *      from that, not the other way round, so a lone error always has three
+ *      pixels of its own colour.
+ *   3. Under `COMPACT_RIBBON_PX` (log-view.ts) the ribbon draws ticks, not
+ *      bands.
+ *   4. The you-are-here box is clamped to the track and never thinner than
+ *      `MARKER_MIN_PX`.
+ *   5. The hover card is placed inside the pane, on whichever side has room.
+ */
+import { ribbonBands } from './log-view';
+
+/** The thinnest a band is ever drawn. Three pixels is the least that reads as a colour. */
+export const BAND_FLOOR_PX = 3;
+/** The gap under each band. */
+export const BAND_GAP_PX = 1;
+/** The thinnest the you-are-here box is ever drawn. */
+export const MARKER_MIN_PX = 6;
+
+/**
+ * How many bands a track this tall gets, each at least the floor.
+ *
+ * `ribbonBands` with the floor as its minimum: one band per ~7px where there is
+ * room, and never more than fit at the floor with their gaps.
+ */
+export function bandCount(trackPx: number): number {
+  return ribbonBands(trackPx, BAND_FLOOR_PX, BAND_GAP_PX);
+}
+
+/** What each band actually gets, in px, once the gaps are taken out. */
+export function bandPx(trackPx: number, bands: number): number {
+  if (bands < 1) return 0;
+  return (trackPx - BAND_GAP_PX * (bands - 1)) / bands;
+}
+
+/** Which band a point on the track falls in. */
+export function bandAt(y: number, trackPx: number, bands: number): number {
+  if (bands < 1 || trackPx <= 0) return -1;
+  return Math.min(bands - 1, Math.max(0, Math.floor((y / trackPx) * bands)));
+}
+
+// ── You are here ────────────────────────────────────────────────────────────
+
+export interface MarkerInput {
+  trackPx: number;
+  scrollTop: number;
+  contentHeight: number;
+  viewportHeight: number;
+  /** The shared clock, when the split has one. */
+  range?: { from: number; to: number };
+  /** When the first and last rows on screen were logged. */
+  viewTimes?: { from?: number; to?: number };
+}
+
+/**
+ * Where the you-are-here box goes, and how tall it is.
+ *
+ * By scroll fraction — the quantity the scrollbar itself uses — or, on a
+ * shared clock, by the instants at the top and bottom of the screen, because
+ * the bands are drawn by time there and a box on another scale would sit at
+ * the right percentage of the wrong thing.
+ *
+ * Never taller than the track (a short pane holding most of its buffer asks
+ * for exactly that), never thinner than `MARKER_MIN_PX` (a pane holding two
+ * screens of a long log would otherwise draw a hairline nobody can find), and
+ * its travel is the track minus itself, so at the end its bottom meets the
+ * track's bottom rather than running past it.
+ */
+export function markerBox(m: MarkerInput): { top: number; height: number } {
+  const track = Math.max(0, m.trackPx);
+  const clamp = (v: number) => Math.min(1, Math.max(0, v));
+
+  if (m.range && m.viewTimes?.from !== undefined && m.viewTimes.to !== undefined) {
+    const span = Math.max(1, m.range.to - m.range.from);
+    const top = clamp((m.viewTimes.from - m.range.from) / span) * track;
+    const bottom = clamp((m.viewTimes.to - m.range.from) / span) * track;
+    const height = Math.min(track, Math.max(MARKER_MIN_PX, bottom - top));
+    return { top: Math.min(Math.max(0, track - height), top), height };
+  }
+
+  const scrollable = Math.max(0, m.contentHeight - m.viewportHeight);
+  const visible = m.contentHeight > 0 ? Math.min(1, m.viewportHeight / m.contentHeight) : 1;
+  const scrolled = scrollable > 0 ? clamp(m.scrollTop / scrollable) : 0;
+  const height = Math.min(track, Math.max(MARKER_MIN_PX, visible * track));
+  return { top: Math.max(0, scrolled * (track - height)), height };
+}
+
+// ── The hover card ──────────────────────────────────────────────────────────
+
+export interface CardInput {
+  /** The pointer, measured from the top of the ribbon's column. */
+  pointerY: number;
+  /** The column's height — the pane's body, which the card must stay inside. */
+  columnPx: number;
+  cardHeight: number;
+  cardWidth: number;
+  /** Room between the column and the pane's left and right edges. */
+  roomLeft: number;
+  roomRight: number;
+  /** Space between the pointer and the card, and between the card and an edge. */
+  gap?: number;
+}
+
+export interface CardPlacement {
+  /** From the top of the column. */
+  top: number;
+  /** Which side of the ribbon the card opens on. */
+  side: 'left' | 'right';
+  /** When neither side fits the card, the width it may have. */
+  maxWidth: number;
+}
+
+/**
+ * Where the hover card goes: inside the pane, beside the pointer.
+ *
+ * The card used to be placed in page coordinates, which is right for the one
+ * pane at the left of the screen and wrong for every other: in the right-hand
+ * panes of a split it opened past the edge and was clipped. So it is placed
+ * against the pane instead. Sideways, it takes whichever side has room —
+ * normally the left, since the ribbon runs down the pane's right edge — and
+ * when neither does it takes the roomier one and narrows to fit. Up and down,
+ * it sits below the pointer in the top half and above it in the bottom half,
+ * so it never runs off the end it is nearest, and is then clamped inside the
+ * column whatever its height.
+ */
+export function hoverCardPlacement(c: CardInput): CardPlacement {
+  const gap = c.gap ?? 6;
+  const fitsLeft = c.roomLeft >= c.cardWidth + gap;
+  const fitsRight = c.roomRight >= c.cardWidth + gap;
+  const side: 'left' | 'right' = fitsLeft ? 'left' : fitsRight ? 'right' : (c.roomLeft >= c.roomRight ? 'left' : 'right');
+  const room = side === 'left' ? c.roomLeft : c.roomRight;
+  const maxWidth = Math.max(0, Math.min(c.cardWidth, room - gap));
+
+  const below = c.pointerY <= c.columnPx / 2;
+  const wanted = below ? c.pointerY + gap : c.pointerY - gap - c.cardHeight;
+  const top = Math.min(Math.max(0, c.columnPx - c.cardHeight), Math.max(0, wanted));
+  return { top, side, maxWidth };
+}
