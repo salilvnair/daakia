@@ -261,3 +261,17 @@ describe('PdbDriver', () => {
     expect(log).toContain(`b ${PATH}:12`);
   });
 });
+
+describe('hover evaluation', () => {
+  it('asks pdb only for names and attribute chains, never calls or writes', async () => {
+    const { isHoverExpr, evalCommand } = await import('./pod-pdb');
+    expect(isHoverExpr('socket')).toBe(true);
+    expect(isHoverExpr('os.environ')).toBe(true);
+    expect(isHoverExpr('self.pool.size')).toBe(true);
+    expect(isHoverExpr('socket.gethostname()')).toBe(false);
+    expect(isHoverExpr('x = 1')).toBe(false);
+    expect(isHoverExpr('d["k"]')).toBe(false);
+    expect(isHoverExpr('__import__')).toBe(true);
+    expect(evalCommand('os.environ')).toContain('type(os.environ).__name__');
+  });
+});

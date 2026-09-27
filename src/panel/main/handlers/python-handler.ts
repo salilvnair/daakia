@@ -36,6 +36,7 @@ import {
 } from '../../../services/k8s/pod-pdb';
 import type { PodTarget } from '../../../services/k8s/pod-files';
 import { configFor } from './terminal-handler';
+import { intelArgs, parseIntel } from '../../../services/k8s/pod-pyintel';
 import { listScripts, saveScript, deleteScript } from '../../../services/py-scripts';
 import { getActiveWorkspaceId } from '../../../storage/workspaces';
 
@@ -343,6 +344,47 @@ export function handlePyDebugWatches(msg: Record<string, unknown>): void {
   if (!d || d.ended) return;
   const exprs = Array.isArray(msg.exprs) ? (msg.exprs as unknown[]).map(String).filter(e => e.trim()).slice(0, 20) : [];
   void d.driver.setWatches(exprs);
+}
+
+/**
+ * A hover in the editor: one name or attribute chain, evaluated in the paused
+ * frame. Answered by `reqId`, and answered even when it cannot be — a hover
+ * waiting on a reply that never comes is a spinner that never stops.
+ */
+export function handlePyDebugEval(msg: Record<string, unknown>, post: PostMessage): void {
+  const debugId = String(msg.debugId ?? '');
+  const reqId = String(msg.reqId ?? '');
+  const d = debuggers.get(debugId);
+  const reply = (r: { type?: string; value?: string; error?: string }) =>
+    post({ type: 'py:debug:evalResult', debugId, reqId, valueType: r.type, value: r.value, error: r.error });
+  if (!d || d.ended) { reply({ error: 'no session' }); return; }
+  if (d.conv.busy) { reply({ error: 'busy' }); return; }
+  void d.driver.evaluate(String(msg.expr ?? '')).then(reply, err => reply({ error: err instanceof Error ? err.message : String(err) }));
+}
+
+/**
+ * IntelliSense from the container: the script parsed (never run) by the pod's
+ * own python3, and the members of what it imports — see pod-pyintel.
+ *
+ * Answered by `reqId`, always: an editor waiting on squiggles that never come
+ * is an editor that looks like it approves of the code.
+ */
+export async function handlePyIntel(msg: Record<string, unknown>, post: PostMessage): Promise<void> {
+  const reqId = String(msg.reqId ?? '');
+  const reply = (r: Record<string, unknown>) => post({ type: 'py:intel', reqId, scriptId: msg.scriptId, ...r });
+  const t = targetOf(msg);
+  if (!t) { reply({ error: 'not a valid pod' }); return; }
+  const source = typeof msg.source === 'string' ? msg.source : '';
+  if (Buffer.byteLength(source, 'utf8') > MAX_SCRIPT_BYTES) { reply({ error: 'script too large to check' }); return; }
+  const probe = await probePython(t);
+  if (!probe.verdict.ok || !probe.verdict.interpreter) { reply({ error: probe.verdict.reason ?? 'no python here' }); return; }
+  const known = Array.isArray(msg.known) ? (msg.known as unknown[]).map(String).slice(0, 200) : [];
+  const r = await run(intelArgs(t, probe.verdict.interpreter), {
+    stdin: JSON.stringify({ source, known }),
+    timeoutMs: 15_000,
+  });
+  const parsed = parseIntel(r.stdout, r.failure ?? r.stderr);
+  reply({ ...parsed, key: keyOf(t) });
 }
 
 export function handlePyDebugStop(msg: Record<string, unknown>, post: PostMessage): void {

@@ -330,6 +330,24 @@ export function varsCommand(scope: 'locals' | 'globals'): string {
     + ` for k, v in list(${scope}().items()) if ${filter}]))`;
 }
 
+/**
+ * Whether an expression is safe to evaluate for a hover.
+ *
+ * A name, or a chain of attributes off one — `socket`, `os.environ`,
+ * `self.pool.size` — and nothing else. Hovering must never run the program:
+ * a call, a subscript that hits `__getitem__` on something clever, or an
+ * assignment could change the state being inspected, so only reads of names
+ * and attributes are asked of pdb.
+ */
+export function isHoverExpr(expr: string): boolean {
+  return /^[A-Za-z_]\w*(\.[A-Za-z_]\w*){0,5}$/.test(expr) && expr.length <= 120;
+}
+
+/** A hover's value: its type and repr, as JSON behind the marker. */
+export function evalCommand(expr: string): string {
+  return `!print('${MARK}eval@@ ' + __import__('json').dumps([type(${expr}).__name__, ${reprOf(`(${expr})`)}]))`;
+}
+
 export function watchCommand(expr: string): string {
   return `!print('${MARK}watch@@ ' + __import__('json').dumps(${reprOf(`(${expr})`)}))`;
 }
@@ -454,6 +472,21 @@ export class PdbDriver {
       const block = await this.conv.send(`b ${this.path}:${l}`);
       if (/^Breakpoint \d+ at /m.test(block)) this.bps.add(l);
     }
+  }
+
+  /**
+   * One expression's type and value in the paused frame — for a hover.
+   *
+   * Only while paused and only when pdb is idle: a hover arriving during a
+   * step would interleave with the step's own commands. Anything but a name
+   * or an attribute chain is refused (`isHoverExpr`).
+   */
+  async evaluate(expr: string): Promise<{ type?: string; value?: string; error?: string }> {
+    if (this.state.status !== 'paused') return { error: 'not paused' };
+    if (!isHoverExpr(expr)) return { error: 'only names and attributes are shown on hover' };
+    const block = await this.conv.send(evalCommand(expr));
+    const got = parseMarked<[string, string]>(block, 'eval');
+    return got ? { type: got[0], value: got[1] } : { error: pdbError(block) ?? 'not available' };
   }
 
   async setWatches(exprs: string[]): Promise<void> {
