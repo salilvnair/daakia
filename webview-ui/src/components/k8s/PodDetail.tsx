@@ -8,7 +8,7 @@
 import { useCallback, useEffect } from 'react';
 import {
   CloseIcon, TerminalIcon, FileTextIcon, CodeIcon, StethoscopeIcon,
-  SparkleIcon, ChevronLeftIcon, LayersIcon, LockIcon, FolderOpenIcon, BracesIcon,
+  SparkleIcon, ChevronLeftIcon, LayersIcon, LockIcon, FolderOpenIcon, BracesIcon, PythonIcon,
 } from '../../icons';
 import { LoggersTab } from './LoggersTab';
 import { CopyButtonView, IconSize, TableSkeletonView } from '@salilvnair/dui';
@@ -25,6 +25,8 @@ import { PodTerminal } from './PodTerminal';
 import { tokenizeDescribeLine, tokenColor, tokenWeight } from './describe-highlight';
 import { CodeEditor } from '../shared/editors/CodeEditor';
 import { OverviewTab } from './OverviewTab';
+import { PythonTab } from './python/PythonTab';
+import { PythonHeaderChips } from './python/PythonHeaderChips';
 
 import { ACCENT } from './tone';
 import { AI as AI_ACCENT } from './tone';
@@ -60,6 +62,12 @@ const TABS: {
   { id: 'loggers', label: 'Loggers', Icon: BracesIcon },
   { id: 'terminal', label: 'Terminal', Icon: TerminalIcon, needs: 'exec' },
   { id: 'doctor', label: 'Doctor', Icon: StethoscopeIcon, needs: 'exec' },
+  /*
+    A script is copied in and run with `kubectl exec`, and the debugger is
+    pdb over the same exec channel the Terminal uses — so it needs exactly
+    what the Terminal needs, and wears the same padlock without it.
+  */
+  { id: 'python', label: 'Python', Icon: PythonIcon, needs: 'exec' },
   // Everything the explorer does is one exec, so it gates on exactly the same
   // access the terminal does.
   { id: 'explorer', label: 'Explorer', Icon: FolderOpenIcon, needs: 'exec' },
@@ -282,6 +290,11 @@ export function PodDetail() {
           </span>
         </div>
 
+        {/* The interpreter, and — while pdb is up in this pod — where it is
+            paused and for how long. In the header rather than the tab because
+            a paused process in a pod is worth knowing about from every tab. */}
+        <PythonHeaderChips />
+
         <div className="flex items-center gap-5 ml-4 flex-wrap">
           <Stat label="status" value={detail.reason || detail.phase} color={color} />
           <Stat label="ready" value={`${detail.ready.current}/${detail.ready.total}`} />
@@ -422,6 +435,7 @@ export function PodDetail() {
                 {detailTab === 'describe' && <DescribePane text={describeText} busy={describeBusy} />}
                 {detailTab === 'yaml' && <YamlPane text={yamlText} busy={describeBusy} />}
                 {detailTab === 'doctor' && <DoctorTab />}
+                {detailTab === 'python' && <PythonTab />}
                 {detailTab === 'explorer' && detail?.context && (
                   <ExplorerTab
                     context={detail.context}

@@ -1381,6 +1381,16 @@ input[type="number"] {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23e5c335' d='M8.879 14H5C3.897 14 3 13.103 3 12V4C3 2.897 3.897 2 5 2H8.879C9.405 2 9.921 2.213 10.293 2.586L14.505 6.798C14.826 7.119 15.003 7.546 15.003 8C15.003 8.454 14.826 8.881 14.505 9.202L10.293 13.414C9.921 13.787 9.405 14 8.879 14Z'/%3E%3Ccircle cx='7' cy='8' r='2' fill='%23ef4444'/%3E%3C/svg%3E");
 }
 
+/* Python-in-a-pod: the values after the paused line, the way VS Code prints
+   them. Muted and italic so they read as annotation rather than as code the
+   reader might think they wrote. */
+.dk-py-inline-value {
+  color: var(--color-warning);
+  opacity: 0.85;
+  font-style: italic;
+  margin-left: 2ch;
+}
+
 /* ─── Sidebar shimmer skeleton animation ─── */
 .sidebar-shimmer {
   animation: sidebarShimmer 1.5s ease-in-out infinite;

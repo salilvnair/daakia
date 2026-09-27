@@ -29,6 +29,8 @@ import { useDk8sDoctorStore } from '../../store/dk8s-doctor-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { useDk8sArtifactStore } from '../../store/dk8s-artifact-store';
 import { ArtifactsView } from './ArtifactsView';
+import { ScriptsScreen } from './python/ScriptsScreen';
+import { usePyStore, ensurePyListener } from '../../store/dk8s-python-store';
 import { ArtifactDetail } from './ArtifactDetail';
 import { openArtifactIn, type AnalyzerId } from '../../store/dk8s-analyze-store';
 import { useUiStateStore } from '../../store/ui-state-store';
@@ -226,9 +228,15 @@ function ViewSwitch({ view, onChange }: {
   // Artifacts carried a count and Pods did not, which read as though only one
   // of them held anything.
   const podCount = useK8sStore(s => s.pods.length);
+  /* The library's size, asked for up front for the same reason as the
+     artifact count above: a badge that fills in only after the click is
+     describing something you have already opened. */
+  const scriptCount = usePyStore(s => s.scripts.length);
+  useEffect(() => { ensurePyListener(); usePyStore.getState().loadScripts(); }, []);
   const TABS = [
     { id: 'pods' as const, label: 'Pods', icon: null, badge: podCount },
     { id: 'artifacts' as const, label: 'Artifacts', icon: null, badge: count },
+    { id: 'scripts' as const, label: 'Scripts', icon: null, badge: scriptCount },
   ];
   return (
     <div className="flex items-center gap-1 px-4 pt-2 shrink-0"
@@ -398,6 +406,15 @@ export function K8sPanel() {
               Analyze holds a parsed dump and Artifacts holds a filter, and
               both were being thrown away by a trip to the pod list — you came
               back to an empty analyzer and had to re-open the file. */}
+          {/* Kept mounted once opened, like Artifacts: a run on three pods is
+              still streaming when you glance at the pod list, and coming back
+              to an empty output would lose it. */}
+          {seen.has('scripts') && (
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden"
+                 style={{ display: view === 'scripts' ? 'flex' : 'none' }}>
+              <ScriptsScreen />
+            </div>
+          )}
           {seen.has('artifacts') && (
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden"
                  style={{ display: view === 'artifacts' ? 'flex' : 'none' }}>

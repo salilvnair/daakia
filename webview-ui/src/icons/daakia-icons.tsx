@@ -2616,3 +2616,21 @@ export function PeekIcon(props: IconProps) {
     </svg>
   );
 }
+
+/**
+ * Python, as two interlocking rounded halves in the stroke style of the rest of
+ * this set — the language's own mark drawn as an outline, so it takes the
+ * theme's colour like every other tab icon instead of arriving blue and yellow.
+ */
+export function PythonIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M12 3H9.5A2.5 2.5 0 0 0 7 5.5V8h5" />
+      <path d="M7 8H5.5A2.5 2.5 0 0 0 3 10.5v3A2.5 2.5 0 0 0 5.5 16H7v-2.5A2.5 2.5 0 0 1 9.5 11h5A2.5 2.5 0 0 0 17 8.5v-3A2.5 2.5 0 0 0 14.5 3H12" />
+      <path d="M12 21h2.5a2.5 2.5 0 0 0 2.5-2.5V16h-5" />
+      <path d="M17 16h1.5a2.5 2.5 0 0 0 2.5-2.5v-3A2.5 2.5 0 0 0 18.5 8H17v2.5a2.5 2.5 0 0 1-2.5 2.5h-5A2.5 2.5 0 0 0 7 15.5v3A2.5 2.5 0 0 0 9.5 21H12" />
+      <circle cx="10" cy="5.5" r="0.6" fill="currentColor" />
+      <circle cx="14" cy="18.5" r="0.6" fill="currentColor" />
+    </svg>
+  );
+}

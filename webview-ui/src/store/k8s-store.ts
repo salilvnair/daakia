@@ -362,6 +362,12 @@ export interface PodCapabilities {
   jmap: boolean;
   jfr: boolean;
   targetPid?: string;
+  /** `Python 3.11.6` — what the header's runtime badge is built from. */
+  python3Version?: string;
+  /** A bare `python`'s version; on the images that have one, usually 2.7. */
+  pythonVersion?: string;
+  /** Where a script could be copied — see pod-classify on the host. */
+  writableDirs?: string[];
   unreachable?: string;
 }
 
@@ -374,7 +380,7 @@ export interface PodAction {
   mutatesPod?: boolean;
 }
 
-export type DetailTab = 'overview' | 'logs' | 'loggers' | 'terminal' | 'doctor' | 'explorer' | 'yaml' | 'describe' | 'access';
+export type DetailTab = 'overview' | 'logs' | 'loggers' | 'terminal' | 'doctor' | 'python' | 'explorer' | 'yaml' | 'describe' | 'access';
 
 export interface MemoryProfile {
   limitBytes?: number;
@@ -502,7 +508,8 @@ export type Dk8sStage =
  * switch to `analyze`, and that happens from the artifact store — a collected
  * dump should land on its analyzer without you navigating there yourself.
  */
-export type Dk8sView = 'pods' | 'artifacts';
+/* `scripts` is the standalone Python screen: one script, several pods. */
+export type Dk8sView = 'pods' | 'artifacts' | 'scripts';
 
 interface K8sState {
   stage: Dk8sStage;
@@ -1192,7 +1199,8 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       it for as long as it stays true, so a second visit costs nothing, and
       the answer genuinely can change when a pod restarts into a new image.
     */
-    if (pod && (detailTab === 'doctor' || detailTab === 'terminal' || detailTab === 'explorer')) {
+    if (pod && (detailTab === 'doctor' || detailTab === 'terminal' || detailTab === 'explorer'
+      || detailTab === 'python')) {
       set({ probeBusy: true });
       postMsg({
         type: 'dk8s:probePod',
