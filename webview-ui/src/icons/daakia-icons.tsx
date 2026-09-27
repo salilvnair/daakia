@@ -2631,6 +2631,24 @@ export function PythonIcon(props: IconProps) {
       <path d="M17 16h1.5a2.5 2.5 0 0 0 2.5-2.5v-3A2.5 2.5 0 0 0 18.5 8H17v2.5a2.5 2.5 0 0 1-2.5 2.5h-5A2.5 2.5 0 0 0 7 15.5v3A2.5 2.5 0 0 0 9.5 21H12" />
       <circle cx="10" cy="5.5" r="0.6" fill="currentColor" />
       <circle cx="14" cy="18.5" r="0.6" fill="currentColor" />
+/** A raised thumb — "this answer was right". */
+export function ThumbUpIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M7 10v11" />
+      <path d="M15 5.9 14 10h5.8a2 2 0 0 1 2 2.3l-1.4 7A2 2 0 0 1 18.4 21H7V10l4.3-7a1.8 1.8 0 0 1 3.3 1.3z" />
+      <path d="M3 10h4v11H3z" />
+    </svg>
+  );
+}
+
+/** A lowered thumb — "this answer was wrong". */
+export function ThumbDownIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M17 14V3" />
+      <path d="M9 18.1 10 14H4.2a2 2 0 0 1-2-2.3l1.4-7A2 2 0 0 1 5.6 3H17v11l-4.3 7a1.8 1.8 0 0 1-3.3-1.3z" />
+      <path d="M21 14h-4V3h4z" />
     </svg>
   );
 }

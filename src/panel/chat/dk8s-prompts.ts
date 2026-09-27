@@ -672,6 +672,20 @@ export const DK8S_ASK_THE_LOG_USER = `━━━ POD ━━━
 /** The variables "Ask the log" adds to the usual ones. */
 export const DK8S_ASK_THE_LOG_VARIABLES = ['{window}', '{catalogue}'];
 
+/**
+ * The variables one prompt's user template can use — what its handler fills.
+ *
+ * Every dk8s prompt goes through `handleDk8sAsk` and gets the usual set,
+ * except Ask the log, whose own handler also fills the window and the
+ * catalogue. Offering `{catalogue}` on the others would let somebody type a
+ * placeholder into the library that reaches the model as the literal text.
+ */
+export function dk8sVariablesFor(key: string): string[] {
+  return key === 'dk8s.log.askTheLog'
+    ? [...DK8S_USER_VARIABLES, ...DK8S_ASK_THE_LOG_VARIABLES]
+    : [...DK8S_USER_VARIABLES];
+}
+
 /** Every prompt starts from the same shape; each can be edited away from it. */
 export const DK8S_USER_PROMPTS: Record<string, string> = {
   ...Object.fromEntries(Object.keys(DK8S_PROMPTS).map(k => [k, DK8S_USER_TEMPLATE])),

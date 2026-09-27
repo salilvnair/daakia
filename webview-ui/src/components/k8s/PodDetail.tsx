@@ -10,7 +10,10 @@ import {
   CloseIcon, TerminalIcon, FileTextIcon, CodeIcon, StethoscopeIcon,
   SparkleIcon, ChevronLeftIcon, LayersIcon, LockIcon, FolderOpenIcon, BracesIcon, PythonIcon,
 } from '../../icons';
-import { LoggersTab } from './LoggersTab';
+import { LoggersTab, scopeOf } from './LoggersTab';
+import { AskLogTab } from './AskLogTab';
+import { usePatternsFor, useLoggersFor } from '../../store/dk8s-logger-store';
+import { LOGGERS } from './tone';
 import { CopyButtonView, IconSize, TableSkeletonView } from '@salilvnair/dui';
 import { useK8sStore, type DetailTab } from '../../store/k8s-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
@@ -60,6 +63,12 @@ const TABS: {
     read the log yet.
   */
   { id: 'loggers', label: 'Loggers', Icon: BracesIcon },
+  /*
+    Beside the catalogue it reads, and gated on the log it asks about: the
+    question is answered from the lines this view holds, so an account that
+    cannot read the log has nothing to ask.
+  */
+  { id: 'ask', label: 'Ask the log', Icon: SparkleIcon, needs: 'logs' },
   { id: 'terminal', label: 'Terminal', Icon: TerminalIcon, needs: 'exec' },
   { id: 'doctor', label: 'Doctor', Icon: StethoscopeIcon, needs: 'exec' },
   /*
@@ -238,6 +247,11 @@ export function PodDetail() {
   const closeAi = useDk8sAiStore(s => s.closePanel);
   const answers = useDk8sAiStore(s => s.answers);
 
+  /* The Loggers tab's number: its marks when any are lit, else its size. */
+  const catalogueScope = scopeOf(detail ?? undefined);
+  const markedCount = usePatternsFor(catalogueScope).filter(p => p.marked).length;
+  const loggerCount = useLoggersFor(catalogueScope).length;
+
   // Escape closes — but only when nothing is selected, so the first Escape
   // after highlighting a stack trace does not throw away the panel too.
   useEffect(() => {
@@ -415,6 +429,14 @@ export function PodDetail() {
                     ? <LockIcon size={IconSize.action} color="var(--color-text-muted)" />
                     : <Icon size={IconSize.action} color={on ? ACCENT : 'var(--color-text-muted)'} />}
                   {label}
+                  {/* How many marks the Logs tab is lighting, else how many
+                      loggers the catalogue holds — the number on the board. */}
+                  {id === 'loggers' && (markedCount > 0 || loggerCount > 0) && (
+                    <span className="px-1.5 rounded-full text-[10px]"
+                          style={{ color: LOGGERS, background: `color-mix(in srgb, ${LOGGERS} 16%, transparent)` }}>
+                      {markedCount > 0 ? `${markedCount} marked` : loggerCount.toLocaleString()}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -431,6 +453,7 @@ export function PodDetail() {
               <>
                 {detailTab === 'logs' && <LogViewer />}
                 {detailTab === 'loggers' && <LoggersTab />}
+                {detailTab === 'ask' && <AskLogTab />}
                 {detailTab === 'terminal' && <PodTerminal />}
                 {detailTab === 'describe' && <DescribePane text={describeText} busy={describeBusy} />}
                 {detailTab === 'yaml' && <YamlPane text={yamlText} busy={describeBusy} />}

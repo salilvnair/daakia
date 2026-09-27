@@ -10,7 +10,9 @@
  */
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
-import { DK8S_PROMPTS, DK8S_USER_PROMPTS, DK8S_USER_VARIABLES } from '@daakia/dk8s-prompts';
+import {
+  DK8S_PROMPTS, DK8S_USER_PROMPTS, DK8S_USER_VARIABLES, dk8sVariablesFor,
+} from '@daakia/dk8s-prompts';
 import {
   DK8S_CHAT_DEFAULTS, DK8S_CHAT_LABELS, DK8S_CHAT_VARIABLES, DK8S_CHAT_COLORS, DK8S_CHAT_KEYS,
   type Dk8sChatKey,
@@ -405,6 +407,8 @@ export type AiPromptTemplateKey =
   | 'dk8s.log.summarise.system'
   | 'dk8s.log.explainShape'
   | 'dk8s.log.explainShape.system'
+  | 'dk8s.log.askTheLog'
+  | 'dk8s.log.askTheLog.system'
   | 'dk8s.pod.crashloop'
   | 'dk8s.pod.crashloop.system'
   | 'dk8s.threads.explain'
@@ -479,6 +483,7 @@ export const PROMPT_WHERE_USED: Partial<Record<AiPromptTemplateKey, string>> = {
   'dk8s.log.explainError': '"Ask AI" chip on a folded stack trace in dk8s → pod → Logs · "Explain" in the log right-click menu',
   'dk8s.log.explainShape': 'Not called from any screen yet — kept so it can be edited before a feature uses it',
   'dk8s.log.summarise': '"Analyze" in the dk8s → pod → Logs toolbar → confirm in the Analyze dialog',
+  'dk8s.log.askTheLog': '"Ask" (or a "try" chip, a follow-up, or a saved check) in dk8s → pod → Ask the log tab — also reached from "Ask AI about this window" in the Logs footer',
   'dk8s.pod.crashloop': 'Not called from any screen yet — kept so it can be edited before a feature uses it',
   'dk8s.terminal.theme': '"Generate" under "Generate with AI" in Settings → DK8S → Terminal → Import a theme',
   'dk8s.threads.explain': '"Ask AI" on a Thread dump, SIGQUIT dump, Flight recording or Python stack card in dk8s → pod → Doctor · "Analyze" in the Thread Dump analyzer',
@@ -583,6 +588,8 @@ export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = 
   'dk8s.log.summarise.system': DK8S_SYSTEM['dk8s.log.summarise'] ?? '',
   'dk8s.log.explainShape': DK8S_USER['dk8s.log.explainShape'] ?? '',
   'dk8s.log.explainShape.system': DK8S_SYSTEM['dk8s.log.explainShape'] ?? '',
+  'dk8s.log.askTheLog': DK8S_USER['dk8s.log.askTheLog'] ?? '',
+  'dk8s.log.askTheLog.system': DK8S_SYSTEM['dk8s.log.askTheLog'] ?? '',
   'dk8s.pod.crashloop': DK8S_USER['dk8s.pod.crashloop'] ?? '',
   'dk8s.pod.crashloop.system': DK8S_SYSTEM['dk8s.pod.crashloop'] ?? '',
   'dk8s.threads.explain': DK8S_USER['dk8s.threads.explain'] ?? '',
@@ -1073,6 +1080,8 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   'dk8s.log.summarise.system': { label: 'Summarise logs — system', description: 'Instruction block: who the model is and how it must answer' },
   'dk8s.log.explainShape': { label: 'Explain a log shape', description: 'A repeating pattern the log analyzer detected' },
   'dk8s.log.explainShape.system': { label: 'Explain a log shape — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.log.askTheLog': { label: 'Ask the log', description: 'A question over a window of a pod\u2019s log — the numbered lines, the logger catalogue and the question' },
+  'dk8s.log.askTheLog.system': { label: 'Ask the log — system', description: 'Instruction block: answer as JSON, every claim citing the lines it came from' },
   'dk8s.pod.crashloop': { label: 'Explain a CrashLoopBackOff', description: 'Why a pod keeps restarting, from its events and exit codes' },
   'dk8s.pod.crashloop.system': { label: 'Explain a CrashLoopBackOff — system', description: 'Instruction block: who the model is and how it must answer' },
   'dk8s.threads.explain': { label: 'Explain a thread dump', description: 'Deadlocks, contention and what the threads are collectively doing' },
@@ -1276,6 +1285,8 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'dk8s.log.summarise.system': [],
   'dk8s.log.explainShape': [...DK8S_USER_VARIABLES],
   'dk8s.log.explainShape.system': [],
+  'dk8s.log.askTheLog': dk8sVariablesFor('dk8s.log.askTheLog'),
+  'dk8s.log.askTheLog.system': [],
   'dk8s.pod.crashloop': [...DK8S_USER_VARIABLES],
   'dk8s.pod.crashloop.system': [],
   'dk8s.threads.explain': [...DK8S_USER_VARIABLES],
@@ -1575,6 +1586,7 @@ export const AI_TEMPLATE_CATEGORIES: {
       'dk8s.log.explainError',
       'dk8s.log.summarise',
       'dk8s.log.explainShape',
+      'dk8s.log.askTheLog',
       'dk8s.pod.crashloop',
       'dk8s.threads.explain',
       'dk8s.threads.explainOne',
@@ -1618,6 +1630,8 @@ export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
   'dk8s.log.summarise.system': '#f59e0b',
   'dk8s.log.explainShape': '#a78bfa',
   'dk8s.log.explainShape.system': '#a78bfa',
+  'dk8s.log.askTheLog': '#7EACB5',
+  'dk8s.log.askTheLog.system': '#7EACB5',
   'dk8s.pod.crashloop': '#ef4444',
   'dk8s.pod.crashloop.system': '#ef4444',
   'dk8s.threads.explain': '#22d3ee',

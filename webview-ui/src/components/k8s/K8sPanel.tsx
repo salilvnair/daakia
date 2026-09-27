@@ -25,6 +25,7 @@ import { useMetricsVisibility } from './useMetricsVisibility';
 import { useTabsStore } from '../../store/tabs-store';
 import { useMetricsAuto } from '../settings/metrics-refresh';
 import { useDk8sAiStore, applyDk8sAiError } from '../../store/dk8s-ai-store';
+import { useDk8sAskLogStore } from '../../store/dk8s-ask-log-store';
 import { useDk8sDoctorStore } from '../../store/dk8s-doctor-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { useDk8sArtifactStore } from '../../store/dk8s-artifact-store';
@@ -330,6 +331,13 @@ export function K8sPanel() {
       const type = typeof msg?.type === 'string' ? msg.type : '';
       if (!type) return;
 
+      /* Ask the log streams on its own id, and its store takes only what is
+         on that id — so every `ai:` message is offered to it first and still
+         goes on to the side panel's store below. */
+      if (type.startsWith('ai:') || type.startsWith('dk8s:askLog')) {
+        useDk8sAskLogStore.getState().apply(msg);
+        if (type.startsWith('dk8s:askLog')) return;
+      }
       if (type === 'dk8s:aiError') { applyDk8sAiError(msg); return; }
       // The host's account of what it actually sent to the model.
       if (type === 'dk8s:aiEvidence') { applyAi(msg); return; }

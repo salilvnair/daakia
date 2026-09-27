@@ -15,7 +15,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  DK8S_PROMPTS, DK8S_USER_PROMPTS, DK8S_USER_VARIABLES, renderDk8sUserPrompt,
+  DK8S_PROMPTS, DK8S_USER_PROMPTS, DK8S_USER_VARIABLES, renderDk8sUserPrompt, dk8sVariablesFor,
 } from './dk8s-prompts';
 import {
   AI_PROMPT_TEMPLATE_DEFAULTS, AI_PROMPT_TEMPLATE_LABELS,
@@ -63,8 +63,9 @@ describe('dk8s prompts in the Prompt Library', () => {
 
   it('offers the variables the user template actually interpolates', () => {
     for (const key of KEYS) {
+      /* The usual set, and for Ask the log the two its own handler adds. */
       expect(AI_PROMPT_TEMPLATE_VARIABLES[key as never], key)
-        .toEqual(DK8S_USER_VARIABLES);
+        .toEqual(dk8sVariablesFor(key));
       // Instructions take no variables, matching every other `.system` entry.
       expect(AI_PROMPT_TEMPLATE_VARIABLES[systemKey(key) as never], key).toEqual([]);
     }
@@ -93,7 +94,7 @@ describe('dk8s prompts in the Prompt Library', () => {
   it('uses only variables the handler passes', () => {
     for (const key of KEYS) {
       const named = [...DK8S_USER_PROMPTS[key]!.matchAll(/\{\w+\}/g)].map(m => m[0]);
-      for (const v of named) expect(DK8S_USER_VARIABLES, `${key} → ${v}`).toContain(v);
+      for (const v of named) expect(dk8sVariablesFor(key), `${key} → ${v}`).toContain(v);
     }
   });
 });
