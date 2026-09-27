@@ -25,6 +25,20 @@ export interface SearchMatch {
   hits: [number, number][];
   before: string[];
   after: string[];
+  /** What the pod's format read off the hit — thread, logger, MDC. Absent where no format reads it. */
+  parse?: LineParse;
+  /** The same for each context line, in order; null where that line has nothing the format reads. */
+  beforeParse?: (LineParse | null)[];
+  afterParse?: (LineParse | null)[];
+}
+
+/** One line's fields, as the host's search-parse reads them. */
+export interface LineParse {
+  thread?: string;
+  logger?: string;
+  app?: string;
+  message?: string;
+  fields?: Record<string, string>;
 }
 
 export interface PodSearchResult {

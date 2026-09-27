@@ -63,6 +63,16 @@ export interface SearchOptions {
   maxMatchesPerPod: number;
   /** Stop the whole search past this many stored matches. */
   maxMatchesTotal: number;
+  /**
+   * Keep every line in the window, not only the ones that match.
+   *
+   * What the Window view asks for: "what ran between 10:50 and 11:30" is every
+   * line in those forty minutes, parsed, and the question is asked of them
+   * afterwards. The query still has to be something `grep` in an archive can
+   * run, so it is `.` with `regex` on; the hits are left empty, because nothing
+   * on these lines was searched for.
+   */
+  everyLine?: boolean;
 }
 
 export interface SearchMatch {
@@ -134,7 +144,8 @@ export type Matcher = (text: string) => [number, number][] | null;
  * A regex compiled inside the loop is the single easiest way to make this
  * feature slow — at 500,000 lines it is half a million compilations.
  */
-export function buildSearchMatcher(opts: Pick<SearchOptions, 'query' | 'regex' | 'caseSensitive'>): Matcher | null {
+export function buildSearchMatcher(opts: Pick<SearchOptions, 'query' | 'regex' | 'caseSensitive' | 'everyLine'>): Matcher | null {
+  if (opts.everyLine) return () => [];
   const q = opts.query;
   if (!q) return null;
 
@@ -269,6 +280,17 @@ async function searchOnePod(
   let seenTs: number | undefined;
   const { fromMs, toMs } = opts;
   const bounded = fromMs !== undefined || toMs !== undefined;
+  /*
+    Past the end of the window, and the rest of the log is not wanted.
+
+    `kubectl logs` has no `--until`, so a window from 10:50 to 11:30 streams
+    on to now — hours of lines read only to be dropped. One container's log is
+    in time order, so the first line past the end is the last worth reading.
+    Several containers come one after another, each in its own order, so those
+    are read to the end.
+  */
+  const oneStream = !(t.containers && t.containers.length > 1);
+  let pastEnd = false;
 
   const handleLine = (raw: string) => {
     lineNo++;
@@ -276,6 +298,7 @@ async function searchOnePod(
     const parsed = parseLine(raw, lineNo, true);
 
     if (parsed.ts !== undefined) seenTs = parsed.ts;
+    if (oneStream && toMs !== undefined && parsed.ts !== undefined && parsed.ts > toMs) pastEnd = true;
     // kubectl enforces the lower bound itself; both are checked anyway, because
     // `--since-time` is only as good as the timestamps the runtime wrote.
     const inWindow = !bounded || seenTs === undefined
@@ -323,6 +346,7 @@ async function searchOnePod(
       for (const raw of parts) {
         if (raw) handleLine(raw);
       }
+      if (pastEnd) { carry = ''; child.kill(); }
     });
 
     let stderrTail = '';
@@ -332,7 +356,7 @@ async function searchOnePod(
     child.on('error', (err) => { result.error = err.message; finish(); });
     child.on('exit', (code) => {
       if (carry) handleLine(carry);
-      if (code !== 0 && !signal.cancelled) {
+      if (code !== 0 && !signal.cancelled && !pastEnd) {
         const first = stderrTail.split('\n').map(l => l.trim()).filter(Boolean)[0];
         // A pod that has never restarted has no previous container; that is a
         // fact about the pod, not a failure of the search.

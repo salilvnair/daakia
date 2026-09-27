@@ -9,7 +9,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  resultLines, podsLabel, podsIn, timings, totals, levelsIn,
+  resultLines, podsLabel, podsIn, timings, totals, levelsIn, shownFor,
 } from './search-results';
 import type { PodGroup, SearchMatch } from '../../store/dk8s-search-store';
 
@@ -99,6 +99,31 @@ describe('a search as lines', () => {
     const lines = resultLines([group({ matches: [match({ before: ['x'] })] })]);
     expect(lines[0].ts).toBeUndefined();
     expect(lines[1].ts).toBe(1_789_000_000_000);
+  });
+});
+
+describe('what the format of the pod read', () => {
+  it('puts thread, logger and MDC on the hit and on each context line', () => {
+    const lines = resultLines([group({ matches: [match({
+      before: ['a', 'b'],
+      parse: { thread: 'exec-7', logger: 'c.a.Billing', fields: { traceId: 't1' } },
+      beforeParse: [null, { thread: 'exec-7' }],
+    })] })]);
+    expect(lines[0].thread).toBeUndefined();
+    expect(lines[1].thread).toBe('exec-7');
+    expect(lines[2].thread).toBe('exec-7');
+    expect(lines[2].logger).toBe('c.a.Billing');
+    expect(lines[2].fields).toEqual({ traceId: 't1' });
+  });
+
+  it('moves a highlight onto the message the row shows', () => {
+    expect(shownFor('10:00 WARN [x] c.A : read timeout', [[26, 33]], { message: 'read timeout' }))
+      .toEqual({ message: 'read timeout', hits: [[5, 12]] });
+  });
+
+  it('shows the raw line when the hit is only in the part the message drops', () => {
+    expect(shownFor('10:00 WARN [exec-7] c.A : ok', [[12, 18]], { message: 'ok' }))
+      .toEqual({ message: undefined, hits: [[12, 18]] });
   });
 });
 

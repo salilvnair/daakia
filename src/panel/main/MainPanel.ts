@@ -752,7 +752,7 @@ export class MainPanel {
         handleDk8sCancelExport(this._post);
         break;
       case 'dk8s:cancelSearch':
-        handleDk8sCancelSearch(this._post);
+        handleDk8sCancelSearch(this._post, msg);
         break;
       case 'dk8s:setKubectlPath':
         handleDk8sSetKubectlPath(msg, this._post);

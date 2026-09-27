@@ -600,7 +600,7 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       handleDk8sCancelExport(post);
       break;
     case 'dk8s:cancelSearch':
-      handleDk8sCancelSearch(post);
+      handleDk8sCancelSearch(post, msg);
       break;
     case 'dk8s:setKubectlPath':
       await handleDk8sSetKubectlPath(msg, post);

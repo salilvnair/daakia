@@ -350,7 +350,8 @@ export function K8sPanel() {
       // Collection messages belong to the doctor store; everything else to the
       // pod store. Both are dk8s:-prefixed, so the split is by name.
       if (/^dk8s:(collect|handoff)/.test(type)) applyDoctor(msg);
-      else if (/^dk8s:search/.test(type)) applySearch(msg);
+      /* A tagged search is a Follow's or a Window's, and has its own store. */
+      else if (/^dk8s:search/.test(type)) { if (!msg.tag) applySearch(msg); }
       else if (/^dk8s:artifact/.test(type)) applyArtifacts(msg);
       else apply(msg);
     };

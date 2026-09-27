@@ -16,6 +16,7 @@ import {
   clearPvCache, mountsOf, appOf, type PvLogConfig,
 } from '../../../services/k8s/pv-logs';
 import { type PvMatch } from '../../../services/k8s/pv-search';
+import { withParse, sampleOf } from '../../../services/k8s/search-parse';
 import { searchPvInPod, rootsFor } from '../../../services/k8s/pv-search-in-pod';
 import {
   startCapture, readPage as readCapturePage, filterCapture, locate as locateInCapture, closeCapture,
@@ -944,8 +945,9 @@ export function handleDk8sStopWatch(): void {
 /** Called when the panel goes away, so a watch cannot outlive its tab. */
 export function disposeDk8s(): void {
   stopAllWatches();
-  activeSearch?.cancel();
-  activeSearch = undefined;
+  for (const s of activeSearches.values()) s.cancel();
+  activeSearches.clear();
+  for (const c of pvCancels.values()) c.cancelled = true;
   stopLogStreams();
   closeAllTerminals();
 }
@@ -2330,8 +2332,18 @@ export async function handleDk8sRevealArtifacts(): Promise<void> {
 
 // ── Multi-pod log search ────────────────────────────────────────────────────
 
-/** One search at a time. Starting a second cancels the first. */
-let activeSearch: SearchHandle | undefined;
+/**
+ * One search at a time per asker. Starting a second cancels the first.
+ *
+ * The dialog's search is the untagged one. A Follow or a Window runs a search
+ * of its own beside it — reading a thread across the pods must not throw away
+ * the result the reader followed it from — so each carries a tag, every
+ * message it produces carries the tag back, and only a search with the same
+ * tag replaces it.
+ */
+const activeSearches = new Map<string, SearchHandle>();
+/** Cancels an archive pass, which is not a search handle — by the same tag. */
+const pvCancels = new Map<string, { cancelled: boolean }>();
 
 /**
  * Search several pods' logs at once.
@@ -2343,12 +2355,17 @@ let activeSearch: SearchHandle | undefined;
  */
 export function handleDk8sSearchLogs(
   msg: Record<string, unknown>,
-  postMessage: PostMessage,
+  reply: PostMessage,
 ): void {
-  activeSearch?.cancel();
-  pvCancel.cancelled = true;
-  pvCancel = { cancelled: false };
-  const signal = pvCancel;
+  const tag = typeof msg.tag === 'string' ? msg.tag : '';
+  const postMessage: PostMessage = tag
+    ? (m) => reply({ ...(m as Record<string, unknown>), tag })
+    : reply;
+  activeSearches.get(tag)?.cancel();
+  const previous = pvCancels.get(tag);
+  if (previous) previous.cancelled = true;
+  const signal = { cancelled: false };
+  pvCancels.set(tag, signal);
 
   const targets = (msg.targets as SearchTarget[]) ?? [];
   const opts: SearchOptions = {
@@ -2387,7 +2404,9 @@ export function handleDk8sSearchLogs(
     supported shape, and silently: the live half returned, the archive half
     was skipped, and nothing said so.
   */
-  const searchArchive = !!pv?.enabled && mountsOf(pv).length > 0;
+  /* A Window or a Follow may ask for the live logs alone — a window around a
+     hit from a minute ago is in the live log, and an archive pass is minutes. */
+  const searchArchive = msg.archive !== false && !!pv?.enabled && mountsOf(pv).length > 0;
 
   postMessage({
     type: 'dk8s:searchStarted',
@@ -2396,26 +2415,60 @@ export function handleDk8sSearchLogs(
     archive: searchArchive,
   });
 
-  activeSearch = searchLogs(targets, opts, {
+  /*
+    Each pod's hits are read with that pod's format before they go — which
+    takes a moment for the pod spec — so "done" waits for the last of them,
+    or it could land before the hits it is counting.
+  */
+  const reading: Promise<void>[] = [];
+  const handle: SearchHandle = searchLogs(targets, opts, {
     onPodDone: (result, matches) => {
-      postMessage({ type: 'dk8s:searchPod', result, matches });
+      const first = matches[0];
+      const t = first ? targets.find(x => x.pod === first.pod && x.namespace === first.namespace) : undefined;
+      reading.push(parsedHits(t?.context ?? first?.context ?? '', matches).then(m => {
+        postMessage({ type: 'dk8s:searchPod', result, matches: m });
+      }));
     },
     onProgress: (done, total, pod) => {
       postMessage({ type: 'dk8s:searchProgress', done, total, pod });
     },
     onFinished: (summary) => {
-      activeSearch = undefined;
-      if (!searchArchive || signal.cancelled) {
-        postMessage({ type: 'dk8s:searchDone', ...summary });
-        return;
-      }
-      void searchArchives(pv!, targets, opts, summary, signal, postMessage);
+      if (activeSearches.get(tag) === handle) activeSearches.delete(tag);
+      void Promise.all(reading).then(() => {
+        if (!searchArchive || signal.cancelled) {
+          postMessage({ type: 'dk8s:searchDone', ...summary });
+          return;
+        }
+        void searchArchives(pv!, targets, opts, summary, signal, postMessage);
+      });
     },
   });
+  activeSearches.set(tag, handle);
 }
 
-/** Cancels an archive pass, which is not an activeSearch handle. */
-let pvCancel = { cancelled: false };
+/**
+ * A pod's hits, each with the thread, logger and MDC its format reads.
+ *
+ * The same format the Logs tab would choose for the pod — a saved rule, else
+ * what the lines look like — so a search hit and the same line in the Logs tab
+ * have the same fields, and "follow this thread" follows exactly. A pod with no
+ * format that reads its lines keeps its hits as they were.
+ */
+async function parsedHits<T extends { pod: string; namespace: string; text: string; before: string[]; after: string[] }>(
+  context: string,
+  matches: T[],
+): Promise<T[]> {
+  const first = matches[0];
+  if (!first) return matches;
+  try {
+    const picked = await resolveFormatFor(context, first.namespace, first.pod, sampleOf(matches));
+    if (!picked.format) return matches;
+    const compiled = compileFormat(picked.format);
+    return matches.map(m => withParse(m, compiled));
+  } catch {
+    return matches;
+  }
+}
 
 function pvConfig(): PvLogConfig | undefined {
   return state().pvLogs;
@@ -2491,7 +2544,8 @@ async function searchArchives(
       that row turned "no grep in this image" into "no matches".
     */
     if (r.matched > 0 || r.files.length > 0 || (out.result as { error?: string }).error) {
-      postMessage({ type: 'dk8s:searchArchivePod', result: out.result, matches: out.matches });
+      const matches = await parsedHits(t.context, out.matches);
+      postMessage({ type: 'dk8s:searchArchivePod', result: out.result, matches });
     }
   }
 
@@ -2532,11 +2586,13 @@ export async function handleDk8sSavePv(
   postMessage({ type: 'dk8s:pvConfig', config: cfg });
 }
 
-export function handleDk8sCancelSearch(postMessage: PostMessage): void {
-  activeSearch?.cancel();
-  pvCancel.cancelled = true;
-  activeSearch = undefined;
-  postMessage({ type: 'dk8s:searchCancelled' });
+export function handleDk8sCancelSearch(postMessage: PostMessage, msg: Record<string, unknown> = {}): void {
+  const tag = typeof msg.tag === 'string' ? msg.tag : '';
+  activeSearches.get(tag)?.cancel();
+  activeSearches.delete(tag);
+  const cancel = pvCancels.get(tag);
+  if (cancel) cancel.cancelled = true;
+  postMessage(tag ? { type: 'dk8s:searchCancelled', tag } : { type: 'dk8s:searchCancelled' });
 }
 
 /**
