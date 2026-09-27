@@ -30,6 +30,7 @@ import { VaultSettings } from './VaultSettings';
 import { BinSettings } from './BinSettings';
 import { CodeScanSettings } from '../settings/CodeScanSettings';
 import { Dk8sLogSettings } from '../settings/Dk8sLogSettings';
+import { FieldsSettings } from '../settings/FieldsSettings';
 import { DeterminantsSettings } from '../settings/DeterminantsSettings';
 import { KeymapSettings } from './KeymapSettings';
 import { PromptLibraryPanel } from './PromptLibraryPanel';
@@ -57,7 +58,7 @@ import { AboutPanel } from '../settings/AboutPanel';
 import { Dk8sGeneralSettings, DkghGeneralSettings } from '../settings/SurfaceGeneralSettings';
 import { Dk8sCommandsSection } from '../settings/Dk8sCommandsSection';
 
-type SettingsSection = 'general' | 'theme' | 'keymap' | 'about' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'code-scan' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-general' | 'dk8s-cluster' | 'dk8s-logs' | 'dk8s-determinants' | 'dk8s-terminal' | 'dk8s-commands' | 'dkgh-general' | 'dkgh';
+type SettingsSection = 'general' | 'theme' | 'keymap' | 'about' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'code-scan' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-general' | 'dk8s-cluster' | 'dk8s-logs' | 'dk8s-fields' | 'dk8s-determinants' | 'dk8s-terminal' | 'dk8s-commands' | 'dkgh-general' | 'dkgh';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
 type PowerSubtab = 'cookies' | 'proxy' | 'certs' | 'monitor' | 'interceptor' | 'diff' | 'bulk' | 'load'
   | 'schema-diff' | 'openapi' | 'security' | 'webhook' | 'postman' | 'clustering'
@@ -83,6 +84,7 @@ const SETTINGS_SECTION_META: Record<SettingsSection, { label: string; icon: Reac
   'dk8s-general':    { label: 'General',         icon: <SettingsIcon size={14} /> },
   'dk8s-cluster':    { label: 'Cluster',         icon: <Dk8sIcon size={14} /> },
   'dk8s-logs':       { label: 'Logs',            icon: <LayersIcon size={14} /> },
+  'dk8s-fields':     { label: 'Fields',          icon: <FilterIcon size={14} /> },
   'dk8s-determinants': { label: 'Determinants',  icon: <ChartBarIcon size={14} /> },
   'dk8s-terminal':   { label: 'Terminal',        icon: <TerminalIcon size={14} /> },
   'dk8s-commands':   { label: 'Commands',        icon: <CodeBracketsIcon size={14} /> },
@@ -123,6 +125,7 @@ const SETTINGS_NAV_ITEMS: SideNavItem[] = [
     { id: 'dk8s-general', label: SETTINGS_SECTION_META['dk8s-general'].label, icon: SETTINGS_SECTION_META['dk8s-general'].icon },
     { id: 'dk8s-cluster', label: SETTINGS_SECTION_META['dk8s-cluster'].label, icon: SETTINGS_SECTION_META['dk8s-cluster'].icon },
     { id: 'dk8s-logs', label: SETTINGS_SECTION_META['dk8s-logs'].label, icon: SETTINGS_SECTION_META['dk8s-logs'].icon },
+    { id: 'dk8s-fields', label: SETTINGS_SECTION_META['dk8s-fields'].label, icon: SETTINGS_SECTION_META['dk8s-fields'].icon },
     { id: 'dk8s-determinants', label: SETTINGS_SECTION_META['dk8s-determinants'].label, icon: SETTINGS_SECTION_META['dk8s-determinants'].icon },
     { id: 'dk8s-terminal', label: SETTINGS_SECTION_META['dk8s-terminal'].label, icon: SETTINGS_SECTION_META['dk8s-terminal'].icon },
     { id: 'dk8s-commands', label: SETTINGS_SECTION_META['dk8s-commands'].label, icon: SETTINGS_SECTION_META['dk8s-commands'].icon },
@@ -238,6 +241,8 @@ export function SettingsPanel() {
               <Dk8sClusterSettings />
             ) : activeSection === 'dk8s-logs' ? (
               <Dk8sLogSettings />
+            ) : activeSection === 'dk8s-fields' ? (
+              <FieldsSettings />
             ) : activeSection === 'dk8s-determinants' ? (
               <DeterminantsSettings />
             ) : activeSection === 'dk8s-terminal' ? (
