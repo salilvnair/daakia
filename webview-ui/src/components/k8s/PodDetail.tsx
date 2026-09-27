@@ -218,6 +218,12 @@ function YamlPane({ text, busy }: { text?: string; busy: boolean }) {
  * their font and their scrollback, is both simpler and strictly more capable.
  */
 
+/** What Back says it returns to, by the tab it returns to. */
+const TAB_NAME: Record<DetailTab, string> = {
+  overview: 'Overview', logs: 'Logs', loggers: 'Loggers', ask: 'Ask the log', terminal: 'Terminal',
+  doctor: 'Doctor', python: 'Python', explorer: 'Explorer', yaml: 'YAML', describe: 'Describe', access: 'Access',
+};
+
 export function PodDetail() {
   const {
     detail, detailTab, setDetailTab, closeDetail, explorerPath, explorerHighlight,
@@ -237,10 +243,16 @@ export function PodDetail() {
   const access = useK8sStore(s => s.access);
   const cameFromSearch = useDk8sSearchStore(s => s.cameFromSearch);
   const returnToSearch = useDk8sSearchStore(s => s.returnToSearch);
+  /* A tab that handed the reader over — Ask the log to Logs — gets them back first. */
+  const returnTab = useK8sStore(s => s.detailReturnTab);
   const goBack = useCallback(() => {
+    if (returnTab && returnTab !== detailTab) {
+      setDetailTab(returnTab);
+      return;
+    }
     closeDetail();
     if (cameFromSearch) returnToSearch();
-  }, [closeDetail, cameFromSearch, returnToSearch]);
+  }, [returnTab, detailTab, setDetailTab, closeDetail, cameFromSearch, returnToSearch]);
 
   const aiOpen = useDk8sAiStore(s => s.open);
   const openAi = useDk8sAiStore(s => s.openPanel);
@@ -287,7 +299,8 @@ export function PodDetail() {
              background: `linear-gradient(to right, color-mix(in srgb, ${color} 8%, transparent), transparent 60%)`,
            }}>
         <button type="button" onClick={goBack}
-                title={cameFromSearch ? 'Back to search results' : 'Back to pods'}
+                title={returnTab && returnTab !== detailTab ? `Back to ${TAB_NAME[returnTab]}`
+                  : cameFromSearch ? 'Back to search results' : 'Back to pods'}
                 className="p-1 rounded cursor-pointer border-none bg-transparent">
           <ChevronLeftIcon size={IconSize.nav} color="var(--color-text-secondary)" />
         </button>

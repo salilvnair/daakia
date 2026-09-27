@@ -77,6 +77,27 @@ export function Dk8sSearchProgress({ progress }: { progress: Dk8sAiProgress }) {
   );
 }
 
+/**
+ * A search's own progress — live logs, then the archive — without the card
+ * around it. The steps card (Dk8sStepsCard) draws this under its search step.
+ */
+export function SearchPhases({ progress }: { progress: Dk8sAiProgress }) {
+  const scope = progress.namespaces.length === 1 ? ` in ${progress.namespaces[0]}` : '';
+  const liveNothing = progress.live?.state === 'done' && progress.live.hits === 0;
+  return (
+    <div className="flex flex-col" style={{ gap: 6 }}>
+      <style>{CSS}</style>
+      <PhaseRow label={`Live logs · ${progress.pods} pod${progress.pods === 1 ? '' : 's'}${scope}`} phase={progress.live ?? { state: 'running', hits: 0, ms: 0 }} />
+      {progress.archive && <ArchiveRow progress={progress} />}
+      {liveNothing && progress.archive && progress.archivePhase?.state !== 'done' && (
+        <div style={{ fontSize: 11, color: 'var(--color-text-muted)', paddingLeft: 22, lineHeight: 1.5 }}>
+          Nothing live — {progress.query} may be older than anything <span style={{ fontFamily: MONO }}>kubectl logs</span> still holds.
+        </div>
+      )}
+    </div>
+  );
+}
+
 /*
   The archive half, pod by pod: the path it is grepping and the pod it is in,
   then how far through the pods it is and how many files have held a hit.

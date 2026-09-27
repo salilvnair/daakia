@@ -21,6 +21,7 @@ import { useAiPromptTemplatesStore } from '../store/prompt-template';
 import { useUiStateStore } from '../store/ui-state-store';
 import { DK8S_CHAT_SYSTEM, fillDk8sSystem, dk8sChatOn, dk8sScoped, DK8S_EXCLUDED_PREF } from '../components/ai/dk8s-chat-prompts';
 import { useDk8sAiProgress } from '../store/dk8s-ai-progress-store';
+import { useDk8sAiSteps } from '../store/dk8s-ai-steps-store';
 import { displayEnvelope, forModel, noticeEnvelope } from '../components/ai/ai-display';
 import { currentId, useAiChatSessions } from '../store/ai-chat-sessions-store';
 import { getVsCodeApi } from '../vscode';
@@ -73,23 +74,24 @@ class DaakiaEventSource {
       */
       /* A look in the manual — quick, but said, so the pause has a reason. */
       if (msg.tabId === tabId && msg.type === 'ai:docsLookup') {
-        const fakeEvt = new MessageEvent('VERBOSE', { data: JSON.stringify({ verbose: { text: `Looking up “${String(msg.query ?? '')}” in the Daakia manual…` } }) });
+        const fakeEvt = new MessageEvent('VERBOSE', { data: JSON.stringify({ verbose: { text: 'Looking in the Daakia manual…' } }) });
         (this._listeners['VERBOSE'] ?? []).forEach(fn => fn(fakeEvt));
       }
 
       /* A kubectl run, said in words while it runs — what it is running and why. */
       if (msg.tabId === tabId && (msg.type === 'ai:kubectlRunStarted' || msg.type === 'ai:kubectlRunResult')) {
+        /* Short: the command and the reason are in the steps card under this
+           line, in a box that wraps — not one long monospaced sentence. */
         const text = msg.type === 'ai:kubectlRunStarted'
-          ? `Running kubectl ${String(msg.command ?? '').replace(/^kubectl\s+/, '')}${msg.why ? ` — ${String(msg.why)}` : ''}…`
-          : 'Read the output — writing the answer…';
+          ? 'Running a command…'
+          : 'Reading what came back…';
         const fakeEvt = new MessageEvent('VERBOSE', { data: JSON.stringify({ verbose: { text } }) });
         (this._listeners['VERBOSE'] ?? []).forEach(fn => fn(fakeEvt));
       }
 
       if (msg.tabId === tabId && (msg.type === 'ai:dk8sSearchStarted' || msg.type === 'ai:dk8sSearchResult')) {
         const text = msg.type === 'ai:dk8sSearchStarted'
-          ? `Searching ${msg.pods} pod${msg.pods === 1 ? '' : 's'} for ${String(msg.query)}`
-            + (msg.archive ? ' — live logs first, then the archive…' : '…')
+          ? `Searching the logs of ${msg.pods} pod${msg.pods === 1 ? '' : 's'}…`
           : describeFound(msg.result as { groups?: { failures?: number }[]; scanned?: { pods?: number } });
         const fakeEvt = new MessageEvent('VERBOSE', { data: JSON.stringify({ verbose: { text } }) });
         (this._listeners['VERBOSE'] ?? []).forEach(fn => fn(fakeEvt));
@@ -288,6 +290,12 @@ export function installDaakiaBridges() {
     if (msg && typeof msg.type === 'string' && (msg.type.startsWith('ai:dk8sSearch')
         || msg.type === 'ai:complete' || msg.type === 'ai:error' || msg.type === 'ai:cancelled')) {
       useDk8sAiProgress.getState().apply(msg);
+    }
+    /* Every step an answer takes — commands, searches, the manual — for the steps card. */
+    if (msg && typeof msg.type === 'string' && (msg.type.startsWith('ai:dk8sSearch')
+        || msg.type.startsWith('ai:kubectlRun') || msg.type === 'ai:docsLookup' || msg.type === 'ai:resolved'
+        || msg.type === 'ai:complete' || msg.type === 'ai:error' || msg.type === 'ai:cancelled')) {
+      useDk8sAiSteps.getState().apply(msg);
     }
   });
 

@@ -421,6 +421,7 @@ function RunRow({ run, first }: { run: Dk8sRun; first: boolean }) {
 const FOLD = 5;
 
 function GroupView({ group }: { group: ThreadGroup }) {
+  const { copied: linkCopied, flash: flashLink } = useCopyTick();
   const [expanded, setExpanded] = useState(false);
   const [status, setStatus] = useState<{ text: string; tone: 'ok' | 'warn'; pods?: string[] } | undefined>();
 
@@ -504,6 +505,7 @@ function GroupView({ group }: { group: ThreadGroup }) {
     if (!anchor) return;
     const link = podLogLink({ context: group.context, namespace: group.namespace, pod: group.pod, ts: anchor.ts, text: anchor.text });
     if (await copyText(link)) {
+      flashLink();
       setStatus({ tone: 'ok', text: 'Link copied — it opens this line in dk8s.' });
       setTimeout(() => setStatus(undefined), 2200);
     }
@@ -540,8 +542,10 @@ function GroupView({ group }: { group: ThreadGroup }) {
           </ButtonView>
         )}
         {group.source === 'live' && (
-          <IconButtonView size="sm" tooltip="Copy a link to this line" aria-label="Copy a link to this line"
-                          disabled={!anchor} icon={<LinkIcon />} onClick={copyLink} />
+          <IconButtonView size="sm" tooltip={linkCopied ? 'Copied' : 'Copy a link to this line'} aria-label="Copy a link to this line"
+                          disabled={!anchor}
+                          /* The link glyph turns into the green tick, like every copy in Daakia. */
+                          icon={linkCopied ? <CopyGlyph copied size={12} /> : <LinkIcon />} onClick={copyLink} />
         )}
       </div>
 

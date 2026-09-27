@@ -74,6 +74,17 @@ describe('the Python tab, mounted for a pod', () => {
     act(() => root.render(<PythonTab />));
     const loops = () => errors.filter(e => e.some(a => /Maximum update depth|getSnapshot should be cached/.test(String(a))));
     expect(loops()).toEqual([]);
+    /* Before the container has said which Python it has, the tab holds —
+       no editor drawn only to be swapped for "No Python" a moment later. */
+    expect(host.textContent).not.toContain('No script open');
+
+    /* The container answers: it has python3. */
+    const { targetKey } = await import('../../../store/dk8s-python-store');
+    const key = targetKey({ context: 'no-such-context', namespace: 'test', pod: 'orders-7d9f2', container: 'app' });
+    act(() => usePyStore.setState(s => ({
+      probes: { ...s.probes, [key]: { busy: false, verdict: { ok: true, interpreter: 'python3', reason: 'python3 is Python 3.11' }, base: '/tmp', writableDirs: ['/tmp'] } },
+    }) as never));
+    expect(loops()).toEqual([]);
     expect(host.textContent?.length).toBeGreaterThan(0);
 
     act(() => usePyStore.setState({

@@ -22,8 +22,11 @@ import {
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
   WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon, CloseIcon,
-  ChevronLeftIcon, SidebarLeftIcon, SearchIcon,
+  ChevronLeftIcon, SidebarLeftIcon, SearchIcon, LinkIcon,
 } from '../../icons';
+import { CopyGlyph, COPY_TICK_MS } from '../shared/CopyTick';
+import { copyText } from '../../utils/clipboard';
+import { podLogLink } from './pod-link';
 import { useTabsStore } from '../../store/tabs-store';
 import { useK8sStore, type LogLevel } from '../../store/k8s-store';
 import { useLogSource } from './log-source';
@@ -71,7 +74,7 @@ import { ExportLogsModal } from './ExportLogsModal';
 import { ACCENT } from './tone';
 import {
   BAND_FLOOR_PX, BAND_GAP_PX, markerBox, bandAt, hoverCardPlacement, type CardPlacement,
-  GUTTER_W, GUTTER_BLOCK_W, blockColor, tickColor, MARKER_EDGE,
+  GUTTER_W, GUTTER_BLOCK_W, bandFill, tickColor, MARKER_EDGE,
 } from './ribbon-layout';
 import { RibbonHover, HOVER_CARD_W } from './RibbonHover';
 import { LineCard, cardRowStyle, type LineCardKind } from './ClickedLine';
@@ -109,10 +112,18 @@ const ROW_HEIGHT = 19;
  */
 const RAIL_MIN_WIDTH = 720;
 const OVERSCAN = 25;
-/** Width of the ribbon column, including its gutter — the pane's own gutter, see `ribbon-layout`. */
-const RIBBON_W = GUTTER_W;
-/** The blocks themselves. */
-const RIBBON_BAND_W = GUTTER_BLOCK_W;
+/**
+ * The ribbon's width, and its blocks'.
+ *
+ * A single log pane gets the full ribbon — 38px with 20px blocks, a picture
+ * you can read the trouble off at a glance. The narrow gutter (`ribbon-layout`,
+ * 16px with 8px blocks) is for a split, where three panes side by side cannot
+ * each give up a word of every line to it.
+ */
+const RIBBON_W = 38;
+const RIBBON_BAND_W = 20;
+const SPLIT_RIBBON_W = GUTTER_W;
+const SPLIT_RIBBON_BAND_W = GUTTER_BLOCK_W;
 const LEVEL_SHORT: Record<LogLevel, string> = {
   error: 'err', warn: 'wrn', info: 'info', debug: 'dbg', other: 'plain',
 };
@@ -322,6 +333,10 @@ function DensityRibbon({
   onCompact?: (compact: boolean) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  /* Only a split pane listens for compact — that is how the ribbon knows it is in one. */
+  const inSplit = !!onCompact;
+  const ribbonW = inSplit ? SPLIT_RIBBON_W : RIBBON_W;
+  const bandW = inSplit ? SPLIT_RIBBON_BAND_W : RIBBON_BAND_W;
   const [height, setHeight] = useState(400);
   const [dragging, setDragging] = useState(false);
   /**
@@ -478,7 +493,7 @@ function DensityRibbon({
 
   return (
     <div ref={columnRef} className="relative shrink-0 flex flex-col items-stretch"
-         style={{ width: RIBBON_W, padding: '3px 0', borderLeft: '1px solid var(--color-surface-border)' }}>
+         style={{ width: ribbonW, padding: '3px 0', borderLeft: '1px solid var(--color-surface-border)' }}>
       <div
         ref={ref}
         /* `min-h-0`: the track measures the pane it is in, never the bands it
@@ -491,7 +506,7 @@ function DensityRibbon({
            and left two floating lines. `ribbonBands` already guarantees the
            bands fit, so there is nothing for a clip to catch. */
         className="relative flex-1 min-h-0 flex flex-col mx-auto"
-        style={{ width: RIBBON_BAND_W, gap: BAND_GAP, cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+        style={{ width: bandW, gap: BAND_GAP, cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
         onPointerDown={e => { setHover(undefined); onPointerDown(e); }}
         onPointerMove={e => {
           if (!dragging) { hoverAt(e.clientY); return; }
@@ -516,10 +531,11 @@ function DensityRibbon({
               borderRadius: 2,
               /* On a shared clock an empty slice is drawn as a faint slot
                  rather than skipped, so "silent here" stays visible. */
-              background: b.count ? blockColor(b.worst) : 'var(--color-surface-border)',
-              // Calm and warning blocks are solid, dimmed colours of their own
-              // and errors are full red — see `blockColor`. Only an empty slot
-              // is faded, so it reads as a slot and not as a block.
+              /* Its lines in proportion — red, amber, calm, left to right
+                 (`bandFill`) — not its worst line, which turned a mostly-INFO
+                 log solid red. Only an empty slot is faded, so it reads as a
+                 slot and not as a block. */
+              background: bandFill(b),
               opacity: !b.count ? 0.25 : 1,
             }}
           />
@@ -1301,6 +1317,46 @@ export function LogViewer() {
     return payloadOpts.remember && !!line.logger && loggersOpen.has(line.logger);
   }, [payloadToggles, payloadOpts.collapsed, payloadOpts.remember, loggersOpen]);
   const [openFields, setOpenFields] = useState<Set<number>>(new Set());
+
+  /*
+    A link to one line, copied from its own row.
+
+    The tick belongs to the line that was copied, not to the pointer: it stays
+    on that row for its second and a half while the pointer has already moved
+    on and the next row is offering its own link.
+  */
+  const [linkCopiedSeq, setLinkCopiedSeq] = useState<number>();
+  const linkTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(linkTimer.current), []);
+  const lineTarget = (line: MatchedLine) => {
+    const own = line as MatchedLine & { pod?: string; namespace?: string; context?: string };
+    const pod = own.pod ?? detail?.name;
+    const namespace = own.namespace ?? detail?.namespace;
+    const context = own.context ?? detail?.context;
+    return pod && namespace && context ? { pod, namespace, context } : undefined;
+  };
+  const rowLink = (line: MatchedLine) => (
+    <button
+      type="button"
+      onClick={() => copyLineLink(line)}
+      title={linkCopiedSeq === line.seq ? 'Copied' : 'Copy a link to this line — it opens here in dk8s'}
+      aria-label="Copy a link to this line"
+      className={`dk-row-link flex items-center justify-center border-none bg-transparent cursor-pointer p-0${linkCopiedSeq === line.seq ? ' is-copied' : ''}`}
+      style={{ width: 14, height: 16 }}
+    >
+      {linkCopiedSeq === line.seq ? <CopyGlyph copied size={12} /> : <LinkIcon size={12} />}
+    </button>
+  );
+  const copyLineLink = (line: MatchedLine) => {
+    const t = lineTarget(line);
+    if (!t) return;
+    void copyText(podLogLink({ ...t, ts: line.ts, text: line.text.slice(0, 200) })).then(ok => {
+      if (!ok) return;
+      setLinkCopiedSeq(line.seq);
+      clearTimeout(linkTimer.current);
+      linkTimer.current = setTimeout(() => setLinkCopiedSeq(undefined), COPY_TICK_MS);
+    });
+  };
   const toggleFields = useCallback((seq: number) => {
     setOpenFields(prev => {
       const next = new Set(prev);
@@ -1684,44 +1740,7 @@ export function LogViewer() {
       <div className="flex flex-col shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
       <div className="flex items-center gap-3 px-4 py-2.5 flex-wrap shrink-0">
-        {/* The filter first, as on the board — it is the control used most, and
-            what it finds decides everything to its right. */}
-        <div className="shrink-0" style={{ width: 260, maxWidth: '100%' }}>
-          <FilterInputView
-            value={logFilter}
-            onChange={(v: string) => setLogFilter(v)}
-            placeholder="Filter — text, or /regex/"
-            size="sm"
-            width="100%"
-            accentColor={ACCENT}
-            /*
-              A way out of the filter, inside the filter.
-
-              Filter By writes its term in here, and a term like
-              `[http-nio-8080-exec-3]` is long enough that clearing it meant
-              selecting the field and deleting — for something applied with one
-              click. Red because clearing is the one destructive thing this
-              control does, and only present when there is something to clear,
-              so it never sits there as decoration.
-            */
-            suffix={logFilter ? (
-              <button
-                type="button"
-                onClick={() => setLogFilter('')}
-                title="Clear filter"
-                aria-label="Clear filter"
-                className="flex items-center justify-center cursor-pointer border-none bg-transparent p-0"
-                style={{ color: 'var(--color-text-secondary)', lineHeight: 0 }}
-              >
-                {/* The same mark the menu's Clear filter carries, so the two
-                    ways out of a filter look like one idea. */}
-                <FilterClearIcon size={IconSize.item} />
-              </button>
-            ) : undefined}
-          />
-        </div>
-
-        {/* Then the field panel's switch: it governs the rail beside the lines
+        {/* First, the field panel's switch: it governs the rail beside the lines
             rather than the rows, and a control that hides a whole column should
             not be buried at the end of a toolbar. */}
         <button
@@ -1761,6 +1780,44 @@ export function LogViewer() {
             onClearField={() => setMarkField(undefined)}
           />
         )}
+
+        {/* The filter takes the rest of the row, after the switch and the chips
+            that shape what it searches. */}
+        <div className="flex-1" style={{ minWidth: 220 }}>
+          <FilterInputView
+            value={logFilter}
+            onChange={(v: string) => setLogFilter(v)}
+            placeholder="Filter — text, or /regex/"
+            size="sm"
+            width="100%"
+            accentColor={ACCENT}
+            /*
+              A way out of the filter, inside the filter.
+
+              Filter By writes its term in here, and a term like
+              `[http-nio-8080-exec-3]` is long enough that clearing it meant
+              selecting the field and deleting — for something applied with one
+              click. Red because clearing is the one destructive thing this
+              control does, and only present when there is something to clear,
+              so it never sits there as decoration.
+            */
+            suffix={logFilter ? (
+              <button
+                type="button"
+                onClick={() => setLogFilter('')}
+                title="Clear filter"
+                aria-label="Clear filter"
+                className="flex items-center justify-center cursor-pointer border-none bg-transparent p-0"
+                style={{ color: 'var(--color-text-secondary)', lineHeight: 0 }}
+              >
+                {/* The same mark the menu's Clear filter carries, so the two
+                    ways out of a filter look like one idea. */}
+                <FilterClearIcon size={IconSize.item} />
+              </button>
+            ) : undefined}
+          />
+        </div>
+
 
         {/*
           How much of each hit's surroundings to keep, and how many there are.
@@ -1814,8 +1871,6 @@ export function LogViewer() {
           </div>
         )}
 
-        {/* Everything above reads the lines; everything after acts on them. */}
-        <div className="flex-1" />
 
         {/*
           Grouped by what each control does, not by the order they were added.
@@ -2308,7 +2363,7 @@ export function LogViewer() {
                         /* A column, so a payload can be drawn under the line it
                            came on. The row is what the virtualiser measures, so
                            the card's height is accounted for by growing it. */
-                        className="flex flex-col"
+                        className="dk-log-row flex flex-col"
                         style={{
                           minHeight: ROW_HEIGHT,
                           whiteSpace: logWrap ? 'pre-wrap' : 'pre',
@@ -2341,6 +2396,12 @@ export function LogViewer() {
                       >
                         <LineCard kind={card} line={line} readers={fieldReaders}>
                         <div className="flex gap-2.5 items-start">
+                        {/* With no line numbers, the link keeps a slot of its own first on the row. */}
+                        {!logLineNumbers && (
+                          <span className="shrink-0 flex items-center justify-center" style={{ width: 16, height: ROW_HEIGHT - 4 }}>
+                            {!row.isFrame && lineTarget(line) && rowLink(line)}
+                          </span>
+                        )}
                         {/* Lines from several pods say which one, first on
                             every row: the same thread name can be reused by
                             another pod, and the pod is what tells them apart. */}
@@ -2354,14 +2415,19 @@ export function LogViewer() {
                         {/* Off is a real preference: on a narrow panel the
                             gutter is width a long line needs more. */}
                         {logLineNumbers && (
-                          <span className="shrink-0 select-none text-right"
+                          /* The link sits just before the number it belongs to —
+                             inside the gutter, in a slot the row always keeps, so
+                             nothing shifts when it appears. */
+                          <span className="shrink-0 select-none flex items-center justify-end"
                                 style={{
-                                  width: gutterWidth,
-                                  color: 'var(--color-text-muted)',
-                                  opacity: 0.45,
+                                  width: gutterWidth + 18,
+                                  gap: 4,
                                   fontVariantNumeric: 'tabular-nums',
                                 }}>
-                            {lineNo}
+                            <span className="shrink-0 flex items-center justify-center" style={{ width: 14 }}>
+                              {!row.isFrame && lineTarget(line) && rowLink(line)}
+                            </span>
+                            <span style={{ color: 'var(--color-text-muted)', opacity: 0.45 }}>{lineNo}</span>
                           </span>
                         )}
 
@@ -2583,12 +2649,14 @@ export function LogViewer() {
                             fields
                           </button>
                         )}
-                        {((line.seq === selectedSeq && selectedLabel) || (line.seq === focusSeq && focusLabel)) && (
-                          <span className="ml-auto shrink-0 select-none self-center pl-2"
-                                style={{ color: FOLLOW, fontSize: 10.5, fontFamily: 'var(--font-sans, system-ui)' }}>
-                            {line.seq === focusSeq && focusLabel ? focusLabel : selectedLabel}
-                          </span>
-                        )}
+                        <span className="ml-auto shrink-0 flex items-center self-center" style={{ gap: 8, paddingLeft: 8 }}>
+                          {((line.seq === selectedSeq && selectedLabel) || (line.seq === focusSeq && focusLabel)) && (
+                            <span className="select-none"
+                                  style={{ color: FOLLOW, fontSize: 10.5, fontFamily: 'var(--font-sans, system-ui)' }}>
+                              {line.seq === focusSeq && focusLabel ? focusLabel : selectedLabel}
+                            </span>
+                          )}
+                        </span>
                         </div>
                         </LineCard>
 

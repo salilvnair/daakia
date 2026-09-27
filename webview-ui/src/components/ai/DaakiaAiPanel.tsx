@@ -29,7 +29,7 @@ import { useAiConversationStore } from '../../store/ai-conversation-store';
 import { useAiChatSessions, currentId } from '../../store/ai-chat-sessions-store';
 import { DK8S_CHAT_PREF, DK8S_OFF_CHATS_PREF, DK8S_EXCLUDED_PREF, dk8sOffChats, setDk8sForChat, dk8sScoped } from './dk8s-chat-prompts';
 import { Dk8sPodPickerPortal } from './Dk8sPodPicker';
-import { Dk8sSearchProgressPortal } from './Dk8sSearchProgress';
+import { Dk8sStepsPortal } from './Dk8sStepsCard';
 import { AiHistoryRail } from './AiHistoryRail';
 import { AiChatHeader } from './AiChatHeader';
 import { AiLandingPortal } from './AiLanding';
@@ -633,7 +633,8 @@ export function DaakiaAiPanel({ tabId }: { tabId: string }) {
             buildPrompts={BUILD_PROMPTS}
           />
           <PromptPalette root={chatRoot} prompts={palettePrompts} />
-          <Dk8sSearchProgressPortal root={chatRoot} tabId={tabId} />
+          {/* Every step the answer takes — commands, searches, the manual — as one card. */}
+          <Dk8sStepsPortal root={chatRoot} tabId={tabId} />
           {dk8sActive && <Dk8sPodPickerPortal root={chatRoot} pods={podsOnScreen} />}
           {streaming && stopSlot && createPortal(
             <button type="button" className="ce-composer-send dai-stop" onClick={stop}

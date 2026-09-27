@@ -38,7 +38,7 @@ import { PyEditor } from './PyEditor';
 import { PyBottomPanel, type BottomTab } from './PyBottomPanel';
 import { PyDebugPanes, DebugToolbar } from './PyDebugPanes';
 import { ThisPodPanel } from './ThisPodPanel';
-import { NoPython } from './NoPython';
+import { NoPython, PythonChecking } from './NoPython';
 import { newId, PY_HEADER_HEIGHT } from './py-view';
 import { ACCENT, WARN, MUTED, BAD } from '../tone';
 
@@ -162,6 +162,12 @@ export function PythonTab() {
   /* The container has said it cannot run a script: the tab is that answer,
      not an editor whose every button is greyed out. A session already
      debugging keeps its screen. */
+  /* The first answer is not in yet: hold the tab, rather than draw the editor
+     and swap it for "No Python" a moment later. A re-check keeps what is shown. */
+  if (access.exec && !debugLive && (!pyProbe || (pyProbe.busy && !pyProbe.verdict))) {
+    return <PythonChecking container={container} />;
+  }
+
   if (verdict && !verdict.ok && pyProbe && !pyProbe.busy && !debugLive) {
     return (
       <NoPython

@@ -457,7 +457,7 @@ function AskChip({ text, onAsk, onRemove, saved }: {
 /** Put one line on screen in the Logs tab, highlighted. */
 function openLine(line: LogLine) {
   useK8sStore.setState({ linkedLine: { seq: line.seq, text: line.text }, pendingLink: undefined });
-  useK8sStore.getState().setDetailTab('logs');
+  useK8sStore.getState().setDetailTab('logs', { from: 'ask' });
 }
 
 /**
@@ -513,7 +513,7 @@ function openLines(lines: LogLine[]) {
   const s = useK8sStore.getState();
   s.clearFieldFilters();
   s.setLogFilter(filterForLines(lines));
-  s.setDetailTab('logs');
+  s.setDetailTab('logs', { from: 'ask' });
 }
 
 /**

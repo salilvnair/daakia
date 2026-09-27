@@ -1209,8 +1209,11 @@ input[type="number"] {
   60%  { transform: scale(1.25); opacity: 1; }
   100% { transform: scale(1); opacity: 1; }
 }
+/* The tick's points run from its long arm's top back down to the short arm,
+   so a positive offset drew it backwards — long stroke first. A negative one
+   reveals it from the short arm up, the way a tick is written. */
 @keyframes dk-tick-draw {
-  from { stroke-dashoffset: 24; }
+  from { stroke-dashoffset: -24; }
   to   { stroke-dashoffset: 0; }
 }
 .dk-copy-tick > svg,
@@ -1220,7 +1223,7 @@ button[title="Copied!"] > svg {
 .dk-copy-tick > svg polyline,
 button[title="Copied!"] > svg polyline {
   stroke-dasharray: 24;
-  stroke-dashoffset: 24;
+  stroke-dashoffset: -24;
   animation: dk-tick-draw 300ms 80ms ease-out forwards;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1229,6 +1232,16 @@ button[title="Copied!"] > svg polyline {
     animation: none; stroke-dashoffset: 0;
   }
 }
+
+/* ─── A Logs row's copy-link button ───
+   Always laid out, so the row never reflows; shown on the row under the
+   pointer at once (no fade — it moves with the pointer), and kept on the row
+   that was just copied while its tick plays. */
+.dk-log-row .dk-row-link { opacity: 0; color: var(--color-text-muted); }
+.dk-log-row:hover .dk-row-link,
+.dk-log-row .dk-row-link.is-copied,
+.dk-log-row .dk-row-link:focus-visible { opacity: 1; }
+.dk-log-row .dk-row-link:hover { color: var(--color-dk8s, var(--color-accent)); }
 
 /* ─── A glyph button that grows under the pointer ───
    No box behind it: the glyph itself gets bigger, and takes its hover colour

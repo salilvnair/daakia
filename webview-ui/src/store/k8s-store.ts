@@ -673,6 +673,13 @@ interface K8sState {
   detail?: PodSummary;
   detailTab: DetailTab;
   /**
+   * The tab that sent the reader to this one — Ask the log's cited line opens
+   * Logs, and Back should return to the answer, not to the pod list. Set only
+   * by a tab that hands over (`setDetailTab(tab, { from })`); choosing a tab
+   * yourself clears it.
+   */
+  detailReturnTab?: DetailTab;
+  /**
    * Where the Explorer should open, when something already knows.
    *
    * A file search hit is a place, not just a pod — landing on the default
@@ -846,7 +853,7 @@ interface K8sState {
   pendingLink?: LogTarget;
   clearLinkedLine: () => void;
   closeDetail: () => void;
-  setDetailTab: (tab: DetailTab) => void;
+  setDetailTab: (tab: DetailTab, opts?: { from?: DetailTab }) => void;
   setExplorerPath: (path?: string) => void;
   openExplorerAt: (a: { path?: string; highlight?: string; fromSearch?: boolean }) => void;
   clearExplorerHighlight: () => void;
@@ -1174,17 +1181,18 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   },
 
   closeDetail: () => {
+    set({ detailReturnTab: undefined });
     postMsg({ type: 'dk8s:closeLogs' });
     set({ detail: undefined, logs: [], logStatus: 'idle', logSelection: undefined });
   },
 
-  setDetailTab: (detailTab) => {
+  setDetailTab: (detailTab, opts) => {
     const pod = get().detail;
     if (pod) {
       useUiStateStore.getState()
         .setScopedPref(DETAIL_TAB_PREF, `${pod.namespace}/${pod.name}`, detailTab);
     }
-    set({ detailTab });
+    set({ detailTab, detailReturnTab: opts?.from !== detailTab ? opts?.from : undefined });
 
     /*
       The screens that need to look inside the container ask when they open.

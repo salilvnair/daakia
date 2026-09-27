@@ -7,6 +7,7 @@
  * things that can change the answer — another container in the same pod, or
  * checking again after the image changed.
  */
+import { useEffect, useState } from 'react';
 import { ButtonView, IconSize } from '@salilvnair/dui';
 import { PythonFileIcon, RefreshIcon } from '../../../icons';
 import { MUTED } from '../tone';
@@ -19,6 +20,44 @@ export function splitReason(reason: string): { title: string; body?: string } {
   if (at < 0) return { title: 'This container cannot run a script', body: reason };
   const body = reason.slice(at + 3).trim();
   return { title: reason.slice(0, at).trim(), body: body.charAt(0).toUpperCase() + body.slice(1) };
+}
+
+/**
+ * The tab while the container is first asked which Python it has.
+ *
+ * Neither the editor nor the no-Python page: drawing the editor first and
+ * swapping it for "No Python" a moment later was a flash of a screen that was
+ * never going to stay. Blank for the first 200ms, so a quick or cached answer
+ * goes straight to the right screen; after that, it says what it is waiting on.
+ */
+export function PythonChecking({ container }: { container?: string }) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setShown(true), 200);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <div className="flex-1 flex items-center justify-center h-full px-8" aria-busy>
+      {shown && (
+        <div className="flex flex-col items-center text-center" style={{ gap: 12, maxWidth: 420 }}>
+          <div className="grid place-items-center dk-py-checking"
+               style={{
+                 width: 64, height: 64, borderRadius: 16,
+                 background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)',
+               }}>
+            <PythonFileIcon size={30} />
+          </div>
+          <span className="text-[13.5px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+            Checking this container for Python…
+          </span>
+          <span className="text-[12px]" style={{ color: MUTED }}>
+            Asking {container ? <span className="font-mono">{container}</span> : 'the container'} which python3 it has before anything is shown.
+          </span>
+          <style>{'.dk-py-checking { animation: dk-py-breathe 1.4s ease-in-out infinite; } @keyframes dk-py-breathe { 0%,100% { opacity: .55; } 50% { opacity: 1; } } @media (prefers-reduced-motion: reduce) { .dk-py-checking { animation: none; } }'}</style>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function NoPython({ reason, container, containers, onContainer, onCheck, checking, pods }: {

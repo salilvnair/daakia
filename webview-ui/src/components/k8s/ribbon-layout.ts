@@ -60,6 +60,31 @@ export function blockColor(worst: LogLevel): string {
   return worst === 'error' ? RED : worst === 'warn' ? GUTTER_WARN : GUTTER_CALM;
 }
 
+/**
+ * A block's fill: its lines in proportion, not its worst line.
+ *
+ * Coloured by the worst line alone, a block of twenty-five lines with one
+ * error in it was as red as a block of twenty-five errors — so a log that is
+ * mostly INFO with an error every few seconds drew a ribbon that was solid
+ * red, and the ribbon said the opposite of the lines beside it. Now each block
+ * is red, amber and calm from left to right in the share each level has, with
+ * a sliver of at least 15% for any error or warning so one is never lost.
+ */
+export function bandFill(b: { count: number; events?: number; errors?: number; warns?: number }): string {
+  if (!b.count) return 'var(--color-surface-border)';
+  /* Out of the events, as the level chips count — a stack frame is part of
+     its error, not a calm line beside it. */
+  const of = Math.max(1, b.events ?? b.count);
+  const share = (n = 0) => (n > 0 ? Math.max(0.15, n / of) : 0);
+  let e = share(b.errors);
+  let w = share(b.warns);
+  if (e + w > 1) { const k = 1 / (e + w); e *= k; w *= k; }
+  const ep = Math.round(e * 100);
+  const wp = Math.round((e + w) * 100);
+  if (ep === 0 && wp === 0) return GUTTER_CALM;
+  return `linear-gradient(to right, ${RED} 0 ${ep}%, ${GUTTER_WARN} ${ep}% ${wp}%, ${GUTTER_CALM} ${wp}% 100%)`;
+}
+
 /** A compact tick's colour: an error is red, a warning the gutter's amber. */
 export function tickColor(level: 'error' | 'warn'): string {
   return level === 'error' ? RED : GUTTER_WARN;

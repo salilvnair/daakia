@@ -445,7 +445,7 @@ function LoggerRow({ row, now, open, onToggle, onAddPatterns, onMenu }: {
     } else {
       s.setLogFilter(shortName(row.name));
     }
-    s.setDetailTab('logs');
+    s.setDetailTab('logs', { from: 'loggers' });
     logUiEvent('dk8s.logger_show', { by: row.seenNames.length ? 'logger' : 'pattern' });
   };
 
@@ -620,7 +620,7 @@ function PatternLine({ stat, now, onMenu }: { stat: PatternStat; now: number; on
     const s = useK8sStore.getState();
     s.clearFieldFilters();
     s.setLogFilter(words);
-    s.setDetailTab('logs');
+    s.setDetailTab('logs', { from: 'loggers' });
     logUiEvent('dk8s.logger_show', { by: 'one-pattern' });
   };
 

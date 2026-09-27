@@ -336,6 +336,13 @@ export interface DensityBucket {
   worst: LogLevel;
   errors: number;
   warns: number;
+  /**
+   * Events in the bucket — lines, less the stack frames folded into them.
+   * The share of errors is errors over THIS: over `count`, a filter showing
+   * only errors drew half-calm bands, because each timeout's frames counted
+   * as calm lines beside it.
+   */
+  events: number;
   /** Wall-clock span, when the lines carried timestamps. */
   fromTs?: number;
   toTs?: number;
@@ -362,6 +369,7 @@ export function densityBuckets(lines: LogLine[], columns: number): DensityBucket
     let worst: LogLevel = 'other';
     let errors = 0;
     let warns = 0;
+    let events = 0;
     let fromTs: number | undefined;
     let toTs: number | undefined;
 
@@ -369,6 +377,7 @@ export function densityBuckets(lines: LogLine[], columns: number): DensityBucket
       /* Events only, the same rule the chips count by: a folded trace is one
          error in the ribbon's tooltip too, however many frames it left here. */
       if (!foldsInto(l)) {
+        events++;
         if (l.level === 'error') errors++;
         else if (l.level === 'warn') warns++;
       }
@@ -379,7 +388,7 @@ export function densityBuckets(lines: LogLine[], columns: number): DensityBucket
       }
     }
 
-    buckets.push({ startIndex: start, count: slice.length, height: 0, worst, errors, warns, fromTs, toTs });
+    buckets.push({ startIndex: start, count: slice.length, height: 0, worst, errors, warns, events, fromTs, toTs });
   }
 
   const busiest = Math.max(...buckets.map(b => b.count));
@@ -432,6 +441,7 @@ export function timeBuckets(
     worst: 'other' as LogLevel,
     errors: 0,
     warns: 0,
+    events: 0,
     fromTs: range.from + i * width,
     toTs: range.from + (i + 1) * width,
   }));
@@ -443,6 +453,7 @@ export function timeBuckets(
     if (b.startIndex === -1) b.startIndex = index;
     b.count++;
     if (!foldsInto(l)) {
+      b.events++;
       if (l.level === 'error') b.errors++;
       else if (l.level === 'warn') b.warns++;
     }
