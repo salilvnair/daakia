@@ -22,7 +22,7 @@ import {
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
   WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon, CloseIcon,
-  ChevronLeftIcon, SidebarLeftIcon, SearchIcon, BracesIcon,
+  ChevronLeftIcon, SidebarLeftIcon, SearchIcon,
 } from '../../icons';
 import { useTabsStore } from '../../store/tabs-store';
 import { useK8sStore, type LogLevel } from '../../store/k8s-store';
@@ -1727,12 +1727,13 @@ export function LogViewer() {
         {payloadOpts.draw && eventStats.withPayload > 0 && (
           <>
             <Sep />
-            <BadgeChipView tone={ACCENT} size="xs"
-                           title={`${eventStats.withPayload.toLocaleString()} of these events carry a JSON, XML, YAML or key=value payload, drawn as a chip on its line`}>
-              <span className="inline-flex items-center gap-1"><BracesIcon size={11} /> Structured</span>
-            </BadgeChipView>
+            {/* The toolbar's own height and corners, so it sits in the row rather than floating on it. */}
+            <span title={`How payloads open — ${eventStats.withPayload.toLocaleString()} of these events carry one. Each line keeps its own switch.`}
+                  className="dk8s-payload-mode inline-flex">
             <SegmentedControlView
-              size="xs"
+              size="md"
+              variant="pointy"
+              borderRadius={4}
               accentColor={ACCENT}
               value={payloadOpts.mode}
               onChange={v => setPayloadPref(PAYLOAD_MODE_PREF, v as PayloadMode)}
@@ -1741,6 +1742,7 @@ export function LogViewer() {
                 ...(payloadOpts.keepRaw ? [{ value: 'raw', label: 'Raw' }] : []),
               ]}
             />
+            </span>
           </>
         )}
 
@@ -2378,7 +2380,10 @@ export function LogViewer() {
                           chip, because a chip that opens "nothing here" is a
                           chip that teaches people not to press it.
                         */}
-                        {!row.isFrame && (line.thread || line.logger || line.fields || payload || mark) && (
+                        {/* Only a line with keys of its own — MDC, a payload's leaves, a pattern's
+                            holes. Thread and logger are in the rail for every line already. */}
+                        {!row.isFrame && (Object.keys(line.fields ?? {}).length > 0
+                          || payload?.value !== undefined || Object.keys(mark?.fields ?? {}).length > 0) && (
                           <button
                             type="button"
                             onClick={() => toggleFields(line.seq)}

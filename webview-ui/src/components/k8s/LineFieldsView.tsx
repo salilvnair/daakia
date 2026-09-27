@@ -38,7 +38,9 @@ export function LineFieldsView({ line, payload, mark }: {
   const searchEverywhere = useDk8sSearchStore(s => s.searchEverywhere);
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
 
-  const fields = useMemo(() => fieldsOf(line, { payload, mark }), [line, payload, mark]);
+  /* The line's own keys. Thread and logger are in the rail beside the log for every line;
+     repeating them here made every row look like it had something to show. */
+  const fields = useMemo(() => fieldsOf(line, { payload, mark }).filter(f => f.origin !== 'format'), [line, payload, mark]);
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
     for (const f of fields) out[f.key] = countHere(logs, f);

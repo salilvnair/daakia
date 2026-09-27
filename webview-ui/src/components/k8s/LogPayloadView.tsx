@@ -3,15 +3,16 @@
  *
  * The row above stays the sentence somebody wrote; this is the machine half of
  * the line, folded to a chip until it is asked for — the same bargain a stack
- * trace already makes. Tree, Pretty and Raw are per line: the tab's switch
- * says how they open, and this overrides it for the one in front of you,
- * because the reason to switch is always a particular line.
+ * trace already makes. Two switches, two jobs: the one in the Logs toolbar is
+ * every payload in the log (and the default next time); this one is the line
+ * in front of you. Changing the toolbar's resets every line to it, so a line
+ * switched earlier never quietly ignores the choice made for all of them.
  *
  * JSON, key=value and YAML are drawn by the response viewer's tree; XML by its
  * own tree, which falls back to indented text for a fragment that does not
  * close — every character the pod wrote either way.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { IconButtonView, SegmentedControlView } from '@salilvnair/dui';
 import { JsonTreeViewer } from '../shared/display/JsonTreeViewer';
 import { CopyIcon, CheckIcon, ExpandAllIcon, CollapseAllIcon, ExternalLinkIcon, ChevronRightIcon } from '../../icons';
@@ -41,6 +42,13 @@ export function LogPayloadView({ payload, mode, depth, hideSecrets, keepRaw = tr
   /* `undefined` means "whatever the tab says", so changing the tab's switch
      still moves a line the reader never touched. */
   const [ownMode, setOwnMode] = useState<Mode | undefined>();
+  /* The toolbar's switch moved: this line follows it again, whatever it was set to. */
+  const lastMode = useRef(mode);
+  useEffect(() => {
+    if (lastMode.current === mode) return;
+    lastMode.current = mode;
+    setOwnMode(undefined);
+  }, [mode]);
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
   /* Expand all remounts the tree at every level; pressing it again goes back to the tab's depth. */
@@ -97,8 +105,11 @@ export function LogPayloadView({ payload, mode, depth, hideSecrets, keepRaw = tr
           </button>
         )}
 
+        {/* The ±20 / ±100 / ±500 switch's props, so the two read as one control. */}
         <SegmentedControlView
           size="xs"
+          variant="rounded"
+          density="compact"
           accentColor={ACCENT}
           value={shown}
           onChange={v => setOwnMode(v as Mode)}
@@ -106,27 +117,27 @@ export function LogPayloadView({ payload, mode, depth, hideSecrets, keepRaw = tr
         />
 
         <IconButtonView
-          size="xs"
+          size="md"
           tooltip={expandAll ? 'Back to the depth set in Settings' : 'Expand all'}
           aria-label={expandAll ? 'Collapse to the usual depth' : 'Expand all'}
           disabled={shown !== 'tree'}
-          icon={expandAll ? <CollapseAllIcon size={11} /> : <ExpandAllIcon size={11} />}
+          icon={expandAll ? <CollapseAllIcon size={13} /> : <ExpandAllIcon size={13} />}
           onClick={() => setExpandAll(e => !e)}
         />
         <IconButtonView
-          size="xs"
+          size="md"
           tooltip="Open in a tab"
           aria-label="Open in a tab"
-          icon={<ExternalLinkIcon size={11} />}
+          icon={<ExternalLinkIcon size={13} />}
           onClick={() => useTabsStore.getState().openDk8sPayloadTab({ payload, title: title ?? `${payload.shape.toUpperCase()} · ${payload.summary}` })}
         />
         <IconButtonView
-          size="xs"
+          size="md"
           tooltip={copied ? 'Copied' : 'Copy the payload, as the pod wrote it'}
           aria-label="Copy the payload"
           active={copied}
           activeColor="var(--color-success)"
-          icon={copied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}
+          icon={copied ? <CheckIcon size={13} /> : <CopyIcon size={13} />}
           onClick={copy}
         />
       </div>

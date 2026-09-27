@@ -53,6 +53,8 @@ export function PayloadTab({ tab }: { tab: RequestTab }) {
         )}
         <SegmentedControlView
           size="sm"
+          variant="pointy"
+          borderRadius={4}
           accentColor={ACCENT}
           value={mode}
           onChange={v => setMode(v as Mode)}
