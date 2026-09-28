@@ -5,7 +5,7 @@
  * cleverly.
  */
 import { describe, it, expect } from 'vitest';
-import { tokenize, planKubectl, runKubectlTool, displayCommand, kubectlToModelText } from './kubectl-run';
+import { tokenize, planKubectl, runKubectlTool, displayCommand, kubectlToModelText, dropOwnContext } from './kubectl-run';
 
 const scope = { context: 'com-eastus-zp-prod', namespace: 'com-zp-prod', pods: ['zp-ui-5dff4b-hqjcc', 'zp-backend-69fd-7gpgz'] };
 
@@ -94,5 +94,16 @@ describe('running it', () => {
 
   it('quotes only what needs quoting when it shows the command', () => {
     expect(displayCommand(['get', 'pods', '-l', 'app=zp ui'])).toBe("kubectl get pods -l 'app=zp ui'");
+  });
+});
+
+describe('dropOwnContext — a suggested command pinned to the screen', () => {
+  it('drops a --context that names the context on screen', () => {
+    expect(dropOwnContext('kubectl --context com-eastus-zp-prod -n ns get pods', 'com-eastus-zp-prod')).toBe('kubectl -n ns get pods');
+    expect(dropOwnContext('$ kubectl get pods --context=com-eastus-zp-prod', 'com-eastus-zp-prod')).toBe('kubectl get pods');
+  });
+  it('keeps any other context, so the plan refuses it', () => {
+    expect(dropOwnContext('kubectl --context other get pods', 'com-eastus-zp-prod')).toBe('kubectl --context other get pods');
+    expect(dropOwnContext('kubectl --context com-eastus-zp-prod-2 get pods', 'com-eastus-zp-prod')).toContain('--context com-eastus-zp-prod-2');
   });
 });

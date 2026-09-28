@@ -18,7 +18,10 @@ import {
 } from '../../../storage/db';
 import { getAiMcpTools, callAiMcpTool } from './ai-mcp-handler';
 import { DK8S_SEARCH_TOOL, runDk8sSearch, toModelText, type Dk8sSearchArgs, type Dk8sSearchResult } from '../../../ai/tools/dk8s-search';
-import { KUBECTL_RUN_TOOL, runKubectlTool, kubectlToModelText, type KubectlRunResult } from '../../../ai/tools/kubectl-run';
+import {
+  KUBECTL_RUN_TOOL, runKubectlTool, kubectlToModelText, planKubectl, displayCommand, dropOwnContext,
+  type KubectlRunResult, type KubectlScope,
+} from '../../../ai/tools/kubectl-run';
 import { run as runKubectl } from '../../../services/k8s/kubectl';
 import { DAAKIA_DOCS_TOOL, runDaakiaDocs, type DocsResult } from '../../../ai/tools/daakia-docs';
 import { watchedPodTargets, archiveSearcher } from './k8s-handler';
@@ -628,24 +631,69 @@ async function runKubectlForConversation(
   args: { command?: string; why?: string },
   postMessage: PostMessage,
 ): Promise<{ success: boolean; result?: string; error?: string }> {
-  const targets = dk8sTargetsByTab.get(tabId) ?? watchedPodTargets();
-  if (!targets.length) return { success: false, error: 'No pods are being watched in dk8s, so there is no cluster to ask.' };
-  /* The namespace most of the watched pods are in — the one on screen. */
-  const counts = new Map<string, number>();
-  for (const t of targets) counts.set(t.namespace, (counts.get(t.namespace) ?? 0) + 1);
-  const namespace = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
-  const context = targets.find(t => t.namespace === namespace)!.context;
+  const scope = kubectlScopeOf(dk8sTargetsByTab.get(tabId) ?? watchedPodTargets());
+  if (!scope) return { success: false, error: 'No pods are being watched in dk8s, so there is no cluster to ask.' };
   postMessage({ type: 'ai:kubectlRunStarted', tabId, toolCallId, command: args.command ?? '', why: args.why });
   try {
-    const result = await runKubectlTool(args, {
-      scope: { context, namespace, pods: targets.filter(t => t.namespace === namespace).map(t => t.pod) },
-      run: (a, o) => runKubectl(a, o),
-    });
+    const result = await runKubectlTool(args, { scope, run: (a, o) => runKubectl(a, o) });
     dk8sResults.set(tabId, [...(dk8sResults.get(tabId) ?? []), result]);
     postMessage({ type: 'ai:kubectlRunResult', tabId, toolCallId, result });
     return { success: true, result: kubectlToModelText(result) };
   } catch (err) {
     return { success: false, error: (err as Error).message };
+  }
+}
+
+/** The context and namespace on screen: where most of the watched pods are. */
+function kubectlScopeOf(targets: { context: string; namespace: string; pod: string }[]): KubectlScope | undefined {
+  if (!targets.length) return undefined;
+  const counts = new Map<string, number>();
+  for (const t of targets) counts.set(t.namespace, (counts.get(t.namespace) ?? 0) + 1);
+  const namespace = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  const context = targets.find(t => t.namespace === namespace)!.context;
+  return { context, namespace, pods: targets.filter(t => t.namespace === namespace).map(t => t.pod) };
+}
+
+/**
+ * A kubectl command an answer suggested, from its Run row in the chat.
+ *
+ * `plan` says what it would run — the command with the context and namespace
+ * pinned, or why it will not — and runs nothing; the row draws it. `run` runs
+ * it through the same guard and the same `run()` as Daakia AI's own kubectl,
+ * so it is read-only, in the Commands audit, and masked the same way. The
+ * user pressing Run is the only way this runs; the model cannot reach it.
+ */
+export async function handleAiKubectlSuggest(msg: Record<string, unknown>, postMessage: PostMessage) {
+  const id = String(msg.id ?? '');
+  const raw = String(msg.command ?? '');
+  const scope = kubectlScopeOf(watchedPodTargets());
+  if (!scope) {
+    postMessage({ type: 'ai:kubectlSuggested', id, plan: {
+      runnable: false, command: raw, refused: 'No pods are being watched in dk8s, so there is no cluster to run it on.',
+    } });
+    return;
+  }
+  const command = dropOwnContext(raw, scope.context);
+  const plan = planKubectl(command, scope);
+  const planned = plan.run
+    ? { runnable: true, command: displayCommand(plan.args), context: scope.context, namespace: scope.namespace }
+    : {
+      runnable: false, refused: plan.refused, proposal: plan.proposal, context: scope.context, namespace: scope.namespace,
+      command: plan.display.length ? displayCommand(plan.display) : raw,
+    };
+  if (msg.mode !== 'run' || !plan.run) {
+    postMessage({ type: 'ai:kubectlSuggested', id, plan: planned });
+    return;
+  }
+  try {
+    const result = await runKubectlTool({ command }, { scope, run: (a, o) => runKubectl(a, o) });
+    postMessage({ type: 'ai:kubectlSuggested', id, plan: planned, result });
+  } catch (err) {
+    postMessage({ type: 'ai:kubectlSuggested', id, plan: planned, result: {
+      kind: 'kubectl', command: planned.command, verb: plan.verb, ok: false, code: null,
+      output: (err as Error).message, truncated: false, elapsedMs: 0,
+      context: scope.context, namespace: scope.namespace, links: [],
+    } satisfies KubectlRunResult });
   }
 }
 

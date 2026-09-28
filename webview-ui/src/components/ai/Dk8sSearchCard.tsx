@@ -20,7 +20,7 @@
  * about what a line holds.
  */
 import { useMemo, useRef, useState } from 'react';
-import { MdViewer } from '../shared/display/MdViewer';
+import { AnswerMd } from './SuggestedCommand';
 import { useTabsStore } from '../../store/tabs-store';
 import { useK8sStore } from '../../store/k8s-store';
 import { postMsg } from '../../vscode';
@@ -35,7 +35,7 @@ import { usePayloadPrefs } from '../k8s/log-payload-prefs';
 import { LogPayloadView } from '../k8s/LogPayloadView';
 import { LineFieldsView } from '../k8s/LineFieldsView';
 import { LogSourceProvider, type LogSource } from '../k8s/log-source';
-import { readFields } from '../k8s/field-readers';
+import { readFields, type FieldReader } from '../k8s/field-readers';
 import { useFieldReaders } from '../k8s/follow-prefs';
 import { ACCENT } from '../k8s/tone';
 import type { LogLine, LogLevel } from '../../store/k8s-store';
@@ -172,7 +172,7 @@ export function Dk8sSearchCard({ payload, submit }: {
       <style>{CARD_CSS}</style>
       {payload.rawText.trim() && (
         <div className="dk8s-answer" style={{ fontSize: 13.5, lineHeight: 1.65 }}>
-          <MdViewer content={linkCitations(payload.rawText)} />
+          <AnswerMd text={linkCitations(payload.rawText)} />
         </div>
       )}
       {payload.results.map((r, i) => isDocsResult(r)
@@ -539,6 +539,8 @@ function GroupView({ group }: { group: ThreadGroup }) {
     place a filter can do what it says.
   */
   const logLines = useMemo(() => group.lines.map((l, i) => asLogLine(l, i, group.thread)), [group.lines, group.thread]);
+  /* Read once for the group and handed down — not once per row. */
+  const readers = useFieldReaders();
   const source = useMemo((): LogSource => ({
     ...(useK8sStore.getState() as unknown as LogSource),
     logs: logLines,
@@ -591,13 +593,13 @@ function GroupView({ group }: { group: ThreadGroup }) {
         )}
       </div>
 
-      <div className="rounded-lg" style={{ fontFamily: MONO, fontSize: 11.5, lineHeight: '20px', background: C.well, padding: '5px 0' }}>
+      <div className="dk-embed rounded-lg" style={{ fontFamily: MONO, fontSize: 11.5, lineHeight: '20px', background: C.well, padding: '5px 0' }}>
         {hiddenBefore > 0 && (
           <FoldButton onClick={() => setExpanded(true)}>··· {plural(hiddenBefore, 'earlier line')} on this thread</FoldButton>
         )}
         <LogSourceProvider value={source}>
           {shown.map((line, i) => (
-            <LineRow key={i} line={line} logLine={logLines[group.lines.indexOf(line)]} pod={group.pod} />
+            <LineRow key={i} line={line} logLine={logLines[group.lines.indexOf(line)]} pod={group.pod} readers={readers} />
           ))}
         </LogSourceProvider>
         {hiddenAfter > 0 && (
@@ -687,12 +689,13 @@ function ChipChevron({ open }: { open: boolean }) {
   );
 }
 
-function LineRow({ line, logLine, pod }: { line: ResultLine; logLine: LogLine; pod: string }) {
+function LineRow({ line, logLine, pod, readers }: {
+  line: ResultLine; logLine: LogLine; pod: string; readers: FieldReader[];
+}) {
   const [framesOpen, setFramesOpen] = useState(false);
   const [payloadOpen, setPayloadOpen] = useState<boolean>();
   const [fieldsOpen, setFieldsOpen] = useState(false);
   const prefs = usePayloadPrefs();
-  const readers = useFieldReaders();
   const failure = line.role === 'failure';
   const hit = line.role === 'hit';
   const time = line.ts !== undefined ? new Date(line.ts).toISOString().slice(11, 23) : '';
@@ -700,12 +703,25 @@ function LineRow({ line, logLine, pod }: { line: ResultLine; logLine: LogLine; p
   const parsed = line.msg !== undefined;
   const full = parsed ? line.msg! : line.masked ?? line.text;
 
-  /* The payload, found the way the Logs tab finds it and under its settings — off there, off here. */
-  const payload: LogPayload | undefined = useMemo(
-    () => prefs.shapes.length ? findPayload(full, { shapes: prefs.shapes, maxChars: prefs.maxChars }) : undefined,
-    [full, prefs.shapes, prefs.maxChars],
-  );
-  const sentence = sentenceWithout(full, payload);
+  /*
+    The payload, found the way the Logs tab finds it and under its settings —
+    off there, off here.
+
+    Drawn from the RAW line, not the masked one: the host masks the text for
+    the model, and a payload parsed from that has "••••••" baked into it as a
+    value, with nothing to reveal. Parsed raw, the tree and the fields hide a
+    secret the way the Logs tab does — behind "show", as the Logs settings say.
+    The sentence stays the masked one.
+  */
+  const find = (text: string) => prefs.shapes.length
+    ? findPayload(text, { shapes: prefs.shapes, maxChars: prefs.maxChars }) : undefined;
+  const maskedPayload: LogPayload | undefined = useMemo(() => find(full),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [full, prefs.shapes.join(','), prefs.maxChars]);
+  const payload: LogPayload | undefined = useMemo(() => (maskedPayload ? find(line.text) ?? maskedPayload : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [maskedPayload, line.text]);
+  const sentence = sentenceWithout(full, maskedPayload);
   /* "Collapsed" in the Logs settings means a payload is a chip until clicked; off, it is drawn open. */
   const showPayload = payload ? (payloadOpen ?? !prefs.collapsed) : false;
   const hasFields = Object.keys(line.fields ?? {}).length > 0 || payload?.value !== undefined
@@ -736,12 +752,12 @@ function LineRow({ line, logLine, pod }: { line: ResultLine; logLine: LogLine; p
             <span className="shrink-0" style={{ width: 44, color: LEVEL_COLOR[line.level.toLowerCase()] ?? C.dim, fontWeight: failure ? 600 : 400 }}>{level}</span>
           </>
         )}
-        <span className="flex-1 min-w-0 flex flex-wrap items-start" style={{ columnGap: 6, rowGap: 2 }}>
-          <span className="min-w-0" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontWeight: failure ? 600 : 400,
-                                              color: line.alarm && !failure ? 'color-mix(in srgb, var(--color-error) 55%, var(--color-text-muted))' : undefined }}>
-            {sentence}
-          </span>
-          {/* The chips the Logs tab puts on the same row, in the same order. */}
+        <span className="flex-1 min-w-0" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontWeight: failure ? 600 : 400,
+                                                 color: line.alarm && !failure ? 'color-mix(in srgb, var(--color-error) 55%, var(--color-text-muted))' : undefined }}>
+          {sentence}
+        </span>
+        {/* The chips the Logs tab puts on a row, kept together at its right end. */}
+        <span className="shrink-0 flex items-start" style={{ gap: 6, marginLeft: 'auto' }}>
           {line.frames?.length ? (
             <RowChip open={framesOpen} tone="muted" onClick={() => setFramesOpen(o => !o)}
                      title={framesOpen ? 'Fold the stack frames' : 'Show the stack frames under this line'}>

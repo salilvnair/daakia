@@ -26,6 +26,11 @@
   display: flex;
   height: 100%;
   min-height: 0;
+  /* It sits in a flex row, where an item is as wide as its content unless told
+     otherwise — so a short conversation left a dead band down the right side,
+     wider the emptier the chat. It fills the row. */
+  flex: 1 1 0;
+  min-width: 0;
   overflow: hidden;
   background: var(--color-panel);
   color: var(--color-text-primary);

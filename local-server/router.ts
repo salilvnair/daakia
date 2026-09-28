@@ -136,7 +136,7 @@ import {
 } from '../src/panel/main/handlers/sm-workflow-handler';
 import { handleSaveUiState, handleGetUiState, handleSaveWorkspaceSnapshot, handleGetWorkspaceSnapshot } from '../src/panel/main/handlers/ui-state-handler';
 import {
-  handleAiSend, handleAiCancel, handleAiChat, handleAiStream, handleAiStreamRequest,
+  handleAiSend, handleAiCancel, handleAiKubectlSuggest, handleAiChat, handleAiStream, handleAiStreamRequest,
   handleAiSaveConversation, handleAiLoadConversations, handleAiLoadConversation, handleAiDeleteConversation,
 } from '../src/panel/main/handlers/ai-handler';
 import { handleLoadStart, handleLoadStop } from '../src/panel/main/handlers/load-handler';
@@ -1265,6 +1265,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'ai:cancel':
       handleAiCancel(msg, post);
+      break;
+    case 'ai:kubectlSuggest':
+      void handleAiKubectlSuggest(msg, post);
       break;
 
     // ── Load testing — real requests, measured.

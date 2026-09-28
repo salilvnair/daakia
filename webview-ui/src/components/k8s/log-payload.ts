@@ -261,6 +261,36 @@ export function sentenceWithout(full: string, payload: LogPayload | undefined, k
   return after ? `${full.slice(0, at).trimEnd()} ${after}` : full.slice(0, at).trimEnd();
 }
 
+/**
+ * How many levels a tree needs open for nothing in it to be folded.
+ *
+ * A node at depth d is open when d < the tree's `openTo`; so this is one more
+ * than the deepest node that has children, and 0 for a payload with none.
+ * Expand all / Collapse all read it: a button that says "Expand all" on a tree
+ * that is already fully open does nothing anybody can see.
+ */
+export function payloadDepth(payload: LogPayload): number {
+  if (payload.shape === 'xml') {
+    const deepest = (n: XmlNode | undefined, d: number): number =>
+      !n || !n.children.length ? -1 : Math.max(d, ...n.children.map(c => deepest(c, d + 1)));
+    return deepest(parseXmlTree(payload.source), 0) + 1;
+  }
+  const deepest = (v: unknown, d: number): number => {
+    if (!v || typeof v !== 'object') return -1;
+    const kids = Object.values(v as Record<string, unknown>);
+    return kids.length ? Math.max(d, ...kids.map(k => deepest(k, d + 1))) : -1;
+  };
+  return deepest(payload.value, 0) + 1;
+}
+
+/** The fold the Expand all / Collapse all button leaves a tree at. */
+export type TreeFold = 'default' | 'all' | 'top';
+
+/** `openTo` for a fold: the Settings depth, everything, or the top level only. */
+export function openToFor(fold: TreeFold, settingsDepth: number): number {
+  return fold === 'all' ? 64 : fold === 'top' ? 1 : settingsDepth;
+}
+
 export function prettyXml(source: string): string[] {
   const parts = source.replace(/>\s*</g, '>\n<').split('\n');
   const out: string[] = [];

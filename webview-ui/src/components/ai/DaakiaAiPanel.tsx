@@ -14,7 +14,7 @@ import { ConvEngineChat } from '@salilvnair/convengine-chat';
 import type { RendererComponentProps } from '@salilvnair/convengine-chat';
 import { useTabsStore, DAAKIA_ASSISTANT_SYSTEM_PROMPT, type ResponseData } from '../../store/tabs-store';
 import { useEnvStore, GLOBAL_ENV_ID } from '../../store/env-store';
-import { MdViewer } from '../shared/display/MdViewer';
+import { AnswerMd } from './SuggestedCommand';
 import { Dk8sSearchCard, isDk8sSearchPayload } from './Dk8sSearchCard';
 import { AiNoticeCard, isAiNoticePayload } from './AiNoticeCard';
 import { useLibrarySlot } from './use-library-slot';
@@ -78,7 +78,7 @@ function payloadToText(payload: unknown): string {
 function DaakiaMdRendererComponent({ payload }: { payload: unknown }) {
   return (
     <div className="daakia-chat-md">
-      <MdViewer content={payloadToText(payload)} />
+      <AnswerMd text={payloadToText(payload)} />
     </div>
   );
 }

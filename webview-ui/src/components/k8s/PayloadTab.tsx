@@ -10,7 +10,7 @@ import { useMemo, useState } from 'react';
 import { ButtonView, SegmentedControlView } from '@salilvnair/dui';
 import type { RequestTab } from '../../store/tabs-store';
 import { PayloadBody } from './LogPayloadView';
-import { maskSecrets } from './log-payload';
+import { maskSecrets, payloadDepth, openToFor, type TreeFold } from './log-payload';
 import { usePayloadPrefs } from './log-payload-prefs';
 import { copyText } from '../../utils/clipboard';
 import { ExpandAllIcon, CollapseAllIcon } from '../../icons';
@@ -23,7 +23,7 @@ export function PayloadTab({ tab }: { tab: RequestTab }) {
   const view = tab.payloadView;
   const prefs = usePayloadPrefs();
   const [mode, setMode] = useState<Mode>(prefs.mode === 'raw' && !prefs.keepRaw ? 'tree' : prefs.mode);
-  const [all, setAll] = useState(false);
+  const [fold, setFold] = useState<TreeFold>('default');
   const [revealed, setRevealed] = useState(false);
   const { copied, flash } = useCopyTick();
 
@@ -36,6 +36,10 @@ export function PayloadTab({ tab }: { tab: RequestTab }) {
     return <div className="flex-1 flex items-center justify-center text-[12px]" style={{ color: 'var(--color-text-muted)' }}>This tab has no payload.</div>;
   }
   const { payload } = view;
+  /* Opened in a tab there is room: never fewer than three levels to begin with. */
+  const openTo = openToFor(fold, Math.max(prefs.depth, 3));
+  const levels = payloadDepth(payload);
+  const allOpen = openTo >= levels;
   const masking = prefs.hideSecrets && !revealed && payload.value !== undefined
     && JSON.stringify(maskSecrets(payload.value)) !== JSON.stringify(payload.value);
 
@@ -61,10 +65,11 @@ export function PayloadTab({ tab }: { tab: RequestTab }) {
           onChange={v => setMode(v as Mode)}
           options={[{ value: 'tree', label: 'Tree' }, { value: 'pretty', label: 'Pretty' }, ...(prefs.keepRaw ? [{ value: 'raw', label: 'Raw' }] : [])]}
         />
-        <ButtonView variant="secondary" size="sm" disabled={mode !== 'tree'}
-                    iconLeft={all ? <CollapseAllIcon size={12} /> : <ExpandAllIcon size={12} />}
-                    onClick={() => setAll(a => !a)}>
-          {all ? 'Collapse' : 'Expand all'}
+        <ButtonView variant="secondary" size="sm" disabled={mode !== 'tree' || levels <= 1}
+                    title={levels <= 1 ? 'Nothing to fold' : undefined}
+                    iconLeft={allOpen ? <CollapseAllIcon size={12} /> : <ExpandAllIcon size={12} />}
+                    onClick={() => setFold(allOpen ? 'top' : 'all')}>
+          {allOpen ? 'Collapse all' : 'Expand all'}
         </ButtonView>
         <ButtonView variant="secondary" size="sm" accentColor={ACCENT} color={copied ? 'var(--color-success)' : ACCENT}
                     iconLeft={<CopyGlyph copied={copied} size={12} />}
@@ -73,7 +78,7 @@ export function PayloadTab({ tab }: { tab: RequestTab }) {
         </ButtonView>
       </div>
       <div className="flex-1 min-h-0 overflow-auto px-5 py-4">
-        <PayloadBody key={`${mode}:${all}`} payload={payload} mode={mode} value={value} depth={all ? 64 : Math.max(prefs.depth, 3)} />
+        <PayloadBody key={`${mode}:${openTo}`} payload={payload} mode={mode} value={value} depth={openTo} />
       </div>
     </div>
   );

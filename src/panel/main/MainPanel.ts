@@ -77,7 +77,7 @@ import { handleMqttConnect, handleMqttDisconnect, handleMqttSubscribe, handleMqt
 import { handleGrpcInvoke, handleGrpcCancel, handleGrpcStreamSend, handleGrpcStreamEnd, handleGrpcReflect, handleGrpcLoadProto, cleanupAllGrpcStreams } from './handlers/grpc-handler';
 import { handleSoapInvoke, handleSoapCancel, handleLoadWsdl, handleLoadWsdlContent, handleGenerateEnvelope, handleExtractFields, handleGenerateSecurity, handleInjectSecurity, handleImportSoapUiProject, handleImportWsdlToCollection } from './handlers/soap-handler';
 import {
-  handleAiSend, handleAiCancel,
+  handleAiSend, handleAiCancel, handleAiKubectlSuggest,
   handleAiSaveConversation, handleAiLoadConversations, handleAiLoadConversation,
   handleAiDeleteConversation, handleAiClearConversations,
   handleAiChat, handleAiStream, handleAiStreamRequest,
@@ -975,6 +975,9 @@ export class MainPanel {
         break;
       case 'ai:cancel':
         handleAiCancel(msg, this._post);
+        break;
+      case 'ai:kubectlSuggest':
+        void handleAiKubectlSuggest(msg, this._post);
         break;
       case 'ai:saveConversation':
         handleAiSaveConversation(msg, this._post);

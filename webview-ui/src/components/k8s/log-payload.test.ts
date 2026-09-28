@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { findPayload, maskSecrets, isSecretKey, prettyXml, HIDDEN, sentenceWithout } from './log-payload';
+import { findPayload, maskSecrets, isSecretKey, prettyXml, HIDDEN, sentenceWithout, payloadDepth } from './log-payload';
+
+describe('payloadDepth — how deep Expand all has to go', () => {
+  it('counts the levels with children, so a flat payload has nothing to fold', () => {
+    expect(payloadDepth(findPayload('stats {"a":1,"b":2}')!)).toBe(1);
+    expect(payloadDepth(findPayload('req {"customer":{"name":"x"},"card":{"last4":"1"}}')!)).toBe(2);
+    expect(payloadDepth(findPayload('said <a><b><c>x</c></b></a>')!)).toBe(2);
+  });
+});
 
 describe('sentenceWithout — the line with its chip standing for the payload', () => {
   const line = 'Sending request {"orderId":42,"amount":10} to billing';

@@ -51,7 +51,10 @@ interface TeamState {
 export const useDk8sTeamStore = create<TeamState>(set => ({
   sources: [],
   loaded: false,
-  apply: (sources) => set({ sources, loaded: true }),
+  /* The same answer again changes nothing: a new empty array per reply would
+     re-render every reader of it for no reason. */
+  apply: (sources) => set(s => s.loaded && JSON.stringify(s.sources) === JSON.stringify(sources)
+    ? s : { sources, loaded: true }),
 }));
 
 /** The message the host answers with — after a request, and after every sync. */
@@ -67,24 +70,38 @@ function isSource(s: unknown): s is TeamDk8sSource {
     && !!v.prefs && typeof v.prefs === 'object';
 }
 
+/*
+  One listener and one request for the whole app, however many readers.
+
+  It was a listener and a request per mount. That was fine for a page or two,
+  and froze the app once every line of a Daakia AI search card read the field
+  readers: 650 rows asked 650 times, and every answer reached 650 listeners,
+  each re-rendering every row.
+*/
+let readers = 0;
+let listening = false;
+function onTeamPrefs(event: MessageEvent): void {
+  const msg = event.data as { type?: string; sources?: unknown };
+  if (msg?.type !== TEAM_PREFS_MESSAGE) return;
+  useDk8sTeamStore.getState().apply(Array.isArray(msg.sources) ? msg.sources.filter(isSource) : []);
+}
+
 /**
  * The team's sources, fetched on first use and kept current.
  *
- * Every page that shows a teammate's determinant calls this; the listener is
- * per mount and the answer lands in one store, so two pages open at once ask
- * twice and agree.
+ * The answer lands in one store, and the host also sends it after every sync,
+ * so the listener stays for the app's life once anything has read it. A new
+ * request goes out only when the first reader arrives after none were left.
  */
 export function useTeamDk8sSources(): TeamDk8sSource[] {
   const sources = useDk8sTeamStore(s => s.sources);
   useEffect(() => {
-    const handler = (event: MessageEvent) => {
-      const msg = event.data as { type?: string; sources?: unknown };
-      if (msg?.type !== TEAM_PREFS_MESSAGE) return;
-      useDk8sTeamStore.getState().apply(Array.isArray(msg.sources) ? msg.sources.filter(isSource) : []);
-    };
-    window.addEventListener('message', handler);
-    requestTeamPrefs();
-    return () => window.removeEventListener('message', handler);
+    if (!listening) {
+      listening = true;
+      window.addEventListener('message', onTeamPrefs);
+    }
+    if (readers++ === 0) requestTeamPrefs();
+    return () => { readers--; };
   }, []);
   return sources;
 }

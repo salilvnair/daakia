@@ -17,15 +17,12 @@ import { IconButtonView, SegmentedControlView } from '@salilvnair/dui';
 import { JsonTreeViewer } from '../shared/display/JsonTreeViewer';
 import { ExpandAllIcon, CollapseAllIcon, ExternalLinkIcon, ChevronRightIcon } from '../../icons';
 import { copyText } from '../../utils/clipboard';
-import { prettyXml, maskSecrets, parseXmlTree, type LogPayload, type XmlNode } from './log-payload';
+import { prettyXml, maskSecrets, parseXmlTree, payloadDepth, openToFor, type LogPayload, type XmlNode, type TreeFold } from './log-payload';
 import { useTabsStore } from '../../store/tabs-store';
 import { ACCENT } from './tone';
 import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 type Mode = 'tree' | 'pretty' | 'raw';
-
-/** Deep enough to open anything a log line carries. */
-const ALL_LEVELS = 64;
 
 export function LogPayloadView({ payload, mode, depth, hideSecrets, keepRaw = true, title, indent = 92 }: {
   payload: LogPayload;
@@ -52,10 +49,15 @@ export function LogPayloadView({ payload, mode, depth, hideSecrets, keepRaw = tr
   }, [mode]);
   const [revealed, setRevealed] = useState(false);
   const { copied, flash } = useCopyTick();
-  /* Expand all remounts the tree at every level; pressing it again goes back to the tab's depth. */
-  const [expandAll, setExpandAll] = useState(false);
+  /* The button remounts the tree at a new depth: everything open, or only the
+     top level. Which one it offers depends on whether the tree is fully open
+     now — at the Settings depth a shallow payload already is, and "Expand all"
+     there changed nothing on screen. */
+  const [fold, setFold] = useState<TreeFold>('default');
   const shown = ownMode ?? (mode === 'raw' && !keepRaw ? 'tree' : mode);
-  const openTo = expandAll ? ALL_LEVELS : depth;
+  const openTo = openToFor(fold, depth);
+  const levels = useMemo(() => payloadDepth(payload), [payload]);
+  const allOpen = openTo >= levels;
 
   const value = useMemo(
     () => (hideSecrets && !revealed ? maskSecrets(payload.value) : payload.value),
@@ -118,11 +120,11 @@ export function LogPayloadView({ payload, mode, depth, hideSecrets, keepRaw = tr
 
         <IconButtonView
           size="md"
-          tooltip={expandAll ? 'Back to the depth set in Settings' : 'Expand all'}
-          aria-label={expandAll ? 'Collapse to the usual depth' : 'Expand all'}
-          disabled={shown !== 'tree'}
-          icon={expandAll ? <CollapseAllIcon size={13} /> : <ExpandAllIcon size={13} />}
-          onClick={() => setExpandAll(e => !e)}
+          tooltip={levels <= 1 ? 'Nothing to fold' : allOpen ? 'Collapse all' : 'Expand all'}
+          aria-label={allOpen ? 'Collapse all' : 'Expand all'}
+          disabled={shown !== 'tree' || levels <= 1}
+          icon={allOpen ? <CollapseAllIcon size={13} /> : <ExpandAllIcon size={13} />}
+          onClick={() => setFold(allOpen ? 'top' : 'all')}
         />
         <IconButtonView
           size="md"

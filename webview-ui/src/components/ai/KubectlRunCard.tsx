@@ -48,7 +48,11 @@ const Svg = ({ children, size = 13 }: { children: React.ReactNode; size?: number
 /** Output taller than this folds, with the rest a click away. */
 const FOLD_LINES = 24;
 
-export function KubectlRunCard({ result }: { result: KubectlRunResult }) {
+export function KubectlRunCard({ result, action }: {
+  result: KubectlRunResult;
+  /** Beside the status: Run again, on a suggested command the user ran from the chat. */
+  action?: React.ReactNode;
+}) {
   const { copied, flash } = useCopyTick();
   const [all, setAll] = useState(false);
   const lines = result.output.split('\n');
@@ -71,7 +75,7 @@ export function KubectlRunCard({ result }: { result: KubectlRunResult }) {
   };
 
   return (
-    <div className="rounded-xl overflow-hidden" style={{
+    <div className="dk-embed rounded-xl overflow-hidden" style={{
       border: '1px solid color-mix(in srgb, var(--color-ai-accent, #D97757) 16%, var(--color-surface-border))',
       background: 'color-mix(in srgb, var(--color-ai-accent, #D97757) 2%, var(--color-panel))',
     }}>
@@ -87,6 +91,7 @@ export function KubectlRunCard({ result }: { result: KubectlRunResult }) {
           {result.why && <div style={{ marginTop: 3, fontSize: 11.5, color: 'var(--color-text-secondary)' }}>{result.why}</div>}
         </div>
         <ChipView size="xs" label={status.label} color={status.color} />
+        {action}
         <IconButtonView
           size="sm"
           tooltip={copied ? 'Copied' : 'Copy command'}

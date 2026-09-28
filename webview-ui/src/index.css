@@ -1233,6 +1233,16 @@ button[title="Copied!"] > svg polyline {
   }
 }
 
+/* ─── dk8s views, inside the chat ───
+   The chat library resets padding and margin on everything under
+   `.ce-chat-root`, unlayered — which beats every Tailwind spacing class
+   (those sit in a layer). So the fields box and the payload tree drawn in a
+   Daakia AI card lost all their padding. Not restated here: `revert-layer`
+   hands the two properties back to the layers, so the views look exactly as
+   they do on the Logs tab and follow it when it changes. */
+.ce-chat-root .dk-embed,
+.ce-chat-root .dk-embed * { padding: revert-layer; margin: revert-layer; }
+
 /* ─── A Logs row's copy-link button ───
    Always laid out, so the row never reflows; shown on the row under the
    pointer at once (no fade — it moves with the pointer), and kept on the row

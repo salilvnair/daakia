@@ -132,6 +132,18 @@ export type Plan =
   | { run: true; args: string[]; verb: string }
   | { run: false; verb: string; refused: string; proposal: boolean; display: string[] };
 
+/**
+ * A suggested command's `--context`, dropped when it names the context on
+ * screen — the one it would be pinned to anyway. Any other context stays, and
+ * `planKubectl` refuses it: Run never reaches a cluster the user is not
+ * looking at.
+ */
+export function dropOwnContext(command: string, context: string): string {
+  const esc = context.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return command.trim().replace(/^\$\s+/, '')
+    .replace(new RegExp(`\\s--context(?:=|\\s+)(['"]?)${esc}\\1(?=\\s|$)`, 'g'), '');
+}
+
 /** Decide what, if anything, runs — and with which context and namespace. */
 export function planKubectl(command: string, scope: KubectlScope): Plan {
   const tokens = tokenize(command.trim().replace(/^kubectl\s+/, ''));
