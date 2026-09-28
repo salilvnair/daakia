@@ -72,6 +72,9 @@ function TreeNode({ keyName, value, depth, maxInitialDepth, path, expandedPaths,
   if (!isExpandable) {
     return (
       <div className="flex items-start gap-1" style={{ paddingLeft: `${depth * 14}px` }}>
+        {/* The chevron's slot, empty: without it a leaf's key started left of the
+            brace it sits under, instead of one step in from it. */}
+        <span className="w-3 flex-shrink-0" />
         {keyName !== undefined && (
           <span className="text-[var(--color-text-secondary)] flex-shrink-0">{keyName}:</span>
         )}

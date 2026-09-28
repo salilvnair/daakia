@@ -112,6 +112,9 @@ export function LogPayloadView({ payload, mode, depth, hideSecrets, keepRaw = tr
           size="xs"
           variant="rounded"
           density="compact"
+          /* Compact is 26px; this header's buttons are 20 ("Show hidden"),
+             and a switch taller than its neighbours reads as the heavier control. */
+          style={{ height: 20 }}
           accentColor={ACCENT}
           value={shown}
           onChange={v => setOwnMode(v as Mode)}

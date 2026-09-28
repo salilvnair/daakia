@@ -24,8 +24,8 @@
  * works the same either way.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { IconSize, ModalView, ButtonView, CheckboxView, PopoverView, AvatarView, ChipView } from '@salilvnair/dui';
-import { DownloadIcon, ChevronDownIcon } from '../../icons';
+import { IconSize, ModalView, ButtonView, CheckboxView, PopoverView, AvatarView, ChipView, SplitPanelView } from '@salilvnair/dui';
+import { DownloadIcon, ChevronDownIcon, SidebarRightIcon } from '../../icons';
 import { podHue, podInitials } from './pod-hue';
 import { downloadMaxMb, LOG_DOWNLOAD_MAX_KEY } from './log-settings';
 import type { PodGroup } from '../../store/dk8s-search-store';
@@ -39,7 +39,7 @@ import {
   ServerIcon, ClockIcon, NetworkIcon, ColumnsIcon,
 } from '../../icons';
 import { logLineSettings } from './log-settings';
-import { useUiStateStore } from '../../store/ui-state-store';
+import { useUiStateStore, usePersistedPref } from '../../store/ui-state-store';
 import { LogViewer } from './LogViewer';
 import { LogSourceProvider, type LogSource } from './log-source';
 import { useResultTabStore, type SearchedPod } from '../../store/dk8s-result-tab-store';
@@ -731,7 +731,37 @@ function OpenWindow({ line, searched, query }: { line?: ResultLine; searched: Se
   );
 }
 
+/** The fields panel's floor: the longest field name and a value beside it, the left rail's own minimum. */
+const FIELDS_MIN = 260;
+
+/**
+ * The right panel's switch, drawn like the left panel's: the same size, the
+ * same pressed look — the two panels are one idea on two sides of the lines.
+ */
+function FieldsRailToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={open ? 'Hide the fields panel' : 'Show the fields panel'}
+      aria-pressed={open}
+      className="flex items-center justify-center shrink-0 border-none cursor-pointer"
+      style={{
+        width: 30, height: 26, borderRadius: 6, marginLeft: 'auto', alignSelf: 'center',
+        color: open ? ACCENT : 'var(--color-text-muted)',
+        background: open ? 'color-mix(in srgb, var(--color-dk8s) 16%, transparent)' : 'transparent',
+        border: open ? '1px solid color-mix(in srgb, var(--color-dk8s) 34%, transparent)' : '1px solid transparent',
+      }}
+    >
+      <SidebarRightIcon size={15} />
+    </button>
+  );
+}
+
 export function SearchResultsPage() {
+  /* Open or closed, kept — the width is the split's own. */
+  const [fieldsRail, setFieldsRail] = usePersistedPref<'open' | 'closed'>('dk8s.search.fieldsRail', 'open', ['open', 'closed']);
+  const fieldsOpen = fieldsRail === 'open';
   const {
     query, groups, at, scanned, searched,
     tab, setTab, filter, setFilter, levels, setLevels, contextLines,
@@ -1017,16 +1047,35 @@ export function SearchResultsPage() {
                 ))}
               </span>
             )}
+            {tab === 'logs' && (
+              <FieldsRailToggle open={fieldsOpen} onToggle={() => setFieldsRail(fieldsOpen ? 'closed' : 'open')} />
+            )}
           </div>
 
           <div className="flex-1 min-h-0 flex">
             {tab === 'overview' ? <SearchOverview /> : (
-              <>
-                <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+              /*
+                The lines and the fields panel, split the way the Logs tab splits
+                its left rail: dragged to a width, collapsed rather than unmounted
+                so it opens again at that width, and switched from the top.
+              */
+              <SplitPanelView
+                direction="horizontal"
+                defaultSplit={76}
+                minFirst={420}
+                minSecond={FIELDS_MIN}
+                collapsed={!fieldsOpen}
+                collapsedSide="second"
+                accentColor={ACCENT}
+                style={{ flex: 1, minWidth: 0, minHeight: 0 }}
+                first={
+                <div className="flex-1 min-w-0 min-h-0 flex flex-col h-full">
                   <LogSourceProvider value={source}>
                     <LogViewer />
                   </LogSourceProvider>
                 </div>
+                }
+                second={
                 <HitFieldsRail
                   line={selectedLine}
                   lines={allLines}
@@ -1043,7 +1092,8 @@ export function SearchResultsPage() {
                   onToggleChart={toggleChart}
                   onOpenView={openView}
                 />
-              </>
+                }
+              />
             )}
           </div>
         </div>

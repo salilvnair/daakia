@@ -1329,10 +1329,13 @@ export function LogViewer() {
   const linkTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(linkTimer.current), []);
   const lineTarget = (line: MatchedLine) => {
-    const own = line as MatchedLine & { pod?: string; namespace?: string; context?: string };
+    /* A search result's line names its cluster `cluster`: its `context` is the
+       log view's yes/no for a neighbour line, and read as a cluster name it
+       built links to a cluster called "true". */
+    const own = line as MatchedLine & { pod?: string; namespace?: string; cluster?: string };
     const pod = own.pod ?? detail?.name;
     const namespace = own.namespace ?? detail?.namespace;
-    const context = own.context ?? detail?.context;
+    const context = own.cluster ?? detail?.context;
     return pod && namespace && context ? { pod, namespace, context } : undefined;
   };
   const rowLink = (line: MatchedLine) => (
@@ -1887,8 +1890,14 @@ export function LogViewer() {
           One wrapping unit, because as siblings of the spacer these wrapped
           individually and a narrow panel flung Download and Analyze onto their
           own row at the far left — reading as a second, broken toolbar.
+
+          Always the second row, the full width of it — not only when the panel
+          is narrow enough to push it there. On a wide screen it used to ride
+          on the filter's row and squeeze the filter; now the first row is what
+          narrows the lines (levels, the filter) and the second is how they are
+          fetched and drawn, with what to do with them at its right end.
         */}
-        <div className="flex items-center gap-2 flex-wrap justify-end">
+        <div className="flex items-center gap-2 flex-wrap" style={{ flexBasis: '100%' }}>
         {/* Modes, not actions, so they are icon toggles rather than labelled
             buttons — and they sit apart from the controls that fetch. */}
         <IconButton on={logWrap} onClick={() => chooseWrap(!logWrap)}
@@ -2041,6 +2050,8 @@ export function LogViewer() {
           }}
         />
 
+        {/* What to do with what came back sits at the right end of the row. */}
+        <span className="flex-1" />
         <Sep />
 
         {/* Following is a decision, not a default. A pod doing hundreds of
@@ -2073,6 +2084,7 @@ export function LogViewer() {
           </>
         )}
 
+        {isSnapshot && <span className="flex-1" />}
         <Sep />
 
         {/* Icon only. A quiet outlined button next to Analyze's filled one

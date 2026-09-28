@@ -25,7 +25,7 @@
  */
 import { ribbonBands } from './log-view';
 import type { LogLevel } from '../../store/k8s-store';
-import { GUTTER_CALM, GUTTER_WARN, RED } from './follow-tone';
+import { GUTTER_INFO, GUTTER_WARN, RED } from './follow-tone';
 
 /** The thinnest a band is ever drawn. Three pixels is the least that reads as a colour. */
 export const BAND_FLOOR_PX = 3;
@@ -52,12 +52,12 @@ export const MARKER_EDGE = 2;
 /**
  * A block's colour, by the worst level in it.
  *
- * Solid colours rather than the level colours faded: a calm stretch is a dim
- * green-teal, a warning a dim amber, and an error full red, so the one thing
+ * Solid colours rather than the level colours faded: a calm stretch is the
+ * INFO blue, a warning a dim amber, and an error full red, so the one thing
  * the gutter is for — where the trouble is — is the only loud thing in it.
  */
 export function blockColor(worst: LogLevel): string {
-  return worst === 'error' ? RED : worst === 'warn' ? GUTTER_WARN : GUTTER_CALM;
+  return worst === 'error' ? RED : worst === 'warn' ? GUTTER_WARN : GUTTER_INFO;
 }
 
 /**
@@ -81,8 +81,8 @@ export function bandFill(b: { count: number; events?: number; errors?: number; w
   if (e + w > 1) { const k = 1 / (e + w); e *= k; w *= k; }
   const ep = Math.round(e * 100);
   const wp = Math.round((e + w) * 100);
-  if (ep === 0 && wp === 0) return GUTTER_CALM;
-  return `linear-gradient(to right, ${RED} 0 ${ep}%, ${GUTTER_WARN} ${ep}% ${wp}%, ${GUTTER_CALM} ${wp}% 100%)`;
+  if (ep === 0 && wp === 0) return GUTTER_INFO;
+  return `linear-gradient(to right, ${RED} 0 ${ep}%, ${GUTTER_WARN} ${ep}% ${wp}%, ${GUTTER_INFO} ${wp}% 100%)`;
 }
 
 /** A compact tick's colour: an error is red, a warning the gutter's amber. */

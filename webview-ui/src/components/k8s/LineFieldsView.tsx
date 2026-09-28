@@ -122,7 +122,8 @@ function FieldRow({ field, count, revealed, onReveal, onFollow, onSearchEverywhe
   };
 
   return (
-    <div className="flex items-center gap-2 px-2.5 py-1.5"
+    /* One step in from the "fields in this line" label above — the tree's step. */
+    <div className="flex items-center gap-2 pl-6 pr-2.5 py-1.5"
          style={{ borderTop: '1px solid color-mix(in srgb, var(--color-surface-border) 60%, transparent)' }}>
       <span className="text-[11px] font-mono shrink-0" style={{ color: 'var(--color-info, #9cdcfe)', width: 132 }}>
         {field.key}

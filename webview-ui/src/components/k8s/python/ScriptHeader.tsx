@@ -151,7 +151,9 @@ export function ScriptMenu({ scriptId, size = 'md' }: { scriptId: string; size?:
           {
             id: 'save-as', label: 'Save as…',
             icon: <CopyIcon size={IconSize.action} />, iconColor: 'var(--color-ctx-duplicate)',
-            onClick: () => setAsName(name.replace(/\.py$/, '-copy.py')),
+            /* The menu closes itself after this; the form below is its own
+               state, so it does not close with it. */
+            onClick: () => { setAsName(name.replace(/\.py$/, '-copy.py')); setOpen(false); },
           },
           { id: 'sep', label: '', separator: true },
           {
@@ -162,7 +164,7 @@ export function ScriptMenu({ scriptId, size = 'md' }: { scriptId: string; size?:
         ]}
       />
       {/* Save as needs a name, so it is a small form of its own. */}
-      <PopoverView open={open && asName !== undefined} onClose={() => { setOpen(false); setAsName(undefined); }}
+      <PopoverView open={asName !== undefined} onClose={() => setAsName(undefined)}
                    anchorEl={anchor.current} placement="bottom" borderRadius={10} className="dk-pop-flush">
         <div className="flex flex-col" style={{ width: 260 }}>
           {asName !== undefined && (
@@ -171,14 +173,14 @@ export function ScriptMenu({ scriptId, size = 'md' }: { scriptId: string; size?:
               <TextInputView autoFocus size="md" value={asName} aria-label="New script name"
                              onChange={(e) => setAsName(e.target.value)}
                              onKeyDown={(e) => {
-                               if (e.key === 'Enter' && asName.trim()) { saveAs(scriptId, asName); setOpen(false); }
+                               if (e.key === 'Enter' && asName.trim()) { saveAs(scriptId, asName); setAsName(undefined); }
                              }}
                              inputStyle={{ fontFamily: 'var(--font-mono, ui-monospace, monospace)' }} />
               <div className="flex justify-end gap-1.5">
-                <ButtonView size="sm" variant="secondary" onClick={() => setAsName(undefined)}>Back</ButtonView>
+                <ButtonView size="sm" variant="secondary" onClick={() => { setAsName(undefined); setOpen(true); }}>Back</ButtonView>
                 <ButtonView size="sm" variant="secondary" accentColor="var(--color-success)" color="var(--color-success)"
                             disabled={!asName.trim()}
-                            onClick={() => { saveAs(scriptId, asName); setOpen(false); }}>
+                            onClick={() => { saveAs(scriptId, asName); setAsName(undefined); }}>
                   Save copy
                 </ButtonView>
               </div>

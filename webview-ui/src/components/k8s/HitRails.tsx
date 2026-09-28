@@ -243,7 +243,9 @@ export function HitFieldsRail({
 
   return (
     <div className="flex flex-col h-full min-h-0"
-         style={{ width: 320, flexShrink: 0, borderLeft: '1px solid var(--color-surface-border)', background: 'var(--color-surface)' }}>
+         /* As wide as the split pane it sits in — the divider is its edge, and it
+            takes whatever width it was dragged to. */
+         style={{ width: '100%', background: 'var(--color-elevated, var(--color-surface))' }}>
       <div className="shrink-0" style={{ padding: '12px 14px 8px' }}>
         <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-text-primary)' }}>Fields in this line</div>
         <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 3, lineHeight: 1.5 }}>
