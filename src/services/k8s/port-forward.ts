@@ -166,12 +166,23 @@ export interface ForwardPort {
 export interface ForwardSpec {
   context: string;
   namespace: string;
+  /** The pod forwarded to — or, for a Service forward, the one it last landed on. */
   pod: string;
   workload?: { kind: string; name: string };
+  /** Forward the Service rather than the pod: `svc/<name>`, remote ports being the Service's own. */
+  service?: string;
   ports: ForwardPort[];
+  /** When the pod goes away, move to the workload's current pod. Default on. */
+  follow?: boolean;
+  /** How many times to reconnect after the tunnel drops. 0 turns it off. Default 5. */
+  reconnectTries?: number;
+  /** Stop after this long with no connection; null for never. Default 30 minutes. */
+  idleMs?: number | null;
+  /** Contexts treated as production, besides `*prod*`. */
+  prodPatterns?: string[];
 }
 
-export type ForwardState = 'connecting' | 'forwarding' | 'stopped' | 'failed';
+export type ForwardState = 'connecting' | 'forwarding' | 'reconnecting' | 'stopped' | 'failed';
 export type StopReason = 'you' | 'idle' | 'limit' | 'closed' | 'exit';
 
 export interface ForwardInfo extends ForwardSpec {
@@ -194,30 +205,58 @@ export interface ForwardInfo extends ForwardSpec {
   command: string;
   /** The last per-connection error — nothing listening in the pod, say. Not fatal. */
   lastConnError?: string;
+  /** Which reconnect this is, while reconnecting. */
+  attempt?: number;
+  /** When the next try goes out. */
+  retryAt?: number;
+  /** How many times it has come back. */
+  reconnects: number;
+  /** The pod it was on before the workload replaced it. */
+  followedFrom?: string;
+  /** Why it is reconnecting. */
+  dropReason?: string;
 }
 
 export interface ForwardDeps {
   spawn: (args: string[]) => Promise<ChildProcess>;
   now?: () => number;
-  /** Stop after this long with no connection. */
+  /** The default idle limit, when a forward does not say. */
   idleMs?: number;
   /** A production forward's hard limit. */
   prodLimitMs?: number;
   /** Give up when kubectl has not said "Forwarding from" by then. */
   connectTimeoutMs?: number;
-  prodPatterns?: () => string[];
+  /**
+   * Which pod to forward to now: the same one while it is running, else — when
+   * the forward follows its workload — the workload's newest ready pod.
+   * Undefined when there is none yet.
+   */
+  resolvePod?: (f: ForwardInfo) => Promise<string | undefined>;
+  /** For a Service forward: the pod it landed on. */
+  landedPod?: (f: ForwardInfo) => Promise<string | undefined>;
+  /** Backoff between reconnects, in ms. */
+  backoff?: number[];
+  /** Timers, injectable for tests. */
+  setTimer?: (fn: () => void, ms: number) => unknown;
+  clearTimer?: (t: unknown) => void;
 }
 
 export const IDLE_MS = 30 * 60_000;
 export const PROD_LIMIT_MS = 60 * 60_000;
+export const RECONNECT_TRIES = 5;
+export const BACKOFF_MS = [1_000, 2_000, 5_000, 10_000, 30_000];
 const CONNECT_TIMEOUT_MS = 20_000;
 /** Finished forwards kept, so "Start again" has something to start. */
 const HISTORY = 12;
 
 export function forwardArgs(spec: ForwardSpec): string[] {
-  return ['--context', spec.context, '-n', spec.namespace, 'port-forward', `pod/${spec.pod}`,
+  return ['--context', spec.context, '-n', spec.namespace, 'port-forward',
+    spec.service ? `svc/${spec.service}` : `pod/${spec.pod}`,
     ...spec.ports.map(p => `${p.local}:${p.remote}`), '--address', '127.0.0.1'];
 }
+
+const RUNNING: ForwardState[] = ['connecting', 'forwarding', 'reconnecting'];
+export const isRunning = (f: { state: ForwardState }) => RUNNING.includes(f.state);
 
 export interface ForwardManager {
   start: (spec: ForwardSpec) => ForwardInfo;
@@ -234,57 +273,106 @@ export interface ForwardManager {
 
 export function createForwardManager(deps: ForwardDeps): ForwardManager {
   const now = deps.now ?? Date.now;
-  const idleMs = deps.idleMs ?? IDLE_MS;
   const prodLimitMs = deps.prodLimitMs ?? PROD_LIMIT_MS;
   const connectMs = deps.connectTimeoutMs ?? CONNECT_TIMEOUT_MS;
+  const backoff = deps.backoff ?? BACKOFF_MS;
+  const setTimer = deps.setTimer ?? ((fn: () => void, ms: number) => { const t = setTimeout(fn, ms); (t as { unref?: () => void }).unref?.(); return t; });
+  const clearTimer = deps.clearTimer ?? ((t: unknown) => clearTimeout(t as ReturnType<typeof setTimeout>));
   const forwards = new Map<string, ForwardInfo>();
   const procs = new Map<string, ChildProcess>();
+  const retries = new Map<string, unknown>();
+  /** Which launch of a forward is current — a late event from an old kubectl is ignored. */
+  const generation = new Map<string, number>();
   const listeners = new Set<() => void>();
   let seq = 0;
 
   const changed = () => { for (const fn of listeners) { try { fn(); } catch { /* a listener's own problem */ } } };
 
   function trimHistory() {
-    const done = [...forwards.values()].filter(f => f.state === 'stopped' || f.state === 'failed')
+    const done = [...forwards.values()].filter(f => !isRunning(f))
       .sort((a, b) => (b.stoppedAt ?? 0) - (a.stoppedAt ?? 0));
     for (const f of done.slice(HISTORY)) forwards.delete(f.id);
   }
 
-  function finish(id: string, state: 'stopped' | 'failed', patch: Partial<ForwardInfo>) {
-    const f = forwards.get(id); if (!f) return;
-    if (f.state === 'stopped' || f.state === 'failed') return;
-    Object.assign(f, patch, { state, stoppedAt: now() });
+  function killProc(id: string) {
     const p = procs.get(id); procs.delete(id);
     if (p && p.exitCode === null) { try { p.kill(); } catch { /* already gone */ } }
+  }
+
+  function finish(id: string, state: 'stopped' | 'failed', patch: Partial<ForwardInfo>) {
+    const f = forwards.get(id); if (!f || !isRunning(f)) return;
+    Object.assign(f, patch, { state, stoppedAt: now(), retryAt: undefined });
+    const r = retries.get(id); if (r !== undefined) { clearTimer(r); retries.delete(id); }
+    generation.set(id, (generation.get(id) ?? 0) + 1);
+    killProc(id);
     trimHistory();
     changed();
   }
 
-  function start(spec: ForwardSpec): ForwardInfo {
-    const id = `pf-${++seq}-${now().toString(36)}`;
-    const prod = isProdContext(spec.context, deps.prodPatterns?.() ?? DEFAULT_PROD_PATTERNS);
-    const args = forwardArgs(spec);
-    const info: ForwardInfo = {
-      ...spec, ports: spec.ports.map(p => ({ ...p })), id, address: '127.0.0.1', state: 'connecting', prod,
-      startedAt: now(), connections: 0, command: ['kubectl', ...args].join(' '),
-      stopsAt: prod ? now() + prodLimitMs : undefined,
-    };
-    forwards.set(id, info);
+  /**
+   * The tunnel dropped. Come back after a pause, on the same local ports —
+   * unless reconnecting is off, or the tries are used up.
+   */
+  function dropped(id: string, why: string) {
+    const f = forwards.get(id); if (!f || !isRunning(f)) return;
+    generation.set(id, (generation.get(id) ?? 0) + 1);
+    killProc(id);
+    const tries = f.reconnectTries ?? RECONNECT_TRIES;
+    const attempt = (f.state === 'reconnecting' ? f.attempt ?? 0 : 0) + 1;
+    if (attempt > tries) {
+      finish(id, 'failed', { error: tries ? `${why} Gave up after ${tries} tries.` : why });
+      return;
+    }
+    const wait = backoff[Math.min(attempt - 1, backoff.length - 1)];
+    Object.assign(f, { state: 'reconnecting', attempt, retryAt: now() + wait, dropReason: why });
+    retries.set(id, setTimer(() => { retries.delete(id); void launch(id); }, wait));
+    changed();
+  }
+
+  async function launch(id: string): Promise<void> {
+    let f = forwards.get(id); if (!f || !isRunning(f)) return;
+    const gen = (generation.get(id) ?? 0) + 1;
+    generation.set(id, gen);
+    const current = () => forwards.get(id) && generation.get(id) === gen && isRunning(forwards.get(id)!);
+
+    /* Which pod, now: the same one while it runs, else the workload's current one. */
+    if (!f.service && deps.resolvePod && (f.state === 'reconnecting' || (f.follow !== false && f.workload))) {
+      let pod: string | undefined;
+      try { pod = await deps.resolvePod(f); } catch { pod = undefined; }
+      if (!current()) return;
+      f = forwards.get(id)!;
+      if (!pod) {
+        dropped(id, f.follow !== false && f.workload
+          ? `No running pod of ${f.workload.name} to forward to.`
+          : `${f.pod} is gone.`);
+        return;
+      }
+      if (pod !== f.pod) { f.followedFrom = f.pod; f.pod = pod; }
+    }
+    f.command = ['kubectl', ...forwardArgs(f)].join(' ');
     changed();
 
     const bound = new Set<number>();
     let stderrTail = '';
     const onLine = (line: string) => {
-      if (!line.trim()) return;
+      if (!line.trim() || !current()) return;
       const r = parseForwardLine(line);
-      const f = forwards.get(id); if (!f) return;
+      const cur = forwards.get(id)!;
       switch (r.kind) {
         case 'bound':
           bound.add(r.local);
-          if (f.state === 'connecting' && f.ports.every(p => bound.has(p.local))) { f.state = 'forwarding'; f.upAt = now(); changed(); }
+          if (cur.state !== 'forwarding' && cur.ports.every(p => bound.has(p.local))) {
+            if (cur.state === 'reconnecting') cur.reconnects++;
+            /* A new tunnel starts clean: the last one's refused connection is not this one's. */
+            Object.assign(cur, { state: 'forwarding', upAt: cur.upAt ?? now(), attempt: undefined, retryAt: undefined, dropReason: undefined, lastConnError: undefined });
+            changed();
+            if (cur.service && deps.landedPod) {
+              void deps.landedPod(cur).then(p => { if (p && current() && p !== cur.pod) { cur.pod = p; changed(); } }).catch(() => undefined);
+            }
+          }
           break;
         case 'conn':
-          f.connections++; f.lastActivity = now(); changed();
+          cur.connections++; cur.lastActivity = now(); changed();
           break;
         case 'portTaken':
           finish(id, 'failed', { error: r.port ? `Local port ${r.port} is already in use on this machine.` : 'A local port is already in use on this machine.' });
@@ -293,13 +381,15 @@ export function createForwardManager(deps: ForwardDeps): ForwardManager {
           finish(id, 'failed', { error: 'Not allowed: this account cannot create pods/portforward in this namespace.' });
           break;
         case 'notRunning':
-          finish(id, 'failed', { error: 'The pod is not running, so there is nothing to forward to.' });
+          /* On a first start there is nothing to wait for; mid-life it is a restart in progress. */
+          if (cur.state === 'connecting' && !cur.reconnects) finish(id, 'failed', { error: 'The pod is not running, so there is nothing to forward to.' });
+          else dropped(id, 'The pod is not running right now.');
           break;
         case 'lost':
-          finish(id, 'failed', { error: 'Lost the connection to the pod — it may have restarted or been replaced.' });
+          dropped(id, 'Lost the connection to the pod.');
           break;
         case 'connError':
-          f.lastConnError = r.text.slice(0, 300); f.lastActivity = now(); changed();
+          cur.lastConnError = r.text.slice(0, 300); cur.lastActivity = now(); changed();
           break;
         default:
           stderrTail = (stderrTail + '\n' + r.text).slice(-600);
@@ -314,31 +404,50 @@ export function createForwardManager(deps: ForwardDeps): ForwardManager {
       };
     };
 
-    deps.spawn(args).then(proc => {
-      const f = forwards.get(id);
-      if (!f || f.state === 'stopped' || f.state === 'failed') { try { proc.kill(); } catch { /* gone */ } return; }
-      procs.set(id, proc);
-      proc.stdout?.on('data', reader());
-      proc.stderr?.on('data', reader());
-      proc.on('error', err => finish(id, 'failed', { error: `kubectl could not start: ${err.message}` }));
-      proc.on('exit', code => {
-        const cur = forwards.get(id);
-        if (!cur || cur.state === 'stopped' || cur.state === 'failed') return;
-        finish(id, 'failed', { stopReason: 'exit', error: stderrTail.trim().split('\n').pop() || `kubectl exited (${code ?? 'signal'}).` });
-      });
-    }).catch(err => finish(id, 'failed', { error: `kubectl could not start: ${(err as Error).message}` }));
+    let proc: ChildProcess;
+    try { proc = await deps.spawn(forwardArgs(f)); } catch (err) {
+      finish(id, 'failed', { error: `kubectl could not start: ${(err as Error).message}` });
+      return;
+    }
+    if (!current()) { try { proc.kill(); } catch { /* gone */ } return; }
+    procs.set(id, proc);
+    proc.stdout?.on('data', reader());
+    proc.stderr?.on('data', reader());
+    proc.on('error', err => { if (current()) finish(id, 'failed', { error: `kubectl could not start: ${err.message}` }); });
+    proc.on('exit', code => {
+      if (!current()) return;
+      const cur = forwards.get(id)!;
+      const said = stderrTail.trim().split('\n').pop();
+      /* kubectl leaving a tunnel that was working is a drop; leaving before it ever worked is a failure. */
+      if (cur.state === 'forwarding' || cur.reconnects > 0 || cur.state === 'reconnecting') dropped(id, said || 'kubectl stopped.');
+      else finish(id, 'failed', { stopReason: 'exit', error: said || `kubectl exited (${code ?? 'signal'}).` });
+    });
+  }
 
+  function start(spec: ForwardSpec): ForwardInfo {
+    const id = `pf-${++seq}-${now().toString(36)}`;
+    const prod = isProdContext(spec.context, [...DEFAULT_PROD_PATTERNS, ...(spec.prodPatterns ?? [])]);
+    const info: ForwardInfo = {
+      ...spec, ports: spec.ports.map(p => ({ ...p })), id, address: '127.0.0.1', state: 'connecting', prod,
+      startedAt: now(), connections: 0, reconnects: 0, command: ['kubectl', ...forwardArgs(spec)].join(' '),
+      stopsAt: prod ? now() + prodLimitMs : undefined,
+      idleMs: spec.idleMs === undefined ? deps.idleMs ?? IDLE_MS : spec.idleMs,
+    };
+    forwards.set(id, info);
+    changed();
+    void launch(id);
     return info;
   }
 
   function tick() {
     const t = now();
     for (const f of forwards.values()) {
-      if (f.state === 'connecting' && t - f.startedAt > connectMs) {
+      if (f.state === 'connecting' && !f.reconnects && t - f.startedAt > connectMs) {
         finish(f.id, 'failed', { error: 'kubectl did not start forwarding within 20 seconds.' });
-      } else if (f.state === 'forwarding') {
-        if (f.stopsAt && t >= f.stopsAt) finish(f.id, 'stopped', { stopReason: 'limit' });
-        else if (t - (f.lastActivity ?? f.upAt ?? f.startedAt) >= idleMs) finish(f.id, 'stopped', { stopReason: 'idle' });
+      } else if (f.stopsAt && t >= f.stopsAt && isRunning(f)) {
+        finish(f.id, 'stopped', { stopReason: 'limit' });
+      } else if (f.state === 'forwarding' && f.idleMs && t - (f.lastActivity ?? f.upAt ?? f.startedAt) >= f.idleMs) {
+        finish(f.id, 'stopped', { stopReason: 'idle' });
       }
     }
   }
@@ -348,14 +457,14 @@ export function createForwardManager(deps: ForwardDeps): ForwardManager {
   return {
     start,
     stop: (id, reason = 'you') => finish(id, 'stopped', { stopReason: reason }),
-    stopAll: (reason = 'you') => { for (const f of [...forwards.values()]) if (f.state === 'connecting' || f.state === 'forwarding') finish(f.id, 'stopped', { stopReason: reason }); },
-    forget: id => { const f = forwards.get(id); if (f && (f.state === 'stopped' || f.state === 'failed')) { forwards.delete(id); changed(); } },
+    stopAll: (reason = 'you') => { for (const f of [...forwards.values()]) if (isRunning(f)) finish(f.id, 'stopped', { stopReason: reason }); },
+    forget: id => { const f = forwards.get(id); if (f && !isRunning(f)) { forwards.delete(id); changed(); } },
     list: () => [...forwards.values()].map(f => ({ ...f, ports: f.ports.map(p => ({ ...p })) })),
     onChange: fn => { listeners.add(fn); return () => listeners.delete(fn); },
     tick,
     dispose: () => {
       clearInterval(timer);
-      for (const f of forwards.values()) if (f.state === 'connecting' || f.state === 'forwarding') finish(f.id, 'stopped', { stopReason: 'closed' });
+      for (const f of forwards.values()) if (isRunning(f)) finish(f.id, 'stopped', { stopReason: 'closed' });
       listeners.clear();
     },
   };

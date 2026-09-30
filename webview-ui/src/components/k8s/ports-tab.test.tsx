@@ -72,7 +72,8 @@ describe('Pod → Ports', () => {
     expect(text).toContain('HTTP API');
     expect(text).toContain('actuator');
     expect(text).toContain('svc/zp-backend');
-    expect(text).toContain('same port as above');
+    /* The Service has its own Forward — kubectl picks the pod behind it. */
+    expect([...document.querySelectorAll('button')].filter(b => b.textContent?.trim() === 'Forward')).toHaveLength(3);
   });
 
   it('starts straight away when the local port is free and the cluster is not production', async () => {
@@ -110,5 +111,72 @@ describe('Pod → Ports', () => {
     expect(posted.some(m => m.type === 'dk8s:pf:start')).toBe(false);
     act(() => { byText('Forward to production')!.click(); });
     expect(last('dk8s:pf:start')).toBeTruthy();
+  });
+});
+
+describe('phase 2 — Services, replicas, sets, settings, restore', () => {
+  it('forwards through the Service when asked', async () => {
+    await mount('kind-dk8s-lab');
+    const buttons = [...document.querySelectorAll('button')].filter(b => b.textContent?.trim() === 'Forward');
+    act(() => { buttons[2].click(); });
+    const check = last('dk8s:pf:check');
+    await reply({ type: 'dk8s:pf:check', reqId: check.reqId, results: [{ port: 8080, free: true, suggestion: 8080 }] });
+    await flush();
+    expect(last('dk8s:pf:start')).toMatchObject({ spec: { service: 'zp-backend', ports: [{ remote: 80 }] } });
+  });
+
+  it('forwards each replica of the workload on its own local port', async () => {
+    const other = { ...pod('kind-dk8s-lab'), name: 'zp-backend-79879f65f7-zzzzz', uid: 'u2' };
+    useK8sStore.setState({ pods: [pod('kind-dk8s-lab'), other] as PodSummary[] });
+    await mount('kind-dk8s-lab');
+    expect(document.body.textContent).toContain('has 2 replicas');
+    act(() => { byText('Each replica')!.click(); });
+    const check = last('dk8s:pf:check');
+    expect(check.ports).toEqual([8080, 8081]);
+    await reply({ type: 'dk8s:pf:check', reqId: check.reqId, results: [{ port: 8080, free: true, suggestion: 8080 }, { port: 8081, free: true, suggestion: 8081 }] });
+    await flush();
+    const starts = posted.filter(m => m.type === 'dk8s:pf:start').map(m => (m.spec as { pod: string; ports: { local: number }[] }));
+    expect(starts.map(s => [s.pod, s.ports[0].local])).toEqual([
+      ['zp-backend-79879f65f7-6f5zb', 8080], ['zp-backend-79879f65f7-zzzzz', 8081],
+    ]);
+    useK8sStore.setState({ pods: [] });
+  });
+
+  it('carries the Settings into every start', async () => {
+    const { useUiStateStore } = await import('../../store/ui-state-store');
+    useUiStateStore.getState().setPref('dk8s.pf.tries', '3');
+    useUiStateStore.getState().setPref('dk8s.pf.follow', 'off');
+    useUiStateStore.getState().setPref('dk8s.pf.idleMinutes', '0');
+    posted.length = 0;
+    usePortForwardStore.getState().start({ context: 'c', namespace: 'n', pod: 'p', ports: [{ local: 1, remote: 1 }] });
+    expect(last('dk8s:pf:start')).toMatchObject({ spec: { reconnectTries: 3, follow: false, idleMs: null } });
+  });
+});
+
+describe('saved sets and the restore offer', () => {
+  it('saves a forward into a new set, then into the same one without doubling it', async () => {
+    const { addToSet, parseSets, PF_SETS_PREF } = await import('./port-forward-prefs');
+    const { useUiStateStore } = await import('../../store/ui-state-store');
+    useUiStateStore.getState().setPref(PF_SETS_PREF, '[]');
+    const item = { context: 'c', namespace: 'n', pod: 'pg-1', workload: { kind: 'Deployment', name: 'postgres' }, ports: [{ local: 15432, remote: 5432 }] };
+    const [set] = addToSet(item, { name: 'backend local dev' });
+    addToSet({ ...item, pod: 'pg-2' }, { id: set.id });
+    const sets = parseSets(useUiStateStore.getState().prefs[PF_SETS_PREF]);
+    expect(sets).toHaveLength(1);
+    expect(sets[0]).toMatchObject({ name: 'backend local dev', items: [{ pod: 'pg-2' }] });
+  });
+
+  it('offers the forwards that were open last time — never production, and not when some survived', async () => {
+    const { useUiStateStore } = await import('../../store/ui-state-store');
+    const lastOpen = [{ context: 'kind-dk8s-lab', namespace: 'n', pod: 'p', ports: [{ local: 8080, remote: 8080 }] }];
+    useUiStateStore.getState().setPref('dk8s.pf.lastOpen', JSON.stringify(lastOpen));
+    usePortForwardStore.setState({ loaded: false, restorable: [] });
+    await reply({ type: 'dk8s:pf:list', forwards: [] });
+    expect(usePortForwardStore.getState().restorable).toHaveLength(1);
+
+    const upProd = { id: 'x', context: 'com-eastus-zp-prod', namespace: 'n', pod: 'q', state: 'forwarding', prod: true, ports: [{ local: 9, remote: 9 }], startedAt: 1, connections: 0, reconnects: 0 };
+    await reply({ type: 'dk8s:pf:list', forwards: [upProd] });
+    expect(usePortForwardStore.getState().restorable).toHaveLength(0);
+    expect(JSON.parse(useUiStateStore.getState().prefs['dk8s.pf.lastOpen'])).toEqual([]);
   });
 });

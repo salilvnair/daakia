@@ -13,7 +13,7 @@ import type { SidebarSection } from '../../sidebar/AppSidebar';
 import {
   SearchIcon, ChevronLeftIcon, ChevronRightIcon, PlusSquareIcon,
   FolderIcon, ClockIcon, LayersIcon, SettingsIcon, ServerIcon, SparkleIcon,
-  SunIcon, CpuIcon, AgentIcon, CodeBracketsIcon, FolderImportIcon,
+  SunIcon, CpuIcon, AgentIcon, CodeBracketsIcon, FolderImportIcon, PortForwardIcon,
   ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge,
   ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, BookOpenIcon,
   Dk8sIcon, StethoscopeIcon, RefreshIcon, LayoutGridIcon, TableIcon, IssueOpenedIcon,
@@ -79,6 +79,7 @@ const SETTINGS_SECTIONS: { id: string; label: string; icon: React.ReactNode; key
   { id: 'ai-audit', label: 'Settings: AI Audit', icon: <SparkleIcon size={15} />, keywords: ['audit log', 'ai calls', 'request', 'response'] },
   { id: 'devtools', label: 'Settings: Developer Tools', icon: <CodeBracketsIcon size={15} />, keywords: ['memory footprint', 'audit log', 'db explorer', 'debug snapshot'] },
   { id: 'power-features', label: 'Settings: Power Features', icon: <CodeBracketsIcon size={15} />, keywords: ['cookie manager', 'proxy', 'client certificates', 'api monitor', 'interceptor', 'response diff', 'bulk url tester', 'load tester'] },
+  { id: 'dk8s-port-forward', label: 'Settings: Port forwarding', icon: <PortForwardIcon size={15} />, keywords: ['port forward', 'tunnel', 'localhost', 'dk8s', 'reconnect', 'saved sets'] },
 ];
 
 /** REST's real Request Config sub-tabs — rest.subtab.<tabId> pref, verified in RequestPanel.tsx. */

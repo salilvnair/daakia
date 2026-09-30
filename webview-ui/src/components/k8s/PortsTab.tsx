@@ -11,15 +11,16 @@
  * port and the next free one; or what forwarding into production means.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { ModalView, SkeletonView } from '@salilvnair/dui';
+import { SkeletonView } from '@salilvnair/dui';
 import { useK8sStore } from '../../store/k8s-store';
 import {
   usePortForwardStore, forwardsFor, isUp, isProdContext, podPortsKey,
-  type PodPorts, type PortCheck, type ForwardPort, type PortRole,
+  type PodPorts, type ForwardPort, type PortRole,
 } from '../../store/dk8s-port-forward-store';
 import { ForwardCard } from './ForwardCard';
 import { PortForwardIcon } from '../../icons';
-import { PF, PfButton, StatePill, RoleChip, PfHeading, PfCheck, PfBar } from './pf-ui';
+import { PF, PfButton, StatePill, RoleChip, PfHeading, PfBar } from './pf-ui';
+import { useStartForwards } from './StartForwards';
 
 const portOf = (s: string) => { const n = Number(s); return Number.isInteger(n) && n >= 1 && n <= 65535 ? n : undefined; };
 
@@ -45,9 +46,6 @@ function LocalBox({ value, onChange, label }: { value: string; onChange: (v: str
   );
 }
 
-/** The start dialog's question: which ports, whether any local one is taken, whether it is production. */
-interface Pending { ports: ForwardPort[]; checks: PortCheck[]; prod: boolean }
-
 export function PortsTab() {
   const detail = useK8sStore(s => s.detail);
   const forwards = usePortForwardStore(s => s.forwards);
@@ -58,8 +56,8 @@ export function PortsTab() {
   const info = fresh ?? cached;
   const [locals, setLocals] = useState<Record<string, string>>({});
   const [another, setAnother] = useState<string>();
-  const [pending, setPending] = useState<Pending>();
-  const [busy, setBusy] = useState(false);
+  const { begin: startMany, busy, dialog } = useStartForwards();
+  const allPods = useK8sStore(s => s.pods);
 
   const podKey = detail ? `${detail.context}/${detail.namespace}/${detail.name}` : '';
   useEffect(() => { usePortForwardStore.getState().refresh(); }, []);
@@ -89,28 +87,21 @@ export function PortsTab() {
   const localFor = (remote: number) => locals[String(remote)] ?? String(forwarded.get(remote) ?? remote);
   const setLocal = (remote: number) => (v: string) => setLocals(l => ({ ...l, [String(remote)]: v }));
 
-  async function begin(ports: ForwardPort[]) {
-    if (!detail?.context || busy) return;
-    setBusy(true);
-    try {
-      const checks = await usePortForwardStore.getState().check(ports.map(p => p.local));
-      const taken = checks.filter(c => !c.free);
-      const adjusted = ports.map(p => {
-        const c = checks.find(x => x.port === p.local);
-        return c && !c.free && c.suggestion ? { ...p, local: c.suggestion } : p;
-      });
-      if (!taken.length && !prod) { go(adjusted); return; }
-      setPending({ ports: adjusted, checks, prod });
-    } finally {
-      setBusy(false);
-    }
-  }
-  function go(ports: ForwardPort[]) {
+  /** One forward from this pod — or through one of its Services. */
+  function begin(ports: ForwardPort[], service?: string) {
     if (!detail?.context) return;
-    usePortForwardStore.getState().start({ context: detail.context, namespace: detail.namespace, pod: detail.name, workload: detail.workload, ports });
-    setPending(undefined);
     setAnother(undefined);
+    void startMany([{ context: detail.context, namespace: detail.namespace, pod: detail.name, workload: detail.workload, service, ports }]);
   }
+
+  /* The workload's other pods, for "each replica on its own port". */
+  const replicas = detail.workload
+    ? allPods.filter(p => p.workload?.kind === detail.workload!.kind && p.workload.name === detail.workload!.name
+        && p.namespace === detail.namespace && (p.context ?? '') === (detail.context ?? '') && !p.deleting && p.phase === 'Running')
+      .sort((a, b) => a.name.localeCompare(b.name))
+    : [];
+  const eachPort = declared.find(p => p.role === 'http') ?? declared[0];
+  const eachBase = eachPort ? portOf(localFor(eachPort.port)) ?? eachPort.port : 0;
 
   const cannot = !running
     ? phase === 'Succeeded' || phase === 'Completed'
@@ -118,13 +109,13 @@ export function PortsTab() {
       : `The pod is ${phase ?? 'not running'} — a forward needs a running pod.`
     : undefined;
 
-  const forwardButton = (remote: number, name: string | undefined, role: PortRole, udp = false) => {
-    const local = portOf(localFor(remote));
+  const forwardButton = (remote: number, name: string | undefined, role: PortRole, udp = false, service?: string, key = String(remote)) => {
+    const local = portOf(locals[key] ?? localFor(remote));
     return (
       <PfButton tone="dk" icon={<PortForwardIcon size={12} />} style={{ justifySelf: 'end' }}
                 disabled={!!cannot || udp || !local || busy}
-                title={udp ? 'kubectl can forward TCP only' : cannot ?? (local ? `Forward ${remote} to localhost:${local}` : 'Pick a local port between 1 and 65535')}
-                onClick={() => local && begin([{ local, remote, name, role }])}>
+                title={udp ? 'kubectl can forward TCP only' : cannot ?? (local ? `Forward ${service ? `svc/${service} ` : ''}${remote} to localhost:${local}` : 'Pick a local port between 1 and 65535')}
+                onClick={() => local && begin([{ local, remote, name, role }], service)}>
         Forward
       </PfButton>
     );
@@ -174,23 +165,45 @@ export function PortsTab() {
           })}
         </div>
 
+        {replicas.length > 1 && eachPort && (
+          <div className="flex items-center flex-wrap" style={{ gap: 8, padding: '8px 10px', borderRadius: 8, border: `1px dashed ${PF.bd}` }}>
+            <span style={{ fontSize: 12, color: PF.mu }}>
+              <b style={{ color: PF.tx }}>{detail.workload?.name}</b> has {replicas.length} replicas — forward <span style={{ fontFamily: PF.mono, color: PF.dk }}>{eachPort.port}</span> on each,
+              on <span style={{ fontFamily: PF.mono, color: PF.tx }}>{replicas.map((_, i) => eachBase + i).join(', ')}</span>, to ask them the same question.
+            </span>
+            <span className="flex-1" />
+            <PfButton tone="dk" icon={<PortForwardIcon size={12} />} disabled={!!cannot || busy}
+                      onClick={() => void startMany(replicas.map((r, i) => ({
+                        context: detail.context!, namespace: detail.namespace, pod: r.name, workload: detail.workload,
+                        ports: [{ local: eachBase + i, remote: eachPort.port, name: eachPort.name, role: eachPort.role }],
+                      })))}>
+              Each replica
+            </PfButton>
+          </div>
+        )}
+
         {info && !info.error && (info.services.length > 0 || info.servicesError) && (
           <div className="flex flex-col" style={{ gap: 6 }}>
             <PfHeading>Services that route here</PfHeading>
             {info.servicesError && <div style={NOTE}>{info.servicesError}</div>}
             {info.services.map(s => {
               const target = s.containerPort;
-              const same = target !== undefined && (declaredNumbers.has(target) || forwarded.has(target));
+              /* Through the Service, kubectl picks the pod — the card says which one it landed on. */
+              const key = `svc:${s.service}:${s.port}`;
+              const viaSvc = up.find(f => f.service === s.service && f.ports.some(p => p.remote === s.port));
+              const localDefault = String(s.port >= 1024 ? s.port : target ?? s.port + 8000);
               return (
-                <div key={`${s.service}:${s.port}`} style={ROW}>
+                <div key={key} style={{ ...ROW, ...(viaSvc ? LIVE : {}) }}>
                   <span className="truncate" style={{ fontFamily: PF.mono, fontSize: 12, color: PF.tx }} title={`svc/${s.service}`}>svc/{s.service}</span>
                   <span style={{ fontFamily: PF.mono, fontSize: 12, color: PF.dk }}>{s.port}→{target ?? s.targetPort}</span>
                   <span style={{ fontSize: 11, color: PF.mu }}>TCP</span>
                   <RoleChip text={s.type} />
-                  {target !== undefined && !same ? <LocalBox value={localFor(target)} onChange={setLocal(target)} label={`Local port for ${target}`} /> : <span />}
-                  {target === undefined ? <span style={{ ...NOTE, justifySelf: 'end' }}>not resolved</span>
-                    : same ? <span style={{ ...NOTE, justifySelf: 'end', whiteSpace: 'nowrap' }}>same port as above</span>
-                      : forwardButton(target, s.name ?? s.service, 'http')}
+                  {viaSvc
+                    ? <span style={{ fontFamily: PF.mono, fontSize: 11.5, color: PF.ok }}>→ {viaSvc.ports.find(p => p.remote === s.port)?.local}</span>
+                    : <LocalBox value={locals[key] ?? localDefault} onChange={v => setLocals(l => ({ ...l, [key]: v }))} label={`Local port for svc/${s.service} ${s.port}`} />}
+                  {viaSvc
+                    ? <span style={{ justifySelf: 'end' }}><StatePill tone="ok">forwarding</StatePill></span>
+                    : forwardButton(s.port, s.name ?? s.service, 'http', false, s.service, key)}
                 </div>
               );
             })}
@@ -223,81 +236,7 @@ export function PortsTab() {
         {cannot && <div style={{ fontSize: 12, color: PF.wa }}>{cannot}</div>}
       </div>
 
-      {pending && (
-        <StartDialog pod={detail.name} workload={detail.workload?.name} context={detail.context} pending={pending}
-                     onCancel={() => setPending(undefined)} onGo={go} />
-      )}
+      {dialog}
     </div>
   );
 }
-
-function StartDialog({ pod, workload, context, pending, onCancel, onGo }: {
-  pod: string; workload?: string; context: string; pending: Pending; onCancel: () => void; onGo: (ports: ForwardPort[]) => void;
-}) {
-  const [ports, setPorts] = useState(pending.ports);
-  const taken = pending.checks.filter(c => !c.free);
-  const valid = ports.every(p => p.local >= 1 && p.local <= 65535) && new Set(ports.map(p => p.local)).size === ports.length;
-  const localLabel = ports.map(p => p.local).join(', ');
-
-  const title = pending.prod
-    ? <span className="flex items-center" style={{ gap: 8 }}><span style={{ color: PF.er }}>▲</span>Forward to production?</span>
-    : <span>Forward <span style={{ fontFamily: PF.mono, color: PF.dk }}>{ports.map(p => p.remote).join(', ')}</span> from {workload ?? pod}</span>;
-
-  return (
-    <ModalView
-      open
-      onClose={onCancel}
-      size="sm"
-      title={title}
-      footerRight={
-        <div style={{ display: 'flex', gap: 8 }}>
-          <PfButton onClick={onCancel}>Cancel</PfButton>
-          <PfButton tone={pending.prod ? 'danger' : 'solid'} disabled={!valid} onClick={() => onGo(ports)}>
-            {pending.prod ? 'Forward to production' : `Forward on ${localLabel}`}
-          </PfButton>
-        </div>
-      }
-    >
-      <div className="flex flex-col" style={{ gap: 10, fontSize: 12.5, color: PF.mu }}>
-        {pending.prod && (
-          <>
-            <PfBar tone="er"><b>{context}</b> is marked as production.</PfBar>
-            <p style={{ margin: 0 }}>
-              Anything on this machine that calls <b style={{ color: PF.tx, fontFamily: PF.mono }}>localhost:{localLabel}</b> will
-              reach <b style={{ color: PF.tx, fontFamily: PF.mono }}>{pod}</b> in production — including tests and load tools you forget are pointed there.
-            </p>
-            <PfCheck>Stop it after <b style={{ color: PF.tx }}>60 minutes</b></PfCheck>
-            <PfCheck>Only this machine (127.0.0.1)</PfCheck>
-          </>
-        )}
-        {taken.map(c => {
-          /* The host answers in the order the ports were asked about. */
-          const idx = pending.checks.indexOf(c);
-          return (
-            <div key={c.port} className="flex flex-col" style={{ gap: 10 }}>
-              <PfBar tone="wa">
-                <b style={{ fontFamily: PF.mono }}>localhost:{c.port}</b> is taken{c.holder ? <> — by <b>{c.holder.name ?? 'a process'}</b>{c.holder.pid ? ` (PID ${c.holder.pid})` : ''}</> : ''}.
-              </PfBar>
-              {idx >= 0 && (
-                <label className="flex flex-col" style={{ gap: 4 }}>
-                  <span style={{ fontSize: 10.5, letterSpacing: '.08em', textTransform: 'uppercase', color: PF.mu }}>Local port</span>
-                  <input value={String(ports[idx].local || '')} inputMode="numeric" aria-label={`Local port instead of ${c.port}`}
-                         onChange={e => {
-                           const n = Number(e.target.value.replace(/\D/g, '').slice(0, 5));
-                           setPorts(ps => ps.map((p, j) => (j === idx ? { ...p, local: n } : p)));
-                         }}
-                         className="outline-none"
-                         style={{ padding: '6px 9px', borderRadius: 7, fontFamily: PF.mono, fontSize: 12, color: PF.tx, border: `1px solid ${PF.bd}`, background: PF.well }} />
-                </label>
-              )}
-              <p style={{ margin: 0 }}>
-                {c.suggestion ? 'The next free port.' : 'No free port nearby — type one.'} Keep <b style={{ color: PF.tx }}>{c.port}</b> by stopping that process first, or use this one.
-              </p>
-            </div>
-          );
-        })}
-      </div>
-    </ModalView>
-  );
-}
-

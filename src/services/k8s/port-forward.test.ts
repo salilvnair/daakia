@@ -142,3 +142,83 @@ describe('a forward, start to finish', () => {
     expect(procs.every(p => p.killed)).toBe(true);
   });
 });
+
+describe('staying up', () => {
+  function rig(opts: { pods?: (string | undefined)[]; tries?: number } = {}) {
+    const procs: ReturnType<typeof fakeProc>[] = [];
+    const timers: (() => void)[] = [];
+    const answers = [...(opts.pods ?? [])];
+    const m = createForwardManager({
+      spawn: async () => { const p = fakeProc(); procs.push(p); return p as unknown as ChildProcess; },
+      resolvePod: async f => (answers.length ? answers.shift() : f.pod),
+      setTimer: fn => { timers.push(fn); return timers.length; },
+      clearTimer: () => undefined,
+    });
+    return { m, procs, timers, fire: async () => { const t = timers.shift(); t?.(); await flush(); await flush(); } };
+  }
+  const spec = { context: 'kind-dk8s-lab', namespace: 'n', pod: 'api-1', workload: { kind: 'Deployment', name: 'api' }, ports: [{ local: 8080, remote: 8080 }] };
+
+  it('reconnects on the same local port, onto the workload\'s new pod', async () => {
+    const { m, procs, fire } = rig({ pods: ['api-1', 'api-2'] });
+    m.start(spec);
+    await flush(); await flush();
+    procs[0].stdout.emit('data', 'Forwarding from 127.0.0.1:8080 -> 8080\n');
+    expect(m.list()[0].state).toBe('forwarding');
+    procs[0].stderr.emit('data', 'E0930 portforward.go:400] an error occurred forwarding 8080 -> 8080: connection refused\n');
+    expect(m.list()[0].lastConnError).toBeTruthy();
+    procs[0].stderr.emit('data', 'E0930 portforward.go:413] lost connection to pod\n');
+    expect(m.list()[0]).toMatchObject({ state: 'reconnecting', attempt: 1 });
+    await fire();
+    expect(m.list()[0]).toMatchObject({ pod: 'api-2', followedFrom: 'api-1' });
+    procs[1].stdout.emit('data', 'Forwarding from 127.0.0.1:8080 -> 8080\n');
+    expect(m.list()[0]).toMatchObject({ state: 'forwarding', reconnects: 1, ports: [{ local: 8080 }] });
+    expect(m.list()[0].lastConnError).toBeUndefined();
+    m.dispose();
+  });
+
+  it('gives up after its tries, and says why', async () => {
+    const { m, procs, fire } = rig({ pods: ['api-1', undefined, undefined] });
+    m.start({ ...spec, reconnectTries: 2 });
+    await flush(); await flush();
+    procs[0].stdout.emit('data', 'Forwarding from 127.0.0.1:8080 -> 8080\n');
+    procs[0].emit('exit', 1);
+    expect(m.list()[0].state).toBe('reconnecting');
+    await fire();
+    expect(m.list()[0]).toMatchObject({ state: 'reconnecting', attempt: 2 });
+    await fire();
+    expect(m.list()[0].state).toBe('failed');
+    expect(m.list()[0].error).toMatch(/No running pod of api.*Gave up after 2 tries/);
+    m.dispose();
+  });
+
+  it('stops for good when stopped while waiting to retry', async () => {
+    const { m, procs, timers } = rig();
+    m.start(spec);
+    await flush(); await flush();
+    procs[0].stdout.emit('data', 'Forwarding from 127.0.0.1:8080 -> 8080\n');
+    procs[0].stderr.emit('data', 'lost connection to pod\n');
+    m.stop(m.list()[0].id);
+    expect(m.list()[0].state).toBe('stopped');
+    timers.forEach(t => t());
+    await flush();
+    expect(procs).toHaveLength(1);
+    m.dispose();
+  });
+
+  it('forwards a Service as svc/<name>, and never goes idle when told not to', async () => {
+    const procs: ReturnType<typeof fakeProc>[] = [];
+    let t = 0;
+    const m = createForwardManager({
+      spawn: async args => { expect(args).toContain('svc/zp-backend'); const p = fakeProc(); procs.push(p); return p as unknown as ChildProcess; },
+      landedPod: async () => 'zp-backend-7gpgz', now: () => t,
+    });
+    m.start({ context: 'kind-dk8s-lab', namespace: 'n', pod: 'zp-backend-old', service: 'zp-backend', ports: [{ local: 8104, remote: 8104 }], idleMs: null });
+    await flush();
+    procs[0].stdout.emit('data', 'Forwarding from 127.0.0.1:8104 -> 8104\n');
+    await flush();
+    expect(m.list()[0].pod).toBe('zp-backend-7gpgz');
+    t = 10 * 60 * 60_000; m.tick();
+    expect(m.list()[0].state).toBe('forwarding');
+    m.dispose();
+  });
+});

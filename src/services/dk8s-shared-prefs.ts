@@ -29,7 +29,8 @@
  */
 
 /** The pref keys a shared workspace carries. */
-export const DK8S_SHARED_PREF_KEYS = ['dk8s.loggers', 'dk8s.fields.custom'] as const;
+/* 'dk8s.pf.sets': saved port-forward sets — the team's "backend local dev" comes with the workspace. */
+export const DK8S_SHARED_PREF_KEYS = ['dk8s.loggers', 'dk8s.fields.custom', 'dk8s.pf.sets'] as const;
 
 /** A shared pref's value is a stored string; anything past this is not a pref. */
 const MAX_VALUE_CHARS = 512 * 1024;

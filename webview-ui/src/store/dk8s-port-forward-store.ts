@@ -8,6 +8,8 @@
  */
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
+import { useUiStateStore } from './ui-state-store';
+import { currentPfPrefs, PF_LAST_OPEN_PREF } from '../components/k8s/port-forward-prefs';
 
 export type PortRole =
   | 'http' | 'actuator' | 'debug' | 'grpc' | 'metrics'
@@ -17,7 +19,7 @@ export interface DeclaredPort { container: string; name?: string; port: number; 
 export interface ServiceRoute { service: string; type: string; port: number; name?: string; targetPort: number | string; containerPort?: number }
 export interface ForwardPort { local: number; remote: number; name?: string; role?: PortRole }
 
-export type ForwardState = 'connecting' | 'forwarding' | 'stopped' | 'failed';
+export type ForwardState = 'connecting' | 'forwarding' | 'reconnecting' | 'stopped' | 'failed';
 
 export interface ForwardInfo {
   id: string;
@@ -39,6 +41,16 @@ export interface ForwardInfo {
   stopsAt?: number;
   command: string;
   lastConnError?: string;
+  service?: string;
+  follow?: boolean;
+  reconnectTries?: number;
+  /** Which reconnect this is, while reconnecting, and when the next try goes. */
+  attempt?: number;
+  retryAt?: number;
+  reconnects: number;
+  /** The pod it was on before its workload replaced it. */
+  followedFrom?: string;
+  dropReason?: string;
 }
 
 export interface PodPorts {
@@ -56,12 +68,14 @@ export interface ForwardRequest {
   namespace: string;
   pod: string;
   workload?: { kind: string; name: string };
+  /** Forward the Service rather than the pod; remote ports are its own. */
+  service?: string;
   ports: ForwardPort[];
 }
 
-/** Contexts treated as production — the host applies the same rule. */
+/** Contexts treated as production — `*prod*` always, and the ones added in Settings. The host applies the same rule. */
 export const PROD_PATTERNS = ['*prod*'];
-export function isProdContext(context: string, patterns: string[] = PROD_PATTERNS): boolean {
+export function isProdContext(context: string, patterns: string[] = [...PROD_PATTERNS, ...currentPfPrefs().prodPatterns]): boolean {
   return patterns.some(p => {
     const t = p.trim(); if (!t) return false;
     return new RegExp('^' + t.split('*').map(x => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$', 'i').test(context);
@@ -70,7 +84,7 @@ export function isProdContext(context: string, patterns: string[] = PROD_PATTERN
 
 export const podPortsKey = (t: { context: string; namespace: string; pod: string }) => `${t.context}/${t.namespace}/${t.pod}`;
 
-export const isUp = (f: ForwardInfo) => f.state === 'connecting' || f.state === 'forwarding';
+export const isUp = (f: ForwardInfo) => f.state === 'connecting' || f.state === 'forwarding' || f.state === 'reconnecting';
 
 /** Forwards to one pod, running first. */
 export function forwardsFor(forwards: ForwardInfo[], p: { context?: string; namespace: string; name: string }): ForwardInfo[] {
@@ -95,6 +109,9 @@ interface State {
    * to the Ports tab draws them at once instead of a skeleton every time.
    */
   portsByPod: Record<string, PodPorts>;
+  /** Forwards that were up when Daakia last closed, offered again. Never production. */
+  restorable: ForwardRequest[];
+  dismissRestore: () => void;
   setPanelOpen: (open: boolean) => void;
   refresh: () => void;
   loadPorts: (t: { context: string; namespace: string; pod: string }) => Promise<PodPorts>;
@@ -116,12 +133,45 @@ function listen() {
     const msg = event.data as Record<string, unknown> | undefined;
     if (!msg || typeof msg.type !== 'string' || !msg.type.startsWith('dk8s:pf:')) return;
     if (msg.type === 'dk8s:pf:list') {
-      usePortForwardStore.setState({ forwards: (msg.forwards as ForwardInfo[]) ?? [], loaded: true });
+      const forwards = (msg.forwards as ForwardInfo[]) ?? [];
+      const first = !usePortForwardStore.getState().loaded;
+      usePortForwardStore.setState({ forwards, loaded: true });
+      rememberOpen(forwards, first);
       return;
     }
     const done = pending.get(String(msg.reqId ?? ''));
     if (done) { pending.delete(String(msg.reqId)); done(msg); }
   });
+}
+
+/**
+ * Which forwards were up — kept so the next start can offer them again.
+ *
+ * Written as the list changes; production ones are never kept, since a tunnel
+ * into production should never come back on its own. The first list after
+ * Daakia starts is the one that decides whether there is anything to offer:
+ * forwards still up (a page reload in the browser build) mean nothing was lost.
+ */
+function rememberOpen(forwards: ForwardInfo[], first: boolean) {
+  const up = forwards.filter(isUp);
+  const ui = useUiStateStore.getState();
+  if (first) {
+    const saved = parseRequests(ui.prefs[PF_LAST_OPEN_PREF]);
+    usePortForwardStore.setState({ restorable: up.length ? [] : saved });
+    if (!saved.length && !up.length) return;
+  }
+  if (!first || up.length) {
+    const keep = up.filter(f => !f.prod).map(f => ({
+      context: f.context, namespace: f.namespace, pod: f.pod, workload: f.workload, service: f.service, ports: f.ports,
+    }));
+    const next = JSON.stringify(keep);
+    if ((ui.prefs[PF_LAST_OPEN_PREF] ?? '[]') !== next) ui.setPref(PF_LAST_OPEN_PREF, next);
+    if (up.length) usePortForwardStore.setState({ restorable: [] });
+  }
+}
+
+function parseRequests(raw: string | undefined): ForwardRequest[] {
+  try { const v = JSON.parse(raw ?? '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
 }
 
 function ask(type: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -140,6 +190,8 @@ export const usePortForwardStore = create<State>(set => ({
   loaded: false,
   panelOpen: false,
   portsByPod: {},
+  restorable: [],
+  dismissRestore: () => { set({ restorable: [] }); useUiStateStore.getState().setPref(PF_LAST_OPEN_PREF, '[]'); },
   setPanelOpen: panelOpen => set({ panelOpen }),
   refresh: () => { listen(); postMsg({ type: 'dk8s:pf:list' }); },
   loadPorts: async t => {
@@ -155,8 +207,19 @@ export const usePortForwardStore = create<State>(set => ({
     if (!got.error) set(s => ({ portsByPod: { ...s.portsByPod, [podPortsKey(t)]: got } }));
     return got;
   },
-  check: async ports => ((await ask('dk8s:pf:check', { ports })).results as PortCheck[]) ?? [],
-  start: req => { listen(); postMsg({ type: 'dk8s:pf:start', spec: req }); },
+  check: async ports => ((await ask('dk8s:pf:check', { ports, strategy: currentPfPrefs().whenTaken })).results as PortCheck[]) ?? [],
+  /* Every start carries the Settings as they are now: tries, follow, idle, production patterns. */
+  start: req => {
+    listen();
+    const p = currentPfPrefs();
+    postMsg({ type: 'dk8s:pf:start', spec: {
+      ...req,
+      follow: p.follow,
+      reconnectTries: p.reconnect ? p.tries : 0,
+      idleMs: p.idleMinutes ? p.idleMinutes * 60_000 : null,
+      prodPatterns: p.prodPatterns,
+    } });
+  },
   stop: id => postMsg({ type: 'dk8s:pf:stop', id }),
   stopAll: () => postMsg({ type: 'dk8s:pf:stopAll' }),
   forget: id => postMsg({ type: 'dk8s:pf:forget', id }),

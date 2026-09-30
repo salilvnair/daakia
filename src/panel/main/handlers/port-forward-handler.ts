@@ -13,15 +13,66 @@
  */
 import { run, spawnKubectl } from '../../../services/k8s/kubectl';
 import {
-  createForwardManager, declaredPorts, servicesFor, isPortFree, nextFreePort, portHolder,
+  createForwardManager, declaredPorts, servicesFor, isPortFree, nextFreePort, portHolder, isRunning,
   type ForwardInfo, type ForwardSpec,
 } from '../../../services/k8s/port-forward';
+import { resolveWorkload } from '../../../services/k8s/workload';
 
 type PostMessage = (msg: unknown) => void;
 
 /* The last page to speak — where changes go. A reload replaces it. */
 let sink: PostMessage | undefined;
-const manager = createForwardManager({ spawn: args => spawnKubectl(args) });
+type RawPod = { metadata?: { name?: string; deletionTimestamp?: string; ownerReferences?: { kind?: string; name?: string }[] }; status?: { phase?: string; startTime?: string; containerStatuses?: { ready?: boolean }[] } };
+
+/**
+ * The pod a forward should be on now: its own while it is running and ready;
+ * else, when it follows its workload, that workload's newest ready pod — one
+ * no other forward of it is on, so "each replica" stays one pod per port
+ * across a rollout. One `get pods` — the same read the pods grid makes.
+ */
+async function resolvePod(f: ForwardInfo): Promise<string | undefined> {
+  const r = await run(['--context', f.context, '-n', f.namespace, 'get', 'pods', '-o', 'json'], { timeoutMs: 15_000, background: true });
+  /* The API not answering is not the pod being gone: try the same pod again. */
+  if (!r.ok) return f.pod;
+  let items: RawPod[] = [];
+  try { items = JSON.parse(r.stdout).items ?? []; } catch { return f.pod; }
+  const ready = items.filter(p => !p.metadata?.deletionTimestamp && p.status?.phase === 'Running'
+    && (p.status.containerStatuses ?? []).every(c => c.ready));
+  if (ready.some(p => p.metadata?.name === f.pod)) return f.pod;
+  if (f.follow === false || !f.workload) return undefined;
+  const same = ready.filter(p => {
+    const w = resolveWorkload(p.metadata?.ownerReferences?.[0]);
+    return w?.kind === f.workload!.kind && w.name === f.workload!.name;
+  }).sort((a, b) => String(b.status?.startTime ?? '').localeCompare(String(a.status?.startTime ?? '')));
+  const taken = new Set(manager.list()
+    .filter(o => o.id !== f.id && !o.service && isRunning(o) && o.context === f.context && o.namespace === f.namespace)
+    .map(o => o.pod));
+  return (same.find(p => !taken.has(p.metadata?.name ?? '')) ?? same[0])?.metadata?.name;
+}
+
+/** A Service forward's pod: the first ready address behind it. */
+async function landedPod(f: ForwardInfo): Promise<string | undefined> {
+  if (!f.service) return undefined;
+  const at = ['--context', f.context, '-n', f.namespace];
+  /* EndpointSlices first — v1 Endpoints is deprecated from 1.33 — and Endpoints for older clusters. */
+  const slices = await run([...at, 'get', 'endpointslices', '-l', `kubernetes.io/service-name=${f.service}`, '-o', 'json'], { timeoutMs: 10_000, background: true });
+  if (slices.ok) {
+    try {
+      const list = JSON.parse(slices.stdout) as { items?: { endpoints?: { conditions?: { ready?: boolean }; targetRef?: { kind?: string; name?: string } }[] }[] };
+      const pod = list.items?.flatMap(i => i.endpoints ?? [])
+        .find(e => e.conditions?.ready !== false && e.targetRef?.kind === 'Pod')?.targetRef?.name;
+      if (pod) return pod;
+    } catch { /* fall through */ }
+  }
+  const r = await run([...at, 'get', 'endpoints', f.service, '-o', 'json'], { timeoutMs: 10_000, background: true });
+  if (!r.ok) return undefined;
+  try {
+    const ep = JSON.parse(r.stdout) as { subsets?: { addresses?: { targetRef?: { kind?: string; name?: string } }[] }[] };
+    return ep.subsets?.flatMap(s => s.addresses ?? []).find(a => a.targetRef?.kind === 'Pod')?.targetRef?.name;
+  } catch { return undefined; }
+}
+
+const manager = createForwardManager({ spawn: args => spawnKubectl(args), resolvePod, landedPod });
 const listeners = new Set<(forwards: ForwardInfo[]) => void>();
 manager.onChange(() => {
   const forwards = manager.list();
@@ -77,12 +128,15 @@ export async function handlePfPorts(msg: Record<string, unknown>, post: PostMess
 export async function handlePfCheck(msg: Record<string, unknown>, post: PostMessage): Promise<void> {
   const reqId = String(msg.reqId ?? '');
   const ports = (Array.isArray(msg.ports) ? msg.ports : []).filter(okPort).slice(0, 10) as number[];
-  const busy = new Set(manager.list().filter(f => f.state === 'connecting' || f.state === 'forwarding').flatMap(f => f.ports.map(p => p.local)));
+  const busy = new Set(manager.list().filter(isRunning).flatMap(f => f.ports.map(p => p.local)));
+  /* How a taken port is replaced: the next free one, or 10000 above it (8080 → 18080) and free from there. */
+  const plus = msg.strategy === 'plus10000';
   const reserved: number[] = [];
   const results = [];
   for (const port of ports) {
     const free = !busy.has(port) && !reserved.includes(port) && await isPortFree(port);
-    const suggestion = free ? port : await nextFreePort(port + 1, async p => !busy.has(p) && isPortFree(p), reserved);
+    const from = plus && port + 10000 <= 65535 ? port + 10000 : port + 1;
+    const suggestion = free ? port : await nextFreePort(from, async p => !busy.has(p) && isPortFree(p), reserved);
     if (suggestion) reserved.push(suggestion);
     const holder = free ? undefined : busy.has(port) ? { pid: 0, name: 'another dk8s forward' } : await portHolder(port);
     results.push({ port, free, suggestion, holder });
@@ -102,10 +156,18 @@ export async function handlePfStart(msg: Record<string, unknown>, post: PostMess
   for (const p of ports) {
     if (!(await isPortFree(p.local))) return bad(`local port ${p.local} was taken in the meantime — pick another.`);
   }
+  if (s.service !== undefined && !NAME.test(String(s.service))) return bad('the Service is not named properly.');
+  const tries = Number(s.reconnectTries);
+  const idle = s.idleMs === null ? null : Number(s.idleMs);
   manager.start({
     context: s.context, namespace: s.namespace, pod: s.pod,
     workload: s.workload && typeof s.workload.name === 'string' ? { kind: String(s.workload.kind), name: s.workload.name } : undefined,
+    service: s.service ? String(s.service) : undefined,
     ports: ports.map(p => ({ local: p.local, remote: p.remote, name: typeof p.name === 'string' ? p.name.slice(0, 63) : undefined, role: p.role })),
+    follow: s.follow !== false,
+    reconnectTries: Number.isInteger(tries) && tries >= 0 && tries <= 10 ? tries : undefined,
+    idleMs: idle === null ? null : Number.isFinite(idle) && idle >= 60_000 ? idle : undefined,
+    prodPatterns: Array.isArray(s.prodPatterns) ? s.prodPatterns.filter(p => typeof p === 'string' && p.length <= 64).slice(0, 12) : undefined,
   });
 }
 

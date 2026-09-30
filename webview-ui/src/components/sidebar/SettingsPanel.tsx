@@ -8,7 +8,7 @@ import type { TabItem } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, GitHubIcon, LockIcon, TrashIcon, KeyboardIcon, Dk8sIcon, TerminalIcon,
          CookieIcon, NetworkIcon, ShieldIcon, UptimeIcon, FilterIcon, LayersIcon, BulkEditIcon, GaugeIcon,
-         DocumentIcon, ConnectIcon, ClipboardCompareIcon, FolderIcon, BugIcon, IssueOpenedIcon, InfoCircleIcon, SearchIcon, ChartBarIcon, DownloadIcon } from '../../icons';
+         DocumentIcon, ConnectIcon, ClipboardCompareIcon, FolderIcon, BugIcon, IssueOpenedIcon, InfoCircleIcon, SearchIcon, ChartBarIcon, DownloadIcon, PortForwardIcon } from '../../icons';
 import { useAiFeaturesStore, type AiFeatureKey } from '../../store/ai-features-store';
 import { useTabsStore } from '../../store/tabs-store';
 import { AiSchemaDiffModal } from '../ai/AiSchemaDiffModal';
@@ -23,6 +23,7 @@ import { AiContractNegotiatorModal } from '../ai/AiContractNegotiatorModal';
 import { AiLiveTrafficMirrorModal } from '../ai/AiLiveTrafficMirrorModal';
 import { Dk8sClusterSettings } from '../settings/Dk8sSettings';
 import { TerminalSettings } from '../settings/dk8s/TerminalSettings';
+import { PortForwardSettings } from '../settings/dk8s/PortForwardSettings';
 import { DkghSettings } from './DkghSettings';
 import { LlmProviderSettings } from './LlmProviderSettings';
 import { GitSyncSettings } from './GitSyncSettings';
@@ -59,7 +60,7 @@ import { AboutPanel } from '../settings/AboutPanel';
 import { Dk8sGeneralSettings, DkghGeneralSettings } from '../settings/SurfaceGeneralSettings';
 import { Dk8sCommandsSection } from '../settings/Dk8sCommandsSection';
 
-type SettingsSection = 'general' | 'theme' | 'keymap' | 'about' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'code-scan' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-general' | 'dk8s-cluster' | 'dk8s-logs' | 'dk8s-logs-downloads' | 'dk8s-logs-formats' | 'dk8s-logs-archive' | 'dk8s-fields' | 'dk8s-determinants' | 'dk8s-terminal' | 'dk8s-commands' | 'dkgh-general' | 'dkgh';
+type SettingsSection = 'general' | 'theme' | 'keymap' | 'about' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'code-scan' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-general' | 'dk8s-cluster' | 'dk8s-logs' | 'dk8s-logs-downloads' | 'dk8s-logs-formats' | 'dk8s-logs-archive' | 'dk8s-fields' | 'dk8s-determinants' | 'dk8s-terminal' | 'dk8s-port-forward' | 'dk8s-commands' | 'dkgh-general' | 'dkgh';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
 type PowerSubtab = 'cookies' | 'proxy' | 'certs' | 'monitor' | 'interceptor' | 'diff' | 'bulk' | 'load'
   | 'schema-diff' | 'openapi' | 'security' | 'webhook' | 'postman' | 'clustering'
@@ -91,6 +92,7 @@ const SETTINGS_SECTION_META: Record<SettingsSection, { label: string; icon: Reac
   'dk8s-fields':     { label: 'Fields',          icon: <FilterIcon size={14} /> },
   'dk8s-determinants': { label: 'Determinants',  icon: <ChartBarIcon size={14} /> },
   'dk8s-terminal':   { label: 'Terminal',        icon: <TerminalIcon size={14} /> },
+  'dk8s-port-forward': { label: 'Port forwarding', icon: <PortForwardIcon size={14} /> },
   'dk8s-commands':   { label: 'Commands',        icon: <CodeBracketsIcon size={14} /> },
   'dkgh-general':    { label: 'General',         icon: <SettingsIcon size={14} /> },
   'dkgh':            { label: 'GitHub CLI',      icon: <IssueOpenedIcon size={14} /> },
@@ -135,6 +137,7 @@ const SETTINGS_NAV_ITEMS: SideNavItem[] = [
       children: LOG_SETTINGS_PAGES.map(p => ({ id: p.id, label: p.label, icon: p.icon })),
     },
     { id: 'dk8s-terminal', label: SETTINGS_SECTION_META['dk8s-terminal'].label, icon: SETTINGS_SECTION_META['dk8s-terminal'].icon },
+    { id: 'dk8s-port-forward', label: SETTINGS_SECTION_META['dk8s-port-forward'].label, icon: SETTINGS_SECTION_META['dk8s-port-forward'].icon },
     { id: 'dk8s-commands', label: SETTINGS_SECTION_META['dk8s-commands'].label, icon: SETTINGS_SECTION_META['dk8s-commands'].icon },
   ] },
   { id: 'g-dkgh', label: 'DKGH', isGroup: true, children: [
@@ -266,6 +269,8 @@ export function SettingsPanel() {
               <Dk8sLogSettings page="general" />
             ) : activeSection === 'dk8s-terminal' ? (
               <TerminalSettings />
+            ) : activeSection === 'dk8s-port-forward' ? (
+              <PortForwardSettings />
             ) : activeSection === 'dkgh' ? (
               <DkghSettings />
             ) : activeSection === 'devtools' ? (

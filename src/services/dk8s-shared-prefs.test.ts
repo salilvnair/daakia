@@ -7,8 +7,8 @@ import { describe, it, expect } from 'vitest';
 import { pickDk8sPrefs, readTeamEntry, shareable, DK8S_SHARED_PREF_KEYS } from './dk8s-shared-prefs';
 
 describe('what a shared workspace carries', () => {
-  it('is the catalogue and the custom field readers', () => {
-    expect([...DK8S_SHARED_PREF_KEYS]).toEqual(['dk8s.loggers', 'dk8s.fields.custom']);
+  it('is the catalogue, the custom field readers and the saved forward sets', () => {
+    expect([...DK8S_SHARED_PREF_KEYS]).toEqual(['dk8s.loggers', 'dk8s.fields.custom', 'dk8s.pf.sets']);
   });
 
   it('takes only the listed keys out of everything prefs hold', () => {
