@@ -1969,6 +1969,18 @@ export function LinkIcon(props: IconProps) {
   );
 }
 
+/** Port forwarding: a pod's port, over here — two arrows, one each way. */
+export function PortForwardIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M4 8h13" />
+      <path d="m14 5 3 3-3 3" />
+      <path d="M20 16H7" />
+      <path d="m10 13-3 3 3 3" />
+    </svg>
+  );
+}
+
 export function CheckCircleIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>

@@ -8,7 +8,7 @@
 import { useCallback, useEffect } from 'react';
 import {
   CloseIcon, TerminalIcon, FileTextIcon, CodeIcon, StethoscopeIcon,
-  SparkleIcon, ChevronLeftIcon, LayersIcon, LockIcon, FolderOpenIcon, BracesIcon, PythonIcon,
+  SparkleIcon, ChevronLeftIcon, LayersIcon, LockIcon, FolderOpenIcon, BracesIcon, PythonIcon, PortForwardIcon,
 } from '../../icons';
 import { LoggersTab, scopeOf } from './LoggersTab';
 import { AskLogTab } from './AskLogTab';
@@ -30,6 +30,8 @@ import { tokenizeDescribeLine, tokenColor, tokenWeight } from './describe-highli
 import { CodeEditor } from '../shared/editors/CodeEditor';
 import { OverviewTab } from './OverviewTab';
 import { PythonTab } from './python/PythonTab';
+import { PortsTab } from './PortsTab';
+import { usePortForwardStore, forwardsFor, isUp } from '../../store/dk8s-port-forward-store';
 import { PythonHeaderChips } from './python/PythonHeaderChips';
 
 import { ACCENT } from './tone';
@@ -81,6 +83,12 @@ const TABS: {
   // Everything the explorer does is one exec, so it gates on exactly the same
   // access the terminal does.
   { id: 'explorer', label: 'Explorer', Icon: FolderOpenIcon, needs: 'exec' },
+  /*
+    A port on this pod, on this machine. Gated on the one permission a
+    forward needs, so an account without it sees the padlock and the rule to
+    ask for instead of a Forward button that fails.
+  */
+  { id: 'ports', label: 'Ports', Icon: PortForwardIcon, needs: 'portForward' },
   { id: 'describe', label: 'Describe', Icon: CodeIcon, needs: 'get' },
   { id: 'yaml', label: 'YAML', Icon: CodeIcon, needs: 'get' },
   /*
@@ -222,7 +230,7 @@ function YamlPane({ text, busy }: { text?: string; busy: boolean }) {
 /** What Back says it returns to, by the tab it returns to. */
 const TAB_NAME: Record<DetailTab, string> = {
   overview: 'Overview', logs: 'Logs', loggers: 'Loggers', ask: 'Ask the log', terminal: 'Terminal',
-  doctor: 'Doctor', python: 'Python', explorer: 'Explorer', yaml: 'YAML', describe: 'Describe', access: 'Access',
+  doctor: 'Doctor', python: 'Python', explorer: 'Explorer', ports: 'Ports', yaml: 'YAML', describe: 'Describe', access: 'Access',
 };
 
 export function PodDetail() {
@@ -281,6 +289,8 @@ export function PodDetail() {
   const catalogueScope = scopeOf(detail ?? undefined);
   const markedCount = usePatternsFor(catalogueScope).filter(p => p.marked).length;
   const loggerCount = useLoggersFor(catalogueScope).length;
+  const allForwards = usePortForwardStore(s => s.forwards);
+  const forwardCount = detail ? forwardsFor(allForwards, detail).filter(isUp).length : 0;
 
   // Escape closes — but only when nothing is selected, so the first Escape
   // after highlighting a stack trace does not throw away the panel too.
@@ -461,6 +471,13 @@ export function PodDetail() {
                   {label}
                   {/* How many marks the Logs tab is lighting, else how many
                       loggers the catalogue holds — the number on the board. */}
+                  {/* How many forwards this pod has open. */}
+                  {id === 'ports' && forwardCount > 0 && (
+                    <span className="px-1.5 rounded-full text-[10px]"
+                          style={{ color: 'var(--color-success)', background: 'color-mix(in srgb, var(--color-success) 16%, transparent)' }}>
+                      {forwardCount}
+                    </span>
+                  )}
                   {id === 'loggers' && (markedCount > 0 || loggerCount > 0) && (
                     <span className="px-1.5 rounded-full text-[10px]"
                           style={{ color: LOGGERS, background: `color-mix(in srgb, ${LOGGERS} 16%, transparent)` }}>
@@ -489,6 +506,7 @@ export function PodDetail() {
                 {detailTab === 'yaml' && <YamlPane text={yamlText} busy={describeBusy} />}
                 {detailTab === 'doctor' && <DoctorTab />}
                 {detailTab === 'python' && <PythonTab />}
+                {detailTab === 'ports' && <PortsTab />}
                 {detailTab === 'explorer' && detail?.context && (
                   <ExplorerTab
                     context={detail.context}

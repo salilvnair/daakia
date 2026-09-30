@@ -174,6 +174,9 @@ import {
   handlePyDebugWatches, handlePyDebugStop, handlePyDebugEval, handlePyIntel,
   handlePyScriptsList, handlePyScriptsSave, handlePyScriptsDelete,
 } from '../src/panel/main/handlers/python-handler';
+import {
+  handlePfList, handlePfPorts, handlePfCheck, handlePfStart, handlePfStop, handlePfStopAll, handlePfForget,
+} from '../src/panel/main/handlers/port-forward-handler';
 
 export type PostMessage = (msg: unknown) => void;
 import { historyCap } from '../src/services/history-cap';
@@ -661,6 +664,28 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'term:close':
       handleTerminalClose(msg);
+      break;
+    // ── Port forwarding — the forwards live as long as this server, not the page ──
+    case 'dk8s:pf:list':
+      handlePfList(msg, post);
+      break;
+    case 'dk8s:pf:ports':
+      await handlePfPorts(msg, post);
+      break;
+    case 'dk8s:pf:check':
+      await handlePfCheck(msg, post);
+      break;
+    case 'dk8s:pf:start':
+      await handlePfStart(msg, post);
+      break;
+    case 'dk8s:pf:stop':
+      handlePfStop(msg, post);
+      break;
+    case 'dk8s:pf:stopAll':
+      handlePfStopAll(msg, post);
+      break;
+    case 'dk8s:pf:forget':
+      handlePfForget(msg, post);
       break;
     // ── Python in a pod — the same handlers the extension routes to ──
     case 'py:probe':

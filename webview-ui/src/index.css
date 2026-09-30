@@ -1233,6 +1233,29 @@ button[title="Copied!"] > svg polyline {
   }
 }
 
+/* ─── Port forwarding (pf-ui.tsx) ───
+   A row's own Stop shows on hover, like the Logs rows' copy link; the 24px
+   buttons brighten under the pointer rather than changing colour. */
+.pf-row .pf-row-stop { opacity: 0; }
+.pf-row:hover .pf-row-stop, .pf-row .pf-row-stop:focus-visible { opacity: 1; }
+.pf-row:hover { border-color: color-mix(in srgb, var(--color-dk8s) 45%, var(--color-surface-border)) !important; }
+.pf-btn:hover:not(:disabled) { filter: brightness(1.18); }
+/* The live dot: a soft ring breathing out from it while a tunnel is up. */
+.pf-live-dot { width: 8px; height: 8px; border-radius: 99px; flex-shrink: 0; background: var(--c, var(--color-success)); position: relative; }
+.pf-live-dot.on { box-shadow: 0 0 0 0 color-mix(in srgb, var(--c) 55%, transparent); animation: pf-breathe 2.2s ease-out infinite; }
+@keyframes pf-breathe { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--c) 55%, transparent); } 70%, 100% { box-shadow: 0 0 0 7px transparent; } }
+/* The tunnel: a line from this machine to the pod, its dashes moving while it carries traffic. */
+.pf-tunnel { flex: 1; min-width: 40px; height: 2px; position: relative; border-radius: 2px;
+  background-image: repeating-linear-gradient(90deg, var(--c) 0 6px, transparent 6px 11px); background-size: 22px 2px; opacity: .8; }
+.pf-tunnel.flowing { animation: pf-flow .9s linear infinite; }
+@keyframes pf-flow { from { background-position: 0 0; } to { background-position: 22px 0; } }
+.pf-tunnel-icon { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: grid; place-items: center;
+  width: 20px; height: 20px; border-radius: 99px; background: var(--color-panel); border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); }
+.pf-icon-btn:hover { background: var(--color-surface-hover) !important; color: var(--color-text-primary) !important; }
+.pf-panel { animation: pf-slide .18s ease-out; }
+@keyframes pf-slide { from { transform: translateX(16px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pf-live-dot.on, .pf-tunnel.flowing, .pf-panel { animation: none; } }
+
 /* ─── dk8s views, inside the chat ───
    The chat library resets padding and margin on everything under
    `.ce-chat-root`, unlayered — which beats every Tailwind spacing class

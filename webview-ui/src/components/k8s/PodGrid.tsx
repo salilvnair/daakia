@@ -54,6 +54,7 @@ import {
 import { ACCENT, OK, MUTED, MATCH } from './tone';
 import { isTypingTarget } from '../../utils/typing-target';
 import { RunningCommand } from './RunningCommand';
+import { ForwardsChip, ForwardsPanel, PodForwardBadge } from './ForwardsPanel';
 /* Amber, not the dk8s accent: a star is a personal mark, not a status, and
    reusing the accent made starred rows look selected. */
 /* Scheduled work reads as its own thing — not an error, not a service. */
@@ -399,6 +400,7 @@ function Pulse({ pods }: { pods: PodSummary[] }) {
 
       {/* When it was read, beside the controls that read it — the right-hand
           end of the row, where the things you act on live. */}
+      <ForwardsChip />
       <WatchIndicator />
       <PodKindControl />
       <UsageControl />
@@ -648,8 +650,9 @@ function PodCard({ pod, onOpen, onMenu }: {
         </span>
       </div>
 
-      <div className="pl-2">
+      <div className="pl-2 flex flex-col gap-1">
         <StatusLine pod={pod} severity={severity} />
+        <PodForwardBadge pod={pod} />
       </div>
 
       <div className="flex items-center justify-between gap-2 pl-2 min-w-0">
@@ -1317,7 +1320,8 @@ export function PodGrid() {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
+      <ForwardsPanel />
       <Pulse pods={kindPods} />
 
       <div className="flex items-center gap-2 px-4 py-2 flex-shrink-0"

@@ -102,9 +102,16 @@ function Breadcrumb() {
   const onPods = useK8sStore(st => st.panel) === 'pods';
   const isProd = !!context && sensitivity[context] === 'production';
 
-  const clusterNames = selectedContexts.length ? selectedContexts : (context ? [context] : []);
+  /*
+    Only what is actually in effect. While the clusters are being chosen (or
+    dk8s is still finding them), the last choice is not the one on screen —
+    naming it above a "Which clusters?" picker said you were somewhere you
+    were not. The namespace waits until they are being watched.
+  */
+  const choosingCluster = stage !== 'ready' && stage !== 'pick-namespace';
+  const clusterNames = choosingCluster ? [] : selectedContexts.length ? selectedContexts : (context ? [context] : []);
   // De-duplicated: two namespaces in one cluster should not name it twice.
-  const namespaceNames = [...new Set(targets.map(t => t.namespace))];
+  const namespaceNames = stage === 'ready' ? [...new Set(targets.map(t => t.namespace))] : [];
 
   return (
     <div

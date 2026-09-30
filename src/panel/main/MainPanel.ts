@@ -15,6 +15,10 @@ import {
   handlePyDebugWatches, handlePyDebugStop, handlePyDebugEval, handlePyIntel,
   handlePyScriptsList, handlePyScriptsSave, handlePyScriptsDelete, disposePython,
 } from './handlers/python-handler';
+import {
+  handlePfList, handlePfPorts, handlePfCheck, handlePfStart, handlePfStop, handlePfStopAll, handlePfForget,
+  disposePortForwards, onForwardsChange,
+} from './handlers/port-forward-handler';
 import * as path from 'path';
 import * as fs from 'fs';
 import { getSqliteStatus, getDbPath, getHistory, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt, getAiPromptTemplates, setAiPromptTemplates, saveAiConversation, loadAiConversation, clearAiConversation, type AiConversationMessage, getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries, insertUiAudit, getUiAuditEntries, clearUiAuditEntries, getDbTables, getDbTableRows, deleteDbRow, onDbReloaded, describeDbReload } from '../../storage/db';
@@ -251,6 +255,21 @@ export class MainPanel {
 
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
 
+    /* Forwards up, in the status bar — a tunnel into a cluster should never be
+       something you forgot was open. Hidden when there are none. */
+    const pfBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 40);
+    pfBar.command = 'daakia.openPanel';
+    const offPf = onForwardsChange(forwards => {
+      const up = forwards.filter(f => f.state === 'connecting' || f.state === 'forwarding');
+      if (!up.length) { pfBar.hide(); return; }
+      const prod = up.some(f => f.prod);
+      pfBar.text = `$(plug) ${up.length} forwarding${prod ? ' · PROD' : ''}`;
+      pfBar.tooltip = up.map(f => `localhost:${f.ports.map(p => p.local).join(', :')} → ${f.pod}${f.prod ? ' (production)' : ''}`).join('\n');
+      pfBar.backgroundColor = prod ? new vscode.ThemeColor('statusBarItem.errorBackground') : undefined;
+      pfBar.show();
+    });
+    this._disposables.push(pfBar, { dispose: offPf });
+
     /* Another Daakia (the browser build, or a second VS Code window) rewrote
        the database file and it was reloaded here: re-send everything, and
        say so when it matters. See storage/db.ts. */
@@ -298,6 +317,8 @@ export class MainPanel {
     disposeDk8s();
     // A script mid-run or a pdb at a breakpoint is a process in someone's pod.
     disposePython();
+    // A forward is a tunnel into a cluster; none outlives the panel.
+    disposePortForwards();
     disposeDkgh();
     stopAutoSyncTimer();
     disposeMonitors();
@@ -813,6 +834,28 @@ export class MainPanel {
         break;
       case 'term:close':
         handleTerminalClose(msg);
+        break;
+      // ── Port forwarding: the Ports tab and the Forwards panel ──
+      case 'dk8s:pf:list':
+        handlePfList(msg, this._post);
+        break;
+      case 'dk8s:pf:ports':
+        void handlePfPorts(msg, this._post);
+        break;
+      case 'dk8s:pf:check':
+        void handlePfCheck(msg, this._post);
+        break;
+      case 'dk8s:pf:start':
+        void handlePfStart(msg, this._post);
+        break;
+      case 'dk8s:pf:stop':
+        handlePfStop(msg, this._post);
+        break;
+      case 'dk8s:pf:stopAll':
+        handlePfStopAll(msg, this._post);
+        break;
+      case 'dk8s:pf:forget':
+        handlePfForget(msg, this._post);
         break;
       // ── Python in a pod: the pod tab and the Scripts screen ──
       case 'py:probe':

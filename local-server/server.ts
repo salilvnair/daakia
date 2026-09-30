@@ -19,6 +19,7 @@
  * this server via WS handshake and routes all postMessage traffic through it.
  */
 import { cleanCaptures } from '../src/services/k8s/log-capture';
+import { disposePortForwards } from '../src/panel/main/handlers/port-forward-handler';
 import * as http from 'http';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -127,6 +128,8 @@ async function main() {
   a few seconds if this does not answer.
 */
 function shutdown(): void {
+  /* No kubectl port-forward left holding a port after the server has gone. */
+  try { disposePortForwards(); } catch { /* best effort on the way out */ }
   try { closeDb(); } catch (err) { console.error('[local-server] could not save the database on the way out:', err); }
   process.exit(0);
 }

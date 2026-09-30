@@ -398,7 +398,7 @@ export interface PodAction {
   mutatesPod?: boolean;
 }
 
-export type DetailTab = 'overview' | 'logs' | 'loggers' | 'ask' | 'terminal' | 'doctor' | 'python' | 'explorer' | 'yaml' | 'describe' | 'access';
+export type DetailTab = 'overview' | 'logs' | 'loggers' | 'ask' | 'terminal' | 'doctor' | 'python' | 'explorer' | 'ports' | 'yaml' | 'describe' | 'access';
 
 export interface MemoryProfile {
   limitBytes?: number;
@@ -1683,7 +1683,15 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     });
   },
 
-  openContextPicker: () => set({ stage: 'pick-context' }),
+  /*
+    With no clusters in hand — the list was lost when the host restarted, say —
+    an empty picker stuck on "Connecting…" is a dead end. Start the wizard
+    again instead: the probe lists the kubeconfig's contexts afresh.
+  */
+  openContextPicker: () => {
+    if (!get().contexts.length) { set({ stage: 'probing' }); get().probe(); return; }
+    set({ stage: 'pick-context', busy: false });
+  },
   openNamespacePicker: () => {
     const { selectedContexts, context, targets } = get();
     const ctxs = selectedContexts.length ? selectedContexts : (context ? [context] : []);
