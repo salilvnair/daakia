@@ -8,8 +8,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  parseLsLine, parseGrepLine, parseLsDate, relativeTo, cleanPath,
-  grepScript, findScript, escapeRegex, explain,
+  parseLsLine, parseGrepLine, parseLsDate, relativeTo, cleanPath, realFiles,
+  grepScript, findScript, escapeRegex, explain, parseMarkedGrep, FILE_MARK,
 } from './pv-in-pod';
 
 const ROOT = '/prodapp-prod-pvc/prodapp_prod_logs';
@@ -115,6 +115,52 @@ describe('reading a grep line', () => {
     expect(m?.rel).toBe('archive/prodapp-2026-09-14.log');
     expect(m?.line).toBe(1);
     expect(m?.text).toContain('archived day 2026-09-14');
+  });
+
+  it('reads a context line with a timestamp as context, not as a hit in a file named after it', () => {
+    /*
+      Seen live: `zp-backend.2026-09-26.1.log-3-2026-09-26T00:09:12.370Z INFO …`
+      split lazily on its own colons into the file `…log-3-2026-09-26T00`,
+      line 9 — every neighbour of a hit became a hit, in a file of its own.
+    */
+    const file = `${ROOT}/zp-backend.2026-09-26.1.log`;
+    const hit = `${file}:4:2026-09-26T00:09:13.100Z ERROR request 8524 failed`;
+    const ctx = `${file}-3-2026-09-26T00:09:12.370Z  INFO GET /api/v1/rules -> 504`;
+    const candidates = [hit, ctx].map(l => parseGrepLine(l, ROOT)!.file);
+    const known = realFiles(candidates);
+    expect([...known]).toEqual([file]);
+    const m = parseGrepLine(ctx, ROOT, known);
+    expect(m?.context).toBe(true);
+    expect(m?.file).toBe(file);
+    expect(m?.line).toBe(3);
+    expect(parseGrepLine(hit, ROOT, known)?.context).toBeUndefined();
+  });
+
+  it('reads a windowed search by the file named above its lines, whatever the text holds', () => {
+    const file = `${ROOT}/zp-backend.2026-09-26.5.log`;
+    const m = parseMarkedGrep([
+      `${FILE_MARK}${file}`,
+      '1177-2026-09-26T00:09:12.370Z  INFO GET /api/v1/rules -> 504',
+      '1178:2026-09-26T00:09:13.100Z ERROR request 8524 failed',
+      '--',
+      // Cut off by head before its hit: context, and nothing more.
+      `${FILE_MARK}${ROOT}/zp-backend.2026-09-26.6.log`,
+      '40-2026-09-26T01:00:00.000Z  INFO something else',
+    ], ROOT);
+    expect(m.map(x => [x.rel, x.line, !!x.context])).toEqual([
+      ['zp-backend.2026-09-26.5.log', 1177, true],
+      ['zp-backend.2026-09-26.5.log', 1178, false],
+      ['zp-backend.2026-09-26.6.log', 40, true],
+    ]);
+  });
+
+  it('names each file in the windowed script, and prints nothing for a file without a hit', () => {
+    const s = grepScript(ROOT, '8524', { contextLines: 2, sinceMs: Date.now() - 60_000 });
+    // A literal \n for printf: the command shown under "What ran" stays on one line.
+    expect(s).toContain(`printf '${FILE_MARK}%s\\n%s\\n' "$f" "$o"`);
+    expect(s).not.toContain('\n');
+    expect(s).toContain('[ -n "$o" ] &&');
+    expect(s).not.toContain('-nH');
   });
 
   it('takes the longest matching file, because one path can prefix another', () => {

@@ -86,3 +86,22 @@ export const SYNTAX = {
  * yellow would read as a second meaning.
  */
 export const MATCH = 'var(--dui-row-flash, #ffc400)';
+
+/**
+ * The Loggers tab's own colour, and Add loggers' and Add patterns'.
+ *
+ * Purple, from the boards, and deliberately not the cyan of the rest of dk8s:
+ * cyan is "this talks to the cluster", and the catalogue is the one part of
+ * the pod view that is written down rather than read off it. A mark, a
+ * catalogue row and the button that adds to it all wear it, so the eye can
+ * tell what came from the catalogue in a log that is otherwise cyan and grey.
+ */
+export const LOGGERS = 'var(--color-dk8s-loggers, #a855f7)';
+export const LOGGERS_SOFT = `color-mix(in srgb, ${LOGGERS} 16%, transparent)`;
+export const LOGGERS_EDGE = `color-mix(in srgb, ${LOGGERS} 42%, transparent)`;
+/** Text on a filled Loggers button — dark, so the purple stays the loud part. */
+export const LOGGERS_INK = 'var(--color-dk8s-loggers-ink, #1a0b2b)';
+/** A pattern's hole, the teal the boards draw `{orderId}` in. */
+export const HOLE = 'var(--color-dk8s-hole, #2dd4bf)';
+/** Text on the filled Ask button. */
+export const AI_INK = 'var(--color-protocol-ai-ink, #10262b)';

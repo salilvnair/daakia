@@ -79,6 +79,8 @@ function buildOpenAiRequest(payload: AiRequestPayload, baseUrl: string, endpoint
       const msg: Record<string, unknown> = { role: m.role, content: m.content };
       if (m.toolCalls?.length) msg.tool_calls = m.toolCalls;
       if (m.toolCallId) msg.tool_call_id = m.toolCallId;
+      /* Back exactly as it came — see `AiMessage.reasoningContent`. */
+      if (m.reasoningContent) msg.reasoning_content = m.reasoningContent;
       return msg;
     });
 
@@ -96,6 +98,8 @@ function buildOpenAiRequest(payload: AiRequestPayload, baseUrl: string, endpoint
   if (payload.settings.stopSequences.length) body.stop = payload.settings.stopSequences;
   if (payload.settings.responseFormat === 'json_object') body.response_format = { type: 'json_object' };
   if (payload.settings.seed != null) body.seed = payload.settings.seed;
+  /* DeepSeek's switch for its thinking mode; see `AiSettings.thinking`. */
+  if (payload.settings.thinking === 'off' && payload.provider === 'deepseek') body.thinking = { type: 'disabled' };
   if (payload.tools?.length) {
     body.tools = payload.tools.map(t => ({ type: t.type, function: t.function }));
   }
@@ -398,6 +402,7 @@ function parseNonStreamingResponse(
   let content = '';
   let toolCalls: AiMessage['toolCalls'];
   let tokens: AiTokenUsage | undefined;
+  let reasoningContent: string | undefined;
 
   switch (provider) {
     case 'anthropic': {
@@ -441,9 +446,10 @@ function parseNonStreamingResponse(
     }
     default: {
       // OpenAI-compatible: { choices: [{ message: { content, tool_calls } }], usage: {...} }
-      const choices = data.choices as { message?: { content?: string; tool_calls?: unknown[] } }[];
+      const choices = data.choices as { message?: { content?: string; tool_calls?: unknown[]; reasoning_content?: string } }[];
       const msg = choices?.[0]?.message;
       content = msg?.content || '';
+      reasoningContent = msg?.reasoning_content || undefined;
       if (msg?.tool_calls?.length) {
         toolCalls = (msg.tool_calls as { id: string; type: string; function: { name: string; arguments: string } }[]).map(tc => ({
           id: tc.id,
@@ -459,6 +465,13 @@ function parseNonStreamingResponse(
           total: usage.total_tokens || 0,
         };
       }
+      /* The shape of the answer, never its text: an empty reply is otherwise
+         indistinguishable from one the screen failed to draw. */
+      console.log('[AI Response]', JSON.stringify({
+        provider, finish: (data.choices as { finish_reason?: string }[] | undefined)?.[0]?.finish_reason,
+        contentChars: content.length, reasoningChars: reasoningContent?.length ?? 0,
+        toolCalls: toolCalls?.length ?? 0, tokens,
+      }));
       break;
     }
   }
@@ -472,6 +485,7 @@ function parseNonStreamingResponse(
       toolCalls,
       timestamp: Date.now(),
       tokens,
+      ...(reasoningContent ? { reasoningContent } : {}),
     },
     tokens,
     duration: Date.now() - startTime,

@@ -387,6 +387,78 @@ Translate Kubernetes' phrasing into plain language. "FailedScheduling: 0/3
 nodes are available: 3 Insufficient memory" means the cluster has nowhere to
 put this pod, which is a capacity problem, not an application problem.`;
 
+/**
+ * Ask the log — a question over a window, answered with the lines behind it.
+ *
+ * Not built on the shared preamble either, for the same reason the format
+ * detector is not: the answer is drawn as a timeline with every step linked to
+ * its line, so it has to arrive as JSON, and the preamble's "end with the
+ * cheapest next check" produces prose. What it keeps from the preamble is the
+ * rule that matters most — nothing that is not in the evidence — and it makes
+ * that rule checkable: every claim names line numbers, and a claim without
+ * one is a claim the screen will not draw.
+ *
+ * The catalogue comes with the lines. It is what lets "which loggers went
+ * quiet" be answered at all: a logger that wrote nothing has no line to be
+ * cited, and only the catalogue knows it exists.
+ */
+export const DK8S_LOG_ASK_THE_LOG = `
+You are the dk8s log reader inside Daakia. A tester is looking at one pod's log
+over a window of time and has asked a question about it — an id to follow, or a
+question in words. You answer from the numbered lines you are given, and every
+claim you make carries the numbers of the lines it came from.
+
+━━━ WHAT YOU ARE GIVEN ━━━
+- THE WINDOW: the time range and the pod.
+- WHAT THIS APPLICATION CAN SAY: the logger catalogue — every logger the team
+  declared or saw, its level, how many lines it wrote in this window, and the
+  message patterns it has with their counts. A logger or a pattern with 0 in
+  the window is one that went quiet or never ran here; that is a fact you may
+  report, and the only way to answer "which loggers went quiet".
+- THE LINES, NUMBERED: "[n] time LEVEL logger message". Some windows are too
+  big to send whole; when lines were left out, a note says how many and which
+  were kept. Never claim something happened "nowhere else" in a window you
+  were only shown part of.
+
+━━━ THIS TASK ━━━
+Answer the question. If it is an id, follow that id through the window in
+order: what happened to it, step by step, and how it ended. If it is a
+question in words, answer it and show the steps that answer it. If the lines
+do not answer it, say so in the first sentence and say what would.
+
+━━━ HOW TO ANSWER ━━━
+Answer with JSON and nothing else — no prose before or after, no code fence:
+
+{
+  "answer": [ { "text": "one or two sentences", "cites": [12, 14] } ],
+  "steps": [
+    { "lines": [12], "time": "14:02:14.021", "text": "short, what happened", "logger": "OrderService" }
+  ],
+  "aggregates": [ { "text": "14 captures failed in this window, first at 14:02:15", "lines": [31, 40, 52] } ],
+  "followUps": [ "a question the tester would plausibly ask next" ],
+  "loggers": [ "OrderService", "CaptureClient" ]
+}
+
+- "answer": one to three short paragraphs. Every paragraph cites lines.
+- "steps": the events in time order, each anchored on the line it came from
+  (the first number in "lines" is the anchor). Keep each "text" under twelve
+  words and in the log's own terms. At most twelve steps.
+- "aggregates": patterns across many lines — a count, a first and last time.
+  Cite a sample of the lines, up to twenty. Omit when there are none.
+- "followUps": up to three, phrased as the tester would type them.
+- "loggers": the loggers your answer relied on, as the lines name them.
+
+━━━ RULES ━━━
+- Cite only numbers that appear in THE LINES. Never invent a line, a time, an
+  id or a logger. A step you cannot cite is a step you leave out.
+- Distinguish "failed" from "retried and succeeded" and from "logged at ERROR
+  but handled". A routine retry reported as an outage wastes an afternoon.
+- Secret values were replaced before sending; do not ask for them and do not
+  treat the replacement as a finding.
+- If the question asks about something outside the window — yesterday, another
+  pod — say that this window cannot show it rather than guessing.
+`.trim();
+
 
 /**
  * Work out a log format from sample lines.
@@ -526,6 +598,7 @@ export const DK8S_PROMPTS: Record<string, string> = {
   'dk8s.file.explain': DK8S_FILE_EXPLAIN,
   'dk8s.format.detect': DK8S_DETECT_FORMAT,
   'dk8s.terminal.theme': DK8S_TERMINAL_THEME,
+  'dk8s.log.askTheLog': DK8S_LOG_ASK_THE_LOG,
 };
 
 /** What each prompt is offered as in the UI. */
@@ -575,10 +648,49 @@ export const DK8S_USER_TEMPLATE = `━━━ POD ━━━
 ━━━ THE DEVELOPER ASKS ━━━
 {question}`;
 
+/**
+ * The turn "Ask the log" sends: the window, the catalogue, the numbered lines
+ * and the question — four blocks where the others have one, because the
+ * catalogue is evidence too and it is a different kind of evidence from the
+ * lines. An empty block is dropped by `renderDk8sUserPrompt`, header and all.
+ */
+export const DK8S_ASK_THE_LOG_USER = `━━━ POD ━━━
+{podContext}
+
+━━━ THE WINDOW ━━━
+{window}
+
+━━━ WHAT THIS APPLICATION CAN SAY ━━━
+{catalogue}
+
+━━━ THE LINES, NUMBERED ━━━
+{evidence}
+
+━━━ THE QUESTION ━━━
+{question}`;
+
+/** The variables "Ask the log" adds to the usual ones. */
+export const DK8S_ASK_THE_LOG_VARIABLES = ['{window}', '{catalogue}'];
+
+/**
+ * The variables one prompt's user template can use — what its handler fills.
+ *
+ * Every dk8s prompt goes through `handleDk8sAsk` and gets the usual set,
+ * except Ask the log, whose own handler also fills the window and the
+ * catalogue. Offering `{catalogue}` on the others would let somebody type a
+ * placeholder into the library that reaches the model as the literal text.
+ */
+export function dk8sVariablesFor(key: string): string[] {
+  return key === 'dk8s.log.askTheLog'
+    ? [...DK8S_USER_VARIABLES, ...DK8S_ASK_THE_LOG_VARIABLES]
+    : [...DK8S_USER_VARIABLES];
+}
+
 /** Every prompt starts from the same shape; each can be edited away from it. */
-export const DK8S_USER_PROMPTS: Record<string, string> = Object.fromEntries(
-  Object.keys(DK8S_PROMPTS).map(k => [k, DK8S_USER_TEMPLATE]),
-);
+export const DK8S_USER_PROMPTS: Record<string, string> = {
+  ...Object.fromEntries(Object.keys(DK8S_PROMPTS).map(k => [k, DK8S_USER_TEMPLATE])),
+  'dk8s.log.askTheLog': DK8S_ASK_THE_LOG_USER,
+};
 
 /**
  * The variables a dk8s user prompt can use.

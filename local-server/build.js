@@ -40,16 +40,24 @@ let restarting = false;
  */
 function restart() {
   const start = () => {
-    child = spawn(process.execPath, [OUT], {
+    const proc = spawn(process.execPath, [OUT], {
       /* 'ipc' so the old server can be asked to save and exit, below. */
       stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
       cwd: path.resolve(__dirname, '..'),
     });
-    child.on('exit', code => {
+    child = proc;
+    proc.on('exit', code => {
       /* A crash is worth saying out loud. The next rebuild will try again, so
          this is information rather than the end of the run. */
       if (code !== null && code !== 0) console.error(`[local-server] exited with ${code}`);
+      /* A dead server is not the running one. Left in `child`, the next
+         rebuild asked it to shut down over a channel that had already
+         closed — and waited for an 'exit' that had already happened. */
+      if (child === proc) child = undefined;
     });
+    /* `send` on a closed channel does not throw, it emits this. Unhandled, it
+       took the whole watcher down with ERR_IPC_CHANNEL_CLOSED. */
+    proc.on('error', err => console.error(`[local-server] ${err.message}`));
   };
 
   /* Two rebuilds in quick succession used to start two servers: the second
@@ -58,7 +66,7 @@ function restart() {
      each with its own copy of the database. The server that is about to
      start will run the newest bundle anyway. */
   if (restarting) return;
-  if (!child) { start(); return; }
+  if (!child || !child.connected || child.exitCode !== null) { child = undefined; start(); return; }
   const old = child;
   child = undefined;
   restarting = true;

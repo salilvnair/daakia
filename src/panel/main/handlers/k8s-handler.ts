@@ -13,10 +13,15 @@ import { probeEnvironment, setKubectlPath } from '../../../services/k8s/kubectl'
 import { connEvidence } from '../../../services/k8s/conn-summary';
 import { probeAccess, forbiddenReason } from '../../../services/k8s/k8s-access';
 import {
-  clearPvCache, mountsOf, type PvLogConfig,
+  clearPvCache, mountsOf, appOf, type PvLogConfig,
 } from '../../../services/k8s/pv-logs';
 import { type PvMatch } from '../../../services/k8s/pv-search';
-import { searchPvInPod } from '../../../services/k8s/pv-search-in-pod';
+import { withParse, sampleOf } from '../../../services/k8s/search-parse';
+import { searchPvInPod, rootsFor } from '../../../services/k8s/pv-search-in-pod';
+import {
+  startCapture, readPage as readCapturePage, filterCapture, locate as locateInCapture, closeCapture,
+} from '../../../services/k8s/log-capture';
+import type { HostFilterSpec } from '../../../services/k8s/log-filter';
 import { fetchFromPod } from '../../../services/k8s/pv-in-pod';
 import * as path from 'path';
 import { promises as fs } from 'fs';
@@ -45,6 +50,7 @@ import {
   type ArtifactKind, type CollectTarget,
 } from '../../../services/k8s/k8s-artifacts';
 import { readMemoryProfile, assessHeapDumpSafety } from '../../../services/k8s/k8s-memory';
+import { scanFolder } from '../../../services/k8s/logger-scan';
 import {
   searchLogs, DEFAULT_SEARCH,
   type SearchHandle, type SearchTarget, type SearchOptions,
@@ -64,7 +70,7 @@ import { detectFormat, detectPattern } from '../../../services/k8s/log-format-de
 import { handleAiSend } from './ai-handler';
 import { handleHeapAnalyze, handleThreadsAnalyze, handleLogsAnalyze } from './heap-handler';
 import { handleJfrAnalyze } from './jfr-handler';
-import { streamLogs, type LogStreamHandle } from '../../../services/k8s/k8s-log-stream';
+import { streamLogs, type LogStreamHandle, type LogLevel } from '../../../services/k8s/k8s-log-stream';
 import { run, kubectlBinary, resolveBinary } from '../../../services/k8s/kubectl';
 import { clearAccessCache } from '../../../services/k8s/k8s-access';
 import { probeCapabilities, classifyFromSpec, availableActions, execFailureKind } from '../../../services/k8s/pod-classify';
@@ -939,8 +945,9 @@ export function handleDk8sStopWatch(): void {
 /** Called when the panel goes away, so a watch cannot outlive its tab. */
 export function disposeDk8s(): void {
   stopAllWatches();
-  activeSearch?.cancel();
-  activeSearch = undefined;
+  for (const s of activeSearches.values()) s.cancel();
+  activeSearches.clear();
+  for (const c of pvCancels.values()) c.cancelled = true;
   stopLogStreams();
   closeAllTerminals();
 }
@@ -1282,6 +1289,13 @@ export async function handleDk8sLogsOpen(
   */
   const key = streamKey(context, namespace, pod);
   if (msg.alongside) stopLogStreams(key); else stopLogStreams();
+  /*
+    Which read these lines belong to, echoed back as it was asked. A stream
+    that is stopped says nothing more, but what it said just before is already
+    on its way — and arrived into the read that replaced it, as forty stray
+    lines on top of "the last 200".
+  */
+  const read = msg.readId !== undefined ? { readId: msg.readId } : {};
 
   logStreams.set(key, streamLogs(context, namespace, pod, {
     format: pinned,
@@ -1310,6 +1324,9 @@ export async function handleDk8sLogsOpen(
        no `--until-time`. */
     fromIso: msg.fromIso as string | undefined,
     toMs: msg.toMs as number | undefined,
+    levels: Array.isArray(msg.levels)
+      ? (msg.levels as unknown[]).filter((l): l is LogLevel => l === 'error' || l === 'warn' || l === 'info' || l === 'debug' || l === 'other')
+      : undefined,
   }, {
     // Named on screen, so it is always clear which format is running and how
     // it was picked — a wrong format is much easier to spot than to debug.
@@ -1320,12 +1337,12 @@ export async function handleDk8sLogsOpen(
     /* Namespace and cluster travel with every line. With two panes open the
        pod name alone is not an address — two namespaces can hold a pod called
        the same thing, and its lines would land in the other one's pane. */
-    onLines: (lines) => postMessage({ type: 'dk8s:logLines', pod, namespace, context, lines }),
+    onLines: (lines) => postMessage({ type: 'dk8s:logLines', pod, namespace, context, lines, ...read }),
     onStatus: (status, detail) => postMessage({
-      type: 'dk8s:logStatus', pod, namespace, context, status, detail,
+      type: 'dk8s:logStatus', pod, namespace, context, status, detail, ...read,
     }),
     onDropped: (count) => postMessage({
-      type: 'dk8s:logDropped', pod, namespace, context, count,
+      type: 'dk8s:logDropped', pod, namespace, context, count, ...read,
     }),
   }));
 }
@@ -2101,7 +2118,7 @@ export const DK8S_AI_TAB = 'dk8s-ai';
  * where to put each one is friction at exactly the wrong moment. The folder is
  * shown in the UI and openable in one click.
  */
-function artifactDir(): string {
+export function artifactDir(): string {
   return join(dk8sStorageRoot(), 'artifacts');
 }
 
@@ -2325,8 +2342,18 @@ export async function handleDk8sRevealArtifacts(): Promise<void> {
 
 // ── Multi-pod log search ────────────────────────────────────────────────────
 
-/** One search at a time. Starting a second cancels the first. */
-let activeSearch: SearchHandle | undefined;
+/**
+ * One search at a time per asker. Starting a second cancels the first.
+ *
+ * The dialog's search is the untagged one. A Follow or a Window runs a search
+ * of its own beside it — reading a thread across the pods must not throw away
+ * the result the reader followed it from — so each carries a tag, every
+ * message it produces carries the tag back, and only a search with the same
+ * tag replaces it.
+ */
+const activeSearches = new Map<string, SearchHandle>();
+/** Cancels an archive pass, which is not a search handle — by the same tag. */
+const pvCancels = new Map<string, { cancelled: boolean }>();
 
 /**
  * Search several pods' logs at once.
@@ -2338,12 +2365,17 @@ let activeSearch: SearchHandle | undefined;
  */
 export function handleDk8sSearchLogs(
   msg: Record<string, unknown>,
-  postMessage: PostMessage,
+  reply: PostMessage,
 ): void {
-  activeSearch?.cancel();
-  pvCancel.cancelled = true;
-  pvCancel = { cancelled: false };
-  const signal = pvCancel;
+  const tag = typeof msg.tag === 'string' ? msg.tag : '';
+  const postMessage: PostMessage = tag
+    ? (m) => reply({ ...(m as Record<string, unknown>), tag })
+    : reply;
+  activeSearches.get(tag)?.cancel();
+  const previous = pvCancels.get(tag);
+  if (previous) previous.cancelled = true;
+  const signal = { cancelled: false };
+  pvCancels.set(tag, signal);
 
   const targets = (msg.targets as SearchTarget[]) ?? [];
   const opts: SearchOptions = {
@@ -2382,7 +2414,9 @@ export function handleDk8sSearchLogs(
     supported shape, and silently: the live half returned, the archive half
     was skipped, and nothing said so.
   */
-  const searchArchive = !!pv?.enabled && mountsOf(pv).length > 0;
+  /* A Window or a Follow may ask for the live logs alone — a window around a
+     hit from a minute ago is in the live log, and an archive pass is minutes. */
+  const searchArchive = msg.archive !== false && !!pv?.enabled && mountsOf(pv).length > 0;
 
   postMessage({
     type: 'dk8s:searchStarted',
@@ -2391,26 +2425,60 @@ export function handleDk8sSearchLogs(
     archive: searchArchive,
   });
 
-  activeSearch = searchLogs(targets, opts, {
+  /*
+    Each pod's hits are read with that pod's format before they go — which
+    takes a moment for the pod spec — so "done" waits for the last of them,
+    or it could land before the hits it is counting.
+  */
+  const reading: Promise<void>[] = [];
+  const handle: SearchHandle = searchLogs(targets, opts, {
     onPodDone: (result, matches) => {
-      postMessage({ type: 'dk8s:searchPod', result, matches });
+      const first = matches[0];
+      const t = first ? targets.find(x => x.pod === first.pod && x.namespace === first.namespace) : undefined;
+      reading.push(parsedHits(t?.context ?? first?.context ?? '', matches).then(m => {
+        postMessage({ type: 'dk8s:searchPod', result, matches: m });
+      }));
     },
     onProgress: (done, total, pod) => {
       postMessage({ type: 'dk8s:searchProgress', done, total, pod });
     },
     onFinished: (summary) => {
-      activeSearch = undefined;
-      if (!searchArchive || signal.cancelled) {
-        postMessage({ type: 'dk8s:searchDone', ...summary });
-        return;
-      }
-      void searchArchives(pv!, targets, opts, summary, signal, postMessage);
+      if (activeSearches.get(tag) === handle) activeSearches.delete(tag);
+      void Promise.all(reading).then(() => {
+        if (!searchArchive || signal.cancelled) {
+          postMessage({ type: 'dk8s:searchDone', ...summary });
+          return;
+        }
+        void searchArchives(pv!, targets, opts, summary, signal, postMessage);
+      });
     },
   });
+  activeSearches.set(tag, handle);
 }
 
-/** Cancels an archive pass, which is not an activeSearch handle. */
-let pvCancel = { cancelled: false };
+/**
+ * A pod's hits, each with the thread, logger and MDC its format reads.
+ *
+ * The same format the Logs tab would choose for the pod — a saved rule, else
+ * what the lines look like — so a search hit and the same line in the Logs tab
+ * have the same fields, and "follow this thread" follows exactly. A pod with no
+ * format that reads its lines keeps its hits as they were.
+ */
+async function parsedHits<T extends { pod: string; namespace: string; text: string; before: string[]; after: string[] }>(
+  context: string,
+  matches: T[],
+): Promise<T[]> {
+  const first = matches[0];
+  if (!first) return matches;
+  try {
+    const picked = await resolveFormatFor(context, first.namespace, first.pod, sampleOf(matches));
+    if (!picked.format) return matches;
+    const compiled = compileFormat(picked.format);
+    return matches.map(m => withParse(m, compiled));
+  } catch {
+    return matches;
+  }
+}
 
 function pvConfig(): PvLogConfig | undefined {
   return state().pvLogs;
@@ -2486,7 +2554,8 @@ async function searchArchives(
       that row turned "no grep in this image" into "no matches".
     */
     if (r.matched > 0 || r.files.length > 0 || (out.result as { error?: string }).error) {
-      postMessage({ type: 'dk8s:searchArchivePod', result: out.result, matches: out.matches });
+      const matches = await parsedHits(t.context, out.matches);
+      postMessage({ type: 'dk8s:searchArchivePod', result: out.result, matches });
     }
   }
 
@@ -2527,11 +2596,13 @@ export async function handleDk8sSavePv(
   postMessage({ type: 'dk8s:pvConfig', config: cfg });
 }
 
-export function handleDk8sCancelSearch(postMessage: PostMessage): void {
-  activeSearch?.cancel();
-  pvCancel.cancelled = true;
-  activeSearch = undefined;
-  postMessage({ type: 'dk8s:searchCancelled' });
+export function handleDk8sCancelSearch(postMessage: PostMessage, msg: Record<string, unknown> = {}): void {
+  const tag = typeof msg.tag === 'string' ? msg.tag : '';
+  activeSearches.get(tag)?.cancel();
+  activeSearches.delete(tag);
+  const cancel = pvCancels.get(tag);
+  if (cancel) cancel.cancelled = true;
+  postMessage(tag ? { type: 'dk8s:searchCancelled', tag } : { type: 'dk8s:searchCancelled' });
 }
 
 /**
@@ -2655,4 +2726,162 @@ export function handleDk8sRefreshPods(postMessage: PostMessage): void {
     return;
   }
   for (const w of live) w.handle.refresh();
+}
+
+/**
+ * Every logger call in a folder, offered for the catalogue.
+ *
+ * The folder is asked for rather than guessed. A guess would be the workspace
+ * root, which is right for somebody with the service open and wrong for
+ * everybody testing a service they do not build — and the wrong answer here
+ * reads a few thousand files before saying nothing useful.
+ *
+ * The calls go back as source text. Turning them into patterns is the
+ * webview's job, through the same parser a pasted call goes through: one set
+ * of rules for what `{}` means, in one place.
+ */
+// ── Downloaded logs: a pod's whole log in a temporary file ──────────────────
+
+/**
+ * Download a pod's whole log — live and, where an archive path covers the pod,
+ * its rotated files — to a temporary file, for the log tab to page through.
+ * See services/k8s/log-capture.ts.
+ */
+export async function handleDk8sCaptureStart(msg: Record<string, unknown>, postMessage: PostMessage): Promise<void> {
+  const id = String(msg.id ?? '');
+  const context = String(msg.context ?? '');
+  const namespace = String(msg.namespace ?? '');
+  const pod = String(msg.pod ?? '');
+  if (!id || !context || !namespace || !pod) {
+    postMessage({ type: 'dk8s:captureError', id, error: 'Which pod? The request named no context, namespace or pod.' });
+    return;
+  }
+  const container = typeof msg.container === 'string' && msg.container ? msg.container : undefined;
+  const capMb = Number(msg.capMb);
+  const pv = pvConfig();
+  const ref = { namespace, pod, context, container, workload: typeof msg.workload === 'string' ? msg.workload : undefined };
+  const roots = pv?.enabled && msg.archive !== false ? rootsFor(pv, ref) : [];
+  await startCapture({
+    id, target: { context, namespace, pod, container },
+    capBytes: Number.isFinite(capMb) && capMb > 0 ? capMb * 1024 * 1024 : undefined,
+    archiveRoots: roots,
+    app: pv ? appOf(pv, ref) : undefined,
+  }, {
+    onProgress: p => postMessage({ type: 'dk8s:captureProgress', id, ...p }),
+    onReady: info => postMessage({ type: 'dk8s:captureReady', id, info, archiveRoots: roots }),
+    onError: error => postMessage({ type: 'dk8s:captureError', id, error }),
+    resolveFormat: async sample => (await resolveFormatFor(
+      context, namespace, pod, sample, typeof msg.formatId === 'string' ? msg.formatId : undefined,
+    )).format,
+  });
+}
+
+export function handleDk8sCaptureRead(msg: Record<string, unknown>, postMessage: PostMessage): void {
+  const id = String(msg.id ?? '');
+  const page = readCapturePage(id, Math.max(0, Number(msg.from) || 0), Math.min(5000, Math.max(1, Number(msg.count) || 1000)));
+  postMessage(page
+    ? { type: 'dk8s:capturePage', id, reqId: msg.reqId, ...page }
+    : { type: 'dk8s:captureGone', id, reqId: msg.reqId });
+}
+
+export async function handleDk8sCaptureFilter(msg: Record<string, unknown>, postMessage: PostMessage): Promise<void> {
+  const id = String(msg.id ?? '');
+  const spec = (msg.spec ?? {}) as HostFilterSpec;
+  await filterCapture(id, {
+    query: String(spec.query ?? ''),
+    levels: Array.isArray(spec.levels) ? spec.levels.map(String) : [],
+    fields: Array.isArray(spec.fields) ? spec.fields : [],
+    contextLines: Number(spec.contextLines) || 0,
+  }, p => postMessage({ type: 'dk8s:captureFilterProgress', id, ...p }));
+}
+
+export function handleDk8sCaptureLocate(msg: Record<string, unknown>, postMessage: PostMessage): void {
+  const id = String(msg.id ?? '');
+  const index = locateInCapture(id, {
+    ts: typeof msg.ts === 'number' ? msg.ts : undefined,
+    text: typeof msg.text === 'string' ? msg.text : undefined,
+  });
+  postMessage({ type: 'dk8s:captureLocated', id, reqId: msg.reqId, index });
+}
+
+export function handleDk8sCaptureClose(msg: Record<string, unknown>): void {
+  closeCapture(String(msg.id ?? ''));
+}
+
+export async function handleDk8sScanLoggers(
+  msg: Record<string, unknown>, postMessage: PostMessage,
+): Promise<void> {
+  let folder = typeof msg.folder === 'string' ? msg.folder.trim() : '';
+  if (!folder) {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      canSelectFolders: true,
+      canSelectFiles: false,
+      title: 'Scan a project for logger calls',
+      openLabel: 'Scan',
+    });
+    if (!picked?.length) {
+      postMessage({ type: 'dk8s:loggerScan', cancelled: true });
+      return;
+    }
+    folder = picked[0].fsPath;
+  }
+
+  try {
+    const result = await scanFolder(folder);
+    postMessage({ type: 'dk8s:loggerScan', folder, ...result });
+  } catch (err) {
+    postMessage({ type: 'dk8s:loggerScan', folder, error: (err as Error).message });
+  }
+}
+
+/**
+ * Every pod dk8s is watching right now, as search targets.
+ *
+ * The scope of an AI-run search, and deliberately nothing wider: the model can
+ * narrow it with a glob, but it cannot name a cluster or a namespace the user
+ * has not opened. What is on screen is what may be read.
+ *
+ * The watch key is `context/namespace`; split at the LAST slash, because a
+ * namespace cannot contain one and an EKS context name routinely does.
+ */
+export function watchedPodTargets(): SearchTarget[] {
+  const out: SearchTarget[] = [];
+  for (const [key, live] of watches) {
+    const cut = key.lastIndexOf('/');
+    if (cut <= 0) continue;
+    const context = key.slice(0, cut);
+    const namespace = key.slice(cut + 1);
+    for (const raw of live.pods as {
+      name?: string; containers?: ({ name?: string } | string)[]; workload?: { name?: string };
+    }[]) {
+      if (!raw?.name) continue;
+      const containers = (raw.containers ?? [])
+        .map(c => (typeof c === 'string' ? c : c?.name))
+        .filter((c): c is string => !!c);
+      out.push({
+        context, namespace, pod: raw.name,
+        containers: containers.length ? containers : undefined,
+        workload: raw.workload?.name,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * The archive half, for a caller that is not the search screen — or nothing,
+ * when no volume is configured, so "archive: true" from a model is a no-op
+ * rather than an error the user has to read.
+ */
+export function archiveSearcher():
+  ((t: SearchTarget, opts: SearchOptions, signal: { cancelled: boolean }) =>
+    ReturnType<typeof searchPvInPod>) | undefined {
+  const pv = pvConfig();
+  if (!pv?.enabled || !mountsOf(pv).length) return undefined;
+  return (t, opts, signal) => searchPvInPod(
+    pv,
+    { namespace: t.namespace, pod: t.pod, context: t.context, workload: t.workload },
+    opts, signal,
+  );
 }

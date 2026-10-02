@@ -6,7 +6,7 @@ import { ConfirmDialog } from '../shared';
 import { SelectInputView, EditorView, KeyValueTableView, DurationInputView, ResizablePanelView, TabView, TextInputView, IconButtonView, PilledTabView, ToggleSwitchView } from '@salilvnair/dui';
 import type { TabItem, KeyValueTableRow, SelectOption, PilledTab } from '@salilvnair/dui';
 import { METHOD_COLORS, methodBg } from '../../colors';
-import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern, ExternalLinkIcon, FolderOpenIcon } from '../../icons';
+import { TrashIcon, DiagonalLinesPattern, ExternalLinkIcon, FolderOpenIcon } from '../../icons';
 import type { MockRoute, HttpMethod } from './mock-types';
 import { postMsg } from '../../vscode';
 import { logUiEvent } from '../../store/ui-audit-store';
@@ -18,6 +18,7 @@ import { SequencePanel } from './wiremock/SequencePanel';
 import { WebhookPanel } from './wiremock/WebhookPanel';
 import { StateMachineTriggerSelect } from './wiremock/StateMachinePanel';
 import type { StateMachineConfig, ConnectedWorkflow } from './mock-types';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 type RouteTab = 'basic' | 'matching' | 'advanced';
 
@@ -52,7 +53,7 @@ export function RouteCard({ route, isEditing, serverBaseUrl, server, onEdit, onU
   const [contentType, setContentType] = useState<'application/json' | 'application/xml' | 'text/plain'>('application/json');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [headersExpanded, setHeadersExpanded] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
   const [activeTab, setActiveTab] = useState<RouteTab>('basic');
 
   const pickBodyFile = useCallback(() => {
@@ -72,9 +73,7 @@ export function RouteCard({ route, isEditing, serverBaseUrl, server, onEdit, onU
     e.stopPropagation();
     if (!serverBaseUrl) return;
     const fullUrl = `${serverBaseUrl}${route.path.startsWith('/') ? '' : '/'}${route.path}`;
-    navigator.clipboard.writeText(fullUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    void navigator.clipboard.writeText(fullUrl).then(flash);
   };
 
   const tryRoute = (e: React.MouseEvent) => {
@@ -183,7 +182,7 @@ export function RouteCard({ route, isEditing, serverBaseUrl, server, onEdit, onU
           <span className="relative z-20 opacity-0 group-hover:opacity-100 transition-all">
             <IconButtonView
               size="default"
-              icon={copied ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
+              icon={<CopyGlyph copied={copied} size={12} />}
               onClick={copyFullPath}
               tooltip="Copy full URL"
             />

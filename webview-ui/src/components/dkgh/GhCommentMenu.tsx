@@ -33,6 +33,7 @@ import { useCallback, useRef, useState } from 'react';
 import { Ico, type IcoName } from './GhIcons';
 import { commentId } from './edit-flow';
 import { dropPortal, dropStyle, useDropPanel } from './drop-panel';
+import { CopyGlyph } from '../shared/CopyTick';
 
 export interface CommentRef {
   author?: string;
@@ -175,8 +176,7 @@ export function GhCommentMenu({
               className={`ghmenu-r${done === it.id ? ' ok' : ''}`}
               onClick={it.run}
             >
-              <Ico name={done === it.id ? 'check' : it.icon}
-                   className={done === it.id ? 'popped' : undefined} />
+              {done === it.id ? <CopyGlyph copied size={12} /> : <Ico name={it.icon} />}
               <span className="ghmenu-t">
                 {it.label}
                 {it.note && <i>{it.note}</i>}

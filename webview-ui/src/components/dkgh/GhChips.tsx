@@ -19,6 +19,7 @@ import { Ico } from './GhIcons';
 import {
   describeTerm, dropField, formatQuery, isEmpty, parseQuery, type FilterState,
 } from './filter-model';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 /** Fields the model can evaluate. Anything else is named and dropped. */
 const KNOWN = new Set([
@@ -152,26 +153,19 @@ export function GhChips({ state, labels, onChange, onExplain, explaining }: {
  * showing would otherwise set state on a component that is gone.
  */
 function CopyButton({ text }: { text: string }) {
-  const [done, setDone] = useState(false);
-
-  useEffect(() => {
-    if (!done) return undefined;
-    const t = window.setTimeout(() => setDone(false), 1500);
-    return () => window.clearTimeout(t);
-  }, [done]);
+  const { copied: done, flash } = useCopyTick();
 
   return (
     <button
       type="button"
-      className={`btn copyb${done ? ' done' : ''}`}
+      className="btn copyb"
       title={done ? 'Copied' : 'Copy the query'}
       aria-label={done ? 'Copied' : 'Copy the query'}
       onClick={() => {
-        navigator.clipboard?.writeText(text);
-        setDone(true);
+        void navigator.clipboard?.writeText(text).then(flash);
       }}
     >
-      <Ico name={done ? 'check' : 'copy'} />
+      <CopyGlyph copied={done} size={12} />
     </button>
   );
 }

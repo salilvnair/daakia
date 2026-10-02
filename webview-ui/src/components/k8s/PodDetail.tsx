@@ -8,10 +8,15 @@
 import { useCallback, useEffect } from 'react';
 import {
   CloseIcon, TerminalIcon, FileTextIcon, CodeIcon, StethoscopeIcon,
-  SparkleIcon, ChevronLeftIcon, LayersIcon, LockIcon, FolderOpenIcon,
+  SparkleIcon, ChevronLeftIcon, LayersIcon, LockIcon, FolderOpenIcon, BracesIcon, PythonIcon, PortForwardIcon,
 } from '../../icons';
+import { LoggersTab, scopeOf } from './LoggersTab';
+import { AskLogTab } from './AskLogTab';
+import { usePatternsFor, useLoggersFor } from '../../store/dk8s-logger-store';
+import { LOGGERS } from './tone';
 import { CopyButtonView, IconSize, TableSkeletonView } from '@salilvnair/dui';
 import { useK8sStore, type DetailTab } from '../../store/k8s-store';
+import { useTabsStore } from '../../store/tabs-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { severityOf, severityColor, shortAge, restartLabel } from './pod-view';
@@ -24,6 +29,10 @@ import { PodTerminal } from './PodTerminal';
 import { tokenizeDescribeLine, tokenColor, tokenWeight } from './describe-highlight';
 import { CodeEditor } from '../shared/editors/CodeEditor';
 import { OverviewTab } from './OverviewTab';
+import { PythonTab } from './python/PythonTab';
+import { PortsTab } from './PortsTab';
+import { usePortForwardStore, forwardsFor, isUp } from '../../store/dk8s-port-forward-store';
+import { PythonHeaderChips } from './python/PythonHeaderChips';
 
 import { ACCENT } from './tone';
 import { AI as AI_ACCENT } from './tone';
@@ -48,11 +57,38 @@ const TABS: {
 }[] = [
   { id: 'overview', label: 'Overview', Icon: LayersIcon },
   { id: 'logs', label: 'Logs', Icon: FileTextIcon, needs: 'logs' },
+  /*
+    Beside Logs, and gated on nothing.
+
+    The catalogue is written down rather than read off the cluster — a pasted
+    logger call needs no permission at all — and it is most wanted exactly when
+    the log is unreadable, which includes the case where this account cannot
+    read the log yet.
+  */
+  { id: 'loggers', label: 'Loggers', Icon: BracesIcon },
+  /*
+    Beside the catalogue it reads, and gated on the log it asks about: the
+    question is answered from the lines this view holds, so an account that
+    cannot read the log has nothing to ask.
+  */
+  { id: 'ask', label: 'Ask the log', Icon: SparkleIcon, needs: 'logs' },
   { id: 'terminal', label: 'Terminal', Icon: TerminalIcon, needs: 'exec' },
   { id: 'doctor', label: 'Doctor', Icon: StethoscopeIcon, needs: 'exec' },
+  /*
+    A script is copied in and run with `kubectl exec`, and the debugger is
+    pdb over the same exec channel the Terminal uses — so it needs exactly
+    what the Terminal needs, and wears the same padlock without it.
+  */
+  { id: 'python', label: 'Python', Icon: PythonIcon, needs: 'exec' },
   // Everything the explorer does is one exec, so it gates on exactly the same
   // access the terminal does.
   { id: 'explorer', label: 'Explorer', Icon: FolderOpenIcon, needs: 'exec' },
+  /*
+    A port on this pod, on this machine. Gated on the one permission a
+    forward needs, so an account without it sees the padlock and the rule to
+    ask for instead of a Forward button that fails.
+  */
+  { id: 'ports', label: 'Ports', Icon: PortForwardIcon, needs: 'portForward' },
   { id: 'describe', label: 'Describe', Icon: CodeIcon, needs: 'get' },
   { id: 'yaml', label: 'YAML', Icon: CodeIcon, needs: 'get' },
   /*
@@ -191,6 +227,12 @@ function YamlPane({ text, busy }: { text?: string; busy: boolean }) {
  * their font and their scrollback, is both simpler and strictly more capable.
  */
 
+/** What Back says it returns to, by the tab it returns to. */
+const TAB_NAME: Record<DetailTab, string> = {
+  overview: 'Overview', logs: 'Logs', loggers: 'Loggers', ask: 'Ask the log', terminal: 'Terminal',
+  doctor: 'Doctor', python: 'Python', explorer: 'Explorer', ports: 'Ports', yaml: 'YAML', describe: 'Describe', access: 'Access',
+};
+
 export function PodDetail() {
   const {
     detail, detailTab, setDetailTab, closeDetail, explorerPath, explorerHighlight,
@@ -210,15 +252,45 @@ export function PodDetail() {
   const access = useK8sStore(s => s.access);
   const cameFromSearch = useDk8sSearchStore(s => s.cameFromSearch);
   const returnToSearch = useDk8sSearchStore(s => s.returnToSearch);
+  /* Back walks the way the reader came — see `navBack`. */
+  const navTop = useK8sStore(s => s.navBack[s.navBack.length - 1]);
+  const appTabs = useTabsStore(s => s.tabs);
   const goBack = useCallback(() => {
-    closeDetail();
-    if (cameFromSearch) returnToSearch();
+    for (;;) {
+      const entry = useK8sStore.getState().popNav();
+      if (!entry) {
+        closeDetail();
+        if (cameFromSearch) returnToSearch();
+        return;
+      }
+      if (entry.kind === 'search') { closeDetail(); returnToSearch(); return; }
+      if (entry.kind === 'app') {
+        const tabs = useTabsStore.getState();
+        if (tabs.tabs.some(t => t.id === entry.tabId)) { tabs.setActiveTab(entry.tabId); return; }
+        continue; /* that Daakia tab has since been closed — the place before it */
+      }
+      return; /* a pod or the grid — popNav opened it */
+    }
   }, [closeDetail, cameFromSearch, returnToSearch]);
+  const backTitle = !navTop ? (cameFromSearch ? 'Back to search results' : 'Back to pods')
+    : navTop.kind === 'pods' ? 'Back to pods'
+    : navTop.kind === 'search' ? 'Back to search results'
+    : navTop.kind === 'app' ? `Back to ${appTabs.find(t => t.id === navTop.tabId)?.name ?? 'the previous tab'}`
+    : detail && navTop.pod.name === detail.name && navTop.pod.namespace === detail.namespace
+      ? `Back to ${TAB_NAME[navTop.tab]}`
+      : `Back to ${navTop.pod.name} · ${TAB_NAME[navTop.tab]}`;
 
   const aiOpen = useDk8sAiStore(s => s.open);
   const openAi = useDk8sAiStore(s => s.openPanel);
   const closeAi = useDk8sAiStore(s => s.closePanel);
   const answers = useDk8sAiStore(s => s.answers);
+
+  /* The Loggers tab's number: its marks when any are lit, else its size. */
+  const catalogueScope = scopeOf(detail ?? undefined);
+  const markedCount = usePatternsFor(catalogueScope).filter(p => p.marked).length;
+  const loggerCount = useLoggersFor(catalogueScope).length;
+  const allForwards = usePortForwardStore(s => s.forwards);
+  const forwardCount = detail ? forwardsFor(allForwards, detail).filter(isUp).length : 0;
 
   // Escape closes — but only when nothing is selected, so the first Escape
   // after highlighting a stack trace does not throw away the panel too.
@@ -255,7 +327,7 @@ export function PodDetail() {
              background: `linear-gradient(to right, color-mix(in srgb, ${color} 8%, transparent), transparent 60%)`,
            }}>
         <button type="button" onClick={goBack}
-                title={cameFromSearch ? 'Back to search results' : 'Back to pods'}
+                title={backTitle}
                 className="p-1 rounded cursor-pointer border-none bg-transparent">
           <ChevronLeftIcon size={IconSize.nav} color="var(--color-text-secondary)" />
         </button>
@@ -271,6 +343,11 @@ export function PodDetail() {
             {runtime && runtime.runtime !== 'unknown' && ` · ${runtime.runtime}`}
           </span>
         </div>
+
+        {/* The interpreter, and — while pdb is up in this pod — where it is
+            paused and for how long. In the header rather than the tab because
+            a paused process in a pod is worth knowing about from every tab. */}
+        <PythonHeaderChips />
 
         <div className="flex items-center gap-5 ml-4 flex-wrap">
           <Stat label="status" value={detail.reason || detail.phase} color={color} />
@@ -392,6 +469,21 @@ export function PodDetail() {
                     ? <LockIcon size={IconSize.action} color="var(--color-text-muted)" />
                     : <Icon size={IconSize.action} color={on ? ACCENT : 'var(--color-text-muted)'} />}
                   {label}
+                  {/* How many marks the Logs tab is lighting, else how many
+                      loggers the catalogue holds — the number on the board. */}
+                  {/* How many forwards this pod has open. */}
+                  {id === 'ports' && forwardCount > 0 && (
+                    <span className="px-1.5 rounded-full text-[10px]"
+                          style={{ color: 'var(--color-success)', background: 'color-mix(in srgb, var(--color-success) 16%, transparent)' }}>
+                      {forwardCount}
+                    </span>
+                  )}
+                  {id === 'loggers' && (markedCount > 0 || loggerCount > 0) && (
+                    <span className="px-1.5 rounded-full text-[10px]"
+                          style={{ color: LOGGERS, background: `color-mix(in srgb, ${LOGGERS} 16%, transparent)` }}>
+                      {markedCount > 0 ? `${markedCount} marked` : loggerCount.toLocaleString()}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -407,10 +499,14 @@ export function PodDetail() {
             ) : (
               <>
                 {detailTab === 'logs' && <LogViewer />}
+                {detailTab === 'loggers' && <LoggersTab />}
+                {detailTab === 'ask' && <AskLogTab />}
                 {detailTab === 'terminal' && <PodTerminal />}
                 {detailTab === 'describe' && <DescribePane text={describeText} busy={describeBusy} />}
                 {detailTab === 'yaml' && <YamlPane text={yamlText} busy={describeBusy} />}
                 {detailTab === 'doctor' && <DoctorTab />}
+                {detailTab === 'python' && <PythonTab />}
+                {detailTab === 'ports' && <PortsTab />}
                 {detailTab === 'explorer' && detail?.context && (
                   <ExplorerTab
                     context={detail.context}

@@ -15,7 +15,7 @@ import { ImportSharedModal } from './ImportSharedModal';
 import { useWorkspaceStore, isReadOnly, useWorkspaceEditable, sharedGroups, type Workspace, type SharingTeammate } from '../../store/workspace-store';
 import { READ_ONLY_REASON } from '../../services/workspace/editable';
 import { useTabsStore } from '../../store/tabs-store';
-import { SplitPanelView, AlertDialogView } from '@salilvnair/dui';
+import { SplitPanelView, AlertDialogView, ContextMenuView } from '@salilvnair/dui';
 import { NewItemModal } from '../shared/modals/NewItemModal';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { postMsg } from '../../vscode';
@@ -310,6 +310,7 @@ function WorkspaceHeader({
   onToggleShared: () => void;
 }) {
   const [overflow, setOverflow] = useState(false);
+  const overflowBtn = useRef<HTMLButtonElement>(null);
   const [sharedOpen, setSharedOpen] = useState(false);
   const readOnly = isReadOnly(active);
   const mine = workspaces.filter(w => !isReadOnly(w));
@@ -389,6 +390,7 @@ function WorkspaceHeader({
           under their name, and sync drops it when they stop sharing. */}
       {!readOnly && (
         <button
+          ref={overflowBtn}
           type="button"
           className="ws-overflow"
           title="Share, rename or delete this workspace"
@@ -398,30 +400,31 @@ function WorkspaceHeader({
         </button>
       )}
 
-      {overflow && !readOnly && (
-        <div className={`ws-menu ws-menu--right${readOnly ? ' ws-menu--wide' : ''}`} onMouseLeave={() => setOverflow(false)}>
-          {readOnly ? (
-            /* A copy is yours to drop. Nothing brings it back on its own —
-               you import it again if you want it. */
-            /* Only a read-only copy from before Import shared made editable
-               workspaces can get here; deleting it is all there is to do. */
-            <button type="button" className="ws-menu-item ws-menu-item--danger" onClick={() => { setOverflow(false); onDelete(); }}>
-              <TrashIcon size={12} /> Delete
-            </button>
-          ) : <>
-            <button type="button" className="ws-menu-item" onClick={() => { setOverflow(false); onToggleShared(); }}
-                    title="Teammates on the same Git Sync repo can import a read-only copy. History is never shared.">
-              <UsersIcon size={12} /> {active?.shared === 1 ? 'Stop sharing' : 'Share with team'}
-            </button>
-            <button type="button" className="ws-menu-item" onClick={() => { setOverflow(false); onRenameStart(); }}>
-              <PencilIcon size={12} /> Rename
-            </button>
-            <button type="button" className="ws-menu-item ws-menu-item--danger" onClick={() => { setOverflow(false); onDelete(); }}>
-              <TrashIcon size={12} /> Delete
-            </button>
-          </>}
-        </div>
-      )}
+      {/* dui's menu, the same as every other ⋯ in Daakia. */}
+      <ContextMenuView
+        anchorEl={overflowBtn.current}
+        open={overflow && !readOnly}
+        onClose={() => setOverflow(false)}
+        align="right"
+        width="md"
+        items={[
+          {
+            id: 'share', label: active?.shared === 1 ? 'Stop sharing' : 'Share with team',
+            description: 'Teammates on the same Git Sync repo import a read-only copy',
+            icon: <UsersIcon size={14} />, iconColor: 'var(--color-info)',
+            onClick: () => { setOverflow(false); onToggleShared(); },
+          },
+          {
+            id: 'rename', label: 'Rename', icon: <PencilIcon size={14} />, iconColor: 'var(--color-ctx-rename)',
+            onClick: () => { setOverflow(false); onRenameStart(); },
+          },
+          { id: 'sep', label: '', separator: true },
+          {
+            id: 'delete', label: 'Delete', danger: true, icon: <TrashIcon size={14} />,
+            onClick: () => { setOverflow(false); onDelete(); },
+          },
+        ]}
+      />
 
       {menuOpen && (
         <div className="ws-menu" ref={menuRef}>

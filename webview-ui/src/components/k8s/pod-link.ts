@@ -138,6 +138,13 @@ export function looksLikePodLink(raw: string): boolean {
  */
 export function findLinkedLine<T extends { ts?: number; text: string }>(
   lines: T[], target: LogTarget,
+  /**
+   * The log is still arriving: settle only for the line itself. The nearest
+   * line by time is an answer only once the log has gone past the target's
+   * time (or ended) — asked of the first batch of a streaming fetch, it is
+   * that batch's last line, which is not the line and stops the search.
+   */
+  opts: { streaming?: boolean } = {},
 ): T | undefined {
   const wanted = target.text?.trim();
   if (!wanted && target.ts === undefined) return undefined;
@@ -157,6 +164,7 @@ export function findLinkedLine<T extends { ts?: number; text: string }>(
   /* No text, or the text is gone: the nearest line by time is the closest
      thing to an answer, and the caller says it is approximate. */
   if (target.ts === undefined) return undefined;
+  if (opts.streaming && !lines.some(l => l.ts !== undefined && l.ts > target.ts! + 1000)) return undefined;
   const timed = lines.filter(l => l.ts !== undefined);
   if (!timed.length) return undefined;
   return timed.reduce((best, l) => (

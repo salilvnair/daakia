@@ -46,6 +46,16 @@ export interface AiMessage {
   toolCallId?: string;          // For tool result messages
   timestamp: number;
   tokens?: AiTokenUsage;
+  /**
+   * A thinking model's reasoning for this turn — DeepSeek's `reasoning_content`.
+   *
+   * Never shown and never summarised; kept only to be sent back. DeepSeek
+   * rejects a follow-up that carries an assistant tool-call turn without the
+   * reasoning that produced it ("The `reasoning_content` in the thinking mode
+   * must be passed back to the API"), so a tool loop that dropped it failed
+   * with a 400 on every second round.
+   */
+  reasoningContent?: string;
 }
 
 export interface AiTokenUsage {
@@ -78,6 +88,13 @@ export interface AiSettings {
   stopSequences: string[];      // optional stop tokens
   responseFormat: 'text' | 'json_object'; // default 'text'
   seed?: number;                // optional deterministic seed
+  /**
+   * 'off': answer without thinking first. For calls that must be quick and
+   * short — ghost text. A thinking model (DeepSeek's `deepseek-flash`) spends
+   * a small `maxTokens` on its reasoning and comes back with no text at all.
+   * Sent only to providers that take it; others ignore it.
+   */
+  thinking?: 'off';
 }
 
 export const DEFAULT_AI_SETTINGS: AiSettings = {

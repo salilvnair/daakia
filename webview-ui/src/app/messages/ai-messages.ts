@@ -6,6 +6,8 @@ import { useAiKeysStore } from '../../store/ai-keys-store';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 import { useAiHistoryStore } from '../../store/ai-history-store';
 import { useAiConversationStore } from '../../store/ai-conversation-store';
+import { displayEnvelope, noticeEnvelope } from '../../components/ai/ai-display';
+import { useAiChatSessions } from '../../store/ai-chat-sessions-store';
 import { useAiPromptTemplatesStore, AI_PROMPT_TEMPLATE_DEFAULTS } from '../../store/prompt-template';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -17,7 +19,7 @@ export function handleAiMessages(msg: any): boolean {
           const tab = useTabsStore.getState().tabs.find(t => t.id === tabId);
           if (tab?.type === 'daakia-ai') {
             // Global conversation store for Daakia AI tab — persisted, survives close/reopen
-            useAiConversationStore.getState().appendAssistantChunk(delta || '');
+            useAiConversationStore.getState().appendAssistantChunk(tabId, delta || '');
           } else if (tab) {
             const conv = [...(tab.aiConversation || [])];
             const lastMsg = conv[conv.length - 1];
@@ -64,8 +66,15 @@ export function handleAiMessages(msg: any): boolean {
           });
 
           const tab = useTabsStore.getState().tabs.find(t => t.id === tabId);
+          /* Stopped from the composer: an answer that arrives anyway is not this thread's any more. */
+          if (tab?.type === 'daakia-ai' && !tab.aiStreaming) break;
           if (tab?.type === 'daakia-ai') {
-            useAiConversationStore.getState().finalizeAssistantMessage(aiMsg);
+            /* The card travels with the answer, so a reopened conversation draws it again. */
+            const dk8s = msg.dk8s as unknown[] | undefined;
+            useAiConversationStore.getState().finalizeAssistantMessage(tabId,
+              dk8s?.length ? { ...aiMsg, display: displayEnvelope(aiMsg.content || '', dk8s) } : aiMsg);
+            /* Every answer saves the tab's thread, so the history rail is never behind. */
+            useAiChatSessions.getState().save(tabId);
             useTabsStore.getState().updateTab(tabId, { aiStreaming: false, loading: false });
           } else if (tab) {
             const conv = [...(tab.aiConversation || [])];
@@ -152,7 +161,11 @@ export function handleAiMessages(msg: any): boolean {
           const tab = useTabsStore.getState().tabs.find(t => t.id === tabId);
           if (tab?.type === 'daakia-ai') {
             const errorDetail = code ? `[${code}] ${errMsg}` : errMsg;
- useAiConversationStore.getState().addErrorMessage(`Error: ${errorDetail}`);
+            /* Drawn as a notice with Retry, reopened or not: the question it failed on is the last one asked. */
+            const asked = [...useAiConversationStore.getState().messagesOf(tabId)].reverse().find(m => m.role === 'user')?.content;
+            useAiConversationStore.getState().addErrorMessage(tabId, `Error: ${errorDetail}`, noticeEnvelope(errorDetail, 'error', asked));
+            /* A thread that ended in a failure is still a thread: kept in the rail like any other. */
+            useAiChatSessions.getState().save(tabId);
             useTabsStore.getState().updateTab(tabId, { aiStreaming: false, loading: false });
           } else if (tab) {
             const conv = [...(tab.aiConversation || [])];
@@ -228,6 +241,17 @@ export function handleAiMessages(msg: any): boolean {
         case 'ai:cancelled': {
           const { tabId } = msg;
           console.log('%c⛔ AI Request Cancelled', 'color:#6b7280;font-weight:bold', { tabId });
+          if (useTabsStore.getState().tabs.find(t => t.id === tabId)?.type === 'daakia-ai') {
+            /* The model is told it was stopped, so the next question is not read as a follow-up to an answer it never gave. */
+            const conv = useAiConversationStore.getState();
+            const msgs = conv.messagesOf(tabId);
+            const last = msgs[msgs.length - 1];
+            if (last?.role === 'user') {
+              conv.addErrorMessage(tabId, '(The user stopped this answer before it was written.)',
+                noticeEnvelope('Stopped before it answered.', 'stopped', last.content));
+              useAiChatSessions.getState().save(tabId);
+            } else conv.setStreaming(tabId, false);
+          }
           useTabsStore.getState().updateTab(tabId, { aiStreaming: false, loading: false });
           break;
         }

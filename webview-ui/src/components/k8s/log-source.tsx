@@ -26,7 +26,8 @@
  * wired to nothing, because a Fetch button that cannot fetch is worse than no
  * Fetch button.
  */
-import { createContext, useContext } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
+import type { LogLine } from '../../store/k8s-store';
 import { useK8sStore } from '../../store/k8s-store';
 
 type K8sStore = ReturnType<typeof useK8sStore.getState>;
@@ -47,6 +48,17 @@ export type LogSource = Pick<K8sStore,
   | 'toggleLogLevel' | 'clearFieldFilters' | 'logLineNumbers'
   | 'logContainer' | 'setLogContainer' | 'closeDetail'
 > & {
+  /** Empty the screen without stopping the read. Absent where there is nothing streaming to clear. */
+  clearLogs?: () => void;
+  /** Following, held still to read — and letting in what arrived meanwhile. */
+  logPaused?: boolean;
+  setLogPaused?: (paused: boolean) => void;
+  /** Lines a snapshot read has brought in so far — see k8s-store `logReceived`. Absent where nothing streams. */
+  logReceived?: number;
+  /** A line the page counts as a hit — marked in the gutter and tinted, without filtering anything out. */
+  isHit?: (line: LogLine) => boolean;
+  /** A term to mark in the text without filtering by it — a search result's own term. */
+  highlightQuery?: string;
   /**
    * True when these lines are a result that already happened.
    *
@@ -68,6 +80,73 @@ export type LogSource = Pick<K8sStore,
    * Set it and the ladder stops where the lines do.
    */
   contextCap?: number;
+  /**
+   * One clock for every pane of a split, when the reader asks for it.
+   *
+   * Each ribbon otherwise scales to its own lines, which is right for one log
+   * and wrong for three side by side: the same height meant a different
+   * instant in each, so a burst that hit all three pods at 14:02 was drawn at
+   * three different heights. With this set, every pane's ribbon spans the same
+   * start and end and the burst lines up across the split.
+   */
+  sharedRange?: { from: number; to: number };
+  /**
+   * These lines are one window onto a longer list — a downloaded log of
+   * millions of lines the view could never hold at once.
+   *
+   * `first` is where `logs[0]` sits in the whole list and `total` how long it
+   * is. Scrolling near either edge asks for the next window, and the line at
+   * the top of the screen stays put while lines arrive above it or are dropped.
+   */
+  paging?: {
+    first: number;
+    total: number;
+    /** The list is still growing (a download or a filter still running). */
+    partial?: boolean;
+    loading?: 'earlier' | 'later';
+    /**
+     * A filter the source is running and has not answered yet.
+     *
+     * The lines on hand are the unfiltered ones until then, so the view must
+     * not filter them itself and say "no line matches" a second before the
+     * matches arrive.
+     */
+    searching?: { query: string; scanned: number; total: number; matched: number };
+    loadEarlier: () => void;
+    loadLater: () => void;
+  };
+  /** A line to bring on screen and mark, for a source with no pod link to carry it. */
+  focusSeq?: number;
+  /** What the focused line is called on its row — "you came from here". */
+  focusLabel?: string;
+  /**
+   * The line the reader clicked, on a page that shows beside the log what that
+   * line names. Absent, a click on a row does nothing, as it always has.
+   */
+  selectedSeq?: number;
+  onSelectLine?: (line: LogLine) => void;
+  /** What the selected line is called on its row — "the line you clicked". */
+  selectedLabel?: string;
+  /** Which pod said each line, as a column — for lines that came from several. */
+  podColumn?: boolean;
+  /** The pod column's colour — by replica where replicas must be told apart. */
+  podColor?: (pod: string) => string;
+  /** Fields drawn as columns after the level: "Add as column". */
+  columns?: { key: string; value: (line: LogLine) => string | undefined; onRemove: () => void }[];
+  /** Drawn above the field rail: a page's own summary of these lines. */
+  railLead?: ReactNode;
+  /** One sentence in the footer, where the page has something true to say of every line. */
+  footerNote?: string;
+  /**
+   * Told when the gutter switches to compact ticks or back. A split pane says
+   * "compact" in its title strip, and only the gutter knows its own height.
+   */
+  onGutterCompact?: (compact: boolean) => void;
+  /**
+   * Told when the reader picks "±N lines around" — a paged source filters on
+   * the host, and has to bring those surrounding lines back with the hits.
+   */
+  onFindContext?: (n: number) => void;
 };
 
 const Ctx = createContext<LogSource | null>(null);

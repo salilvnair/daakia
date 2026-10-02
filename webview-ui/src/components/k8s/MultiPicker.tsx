@@ -79,6 +79,10 @@ function Check({ on }: { on: boolean }) {
 
 export function ClusterPicker() {
   const { contexts, contextError, busy, selectedContexts, useContexts } = useK8sStore();
+  /* No clusters to pick from is not a picker — it is the start of the wizard. */
+  useEffect(() => {
+    if (!contexts.length) { useK8sStore.setState({ stage: 'probing' }); useK8sStore.getState().probe(); }
+  }, [contexts.length]);
   const [filter, setFilter] = useState('');
   const [checked, setChecked] = useState<string[]>(() =>
     selectedContexts.length ? selectedContexts : contexts.filter(c => c.current).map(c => c.name));

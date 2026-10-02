@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { useCopyTick, CopyGlyph } from '../../../components/shared/CopyTick';
 
 // ─── Copy Root HTML Button ────────────────────────────────────────────────────
 // Wiki capture helper — click to copy outerHTML of #root to clipboard.
@@ -49,13 +50,12 @@ async function copyRootHtml(): Promise<boolean> {
 const SHOW_BUTTON = false;
 
 export function CopyRootHtmlButton() {
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
 
   const handleClick = async () => {
     const ok = await copyRootHtml();
     if (!ok) return;
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    flash();
   };
 
   // Global shortcut — Ctrl+Shift+1 (Cmd+Shift+1 on Mac) — fires regardless of
@@ -103,7 +103,7 @@ export function CopyRootHtmlButton() {
         if (!copied) (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
       }}
     >
-      {copied ? '✅' : ''}
+      <CopyGlyph copied={copied} size={18} />
     </button>
   );
 }

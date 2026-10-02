@@ -18,12 +18,18 @@ import {
   DEFAULT_TAIL_LADDER, DEFAULT_CONTEXT_LADDER, DEFAULT_ARCHIVE_LADDER,
   DEFAULT_TAIL, DEFAULT_CONTEXT, MAX_LINES,
   ladder, ladderText, defaultOf, contextLabel, tailLabel,
+  LOG_DOWNLOAD_MAX_KEY, DEFAULT_DOWNLOAD_MAX_MB, downloadMaxMb,
 } from '../../components/k8s/log-settings';
+import { TextInputView } from '@salilvnair/dui';
 import { LayersIcon, SearchIcon, ClockIcon } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
 import { LogFormatSettings } from './LogFormatSettings';
+import { LogPayloadSettings } from './LogPayloadSettings';
 import { PvLogSettings } from './PvLogSettings';
 import { PvPodCheck } from './PvPodCheck';
+import { ConfirmDialog } from '../shared/modals/ConfirmDialog';
+import { ASK_LINE_CAP, ASK_SEND_MORE_PREF } from '../../components/k8s/ask-cap';
+import { MAX_SCOPE_LINES } from '../../components/k8s/ask-scope';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -144,7 +150,34 @@ function Ladder({
   );
 }
 
-export function Dk8sLogSettings() {
+/** The Logs pages this file draws — Fields and Determinants have their own. */
+export type LogSettingsPage = 'general' | 'downloads' | 'formats' | 'archive';
+
+const PAGE_HEAD: Record<LogSettingsPage, { title: string; body: React.ReactNode }> = {
+  general: {
+    title: 'Logs',
+    body: <>
+      Every &ldquo;how many lines&rdquo; dropdown in dk8s offers the numbers set here.
+      Separate them with commas; they are sorted for you, and anything that is not a
+      number of lines is dropped. Nothing above {MAX_LINES.toLocaleString()} &mdash; one
+      fetch still has to be something a panel can hold.
+    </>,
+  },
+  downloads: {
+    title: 'Downloads',
+    body: <>A pod&rsquo;s whole log, downloaded to a temporary file and opened in a tab &mdash; how big one may get.</>,
+  },
+  formats: {
+    title: 'Log formats',
+    body: <>How a line is split into its time, level, logger, thread and message &mdash; the built-in formats, and your own.</>,
+  },
+  archive: {
+    title: 'Archive',
+    body: <>Where a pod&rsquo;s older, rotated logs live on a volume, so a search and a download can read past what the container still has.</>,
+  },
+};
+
+export function Dk8sLogSettings({ page = 'general' }: { page?: LogSettingsPage }) {
   const logLineNumbers = useK8sStore(s => s.logLineNumbers);
   const setLogLineNumbers = useK8sStore(s => s.setLogLineNumbers);
   const apply = useK8sStore(s => s.apply);
@@ -165,16 +198,18 @@ export function Dk8sLogSettings() {
     <div className="flex flex-col gap-6 px-5 py-5">
       <div className="flex flex-col gap-1.5">
         <h2 className="text-[15px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-          Logs
+          {PAGE_HEAD[page].title}
         </h2>
         <p className="text-[11.5px] leading-relaxed" style={{ color: 'var(--color-text-secondary)', maxWidth: '110ch' }}>
-          Every &ldquo;how many lines&rdquo; dropdown in dk8s offers the numbers set here.
-          Separate them with commas; they are sorted for you, and anything that is not a
-          number of lines is dropped. Nothing above {MAX_LINES.toLocaleString()} &mdash; one
-          fetch still has to be something a panel can hold.
+          {PAGE_HEAD[page].body}
         </p>
       </div>
 
+      {page === 'downloads' && <DownloadLimit />}
+      {page === 'formats' && <LogFormatSettings />}
+      {page === 'archive' && <><PvLogSettings /><PvPodCheck /></>}
+
+      {page === 'general' && <>
       <div className="flex flex-col gap-3">
         <SectionRule label="the log view" />
         <Ladder
@@ -242,10 +277,51 @@ export function Dk8sLogSettings() {
         />
       </div>
 
-      <LogFormatSettings />
-      <PvLogSettings />
-      <PvPodCheck />
+      <LogPayloadSettings />
+
+      <div className="flex flex-col gap-3">
+        <SectionRule label="ask the log" />
+        <SendMoreToAi />
+      </div>
+      </>}
     </div>
+  );
+}
+
+/**
+ * Ask the log sends at most 2,000 lines of a scope — grepped for what the
+ * question names, then the newest. This lifts that to what one fetch holds,
+ * and asks first: it is the reader's AI credits being spent.
+ */
+function SendMoreToAi() {
+  const on = useUiStateStore(s => s.prefs[ASK_SEND_MORE_PREF] === 'on');
+  const setPref = useUiStateStore(s => s.setPref);
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <>
+      <Toggle
+        on={on}
+        onChange={v => { if (v) setConfirming(true); else setPref(ASK_SEND_MORE_PREF, 'off'); }}
+        label={`Let Ask the log send more than ${ASK_LINE_CAP.toLocaleString()} lines`}
+        description={
+          `A question over a long stretch — “since yesterday” on a busy pod — is tens of thousands of lines. `
+          + `Off, Ask the log sends the ${ASK_LINE_CAP.toLocaleString()} newest of the lines that mention what the question names, `
+          + `and says so above the answer. On, it sends up to ${MAX_SCOPE_LINES.toLocaleString()}: fuller answers, and many more AI tokens.`
+        }
+      />
+      {confirming && (
+        <ConfirmDialog
+          title={`Send more than ${ASK_LINE_CAP.toLocaleString()} lines to the AI?`}
+          message={`Every line sent is paid for in AI tokens. A question over a long window can send up to `
+            + `${MAX_SCOPE_LINES.toLocaleString()} lines — many times the usual cost of one answer, and it can use up `
+            + 'your AI credits or rate limit quickly. You can turn it off here at any time.'}
+          confirmLabel="Turn it on"
+          danger
+          onConfirm={() => { setPref(ASK_SEND_MORE_PREF, 'on'); setConfirming(false); }}
+          onCancel={() => setConfirming(false)}
+        />
+      )}
+    </>
   );
 }
 
@@ -268,5 +344,58 @@ function Toggle({ on, onChange, label, description }: {
         </span>
       </span>
     </label>
+  );
+}
+
+/**
+ * How big a downloaded pod log may get — "Open logs" on a search result.
+ *
+ * A download is a temporary file, deleted when its tab closes; this only
+ * bounds how much disk one can take while it is open. Stored as text like the
+ * ladders above, and resolved the same way the download resolves it, so what
+ * this says is what the next download will use.
+ */
+function DownloadLimit() {
+  const stored = useUiStateStore(s => s.prefs[LOG_DOWNLOAD_MAX_KEY]) ?? '';
+  const setPref = useUiStateStore(s => s.setPref);
+  const [text, setText] = useState(stored);
+  useEffect(() => { setText(stored); }, [stored]);
+  const resolved = downloadMaxMb(text);
+  const shown = resolved >= 1024 ? `${(resolved / 1024).toFixed(resolved % 1024 ? 2 : 0)} GB` : `${resolved} MB`;
+  return (
+    <div className="flex flex-col gap-3 px-4 py-3.5 rounded-lg" style={cardStyle}>
+      <div className="flex items-start gap-3">
+        <span style={{ color: ACCENT, marginTop: 2, flexShrink: 0, display: 'inline-flex' }}><ClockIcon size={15} /></span>
+        <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+          <span className="text-[13px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
+            The most one downloaded log may take
+          </span>
+          <span className="text-[11.5px] leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+            <em>Open logs</em> on a search result downloads the pod&rsquo;s whole log &mdash; live, and its archived files
+            where an archive path covers it &mdash; into <code>~/.salilvnair/daakia-vsce/temp/logs</code>, and opens it
+            in a tab. The file is deleted when you close that tab, or when Daakia closes. This caps how big one download
+            may grow; when it is reached the tab says what was left out.
+          </span>
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <TextInputView
+          size="sm"
+          width="sm"
+          inputMode="numeric"
+          value={text}
+          placeholder={String(DEFAULT_DOWNLOAD_MAX_MB)}
+          aria-label="Maximum size of a downloaded log, in MB"
+          suffixIcon={<span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>MB</span>}
+          accentColor={ACCENT}
+          onChange={e => { setText(e.target.value); setPref(LOG_DOWNLOAD_MAX_KEY, e.target.value); }}
+        />
+        <span className="text-[11.5px]" style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+          {text.trim() && downloadMaxMb(text) === DEFAULT_DOWNLOAD_MAX_MB && Number(text) !== DEFAULT_DOWNLOAD_MAX_MB
+            ? `Not a size — using the default, ${shown}.`
+            : `Downloads stop at ${shown}.`}
+        </span>
+      </div>
+    </div>
   );
 }

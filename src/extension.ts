@@ -1,3 +1,4 @@
+import { cleanCaptures } from './services/k8s/log-capture';
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -21,6 +22,8 @@ import { purgeExpiredTrash } from './services/bin';
 import { setDk8sStorageRoot } from './panel/main/handlers/k8s-handler';
 
 export async function activate(context: vscode.ExtensionContext) {
+  /* Whatever a crash left in the downloaded-logs folder goes now. */
+  cleanCaptures();
   console.log('[daakia] Activating...');
 
   // Initialize OS keychain secret store (macOS Keychain / Windows Credential Manager / libsecret)
@@ -334,6 +337,8 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
+  /* Downloaded logs are temporary: nothing outlives the session. */
+  cleanCaptures();
   stopAllMockServers();
   closeDb();
 }

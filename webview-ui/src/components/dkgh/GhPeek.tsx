@@ -53,6 +53,7 @@ import { avClass } from './GhCards';
 import { sinceIso } from './format';
 import type { BoardIssue } from './board-types';
 import { ACCENT } from './types';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 interface Detail {
   number: number;
@@ -235,22 +236,16 @@ export function GhPeek({ repo, issue, onOpen, onClose }: {
  * whether it worked at all.
  */
 function CopyLink({ url }: { url: string }) {
-  const [done, setDone] = useState(false);
-
-  useEffect(() => {
-    if (!done) return undefined;
-    const t = window.setTimeout(() => setDone(false), 1500);
-    return () => window.clearTimeout(t);
-  }, [done]);
+  const { copied: done, flash } = useCopyTick();
 
   return (
     <button
       type="button"
-      className={`btn copyb${done ? ' done' : ''}`}
+      className="btn copyb"
       title={done ? 'Copied' : 'Copy the link'}
-      onClick={() => { navigator.clipboard?.writeText(url); setDone(true); }}
+      onClick={() => { void navigator.clipboard?.writeText(url).then(flash); }}
     >
-      <Ico name={done ? 'check' : 'copy'} />{done ? 'Copied' : 'Link'}
+      <CopyGlyph copied={done} size={12} />Link
     </button>
   );
 }

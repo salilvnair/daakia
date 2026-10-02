@@ -10,7 +10,13 @@
  */
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
-import { DK8S_PROMPTS, DK8S_USER_PROMPTS, DK8S_USER_VARIABLES } from '@daakia/dk8s-prompts';
+import {
+  DK8S_PROMPTS, DK8S_USER_PROMPTS, DK8S_USER_VARIABLES, dk8sVariablesFor,
+} from '@daakia/dk8s-prompts';
+import {
+  DK8S_CHAT_DEFAULTS, DK8S_CHAT_LABELS, DK8S_CHAT_VARIABLES, DK8S_CHAT_COLORS, DK8S_CHAT_KEYS,
+  type Dk8sChatKey,
+} from '../components/ai/dk8s-chat-prompts';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SECTION 1 — Agent Prompts
@@ -82,25 +88,46 @@ export const AGENT_SCENARIO_VARIABLES: Record<AgentScenario, ScenarioVarMap> = {
 
 // ─── Default System Prompts ───────────────────────────────────────────────────
 
+/*
+  System and user, split the way every prompt in the library is: the system
+  prompt is the instruction — who the agent is, what to do, what to return —
+  and the user prompt carries the values of this one call. A value in the
+  system prompt made the instruction change on every call and left the user
+  half empty.
+*/
 export function getDefaultSystemPrompt(scenario: AgentScenario): string {
   switch (scenario) {
     case 'request':
-      return `You are a REST API request builder for the Daakia API client.\n\nThe user wants: {{userIntent}}\nActive URL: {{currentUrl}}\nHTTP Method: {{currentMethod}}\nEnvironment variables: {{envVars}}\nCurrent headers: {{headers}}\n\nYour task:\n1. Determine the correct HTTP method, URL, headers, and body\n2. Return a structured JSON response with the request configuration\n3. Use environment variable references like {{baseUrl}} where appropriate\n4. Include Content-Type headers when a body is present\n5. Provide a brief explanation of what the request does\n\nReturn valid JSON with keys: method, url, headers, body, explanation`;
+      return `You are a REST API request builder for the Daakia API client.\n\nFrom what the user wants and the context they give you:\n1. Determine the correct HTTP method, URL, headers, and body\n2. Use environment variable references like {{baseUrl}} where appropriate\n3. Include Content-Type headers when a body is present\n4. Provide a brief explanation of what the request does\n\nReturn valid JSON with keys: method, url, headers, body, explanation`;
     case 'mock':
-      return `You are a mock API server designer for the Daakia mock server.\n\nUser request: {{userIntent}}\nExisting routes: {{existingRoutes}}\nData schema hint: {{dataSchema}}\n\nYour task:\n1. Design realistic mock endpoint(s) that match the user's intent\n2. Generate realistic sample data that looks like real production data\n3. Include proper HTTP status codes and headers\n4. Consider edge cases (empty arrays, pagination, errors)\n\nDesign endpoints that feel like a real API — use realistic names, IDs, timestamps, and values.`;
+      return `You are a mock API server designer for the Daakia mock server.\n\nFrom the user's request and the routes that already exist:\n1. Design realistic mock endpoint(s) that match the user's intent\n2. Generate realistic sample data that looks like real production data\n3. Include proper HTTP status codes and headers\n4. Consider edge cases (empty arrays, pagination, errors)\n\nDesign endpoints that feel like a real API — use realistic names, IDs, timestamps, and values.`;
     case 'test':
-      return `You are a test script generator for Daakia's built-in test framework.\n\nRequest: {{requestMethod}} {{requestUrl}}\nResponse status: {{responseStatus}}\nResponse body: {{responseBody}}\nContent-Type: {{contentType}}\n\nGenerate dk.* assertions to verify:\n1. Status code is correct\n2. Response body structure matches expectations\n3. Required fields are present with correct types\n4. Business logic constraints are satisfied\n\nUse the dk.* API:\n- dk.expect(value).toBe(expected)\n- dk.expect(value).toMatchSchema({ type: 'string'|'number'|'boolean'|'array'|'object' })\n- dk.expect(value).toContain(substring)\n- dk.expect(status).toBe(200)\n- dk.env.set('name', value)\n\nWrite clear, readable tests with descriptive messages.`;
+      return `You are a test script generator for Daakia's built-in test framework.\n\nGenerate dk.* assertions for the request and response you are given, to verify:\n1. Status code is correct\n2. Response body structure matches expectations\n3. Required fields are present with correct types\n4. Business logic constraints are satisfied\n\nUse the dk.* API:\n- dk.expect(value).toBe(expected)\n- dk.expect(value).toMatchSchema({ type: 'string'|'number'|'boolean'|'array'|'object' })\n- dk.expect(value).toContain(substring)\n- dk.expect(status).toBe(200)\n- dk.env.set('name', value)\n\nWrite clear, readable tests with descriptive messages.`;
     case 'curl':
-      return `You are a cURL command converter for the Daakia API client.\n\ncURL command: {{curlCommand}}\nEnvironment variables: {{envVars}}\n\nConvert this cURL command to a structured Daakia request:\n1. Extract the HTTP method (from -X flag or infer from -d)\n2. Parse all headers (-H flags)\n3. Extract the request body (-d, --data, --data-raw)\n4. Identify the URL\n5. Replace hardcoded values with environment variable references where sensible\n\nReturn JSON with: method, url, headers (key-value pairs), body, and notes about assumptions.`;
+      return `You are a cURL command converter for the Daakia API client.\n\nConvert the cURL command you are given to a structured Daakia request:\n1. Extract the HTTP method (from -X flag or infer from -d)\n2. Parse all headers (-H flags)\n3. Extract the request body (-d, --data, --data-raw)\n4. Identify the URL\n5. Replace hardcoded values with environment variable references where sensible\n\nReturn JSON with: method, url, headers (key-value pairs), body, and notes about assumptions.`;
     case 'explain':
-      return `You are an HTTP and API expert assistant for the Daakia API client.\n\nRequest: {{requestMethod}} {{requestUrl}}\nStatus: {{responseStatus}}\nContent-Type: {{contentType}}\nResponse body: {{responseBody}}\n\nExplain this API response in plain English:\n1. What the status code means in this context\n2. What data is returned and what each key/field means\n3. Notable patterns, conventions, or design decisions\n4. Any potential issues or things to watch for\n5. Common follow-up actions or related endpoints to try\n\nBe conversational, clear, and avoid unnecessary jargon.`;
+      return `You are an HTTP and API expert assistant for the Daakia API client.\n\nExplain the API response you are given in plain English:\n1. What the status code means in this context\n2. What data is returned and what each key/field means\n3. Notable patterns, conventions, or design decisions\n4. Any potential issues or things to watch for\n5. Common follow-up actions or related endpoints to try\n\nBe conversational, clear, and avoid unnecessary jargon.`;
     case 'general':
-      return `You are a helpful assistant built into the Daakia API client — a VS Code extension for API development and testing.\n\nUser message: {{userMessage}}\nContext: {{context}}\n\nHelp the user with:\n- HTTP methods, status codes, and headers\n- REST API design and best practices\n- Authentication patterns (Bearer, Basic, OAuth, API keys)\n- API testing strategies\n- JSON structure and data formats\n- WebSocket and GraphQL concepts\n- Daakia-specific features and capabilities\n\nBe concise, practical, and provide code examples when helpful.`;
+      return `You are a helpful assistant built into the Daakia API client — a VS Code extension for API development and testing.\n\nHelp the user with:\n- HTTP methods, status codes, and headers\n- REST API design and best practices\n- Authentication patterns (Bearer, Basic, OAuth, API keys)\n- API testing strategies\n- JSON structure and data formats\n- WebSocket and GraphQL concepts\n- Daakia-specific features and capabilities\n\nBe concise, practical, and provide code examples when helpful.`;
   }
 }
 
-export function getDefaultUserPrompt(_scenario: AgentScenario): string {
-  return '';
+/** The values of one call — what the system prompt's instruction is applied to. */
+export function getDefaultUserPrompt(scenario: AgentScenario): string {
+  switch (scenario) {
+    case 'request':
+      return `What I want: {{userIntent}}\n\nActive URL: {{currentUrl}}\nHTTP method: {{currentMethod}}\nEnvironment variables: {{envVars}}\nCurrent headers: {{headers}}`;
+    case 'mock':
+      return `What I need mocked: {{userIntent}}\n\nExisting routes: {{existingRoutes}}\nData schema hint: {{dataSchema}}`;
+    case 'test':
+      return `Request: {{requestMethod}} {{requestUrl}}\nResponse status: {{responseStatus}}\nContent-Type: {{contentType}}\n\nResponse body:\n{{responseBody}}`;
+    case 'curl':
+      return `cURL command:\n{{curlCommand}}\n\nEnvironment variables: {{envVars}}`;
+    case 'explain':
+      return `Request: {{requestMethod}} {{requestUrl}}\nStatus: {{responseStatus}}\nContent-Type: {{contentType}}\n\nResponse body:\n{{responseBody}}`;
+    case 'general':
+      return `{{userMessage}}\n\nContext: {{context}}`;
+  }
 }
 
 // ─── Display Order & Categories ───────────────────────────────────────────────
@@ -380,6 +407,8 @@ export type AiPromptTemplateKey =
   | 'dk8s.log.summarise.system'
   | 'dk8s.log.explainShape'
   | 'dk8s.log.explainShape.system'
+  | 'dk8s.log.askTheLog'
+  | 'dk8s.log.askTheLog.system'
   | 'dk8s.pod.crashloop'
   | 'dk8s.pod.crashloop.system'
   | 'dk8s.threads.explain'
@@ -401,7 +430,15 @@ export type AiPromptTemplateKey =
   | 'dk8s.format.detect'
   | 'dk8s.format.detect.system'
   | 'dk8s.terminal.theme'
-  | 'dk8s.terminal.theme.system';
+  | 'dk8s.python.complete'
+  | 'dk8s.python.complete.system'
+  | 'dk8s.log.askScope'
+  | 'dk8s.log.askScope.system'
+  | 'dk8s.python.ask'
+  | 'dk8s.python.ask.system'
+  | 'dk8s.terminal.theme.system'
+  // ── dk8s · asking Daakia AI about the watched pods ──
+  | Dk8sChatKey;
 
 // ─── Default templates ────────────────────────────────────────────────────────
 
@@ -433,7 +470,64 @@ const DK8S_USER = DK8S_USER_PROMPTS as Record<string, string>;
  * Renaming the odd ones out was the alternative and is worse: edited prompts
  * are stored against these keys, so a rename orphans a user's edits.
  */
+/**
+ * Where a prompt is used, for the ones no feature flag describes — the Prompt
+ * Library's "↳" line. A prompt with a flag takes its line from the flag
+ * (AI_FEATURE_LABELS.gates); every other one is here, so none is shown without
+ * saying which button sends it.
+ */
+export const PROMPT_WHERE_USED: Partial<Record<AiPromptTemplateKey, string>> = {
+  'history.filter.parse': '"Filter" (the "Describe it: …" box) in REST sidebar → History → Filter history popup → Request tab',
+  'rest.collection.search': '"Search with AI" sparkle, or Enter in the Search… box, in REST sidebar → Collections',
+  'dk8s.describe.explain': 'Not called from any screen yet — kept so it can be edited before a feature uses it',
+  'dk8s.file.explain': '"Ask AI" in dk8s → pod → Explorer tab → an open file (also from the Logs/Files search dialog)',
+  'dk8s.format.detect': '"Detect with AI" in Settings → DK8S → Logs → Log formats editor',
+  'dk8s.heap.explain': '"Ask AI" on a Class histogram or Heap dump result card in dk8s → pod → Doctor tab',
+  'dk8s.heap.explainOne': '✦ Ask on a suspect, finding or class row, or on a Retention graph node, in the Heap Dump analyzer',
+  'dk8s.heap.investigate': '"Investigate" in the Heap Dump analyzer → Explain tab',
+  'dk8s.log.askWhy': '"Ask AI why" on a selection in dk8s → pod → Logs · "Ask AI" in pod → Terminal · Doctor result cards without a prompt of their own',
+  'dk8s.log.explainError': '"Ask AI" chip on a folded stack trace in dk8s → pod → Logs · "Explain" in the log right-click menu',
+  'dk8s.log.explainShape': 'Not called from any screen yet — kept so it can be edited before a feature uses it',
+  'dk8s.log.summarise': '"Analyze" in the dk8s → pod → Logs toolbar → confirm in the Analyze dialog',
+  'dk8s.log.askTheLog': '"Ask" (or a "try" chip, a follow-up, or a saved check) in dk8s → pod → Ask the log tab — also reached from "Ask AI about this window" in the Logs footer',
+  'dk8s.pod.crashloop': 'Not called from any screen yet — kept so it can be edited before a feature uses it',
+  'dk8s.terminal.theme': '"Generate" under "Generate with AI" in Settings → DK8S → Terminal → Import a theme',
+  'dk8s.log.askScope': '"Ask" in dk8s → pod → Ask the log, when the question names its time in a way the tab does not read itself — turns it into what kubectl logs is given',
+  'dk8s.python.complete': 'Grey ghost text while typing in dk8s → pod → Python (Tab accepts) — and the code after a comment line, on the next line',
+  'dk8s.python.ask': '"Ask AI" in the dk8s → pod → Python toolbar, and in the Scripts screen',
+  'dk8s.threads.explain': '"Ask AI" on a Thread dump, SIGQUIT dump, Flight recording or Python stack card in dk8s → pod → Doctor · "Analyze" in the Thread Dump analyzer',
+  'dk8s.threads.explainLock': '✦ Ask on a lock in the Thread Dump analyzer → Locks graph',
+  'dk8s.threads.explainOne': '✦ on a thread row in the Thread Dump analyzer · "Ask AI" on a stack-shape finding card',
+  'dkgh.compose': '"Generate with AI" in dkgh → New issue',
+  'import.api.discovery': '"Analyze with AI" in REST sidebar → Collections → AI Auto-Discovery Agent',
+  'mock.traffic.enrich': '"Generate Variations" in Mock Server → Traffic tab → a record → "AI Enrich ✦"',
+  'platform.schema.diff': '"Analyse anomalies" in Settings → Power Features → Schema Diff ✦',
+  'platform.schema.migration': '"Generate migration" in Settings → Power Features → Schema Diff ✦',
+  'mock.graphql.generate': '"Generate with AI" in Mock Server → GraphQL server → GraphQL Operations',
+  'mock.grpc.generate': '"Generate with AI" in Mock Server → gRPC server → gRPC Services',
+  'mock.mqtt.generate': '"Generate with AI" in Mock Server → MQTT server → MQTT Topics',
+  'mock.soap.generate': '"Generate with AI" in Mock Server → SOAP server → SOAP Operations',
+  'mock.socketio.generate': '"Generate with AI" in Mock Server → Socket.IO server → Socket.IO Events',
+  'mock.sse.generate': '"Generate with AI" in Mock Server → SSE server → SSE Events',
+  'mock.websocket.generate': '"Generate with AI" in Mock Server → WebSocket server → WebSocket Handlers',
+  'rest.code.import': '"Extract with AI" in REST URL bar → ⋮ → Import cURL → Import Request → Code tab',
+  'rest.curl.explain': '"Explain with AI" in REST URL bar → ⋮ → Import cURL → Import Request → cURL tab',
+  'rest.docs.generate': '"Write with AI" in a REST request → Docs tab',
+  'rest.fuzz.analyze': '"Analyze Results" in the AI fuzzer — opened from "Fuzz" in a REST body, the GraphQL editor, a gRPC request, a SOAP request, or MCP → Tools',
+};
+
+/** The "↳ where it is used" line for a library entry, from its flag or from PROMPT_WHERE_USED. */
+export function whereUsed(key: AiPromptTemplateKey, flagGates?: string): string | undefined {
+  if (flagGates) return flagGates;
+  if (key.startsWith('dk8s.chat.')) {
+    return 'Daakia AI tab → "Ask the logs" starters on the landing, and the / prompt palette — sent with "Ask the logs — system"';
+  }
+  return PROMPT_WHERE_USED[key];
+}
+
 export function systemKeyFor(key: AiPromptTemplateKey): AiPromptTemplateKey | undefined {
+  /* Every "Ask the logs" starter is sent with the one dk8s system prompt: that is its System tab. */
+  if (key.startsWith('dk8s.chat.') && key !== 'dk8s.chat.system') return 'dk8s.chat.system' as AiPromptTemplateKey;
   const candidates = key.includes('.generate')
     ? [key.replace('.generate', '.system'), `${key}.system`]
     : [`${key}.system`];
@@ -491,7 +585,82 @@ What the reporter wrote:
 {{description}}
 `;
 
+/**
+ * The Python tab's two prompts — ghost text as you type, and Ask AI.
+ *
+ * The system halves are the instructions, and take the two facts the
+ * instructions depend on: which Python, in which container. Everything about
+ * this one call — the code either side of the cursor, the question, the last
+ * run — is the user half.
+ */
+const DK8S_PY_COMPLETE_SYSTEM = `You write inline code suggestions in a Python editor, the grey text an IDE offers at the cursor.
+
+The script runs inside a Kubernetes pod, in container {{container}}, with Python {{pythonVersion}} and only the packages installed in that container.
+
+Rules:
+- Reply with ONLY the text to insert at the cursor. No explanation, no markdown fences, and nothing that is already before the cursor.
+- When the line above the cursor is a comment saying what to do next, write the code that does it, starting at the cursor.
+- Otherwise finish the current statement, or write the next few lines at most — never more than 12.
+- Keep the file's indentation and style. Use the standard library and the modules the script already imports; add an import only when a comment asks for something they cannot do.
+- Never invent hostnames, credentials, service names or file paths in the pod — read them from the environment or leave a clearly named placeholder.
+- If there is nothing worth suggesting, reply with an empty string.`;
+
+/*
+ * Ask the log's scope: the question's own words about time and amount, as
+ * kubectl logs flags. Asked only when the tab's own reading of the question
+ * (`ask-scope.ts`) found none — "last 100 lines" and "since yesterday" never
+ * reach a model.
+ */
+const DK8S_ASK_SCOPE_SYSTEM = `You turn a question about a Kubernetes pod's log into how much of that log to read — what kubectl logs would be given as --tail, --since and --since-time.
+
+Answer with one JSON object and nothing else:
+{"tail": <how many of the newest lines, or null>, "head": <how many of the first lines, or null>, "sinceMinutes": <minutes back from now, or null>, "from": "<ISO 8601 local time the window starts, or null>", "to": "<ISO 8601 local time it ends, or null>", "label": "<the window as a person would say it: last 30 minutes, since 14:00, the last 500 lines>"}
+
+Rules:
+- Use only what the question itself says about time or amount. A question that names neither gets every field null — do not guess a window for it.
+- Resolve words like yesterday, this morning, after lunch or since the deploy at 3 against now, in the reader's time zone. A time with no date is today's, or yesterday's if it has not happened yet today.
+- One way of choosing lines: tail, head, sinceMinutes, or from/to — not two.`;
+
+const DK8S_ASK_SCOPE_USER = `Now: {{now}} ({{timezone}})
+Pod: {{pod}}
+
+Question: {{question}}`;
+
+const DK8S_PY_COMPLETE_USER = `Code before the cursor:
+{{prefix}}
+
+Code after the cursor:
+{{suffix}}
+
+Modules the script imports, as this container has them: {{imports}}`;
+
+const DK8S_PY_ASK_SYSTEM = `You help write, fix and explain a Python script that runs inside a Kubernetes pod, in container {{container}}, with Python {{pythonVersion}} and only the packages installed there.
+
+Answer as a JSON object and nothing else:
+{"answer": "<markdown: what you changed or found, and why — short>", "code": "<the whole updated script, or an empty string when no change is needed>"}
+
+Rules:
+- When asked to change or fix the script, return the complete script in "code", keeping everything the request did not ask to change.
+- When asked a question, answer it in "answer" and leave "code" empty.
+- Use the standard library and what the container has; if a package is missing, say so rather than importing it.
+- Read the last run's output and the problems the container's Python found — fix those first when asked to fix.
+- Never invent hostnames, credentials, service names or paths in the pod.`;
+
+const DK8S_PY_ASK_USER = `{{question}}
+
+Script {{scriptName}}:
+\`\`\`python
+{{script}}
+\`\`\`
+
+Selected lines: {{selection}}
+
+Last run: {{lastRun}}
+
+Problems the container's Python found: {{problems}}`;
+
 export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = {
+  ...(DK8S_CHAT_DEFAULTS as Record<Dk8sChatKey, string>),
   'dkgh.compose': DKGH_COMPOSE_USER,
   'dkgh.compose.system': DKGH_COMPOSE_SYSTEM,
   'dk8s.log.askWhy': DK8S_USER['dk8s.log.askWhy'] ?? '',
@@ -502,6 +671,8 @@ export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = 
   'dk8s.log.summarise.system': DK8S_SYSTEM['dk8s.log.summarise'] ?? '',
   'dk8s.log.explainShape': DK8S_USER['dk8s.log.explainShape'] ?? '',
   'dk8s.log.explainShape.system': DK8S_SYSTEM['dk8s.log.explainShape'] ?? '',
+  'dk8s.log.askTheLog': DK8S_USER['dk8s.log.askTheLog'] ?? '',
+  'dk8s.log.askTheLog.system': DK8S_SYSTEM['dk8s.log.askTheLog'] ?? '',
   'dk8s.pod.crashloop': DK8S_USER['dk8s.pod.crashloop'] ?? '',
   'dk8s.pod.crashloop.system': DK8S_SYSTEM['dk8s.pod.crashloop'] ?? '',
   'dk8s.threads.explain': DK8S_USER['dk8s.threads.explain'] ?? '',
@@ -524,6 +695,12 @@ export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = 
   'dk8s.format.detect.system': DK8S_SYSTEM['dk8s.format.detect'] ?? '',
   'dk8s.terminal.theme': DK8S_USER['dk8s.terminal.theme'] ?? '',
   'dk8s.terminal.theme.system': DK8S_SYSTEM['dk8s.terminal.theme'] ?? '',
+  'dk8s.python.complete': DK8S_PY_COMPLETE_USER,
+  'dk8s.python.complete.system': DK8S_PY_COMPLETE_SYSTEM,
+  'dk8s.log.askScope': DK8S_ASK_SCOPE_USER,
+  'dk8s.log.askScope.system': DK8S_ASK_SCOPE_SYSTEM,
+  'dk8s.python.ask': DK8S_PY_ASK_USER,
+  'dk8s.python.ask.system': DK8S_PY_ASK_SYSTEM,
   // ── Response & Diagnostics — system prompts ───────────────────────────────
   'askAiWhy.system':
     `You are a precise HTTP error diagnosis assistant. Analyze the status code, response body, and request context to identify the root cause and provide actionable fix steps. Be concise and technical. Format with numbered steps.`,
@@ -978,6 +1155,7 @@ Return ONLY a JSON array of stub objects — no explanation, no markdown fences.
 // ─── Labels for UI ────────────────────────────────────────────────────────────
 
 export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: string; description: string }> = {
+  ...(DK8S_CHAT_LABELS as Record<Dk8sChatKey, { label: string; description: string }>),
   'dkgh.compose': { label: 'Generate with AI (dkgh)',
     description: 'A description and the repository\u2019s own form fields \u2014 which of them it '
       + 'already answers, and which it does not' },
@@ -991,6 +1169,8 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   'dk8s.log.summarise.system': { label: 'Summarise logs — system', description: 'Instruction block: who the model is and how it must answer' },
   'dk8s.log.explainShape': { label: 'Explain a log shape', description: 'A repeating pattern the log analyzer detected' },
   'dk8s.log.explainShape.system': { label: 'Explain a log shape — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.log.askTheLog': { label: 'Ask the log', description: 'A question over a window of a pod\u2019s log — the numbered lines, the logger catalogue and the question' },
+  'dk8s.log.askTheLog.system': { label: 'Ask the log — system', description: 'Instruction block: answer as JSON, every claim citing the lines it came from' },
   'dk8s.pod.crashloop': { label: 'Explain a CrashLoopBackOff', description: 'Why a pod keeps restarting, from its events and exit codes' },
   'dk8s.pod.crashloop.system': { label: 'Explain a CrashLoopBackOff — system', description: 'Instruction block: who the model is and how it must answer' },
   'dk8s.threads.explain': { label: 'Explain a thread dump', description: 'Deadlocks, contention and what the threads are collectively doing' },
@@ -1012,6 +1192,12 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   'dk8s.format.detect': { label: 'Detect a log format', description: 'Infer a parser from sample lines' },
   'dk8s.format.detect.system': { label: 'Detect a log format — system', description: 'Instruction block: who the model is and how it must answer' },
   'dk8s.terminal.theme': { label: 'Design a terminal theme', description: 'Fill in a palette from a description of the look wanted' },
+  'dk8s.log.askScope': { label: 'Ask the log — what to read', description: 'The question, and now — turned into how much of the log to fetch: the newest lines, or a window of time' },
+  'dk8s.log.askScope.system': { label: 'Ask the log — what to read — system', description: 'Instruction block: kubectl logs flags as JSON, only from what the question says' },
+  'dk8s.python.complete': { label: 'Python ghost text', description: 'The code either side of the cursor — the suggestion to insert, or the code a comment asks for' },
+  'dk8s.python.complete.system': { label: 'Python ghost text — system', description: 'Instruction block: insert-only text, short, the container\u2019s Python and packages' },
+  'dk8s.python.ask': { label: 'Ask AI (Python)', description: 'A question or a change for the script, with the script, the selection, the last run and the problems found' },
+  'dk8s.python.ask.system': { label: 'Ask AI (Python) — system', description: 'Instruction block: answer as JSON — what and why, and the whole script when it changes' },
   'dk8s.terminal.theme.system': { label: 'Design a terminal theme — system', description: 'Instruction block: who the model is and how it must answer' },
   askAiWhy:               { label: 'Ask AI Why (Error Diagnosis)', description: 'Prompt used when "Ask AI why" is clicked on a failed HTTP response' },
   explainWithAi:          { label: 'Explain with AI',              description: 'Prompt used when "Explain" is clicked on a successful HTTP response' },
@@ -1181,6 +1367,7 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
 // ─── Variables available per template ────────────────────────────────────────
 
 export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]> = {
+  ...(DK8S_CHAT_VARIABLES as Record<Dk8sChatKey, string[]>),
   // The user halves interpolate; the system halves are instructions and take
   // no variables, the same as every other `.system` entry here.
   'dkgh.compose': ['repo', 'template', 'fields', 'description'],
@@ -1193,6 +1380,8 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'dk8s.log.summarise.system': [],
   'dk8s.log.explainShape': [...DK8S_USER_VARIABLES],
   'dk8s.log.explainShape.system': [],
+  'dk8s.log.askTheLog': dk8sVariablesFor('dk8s.log.askTheLog'),
+  'dk8s.log.askTheLog.system': [],
   'dk8s.pod.crashloop': [...DK8S_USER_VARIABLES],
   'dk8s.pod.crashloop.system': [],
   'dk8s.threads.explain': [...DK8S_USER_VARIABLES],
@@ -1213,6 +1402,13 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'dk8s.file.explain.system': [],
   'dk8s.format.detect': [...DK8S_USER_VARIABLES],
   'dk8s.terminal.theme': [...DK8S_USER_VARIABLES],
+  'dk8s.log.askScope': ['now', 'timezone', 'pod', 'question'],
+  'dk8s.log.askScope.system': [],
+  'dk8s.python.complete': ['prefix', 'suffix', 'imports'],
+  /* The instructions depend on which Python and which container, so those two are the system half's. */
+  'dk8s.python.complete.system': ['pythonVersion', 'container'],
+  'dk8s.python.ask': ['question', 'scriptName', 'script', 'selection', 'lastRun', 'problems'],
+  'dk8s.python.ask.system': ['pythonVersion', 'container'],
   'dk8s.terminal.theme.system': [],
   'dk8s.format.detect.system': [],
   askAiWhy:               ['{method}', '{url}', '{status}', '{statusText}', '{body}'],
@@ -1477,6 +1673,13 @@ export const AI_TEMPLATE_CATEGORIES: {
     keys: ['dkgh.compose'],
   },
   {
+    id: 'dk8s-chat',
+    label: 'dk8s · Ask the logs',
+    kind: 'mock',
+    /* The shared system prompt is each starter's System tab, not an entry of its own — alone it had no user half. */
+    keys: DK8S_CHAT_KEYS.filter(k => k !== 'dk8s.chat.system') as AiPromptTemplateKey[],
+  },
+  {
     id: 'dk8s',
     label: 'dk8s',
     kind: 'mock',
@@ -1485,6 +1688,7 @@ export const AI_TEMPLATE_CATEGORIES: {
       'dk8s.log.explainError',
       'dk8s.log.summarise',
       'dk8s.log.explainShape',
+      'dk8s.log.askTheLog',
       'dk8s.pod.crashloop',
       'dk8s.threads.explain',
       'dk8s.threads.explainOne',
@@ -1496,6 +1700,9 @@ export const AI_TEMPLATE_CATEGORIES: {
       'dk8s.file.explain',
       'dk8s.format.detect',
       'dk8s.terminal.theme',
+      'dk8s.python.complete',
+      'dk8s.python.ask',
+      'dk8s.log.askScope',
     ],
   },
   // ── MCP & Platform AI ─────────────────────────────────────────────────────
@@ -1515,6 +1722,7 @@ export const AI_TEMPLATE_CATEGORIES: {
 ];
 
 export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
+  ...(DK8S_CHAT_COLORS as Record<Dk8sChatKey, string>),
   'history.filter.parse': '#7dd3fc',
   'history.filter.parse.system': '#7dd3fc',
   'dkgh.compose': '#de7356',
@@ -1527,6 +1735,8 @@ export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
   'dk8s.log.summarise.system': '#f59e0b',
   'dk8s.log.explainShape': '#a78bfa',
   'dk8s.log.explainShape.system': '#a78bfa',
+  'dk8s.log.askTheLog': '#7EACB5',
+  'dk8s.log.askTheLog.system': '#7EACB5',
   'dk8s.pod.crashloop': '#ef4444',
   'dk8s.pod.crashloop.system': '#ef4444',
   'dk8s.threads.explain': '#22d3ee',
@@ -1547,6 +1757,12 @@ export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
   'dk8s.file.explain.system': '#22d3ee',
   'dk8s.format.detect': '#10b981',
   'dk8s.terminal.theme': '#a78bfa',
+  'dk8s.python.complete': '#4B8BBE',
+  'dk8s.python.complete.system': '#4B8BBE',
+  'dk8s.log.askScope': '#2dd4bf',
+  'dk8s.log.askScope.system': '#2dd4bf',
+  'dk8s.python.ask': '#4B8BBE',
+  'dk8s.python.ask.system': '#4B8BBE',
   'dk8s.format.detect.system': '#10b981',
   'dk8s.terminal.theme.system': '#a78bfa',
   askAiWhy:               '#ef4444',

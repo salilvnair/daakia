@@ -1969,6 +1969,18 @@ export function LinkIcon(props: IconProps) {
   );
 }
 
+/** Port forwarding: a pod's port, over here — two arrows, one each way. */
+export function PortForwardIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M4 8h13" />
+      <path d="m14 5 3 3-3 3" />
+      <path d="M20 16H7" />
+      <path d="m10 13-3 3 3 3" />
+    </svg>
+  );
+}
+
 export function CheckCircleIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>
@@ -2464,15 +2476,23 @@ export function MailIcon(props: IconProps) {
  *
  * Generated from that file. If the mark changes, regenerate rather than edit.
  */
-export function DaakiaMarkIcon({ size = 16 }: { size?: number }) {
+/**
+ * Daakia's mark. `tint` draws it in tones of one colour — the globe soft, the
+ * head light, the body full — for a surface that has its own accent, like the
+ * Daakia AI tab. Without it, the mark's own colours.
+ */
+export function DaakiaMarkIcon({ size = 16, tint }: { size?: number; tint?: string }) {
+  const globe = tint ? { fill: tint, fillOpacity: 0.62 } : undefined;
+  const head = tint ? { fill: `color-mix(in srgb, ${tint} 62%, white)` } : undefined;
+  const body = tint ? { fill: tint } : undefined;
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"
          aria-hidden="true">
       <g fill="none" fillRule="evenodd">
-      <path fill="#4caf50" fillOpacity=".8" d="M6,14.7097474 C3.1095002,13.8485374 1,11.1691214 1,8 C1,4.136 4.136,1 8,1 C11.864,1 15,4.136 15,8 C15,8.33540551 14.9763712,8.66532575 14.9306884,8.98818582 C14.819635,7.95407916 14.2380149,7.0608427 13.4042215,6.52686956 C12.7574981,4.14874451 10.5829696,2.4 8,2.4 C4.9072054,2.4 2.4,4.9072054 2.4,8 C2.4,10.5667503 4.1268516,12.7301729 6.48214524,13.3918581 C6.18077925,13.7275368 6,14.1108596 6,14.5416667 L6,14.7097474 Z M13.7729097,11.9584873 C13.7551484,11.9537059 13.7373857,11.9489757 13.7196237,11.9442969 C13.7708773,11.9023712 13.8208657,11.8589566 13.8695228,11.8141193 C13.8379008,11.8626613 13.8056931,11.9107873 13.7729097,11.9584873 Z" />
-      <path fill="#4caf50" fillOpacity=".8" d="M13.4327035,6.63685933 C13.4324554,6.63667553 13.4322073,6.63649176 13.4319591,6.63630803 C12.994526,4.89641293 11.7396279,3.47892394 10.1,2.813 L10.1,3.1 C10.1,3.87 9.47,4.5 8.7,4.5 L7.3,4.5 L7.3,5.9 C7.3,6.285 6.985,6.6 6.6,6.6 L5.2,6.6 L5.2,8 L8.49908167,8 C8.33861407,8.38479604 8.25,8.80704956 8.25,9.25 C8.25,10.3256011 8.77251034,11.2791633 9.57755025,11.870706 C8.77930629,12.0559719 7.95555211,12.3458562 7.3,12.7398445 L7.3,12.2 C6.53,12.2 5.9,11.57 5.9,10.8 L5.9,10.1 L2.547,6.747 C2.45618789,7.15216173 2.4002314,7.56429459 2.40000072,7.99731203 C2.40145449,4.90734577 4.90969604,2.4 8,2.4 C10.6210913,2.4 12.8234551,4.20374911 13.4327035,6.63685933 Z M6.48234054,13.3916406 C5.47894661,13.1094706 4.58938028,12.5545233 3.89884492,11.8120021 C4.58982227,12.5536947 5.48036252,13.1072402 6.48571605,13.3878892 C6.48458921,13.389139 6.48346404,13.3903894 6.48234054,13.3916406 Z M2.40000063,7.99731203 C2.40000035,7.99791096 2.40000016,7.99850992 2.40000007,7.99910889 Z" />
-      <path fill="#E535AB" d="M11.5,11.5 C12.743125,11.5 13.75,10.493125 13.75,9.25 C13.75,8.006875 12.743125,7 11.5,7 C10.256875,7 9.25,8.006875 9.25,9.25 C9.25,10.493125 10.256875,11.5 11.5,11.5 Z" />
-      <path fill="#6366f1" d="M11.5,12.625 C9.998125,12.625 7,13.37875 7,14.875 L7,16 L16,16 L16,14.875 C16,13.37875 13.001875,12.625 11.5,12.625 Z" />
+      <path fill="#4caf50" fillOpacity=".8" style={globe} d="M6,14.7097474 C3.1095002,13.8485374 1,11.1691214 1,8 C1,4.136 4.136,1 8,1 C11.864,1 15,4.136 15,8 C15,8.33540551 14.9763712,8.66532575 14.9306884,8.98818582 C14.819635,7.95407916 14.2380149,7.0608427 13.4042215,6.52686956 C12.7574981,4.14874451 10.5829696,2.4 8,2.4 C4.9072054,2.4 2.4,4.9072054 2.4,8 C2.4,10.5667503 4.1268516,12.7301729 6.48214524,13.3918581 C6.18077925,13.7275368 6,14.1108596 6,14.5416667 L6,14.7097474 Z M13.7729097,11.9584873 C13.7551484,11.9537059 13.7373857,11.9489757 13.7196237,11.9442969 C13.7708773,11.9023712 13.8208657,11.8589566 13.8695228,11.8141193 C13.8379008,11.8626613 13.8056931,11.9107873 13.7729097,11.9584873 Z" />
+      <path fill="#4caf50" fillOpacity=".8" style={globe} d="M13.4327035,6.63685933 C13.4324554,6.63667553 13.4322073,6.63649176 13.4319591,6.63630803 C12.994526,4.89641293 11.7396279,3.47892394 10.1,2.813 L10.1,3.1 C10.1,3.87 9.47,4.5 8.7,4.5 L7.3,4.5 L7.3,5.9 C7.3,6.285 6.985,6.6 6.6,6.6 L5.2,6.6 L5.2,8 L8.49908167,8 C8.33861407,8.38479604 8.25,8.80704956 8.25,9.25 C8.25,10.3256011 8.77251034,11.2791633 9.57755025,11.870706 C8.77930629,12.0559719 7.95555211,12.3458562 7.3,12.7398445 L7.3,12.2 C6.53,12.2 5.9,11.57 5.9,10.8 L5.9,10.1 L2.547,6.747 C2.45618789,7.15216173 2.4002314,7.56429459 2.40000072,7.99731203 C2.40145449,4.90734577 4.90969604,2.4 8,2.4 C10.6210913,2.4 12.8234551,4.20374911 13.4327035,6.63685933 Z M6.48234054,13.3916406 C5.47894661,13.1094706 4.58938028,12.5545233 3.89884492,11.8120021 C4.58982227,12.5536947 5.48036252,13.1072402 6.48571605,13.3878892 C6.48458921,13.389139 6.48346404,13.3903894 6.48234054,13.3916406 Z M2.40000063,7.99731203 C2.40000035,7.99791096 2.40000016,7.99850992 2.40000007,7.99910889 Z" />
+      <path fill="#E535AB" style={head} d="M11.5,11.5 C12.743125,11.5 13.75,10.493125 13.75,9.25 C13.75,8.006875 12.743125,7 11.5,7 C10.256875,7 9.25,8.006875 9.25,9.25 C9.25,10.493125 10.256875,11.5 11.5,11.5 Z" />
+      <path fill="#6366f1" style={body} d="M11.5,12.625 C9.998125,12.625 7,13.37875 7,14.875 L7,16 L16,16 L16,14.875 C16,13.37875 13.001875,12.625 11.5,12.625 Z" />
       </g>
     </svg>
   );
@@ -2607,4 +2627,121 @@ export function PeekIcon(props: IconProps) {
       <path d="M9 19h10a2 2 0 0 0 2-2V9" />
     </svg>
   );
+}
+
+/**
+ * Python, as two interlocking rounded halves in the stroke style of the rest of
+ * this set — the language's own mark drawn as an outline, so it takes the
+ * theme's colour like every other tab icon instead of arriving blue and yellow.
+ */
+export function PythonIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M12 3H9.5A2.5 2.5 0 0 0 7 5.5V8h5" />
+      <path d="M7 8H5.5A2.5 2.5 0 0 0 3 10.5v3A2.5 2.5 0 0 0 5.5 16H7v-2.5A2.5 2.5 0 0 1 9.5 11h5A2.5 2.5 0 0 0 17 8.5v-3A2.5 2.5 0 0 0 14.5 3H12" />
+      <path d="M12 21h2.5a2.5 2.5 0 0 0 2.5-2.5V16h-5" />
+      <path d="M17 16h1.5a2.5 2.5 0 0 0 2.5-2.5v-3A2.5 2.5 0 0 0 18.5 8H17v2.5a2.5 2.5 0 0 1-2.5 2.5h-5A2.5 2.5 0 0 0 7 15.5v3A2.5 2.5 0 0 0 9.5 21H12" />
+      <circle cx="10" cy="5.5" r="0.6" fill="currentColor" />
+      <circle cx="14" cy="18.5" r="0.6" fill="currentColor" />
+    </svg>
+  );
+}
+
+/**
+ * A Python file, in Python's own blue and yellow — the file icon VS Code's
+ * icon themes give a `.py`. Filled rather than stroked, and fixed in colour
+ * on purpose: it names the language, the way the logo does, in either theme.
+ */
+export function PythonFileIcon({ size = 14, ...rest }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden {...rest}>
+      <path fill="#3776AB" fillRule="evenodd"
+            d="M11.9 2C6.8 2 7.1 4.2 7.1 4.2v2.3h4.9v.7H5.2S2 6.8 2 12s2.9 5 2.9 5h1.7v-2.4s-.1-2.9 2.8-2.9h4.8s2.7 0 2.7-2.6V4.8S17.3 2 11.9 2Zm-2.7 1.5a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8Z" />
+      <path fill="#FFD43B" fillRule="evenodd"
+            d="M12.1 22c5.1 0 4.8-2.2 4.8-2.2v-2.3H12v-.7h6.8S22 17.2 22 12s-2.9-5-2.9-5h-1.7v2.4s.1 2.9-2.8 2.9H9.8s-2.7 0-2.7 2.6v4.3S6.7 22 12.1 22Zm2.7-1.5a.9.9 0 1 1 0-1.8.9.9 0 0 1 0 1.8Z" />
+    </svg>
+  );
+}
+
+/** A raised thumb — "this answer was right". */
+export function ThumbUpIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M7 10v11" />
+      <path d="M15 5.9 14 10h5.8a2 2 0 0 1 2 2.3l-1.4 7A2 2 0 0 1 18.4 21H7V10l4.3-7a1.8 1.8 0 0 1 3.3 1.3z" />
+      <path d="M3 10h4v11H3z" />
+    </svg>
+  );
+}
+
+/** A lowered thumb — "this answer was wrong". */
+export function ThumbDownIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M17 14V3" />
+      <path d="M9 18.1 10 14H4.2a2 2 0 0 1-2-2.3l1.4-7A2 2 0 0 1 5.6 3H17v11l-4.3 7a1.8 1.8 0 0 1-3.3-1.3z" />
+      <path d="M21 14h-4V3h4z" />
+    </svg>
+  );
+}
+
+/** A pennant on a pole — a pattern marked in the Loggers tab, lit in the Logs tab. */
+export function MarkFlagIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M4 21V4h11l1 2h4v10h-5l-1-2H6v7z" />
+    </svg>
+  );
+}
+
+/** Three lines, the last one short — a logger's lines; the Loggers board's mark. */
+export function LoggerLinesIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M4 6h16M4 12h16M4 18h10" />
+    </svg>
+  );
+}
+
+/** A hexagon — the pod, as the dk8s boards draw it. */
+export function PodHexIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M12 2 3 7v10l9 5 9-5V7z" />
+    </svg>
+  );
+}
+
+/** A clipboard — something pasted in. */
+export function ClipboardIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <rect x="8" y="2" width="8" height="4" rx="1" />
+    </svg>
+  );
+}
+
+/** A square-cornered folder, the one the Loggers boards draw beside a path. */
+export function FolderFlatIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M3 7h6l2 2h10v10H3z" />
+    </svg>
+  );
+}
+
+/** Three lines, each shorter — calls going out, fewer at each hop. The Window's downstream card. */
+export function ShorterLinesIcon(props: IconProps) {
+  return <svg {...withDefaults(props)}><path d="M4 7h16M4 12h10M4 17h7" /></svg>;
+}
+
+/** Two arcs chasing each other — a retry, a round trip. The Window's retries card. */
+export function RoundTripIcon(props: IconProps) {
+  return <svg {...withDefaults(props)}><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 12a9 9 0 0 1-15 6.7L3 16" /></svg>;
+}
+
+/** Two bars — a row that can be dragged to reorder. */
+export function GripLinesIcon(props: IconProps) {
+  return <svg {...withDefaults(props)}><path d="M4 8h16M4 16h16" /></svg>;
 }

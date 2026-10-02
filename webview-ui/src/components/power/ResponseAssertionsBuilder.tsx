@@ -7,7 +7,8 @@
 import { useState, useCallback } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { useToastStore } from '../../store/toast-store';
-import { CopyIcon, CheckIcon } from '../../icons';
+import { CheckIcon } from '../../icons';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 interface Props {
   responseBody: string;
@@ -128,7 +129,7 @@ export function ResponseAssertionsBuilder({ responseBody, tabId }: Props) {
   const [assertions, setAssertions] = useState<string[]>([]);
   const [hovered, setHovered] = useState<string | null>(null);
   const [applied, setApplied] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
   const updateTab = useTabsStore(s => s.updateTab);
   const addToast = useToastStore(s => s.addToast);
 
@@ -164,8 +165,7 @@ export function ResponseAssertionsBuilder({ responseBody, tabId }: Props) {
     if (assertions.length === 0) return;
     const script = `const data = dk.response.json();\ndk.test('Visual assertions', () => {\n${assertions.map(a => `  ${a}`).join('\n')}\n});`;
     await navigator.clipboard.writeText(script);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
+    flash();
   };
 
   if (parseError) {
@@ -222,8 +222,8 @@ export function ResponseAssertionsBuilder({ responseBody, tabId }: Props) {
               <button type="button" onClick={copyScript}
                 className="flex-1 h-[26px] text-[11px] rounded cursor-pointer border flex items-center justify-center gap-1"
                 style={{ borderColor: 'var(--color-surface-border)', color: copied ? 'var(--color-success)' : 'var(--color-text-secondary)' }}>
-                <CopyIcon size={10} />
-                {copied ? 'Copied!' : 'Copy'}
+                <CopyGlyph copied={copied} size={10} />
+                Copy
               </button>
               <button type="button" onClick={applyToScript}
                 className="flex-1 h-[26px] text-[11px] rounded cursor-pointer text-white flex items-center justify-center gap-1"

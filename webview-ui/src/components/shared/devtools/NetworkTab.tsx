@@ -9,8 +9,9 @@
  */
 import { useState, useMemo } from 'react';
 import { useDevToolsStore, type NetworkEntry, type CookieEntry } from '../../../store/devtools-store';
-import { NetworkIcon, CopyIcon, CheckIcon, ChevronDownIcon, ArrowUpRightIcon, ArrowDownLeftIcon, InfoCircleIcon, DownloadIcon } from '../../../icons';
+import { NetworkIcon, ChevronDownIcon, ArrowUpRightIcon, ArrowDownLeftIcon, InfoCircleIcon, DownloadIcon } from '../../../icons';
 import { RequestBodyDisplay } from '../display/RequestBodyDisplay';
+import { useCopyTick, CopyGlyph } from '../CopyTick';
 
 type DetailTab = 'request' | 'response' | 'network-logs';
 
@@ -111,12 +112,10 @@ function RequestListRow({ entry, isSelected, onSelect }: {
 // ─── Copy button ───────────────────────────────────────────────────────────────
 
 function CopyButton({ text, size = 13 }: { text: string; size?: number }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    void navigator.clipboard.writeText(text).then(flash);
   };
   return (
     <button
@@ -129,7 +128,7 @@ function CopyButton({ text, size = 13 }: { text: string; size?: number }) {
       }`}
       title={copied ? 'Copied!' : 'Copy'}
     >
-      {copied ? <CheckIcon size={size} /> : <CopyIcon size={size} />}
+      <CopyGlyph copied={copied} size={size} />
     </button>
   );
 }

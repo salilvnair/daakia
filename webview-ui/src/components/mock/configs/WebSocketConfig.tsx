@@ -6,12 +6,13 @@ import {
   SelectInputView, EditorView, ResizablePanelView, ButtonView, IconButtonView,
   ToggleSwitchView, TextInputView, CheckboxView, type SelectOption,
 } from '@salilvnair/dui';
-import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern } from '../../../icons';
+import { TrashIcon, DiagonalLinesPattern } from '../../../icons';
 import { ConfirmDialog } from '../../shared';
 import { WEBSOCKET_SAMPLES } from '../samples';
 import type { MockServer } from '../mock-types';
 import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
 import { logUiEvent } from '../../../store/ui-audit-store';
+import { CopyUrlButton } from './CopyUrlButton';
 
 const WS_SAMPLE_OPTIONS: SelectOption[] = [
   { value: '', label: 'Load Sample...' },
@@ -27,17 +28,9 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
   const handlers = server.wsHandlers || [];
   const [selectedSample, setSelectedSample] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showDeleteAll, setShowDeleteAll] = useState(false);
 
   const wsUrl = server.running && server.port ? `ws://localhost:${server.port}` : '';
-
-  const copyWsUrl = (id: string) => {
-    if (!wsUrl) return;
-    navigator.clipboard.writeText(wsUrl);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 1500);
-  };
 
   const applySample = (sampleId: string) => {
     if (!sampleId) return;
@@ -191,12 +184,7 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
               />
             )}
             {wsUrl && handler.enabled && (
-              <IconButtonView
-                size="sm"
-                icon={copiedId === handler.id ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
-                onClick={() => copyWsUrl(handler.id)}
-                title="Copy WebSocket URL"
-              />
+              <CopyUrlButton text={wsUrl} title="Copy WebSocket URL" />
             )}
             {handler.enabled && (
               <IconButtonView

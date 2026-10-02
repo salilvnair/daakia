@@ -15,15 +15,19 @@
  *   - Stack traces fold to one row. An unfolded Java exception costs a screen
  *     and a half, so three of them mean you never see the fourth.
  */
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback, useDeferredValue } from 'react';
 import {
   FilterInputView, SelectInputView, SegmentedControlView, CheckboxView, ButtonView,
-  BadgeChipView, IconSize, SplitPanelView, DateTimeInputView } from '@salilvnair/dui';
+  BadgeChipView, IconSize, SplitPanelView, DateTimeInputView, ProgressBarView } from '@salilvnair/dui';
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
   WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon, CloseIcon,
-  ChevronLeftIcon, SidebarLeftIcon,
+  ChevronLeftIcon, SidebarLeftIcon, SearchIcon, LinkIcon, ClockIcon, EraserIcon, PauseIcon, PlayIcon,
 } from '../../icons';
+import { CopyGlyph, COPY_TICK_MS } from '../shared/CopyTick';
+import { copyText } from '../../utils/clipboard';
+import { podLogLink } from './pod-link';
+import { useTabsStore } from '../../store/tabs-store';
 import { useK8sStore, type LogLevel } from '../../store/k8s-store';
 import { useLogSource } from './log-source';
 import {
@@ -35,17 +39,32 @@ import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { buildFacets, filterTermFor } from './log-facets';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { logLineSettings, onLadder, tailLabel, contextLabel } from './log-settings';
+import { findPayload, payloadNote, sentenceWithout, type LogPayload } from './log-payload';
+import { markOf, keepMarked, nextMarked, type MarkHit } from './logger-marks';
+import { useMarkIndex, MarkedBar, MarkMapStrip, MarkedRail, MarkedCount, MarkedJump } from './LogMarks';
+import { OUTLINE_BUTTON } from './asklog-tone';
+import { LineFieldsView } from './LineFieldsView';
+import { useDeterminantsFor } from './use-determinants';
+import { SummaryPanel } from './SummaryPanel';
+import { usePatternsFor, MARK_COLORS, clearMarks } from '../../store/dk8s-logger-store';
+import { scopeOf } from './LoggersTab';
+import { payloadPrefs, openLoggers, setOpenLogger } from './log-payload-prefs';
+import { LogPayloadView } from './LogPayloadView';
 import { FacetRail } from './FacetRail';
+import { podHue, podTail } from './pod-hue';
+import { readFields } from './field-readers';
+import { useFieldReaders } from './follow-prefs';
 import { LogSkeleton } from './LogSkeleton';
 import {
   setFilterProvider, clearFilterProvider,
   type FilterMenu, type FilterGroup,
 } from '../shared/menus/filter-provider';
 import {
-  filterLines, densityBuckets, describeBucket, levelCounts, levelColor,
+  filterLines, densityBuckets, levelCounts, levelColor, ribbonBands,
+  timeBuckets, ribbonTicks, COMPACT_RIBBON_PX, type DensityBucket, type RibbonTick,
   formatLogTime, selectionText, LEVEL_ORDER, foldStackTraces, bufferBytes,
   compactCount, grepTermFor, frameOrigin, type MatchedLine, type FieldFilter,
-  displayText,
+  displayText, ownFramesFirst, buildMatcher, keepAround,
 } from './log-view';
 import {
   AnalyzeModal, planAnalyze, ANALYZE_HEAD, ANALYZE_TAIL, type AnalyzePlan,
@@ -53,6 +72,13 @@ import {
 import { ExportLogsModal } from './ExportLogsModal';
 
 import { ACCENT } from './tone';
+import {
+  BAND_FLOOR_PX, BAND_GAP_PX, markerBox, bandAt, hoverCardPlacement, type CardPlacement,
+  GUTTER_W, GUTTER_BLOCK_W, bandFill, tickColor, MARKER_EDGE,
+} from './ribbon-layout';
+import { RibbonHover, HOVER_CARD_W } from './RibbonHover';
+import { LineCard, cardRowStyle, type LineCardKind } from './ClickedLine';
+import { FOLLOW } from './follow-tone';
 /**
  * One size for every control in the toolbar.
  *
@@ -86,10 +112,18 @@ const ROW_HEIGHT = 19;
  */
 const RAIL_MIN_WIDTH = 720;
 const OVERSCAN = 25;
-/** Width of the ribbon column, including its gutter. */
+/**
+ * The ribbon's width, and its blocks'.
+ *
+ * A single log pane gets the full ribbon — 38px with 20px blocks, a picture
+ * you can read the trouble off at a glance. The narrow gutter (`ribbon-layout`,
+ * 16px with 8px blocks) is for a split, where three panes side by side cannot
+ * each give up a word of every line to it.
+ */
 const RIBBON_W = 38;
-/** The bands themselves. Thick enough to read as colour and to click. */
 const RIBBON_BAND_W = 20;
+const SPLIT_RIBBON_W = GUTTER_W;
+const SPLIT_RIBBON_BAND_W = GUTTER_BLOCK_W;
 const LEVEL_SHORT: Record<LogLevel, string> = {
   error: 'err', warn: 'wrn', info: 'info', debug: 'dbg', other: 'plain',
 };
@@ -255,10 +289,19 @@ function FieldFilterStrip({ filters, onFlip, onRemove, onClearAll }: {
 
 // ── Density ribbon: vertical, on the right ──────────────────────────────────
 
+/** A band's smallest drawn height, and the gap under it. Both in px — see `ribbon-layout`. */
+const BAND_MIN = BAND_FLOOR_PX;
+const BAND_GAP = BAND_GAP_PX;
+
 function DensityRibbon({
   lines, scrollTop, contentHeight, viewportHeight, onJump, onScrollTo, onDragStart, onDragEnd,
+  sharedRange, viewTimes, onCompact,
 }: {
   lines: MatchedLine[];
+  /** One clock across a split: bands become equal slices of this span. */
+  sharedRange?: { from: number; to: number };
+  /** When the first and last rows on screen were logged — the marker, on a clock. */
+  viewTimes?: { from?: number; to?: number };
   /**
    * The marker is derived from the scroll position, NOT from the
    * virtualisation indices.
@@ -286,8 +329,14 @@ function DensityRibbon({
    */
   onDragStart: () => void;
   onDragEnd: () => void;
+  /** Told when the gutter goes compact or back — a split pane says so in its title strip. */
+  onCompact?: (compact: boolean) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  /* Only a split pane listens for compact — that is how the ribbon knows it is in one. */
+  const inSplit = !!onCompact;
+  const ribbonW = inSplit ? SPLIT_RIBBON_W : RIBBON_W;
+  const bandW = inSplit ? SPLIT_RIBBON_BAND_W : RIBBON_BAND_W;
   const [height, setHeight] = useState(400);
   const [dragging, setDragging] = useState(false);
   /**
@@ -302,29 +351,102 @@ function DensityRibbon({
   useEffect(() => {
     if (!ref.current) return;
     const el = ref.current;
-    const ro = new ResizeObserver(() => setHeight(Math.max(60, el.clientHeight)));
+    /* The track's own height, whatever it is. The floor here used to be 60,
+       which is taller than the track gets in a short pane of a four-way split —
+       and a marker placed on a 60px scale inside a 44px track is off by a
+       quarter of the log. */
+    const measure = () => setHeight(Math.max(1, el.clientHeight));
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setHeight(Math.max(60, el.clientHeight));
+    measure();
     return () => ro.disconnect();
   }, []);
 
-  // One band per ~7px of height. Coarser than the horizontal version was,
-  // because a band has to be clickable and readable as a colour.
-  const bands = Math.max(8, Math.floor(height / 7));
-  const buckets = useMemo(() => densityBuckets(lines, bands), [lines, bands]);
+  // Never more bands than this track can hold — see `ribbonBands`.
+  const bands = ribbonBands(height, BAND_MIN, BAND_GAP);
+  /* Too short for density to mean anything: marks instead of bands. */
+  const compact = height < COMPACT_RIBBON_PX;
+  useEffect(() => { onCompact?.(compact); }, [compact, onCompact]);
+  const buckets = useMemo(
+    () => (compact ? [] : sharedRange
+      ? timeBuckets(lines, bands, sharedRange)
+      : densityBuckets(lines, bands)),
+    [lines, bands, compact, sharedRange],
+  );
+  const ticks = useMemo(
+    () => (compact ? ribbonTicks(lines, height, 4, sharedRange) : []),
+    [compact, lines, height, sharedRange],
+  );
 
   // Exactly what the scrollbar shows: how much of the content is visible, and
   // how far down it we are.
   const scrollable = Math.max(0, contentHeight - viewportHeight);
-  const visibleFraction = contentHeight > 0
-    ? Math.min(1, viewportHeight / contentHeight)
-    : 1;
-  const scrolledFraction = scrollable > 0 ? Math.min(1, scrollTop / scrollable) : 0;
 
-  const viewH = Math.max(8, visibleFraction * height);
-  // Travel is the track minus the marker, so at scrollTop = max the marker's
-  // BOTTOM lands on the track's bottom rather than its top overshooting it.
-  const viewTop = scrolledFraction * (height - viewH);
+  /*
+    On a shared clock the bands are drawn by TIME, so the marker and the drag
+    have to be as well. Left on scroll position, the box said "you are at 90%"
+    of a strip whose 90% meant a different instant — two scales on one ribbon,
+    each right about itself and wrong about the other.
+
+    Clamped to this track and never thinner than 6px — see `markerBox`, which
+    is where the rule is tested at every height a pane can have.
+  */
+  const { top: viewTop, height: viewH } = markerBox({
+    trackPx: height, scrollTop, contentHeight, viewportHeight, range: sharedRange, viewTimes,
+  });
+
+  /*
+    The hover card, anchored to the pane.
+
+    Each band carried a `title`, which the browser places against the page:
+    in the right-hand panes of a split it opened past the edge and was
+    clipped, and it said the same thing at the same size whether the pane was
+    a whole screen or a sliver. The card is drawn inside this column instead,
+    measured against the pane's own body, on whichever side has room.
+  */
+  const columnRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [hover, setHover] = useState<{ y: number; bucket?: DensityBucket; tick?: RibbonTick }>();
+  const [card, setCard] = useState<CardPlacement>();
+
+  const hoverAt = (clientY: number) => {
+    const el = ref.current;
+    if (!el) return;
+    const y = clientY - el.getBoundingClientRect().top;
+    if (compact) {
+      /* The nearest tick within a few pixels — a tick is 3px tall and a
+         pointer that has to land on it exactly is a pointer that misses. */
+      let best: RibbonTick | undefined;
+      let bestDist = 6;
+      for (const t of ticks) {
+        const d = Math.abs(t.at * height - y);
+        if (d <= bestDist) { best = t; bestDist = d; }
+      }
+      setHover(best ? { y, tick: best } : undefined);
+      return;
+    }
+    const i = bandAt(y, height, buckets.length);
+    setHover(i >= 0 ? { y, bucket: buckets[i] } : undefined);
+  };
+
+  useLayoutEffect(() => {
+    const column = columnRef.current;
+    const body = column?.parentElement;
+    if (!hover || !column || !body) { setCard(undefined); return; }
+    const c = column.getBoundingClientRect();
+    const b = body.getBoundingClientRect();
+    const track = ref.current?.getBoundingClientRect();
+    setCard(hoverCardPlacement({
+      /* The track is inset in the column by its padding; the card is placed
+         against the column, so the pointer is too. */
+      pointerY: hover.y + (track ? track.top - c.top : 0),
+      columnPx: c.height,
+      cardHeight: cardRef.current?.offsetHeight ?? 56,
+      cardWidth: HOVER_CARD_W,
+      roomLeft: c.left - b.left,
+      roomRight: b.right - c.right,
+    }));
+  }, [hover]);
 
   /**
    * Drag like a scrollbar thumb.
@@ -332,16 +454,26 @@ function DensityRibbon({
    * The pointer grabs the CENTRE of the marker and the marker follows, which is
    * how every scrollbar behaves — anchoring the marker's top to the pointer
    * instead makes it jump downward by half its height the moment you touch it.
+   *
+   * On a clock the pointer names an instant, and the view goes to the first
+   * line at or after it.
    */
   const scrollToPointer = useCallback((clientY: number) => {
     const el = ref.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
+    if (sharedRange) {
+      const fraction = Math.min(1, Math.max(0, (clientY - rect.top) / Math.max(1, rect.height)));
+      const at = sharedRange.from + fraction * (sharedRange.to - sharedRange.from);
+      const index = lines.findIndex(l => l.ts !== undefined && l.ts >= at);
+      onJump(index === -1 ? Math.max(0, lines.length - 1) : index);
+      return;
+    }
     const travel = Math.max(1, rect.height - viewH);
     const y = clientY - rect.top - viewH / 2;
     const fraction = Math.min(1, Math.max(0, y / travel));
     onScrollTo(fraction * scrollable);
-  }, [viewH, scrollable, onScrollTo]);
+  }, [viewH, scrollable, onScrollTo, sharedRange, lines, onJump]);
 
   const onPointerDown = (e: React.PointerEvent) => {
     // Capture on the TRACK, not on whichever band was under the pointer, so
@@ -360,37 +492,71 @@ function DensityRibbon({
   };
 
   return (
-    <div className="relative shrink-0 flex flex-col items-stretch py-1"
-         style={{ width: RIBBON_W }}>
+    <div ref={columnRef} className="relative shrink-0 flex flex-col items-stretch"
+         style={{ width: ribbonW, padding: '3px 0', borderLeft: '1px solid var(--color-surface-border)' }}>
       <div
         ref={ref}
-        className="relative flex-1 flex flex-col gap-px mx-auto"
-        style={{ width: RIBBON_BAND_W, cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
-        onPointerDown={onPointerDown}
+        /* `min-h-0`: the track measures the pane it is in, never the bands it
+           holds. Without it a flex child stays as tall as its content and the
+           number this reads back is one no pane ever had.
+
+           NOT `overflow-hidden`, though it looks like it belongs with it. The
+           you-are-here box is drawn 4px wider than the track on each side and
+           glows past that; clipping the track cut its sides and its glow off
+           and left two floating lines. `ribbonBands` already guarantees the
+           bands fit, so there is nothing for a clip to catch. */
+        className="relative flex-1 min-h-0 flex flex-col mx-auto"
+        style={{ width: bandW, gap: BAND_GAP, cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+        onPointerDown={e => { setHover(undefined); onPointerDown(e); }}
         onPointerMove={e => {
-          if (!dragging) return;
+          if (!dragging) { hoverAt(e.clientY); return; }
           movedRef.current = true;
           scrollToPointer(e.clientY);
         }}
+        onPointerLeave={() => setHover(undefined)}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
       >
-        {buckets.map(b => (
+        {buckets.map((b, i) => (
           <div
-            key={b.startIndex}
+            key={`${i}-${b.startIndex}`}
             // A click that did not turn into a drag jumps to the band — the
-            // precise gesture, kept alongside the coarse one.
-            onClick={() => { if (!movedRef.current) onJump(b.startIndex); }}
-            title={describeBucket(b)}
+            // precise gesture, kept alongside the coarse one. An empty slice
+            // of time has nowhere to jump to.
+            onClick={() => { if (!movedRef.current && b.startIndex >= 0) onJump(b.startIndex); }}
             className="transition-opacity hover:opacity-100"
             style={{
               flex: 1,
-              minHeight: 2,
+              minHeight: BAND_MIN,
               borderRadius: 2,
-              background: levelColor(b.worst),
-              // Errors at full strength, calm stretches receded to texture —
-              // the ribbon exists to make trouble findable, not to be even.
-              opacity: b.worst === 'error' ? 0.95 : b.worst === 'warn' ? 0.72 : 0.3,
+              /* On a shared clock an empty slice is drawn as a faint slot
+                 rather than skipped, so "silent here" stays visible. */
+              /* Its lines in proportion — red, amber, calm, left to right
+                 (`bandFill`) — not its worst line, which turned a mostly-INFO
+                 log solid red. Only an empty slot is faded, so it reads as a
+                 slot and not as a block. */
+              background: bandFill(b),
+              opacity: !b.count ? 0.25 : 1,
+            }}
+          />
+        ))}
+
+        {/*
+          Compact: a pane too short for density — the small panes of a grid —
+          gets one tick per error or warning run, placed where it is in the
+          buffer. Density in 150px is a barcode; a tick is still a fact.
+        */}
+        {compact && ticks.map(t => (
+          <div
+            key={t.startIndex}
+            onClick={() => { if (!movedRef.current) onJump(t.startIndex); }}
+            className="absolute cursor-pointer"
+            style={{
+              left: -1, right: -1,
+              top: `calc(${(t.at * 100).toFixed(2)}% - 1.5px)`,
+              height: 3,
+              borderRadius: 2,
+              background: tickColor(t.level),
             }}
           />
         ))}
@@ -401,19 +567,38 @@ function DensityRibbon({
           <div
             className="absolute pointer-events-none"
             style={{
-              left: -4, right: -4,
+              left: -MARKER_EDGE, right: -MARKER_EDGE,
               top: viewTop,
               height: viewH,
-              border: `1.5px solid ${ACCENT}`,
+              boxSizing: 'border-box',
+              border: `2px solid ${FOLLOW}`,
               borderRadius: 3,
-              background: `color-mix(in srgb, ${ACCENT} 10%, transparent)`,
-              boxShadow: `0 0 6px color-mix(in srgb, ${ACCENT} 45%, transparent)`,
               // No transition while dragging, or the marker lags the pointer.
               transition: dragging ? 'none' : 'top .12s linear',
             }}
           />
         )}
       </div>
+
+      {hover && !dragging && (
+        <div
+          ref={cardRef}
+          role="tooltip"
+          className="absolute pointer-events-none z-20 flex flex-col gap-0.5 px-2.5 py-1.5 rounded-md text-[11px]"
+          style={{
+            top: card?.top ?? 0,
+            ...(card?.side === 'right' ? { left: '100%' } : { right: '100%' }),
+            width: card ? card.maxWidth : HOVER_CARD_W,
+            visibility: card ? 'visible' : 'hidden',
+            background: 'var(--color-panel)',
+            border: '1px solid var(--color-surface-border)',
+            boxShadow: '0 4px 14px rgba(0,0,0,0.25)',
+            color: 'var(--color-text-secondary)',
+          }}
+        >
+          <RibbonHover bucket={hover.bucket} tick={hover.tick} lines={lines} />
+        </div>
+      )}
     </div>
   );
 }
@@ -421,12 +606,21 @@ function DensityRibbon({
 // ── Level chips ─────────────────────────────────────────────────────────────
 
 function LevelChips() {
-  const { logs, logLevels, toggleLogLevel } = useLogSource();
+  const { logs, logLevels, toggleLogLevel, detail } = useLogSource();
   const counts = useMemo(() => levelCounts(logs), [logs]);
+  /*
+    A level keeps its chip for the pod once it has been seen. Shown only while
+    its count was above 0, every chip went out on Clear and came back one by
+    one as lines arrived — the whole toolbar shifting left and right with them.
+  */
+  const podKey = `${detail?.context ?? ''}/${detail?.namespace ?? ''}/${detail?.name ?? ''}`;
+  const seen = useRef<{ pod: string; levels: Set<LogLevel> }>({ pod: podKey, levels: new Set() });
+  if (seen.current.pod !== podKey) seen.current = { pod: podKey, levels: new Set() };
+  for (const l of LEVEL_ORDER) if (counts[l] > 0) seen.current.levels.add(l);
 
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
-      {LEVEL_ORDER.filter(l => counts[l] > 0).map(level => {
+      {LEVEL_ORDER.filter(l => seen.current.levels.has(l) || logLevels.includes(l)).map(level => {
         const on = logLevels.includes(level);
         // Nothing selected means everything, so no chip is dimmed until the
         // user picks — all-chips-off with all-lines-showing is a lie.
@@ -525,8 +719,71 @@ function Sep() {
  * shape and hit target. `on` absent makes it a plain action, and the missing
  * aria-pressed is the point: Download is not a state.
  */
-function IconButton({ on, onClick, title, icon }: {
+/**
+ * The find bar — the editor's Ctrl+F, in the log view's own look: the term,
+ * where you are among its matches, case and regex, up, down, close.
+ */
+function FindBar({ inputRef, text, onText, matchCase, onMatchCase, regex, onRegex, at, total, onStep, onClose }: {
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  text: string; onText: (v: string) => void;
+  matchCase: boolean; onMatchCase: () => void;
+  regex: boolean; onRegex: () => void;
+  at: number; total: number;
+  onStep: (d: number) => void; onClose: () => void;
+}) {
+  const toggle = (on: boolean): React.CSSProperties => ({
+    width: 24, height: 22, borderRadius: 5, fontSize: 11, fontFamily: 'var(--font-mono, ui-monospace, monospace)',
+    border: `1px solid ${on ? `color-mix(in srgb, ${ACCENT} 45%, transparent)` : 'transparent'}`,
+    background: on ? `color-mix(in srgb, ${ACCENT} 16%, transparent)` : 'transparent',
+    color: on ? ACCENT : 'var(--color-text-secondary)',
+  });
+  const plain: React.CSSProperties = { width: 24, height: 22, borderRadius: 5, border: 'none', background: 'transparent', color: 'var(--color-text-secondary)' };
+  return (
+    <div role="search" className="absolute z-30 flex items-center"
+         style={{
+           top: 8, right: 28, gap: 2, padding: '4px 5px 4px 8px', borderRadius: 9,
+           background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)',
+           boxShadow: '0 10px 28px -12px rgba(0,0,0,.65)',
+         }}
+         onKeyDown={e => {
+           if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); }
+           else if (e.key === 'Enter') { e.preventDefault(); onStep(e.shiftKey ? -1 : 1); }
+         }}>
+      <SearchIcon size={12} color="var(--color-text-muted)" />
+      <input ref={inputRef} value={text} onChange={e => onText(e.target.value)} placeholder="Find in log" aria-label="Find in log"
+             spellCheck={false} className="outline-none"
+             style={{
+               width: 210, height: 24, padding: '0 8px', marginLeft: 4, borderRadius: 6, fontSize: 12,
+               fontFamily: 'var(--font-mono, ui-monospace, monospace)', color: 'var(--color-text-primary)',
+               background: 'var(--color-bg, var(--color-input-bg))',
+               border: `1px solid ${text && !total ? 'color-mix(in srgb, var(--color-error) 60%, transparent)' : 'var(--color-surface-border)'}`,
+             }} />
+      <span className="select-none" style={{ minWidth: 64, padding: '0 6px', textAlign: 'center', fontSize: 11, fontVariantNumeric: 'tabular-nums',
+                                            color: text && !total ? 'var(--color-error)' : 'var(--color-text-muted)' }}>
+        {!text ? '' : total ? `${at + 1} of ${total.toLocaleString()}` : 'No results'}
+      </span>
+      <button type="button" title="Match case" aria-pressed={matchCase} onClick={onMatchCase} className="cursor-pointer" style={toggle(matchCase)}>Aa</button>
+      <button type="button" title="Regular expression" aria-pressed={regex} onClick={onRegex} className="cursor-pointer" style={toggle(regex)}>.*</button>
+      <span style={{ width: 1, height: 16, margin: '0 3px', background: 'var(--color-surface-border)' }} />
+      <button type="button" title="Previous match (Shift+Enter)" disabled={!total} onClick={() => onStep(-1)}
+              className="flex items-center justify-center cursor-pointer disabled:opacity-40" style={plain}>
+        <span style={{ display: 'inline-flex', transform: 'rotate(180deg)' }}><ChevronDownIcon size={13} /></span>
+      </button>
+      <button type="button" title="Next match (Enter)" disabled={!total} onClick={() => onStep(1)}
+              className="flex items-center justify-center cursor-pointer disabled:opacity-40" style={plain}>
+        <ChevronDownIcon size={13} />
+      </button>
+      <button type="button" title="Close (Esc)" onClick={onClose} className="dk-row-close flex items-center justify-center cursor-pointer" style={plain}>
+        <CloseIcon size={12} />
+      </button>
+    </div>
+  );
+}
+
+function IconButton({ on, onClick, title, icon, tone = ACCENT }: {
   on?: boolean; onClick: () => void; title: string; icon: React.ReactNode;
+  /** The colour it lights in when on — amber for a read that is not the usual one. */
+  tone?: string;
 }) {
   return (
     <button
@@ -541,9 +798,9 @@ function IconButton({ on, onClick, title, icon }: {
         // eyeballed before and both were wrong — 30 tall and 6 round — which
         // is the kind of thing you see without being able to name.
         width: 28, height: 28, borderRadius: 4,
-        color: on ? ACCENT : 'var(--color-text-secondary)',
-        background: on ? `color-mix(in srgb, ${ACCENT} 14%, transparent)` : 'transparent',
-        border: `1px solid ${on ? `color-mix(in srgb, ${ACCENT} 38%, transparent)` : 'var(--color-surface-border)'}`,
+        color: on ? tone : 'var(--color-text-secondary)',
+        background: on ? `color-mix(in srgb, ${tone} 14%, transparent)` : 'transparent',
+        border: `1px solid ${on ? `color-mix(in srgb, ${tone} 38%, transparent)` : 'var(--color-surface-border)'}`,
       }}
     >
       {icon}
@@ -557,9 +814,20 @@ function IconButton({ on, onClick, title, icon }: {
 const RAIL_MIN = 208;
 const RAIL_MAX = RAIL_MIN * 2;
 
+/** Find-in-log's marking: yellow, apart from the level colours. */
+const FIND_TONE = 'var(--color-find, #e2b93d)';
+/** A search result's hits: a pale lavender, light enough to read through, used nowhere else in the log view. */
+const HIT_TONE = 'var(--color-hit, #b8adf6)';
+
+/** The log view Ctrl+F opens find in: the one last clicked or focused. */
+let activeViewer: { id: symbol; el: HTMLElement } | null = null;
+
+/** The filter's share of a one-row toolbar, and the least it may be. */
+const FILTER_MIN = 180;
+
 export function LogViewer() {
   const {
-    logs, logStatus, logDetail, logDropped, logFilter, logLevels, logRequestedAt,
+    logs, logStatus, logDetail, logDropped, logReceived, logFilter, logLevels, logRequestedAt,
     logFieldFilters, addFieldFilter, removeFieldFilter,
     logFollow, logLive, logTail, logDirection, logSince, logWrap, logPrevious,
     logFrom, logTo, setLogWindow, logContainer,
@@ -570,12 +838,34 @@ export function LogViewer() {
     /* From the source, not the store: a results page clears ITS filters and
        closes ITS view, and reaching past the source for either would act on
        whichever pod happened to be open behind it. */
-    clearFieldFilters, closeDetail, isSnapshot, contextCap,
+    clearFieldFilters, closeDetail, isSnapshot, contextCap, sharedRange,
+    paging, focusSeq, onFindContext, isHit, highlightQuery, clearLogs, logPaused, setLogPaused,
+    focusLabel, selectedSeq, onSelectLine, selectedLabel, podColumn, podColor, columns, railLead, footerNote,
+    onGutterCompact,
   } = useLogSource();
 
   /* Every "how many lines" ladder in this view, from Settings → DK8S → Logs. */
   const prefs = useUiStateStore(p => p.prefs);
   const lineSettings = useMemo(() => logLineSettings(prefs), [prefs]);
+  /* How a JSON, XML or key=value payload is drawn, from the same screen. */
+  const payloadOpts = useMemo(() => payloadPrefs(prefs), [prefs]);
+  /* The patterns catalogued for this workload — the marked ones highlight,
+     and the ones with a summary answer "what ran in this window". */
+  const catalogue = usePatternsFor(scopeOf(detail));
+  /* Yours and your team's that apply to this pod and are on — the same set
+     the Summary panel answers, so the button never offers an empty panel. */
+  const determinants = useDeterminantsFor(detail).enabled;
+  /* Every pattern's holes and every named field — what decides whether a row has fields to open. */
+  const fieldReaders = useFieldReaders();
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  /* The marks over the whole buffer — the map, the rail, Only marked. See LogMarks. */
+  const markIdx = useMarkIndex(catalogue, logs);
+  const marks = markIdx.marks;
+  const [onlyMarked, setOnlyMarked] = useState(false);
+  const [markField, setMarkField] = useState<{ field: string; value: string } | undefined>();
+  useEffect(() => {
+    if (!marks.length) { setOnlyMarked(false); setMarkField(undefined); }
+  }, [marks.length]);
   /*
     The first moment after asking, when an empty view means nothing yet.
 
@@ -629,7 +919,8 @@ export function LogViewer() {
     So it is opened by what is there, and the preference only decides whether to
     show a rail that has something in it.
   */
-  const hasFacets = useMemo(() => buildFacets(logs).length > 0, [logs]);
+  /* Marks open it too: their holes are facets no format had to name. */
+  const hasFacets = useMemo(() => buildFacets(logs).length > 0, [logs]) || marks.length > 0;
 
   /*
     ── And only when there is room for it ──
@@ -812,8 +1103,9 @@ export function LogViewer() {
     there.
   */
   const linkedLine = useK8sStore(s => s.linkedLine);
+  const pendingLink = useK8sStore(s => s.pendingLink);
   const clearLinkedLine = useK8sStore(s => s.clearLinkedLine);
-  const linkedSeq = isSnapshot ? undefined : linkedLine?.seq;
+  const linkedSeq = focusSeq ?? (isSnapshot ? undefined : linkedLine?.seq);
 
 
   const chooseFold = useCallback((on: boolean) => {
@@ -858,6 +1150,25 @@ export function LogViewer() {
   >(null);
 
   /*
+    The lines selected, as a range — not as the browser's selection.
+
+    The list draws only the rows on screen, so a selection dragged over
+    forty lines and then scrolled lost the rows it was anchored in: it
+    vanished, or jumped onto whatever text the reused rows held next. The
+    range is kept here instead and the rows draw it themselves, so it
+    survives any scroll; Shift+click a row extends it from where it began,
+    a line number selects that line, Esc lets go. Copy writes these lines
+    as they read — time, level, message — whatever is on screen.
+  */
+  const [lineRange, setLineRange] = useState<{ anchor: number; first: number; last: number } | null>(null);
+  const lineRangeRef = useRef(lineRange); lineRangeRef.current = lineRange;
+  const pointerDownRef = useRef(false);
+  const extendRange = (seq: number) => setLineRange(r => {
+    const anchor = r?.anchor ?? seq;
+    return { anchor, first: Math.min(anchor, seq), last: Math.max(anchor, seq) };
+  });
+
+  /*
     How much of a hit's surroundings the filter keeps.
 
     Searching a log is almost never about the matching line on its own: you
@@ -867,7 +1178,10 @@ export function LogViewer() {
 
     Starts at 0 — the old behaviour — so nobody's filter changes under them.
   */
-  const [findContext, setFindContext] = useState(0);
+  /* A search result opens at the width it was searched with: the neighbours it
+     fetched are on screen from the start, not hidden until ±N is picked. */
+  const [findContext, setFindContext] = useState(contextCap ?? 0);
+  useEffect(() => { onFindContext?.(findContext); }, [findContext, onFindContext]);
 
   /*
     Which widths this buffer can actually honour — see the note on the
@@ -877,17 +1191,57 @@ export function LogViewer() {
     const all = lineSettings.contextLadder;
     if (contextCap === undefined) return all;
     const within = all.filter(v => v <= contextCap);
-    /* Always at least "none" and the width it was searched at, even when the
-       cap falls between two rungs. */
-    return within.length ? within : [0];
+    /* Always "none" and the width it was searched at, even when the cap falls
+       between two rungs — a search at ±3 on a 0/5/10 ladder offered only 0. */
+    return [...new Set([0, ...within, contextCap])].sort((a, b) => a - b);
   }, [lineSettings.contextLadder, contextCap]);
 
+  /*
+    The filter, a beat behind the box.
+
+    Twenty thousand lines filtered and redrawn on every keystroke froze the
+    page while somebody typed. The box keeps its own text and hands it on
+    when they pause; the view then filters at React's lower priority, so a
+    keystroke is never waiting on the last one's redraw.
+  */
+  const [filterDraft, setFilterDraft] = useState(logFilter);
+  const draftPending = useRef(false);
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => { if (!draftPending.current) setFilterDraft(logFilter); }, [logFilter]);
+  useEffect(() => () => clearTimeout(draftTimer.current), []);
+  const typeFilter = (v: string) => {
+    setFilterDraft(v);
+    draftPending.current = true;
+    clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(() => { draftPending.current = false; setLogFilter(v); }, 220);
+  };
+  const clearFilterNow = () => {
+    clearTimeout(draftTimer.current);
+    draftPending.current = false;
+    setFilterDraft('');
+    setLogFilter('');
+  };
+  const filterQuery = useDeferredValue(logFilter);
+
   const visible = useMemo(
-    () => filterLines(logs, {
-      query: logFilter, levels: logLevels, fields: logFieldFilters,
-      contextLines: findContext,
-    }),
-    [logs, logFilter, logLevels, logFieldFilters, findContext],
+    () => {
+      const filtered = filterLines(logs, {
+        query: filterQuery, levels: logLevels, fields: logFieldFilters,
+        contextLines: findContext,
+      });
+      /* No term typed, but the page has hits of its own (a search result):
+         ±N works on those, so "no surrounding lines" means the hits alone. */
+      const shown = !filterQuery.trim() && isHit ? keepAround(filtered, isHit, findContext) : filtered;
+      /* Only marked, or one hole's value from the rail: the marked lines and their frames. */
+      return (onlyMarked || markField) && marks.length ? keepMarked(shown, markIdx.index, markField) : shown;
+    },
+    [logs, filterQuery, logLevels, logFieldFilters, findContext, onlyMarked, markField, marks.length, markIdx.index, isHit],
+  );
+
+  /* A term to mark in the text without filtering by it — a search result's own term. */
+  const highlightMatcher = useMemo(
+    () => (highlightQuery && !filterQuery.trim() ? buildMatcher(highlightQuery) : null),
+    [highlightQuery, filterQuery],
   );
 
   /* The hits themselves, for the counter and for stepping between them. */
@@ -895,22 +1249,43 @@ export function LogViewer() {
 
   // Fold, then expand the ones the user opened. Expansion is keyed on the
   // heading line's seq so it survives new lines arriving above it.
+  const rowsRef = useRef<{ line: MatchedLine; folded?: MatchedLine[]; isFrame?: boolean; yaml?: LogPayload }[]>([]);
+  const offsetsRef = useRef<Float64Array>(new Float64Array(1));
+  const rowAtRef = useRef<(y: number) => number>(() => 0);
+  const yamlOn = payloadOpts.shapes.includes('yaml');
   const rows = useMemo(() => {
-    const folded = foldStackTraces(visible, foldTraces);
-    const out: { line: MatchedLine; folded?: MatchedLine[]; isFrame?: boolean }[] = [];
+    const folded = foldStackTraces(visible, foldTraces, { yaml: yamlOn });
+    const out: { line: MatchedLine; folded?: MatchedLine[]; isFrame?: boolean; yaml?: LogPayload }[] = [];
     for (const r of folded) {
-      out.push({ line: r.line, folded: r.folded });
-      if (r.folded && expanded.has(r.line.seq)) {
-        for (const f of r.folded) out.push({ line: f, isFrame: true });
+      out.push({ line: r.line, folded: r.folded, yaml: r.yaml });
+      /* A YAML block is drawn as its payload, never as frames. An opened trace
+         lists the reader's own frames first when Settings says so. */
+      if (r.folded && !r.yaml && expanded.has(r.line.seq)) {
+        const frames = payloadOpts.appFirst ? ownFramesFirst(r.folded, payloadOpts.homePackages) : r.folded;
+        for (const f of frames) out.push({ line: f, isFrame: true });
       }
     }
     return out;
-  }, [visible, foldTraces, expanded]);
+  }, [visible, foldTraces, expanded, yamlOn, payloadOpts.appFirst, payloadOpts.homePackages]);
 
   const total = rows.length;
+  /*
+    A row's number is its line in the read, not its place on screen.
+
+    Numbered by place, a folded stack trace counted once for its ten lines,
+    so a read of the last 200 ended at 165 and looked short. Numbered by line,
+    the last one is 200 and a fold skips numbers the way an editor's does —
+    and a filtered view keeps each line's own number, like `grep -n`.
+  */
+  const lineOffset = paging?.first ?? 0;
+  const lineIndex = useMemo(() => {
+    const m = new Map<number, number>();
+    logs.forEach((l, i) => m.set(l.seq, i));
+    return m;
+  }, [logs]);
   // Sized from the largest number it will hold, so the column does not shift
   // as you scroll from line 99 to line 100.
-  const gutterWidth = `${Math.max(2, String(rows.length).length)}ch`;
+  const gutterWidth = `${Math.max(2, String(lineOffset + logs.length).length)}ch`;
 
   /**
    * Real heights for the rows that have been on screen.
@@ -948,6 +1323,9 @@ export function LogViewer() {
   }, [rows, measuredAt]);
 
   const contentHeight = offsets[rows.length] || 0;
+  /* Read by onScroll, which is declared before these and must not re-create on every row change. */
+  rowsRef.current = rows;
+  offsetsRef.current = offsets;
 
   /** Binary search rather than a divide: heights are no longer uniform. */
   const rowAt = useCallback((y: number) => {
@@ -960,9 +1338,336 @@ export function LogViewer() {
     return Math.min(lo, Math.max(0, rows.length - 1));
   }, [offsets, rows.length]);
 
+  rowAtRef.current = rowAt;
   const first = Math.max(0, rowAt(scrollTop) - OVERSCAN);
   const last = Math.min(total, rowAt(scrollTop + viewportH) + 1 + OVERSCAN);
   const slice = rows.slice(first, last);
+  /* The instants at the top and bottom of the screen, for a ribbon on a clock.
+     Taken past the overscan, so it is what is visible rather than what is
+     rendered around it. */
+  const viewTimes = useMemo(() => {
+    const top = rows[Math.min(rows.length - 1, first + OVERSCAN)]?.line.ts;
+    const bottom = rows[Math.max(0, last - 1 - OVERSCAN)]?.line.ts;
+    return { from: top, to: bottom };
+  }, [rows, first, last]);
+
+  /*
+    Which of the rows on screen carry a payload.
+
+    Over the SLICE, never over the buffer: parsing is cheap for one line and
+    ruinous for two hundred thousand, and a row nobody can see has no chip to
+    put a verdict on. The window moves as you scroll and this moves with it.
+  */
+  /*
+    Detection is per event and cached: a line is parsed once for the settings
+    it was parsed under, not on every scroll past it — which is what lets the
+    footer count payloads across the whole buffer rather than the screen.
+  */
+  const payloadCache = useRef(new Map<number, { text: string; key: string; p: LogPayload | null }>());
+  const payloadKey = `${payloadOpts.shapes.join(',')}|${payloadOpts.maxChars}`;
+  const payloadOf = useCallback((line: MatchedLine): LogPayload | undefined => {
+    if (!payloadOpts.shapes.length) return undefined;
+    const text = displayText(line);
+    const hit = payloadCache.current.get(line.seq);
+    if (hit && hit.key === payloadKey && hit.text === text) return hit.p ?? undefined;
+    const p = findPayload(text, { shapes: payloadOpts.shapes, maxChars: payloadOpts.maxChars }) ?? null;
+    if (payloadCache.current.size > 60_000) payloadCache.current.clear();
+    payloadCache.current.set(line.seq, { text, key: payloadKey, p });
+    return p ?? undefined;
+  }, [payloadKey, payloadOpts.shapes, payloadOpts.maxChars]);
+
+  const payloads = useMemo(() => {
+    const found = new Map<number, LogPayload>();
+    if (!payloadOpts.shapes.length) return found;
+    for (const row of slice) {
+      if (row.isFrame) continue;
+      const p = row.yaml ?? payloadOf(row.line);
+      if (p) found.set(row.line.seq, p);
+    }
+    return found;
+    // `slice` is a new array every render; its identity is the window.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [first, last, rows, payloadOf]);
+
+  /* A line that looks like it carries one but will not be drawn says why. */
+  const payloadNotes = useMemo(() => {
+    const found = new Map<number, string>();
+    if (!payloadOpts.shapes.length) return found;
+    for (const row of slice) {
+      if (row.isFrame || payloads.has(row.line.seq)) continue;
+      const note = payloadNote(displayText(row.line), {
+        shapes: payloadOpts.shapes, maxChars: payloadOpts.maxChars, truncated: row.line.truncated,
+      });
+      if (note) found.set(row.line.seq, note);
+    }
+    return found;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payloads, payloadOpts.shapes, payloadOpts.maxChars]);
+
+  /* Events, not lines: a folded trace or a YAML block is one, and its frames are none. */
+  const eventStats = useMemo(() => {
+    let events = 0;
+    let withPayload = 0;
+    for (const row of rows) {
+      if (row.isFrame) continue;
+      events++;
+      if (row.yaml || payloadOf(row.line)) withPayload++;
+    }
+    return { events, withPayload };
+  }, [rows, payloadOf]);
+
+  /*
+    Marked patterns from the Loggers tab, matched over the same window.
+
+    A mark leaves the log intact and says where to look in it — so it paints
+    the row's edge rather than filtering anything, and it is computed here,
+    beside the payloads, because both are questions about what is on screen.
+  */
+  const markHits = useMemo(() => {
+    const found = new Map<number, MarkHit>();
+    if (!marks.length) return found;
+    for (const row of slice) {
+      /* The buffer's index has most of them already; a line it has not seen
+         yet (it arrived this render) is matched here. */
+      const hit = markIdx.index.get(row.line.seq) ?? markOf(displayText(row.line), marks);
+      if (hit) found.set(row.line.seq, hit);
+    }
+    return found;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [first, last, rows, marks, markIdx.index]);
+
+  /* How many of the lines in view a mark claims, and the jump between them. */
+  const markedInView = useMemo(
+    () => (marks.length ? visible.reduce((n, l) => n + (markIdx.index.has(l.seq) ? 1 : 0), 0) : 0),
+    [visible, marks.length, markIdx.index],
+  );
+  const jumpToRow = useCallback((rowIndex: number) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setLogFollow(false);
+    el.scrollTop = Math.max(0, offsets[rowIndex] - el.clientHeight / 3);
+  }, [offsets, setLogFollow]);
+  /*
+    Find in this log — Ctrl+F.
+
+    Not the filter: every line stays where it is, and the ones that match
+    are marked down the gutter and across the row, the current one stronger,
+    Enter and Shift+Enter stepping between them. A filter answers "show me
+    only these"; find answers "where is it, and what is around it".
+  */
+  const [findOpen, setFindOpen] = useState(false);
+  const [findText, setFindText] = useState('');
+  const [findCase, setFindCase] = useState(false);
+  const [findRegex, setFindRegex] = useState(false);
+  const [findAt, setFindAt] = useState(0);
+  const findInputRef = useRef<HTMLInputElement>(null);
+  const findQuery = useDeferredValue(findText);
+  const findRows = useMemo(() => {
+    if (!findOpen || !findQuery) return [] as number[];
+    let test: (s: string) => boolean;
+    if (findRegex) {
+      try { const re = new RegExp(findQuery, findCase ? '' : 'i'); test = s => re.test(s); } catch { return []; }
+    } else if (findCase) {
+      test = s => s.includes(findQuery);
+    } else {
+      const q = findQuery.toLowerCase();
+      test = s => s.toLowerCase().includes(q);
+    }
+    const out: number[] = [];
+    rows.forEach((r, i) => {
+      if (test(r.line.text) || r.folded?.some(f => test(f.text))) out.push(i);
+    });
+    return out;
+  }, [findOpen, findQuery, findCase, findRegex, rows]);
+  const findSeqs = useMemo(() => new Set(findRows.map(i => rows[i]?.line.seq)), [findRows, rows]);
+  const findIdx = findRows.length ? Math.min(findAt, findRows.length - 1) : -1;
+  const findCurrentSeq = findIdx >= 0 ? rows[findRows[findIdx]]?.line.seq : undefined;
+  /* A new term starts at the first match from where the reader is looking. */
+  useEffect(() => {
+    if (!findRows.length) return;
+    const el = scrollRef.current;
+    const from = el ? rowAt(el.scrollTop) : 0;
+    const k = findRows.findIndex(i => i >= from);
+    setFindAt(k === -1 ? 0 : k);
+    jumpToRow(findRows[k === -1 ? 0 : k]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [findQuery, findCase, findRegex, findOpen]);
+  const stepFind = (d: number) => {
+    const n = findRows.length;
+    if (!n) return;
+    const next = ((findIdx < 0 ? 0 : findIdx) + d + n) % n;
+    setFindAt(next);
+    jumpToRow(findRows[next]);
+  };
+  const closeFind = () => { setFindOpen(false); };
+  const findId = useRef(Symbol('log-view'));
+  useEffect(() => {
+    const root = viewerRef.current;
+    if (!root) return;
+    const mark = () => { activeViewer = { id: findId.current, el: root }; };
+    root.addEventListener('mousedown', mark, true);
+    root.addEventListener('focusin', mark);
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'f') return;
+      if (root.offsetParent === null) return;
+      const other = activeViewer && activeViewer.id !== findId.current
+        && activeViewer.el.isConnected && activeViewer.el.offsetParent !== null;
+      if (other) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setFindOpen(true);
+      const picked = window.getSelection()?.toString().trim();
+      if (picked && !picked.includes('\n') && picked.length < 200) setFindText(picked);
+      setTimeout(() => { findInputRef.current?.focus(); findInputRef.current?.select(); }, 0);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      root.removeEventListener('mousedown', mark, true);
+      root.removeEventListener('focusin', mark);
+      window.removeEventListener('keydown', onKey, true);
+      if (activeViewer?.id === findId.current) activeViewer = null;
+    };
+  }, []);
+
+  /* As wide as the pod names are — a fixed 104px left a band of air after a five-letter tail. */
+  const podColWidth = useMemo(() => {
+    if (!podColumn) return 0;
+    let n = 4;
+    for (const l of logs) { const p = (l as { pod?: string }).pod; if (p) n = Math.max(n, podTail(p).length); }
+    return `calc(${Math.min(n, 24)}ch + 4px)`;
+  }, [podColumn, logs]);
+
+  /* From the row a jump lands on — a third of the way down — so pressing it
+     again moves on rather than finding the same line. */
+  const jumpToNextMark = useCallback((markId?: string) => {
+    const el = scrollRef.current;
+    const from = el ? rowAt(el.scrollTop + el.clientHeight / 3) : 0;
+    const next = nextMarked(rows, markIdx.index, from, markId);
+    if (next !== undefined) jumpToRow(next);
+  }, [rows, markIdx.index, rowAt, jumpToRow]);
+
+  /* Opened by the reader, keyed on seq so new lines above do not shift it. */
+  /*
+    A payload is open when the reader said so on that line; else when Settings
+    draws payloads open; else when its logger's payloads were left open and
+    "remember" is on.
+  */
+  const [payloadToggles, setPayloadToggles] = useState<Map<number, boolean>>(new Map());
+  /*
+    The loggers remembered open, as they stood when this read began.
+
+    Remembering is for the NEXT read — open a payload today and that logger's
+    payloads open when the pod is read again. Read live, it applied the moment
+    one was clicked: opening one "provider said" opened every other one on the
+    screen, and expanding a line looked like it expanded a different one. So
+    the set is taken once per read, and a click opens the line that was
+    clicked, nothing else.
+  */
+  const loggersAtRead = useRef<{ at: number; open: Set<string> }>({ at: -1, open: new Set() });
+  if (loggersAtRead.current.at !== logRequestedAt) loggersAtRead.current = { at: logRequestedAt, open: openLoggers(prefs) };
+  const loggersOpen = loggersAtRead.current.open;
+  const isPayloadOpen = useCallback((line: MatchedLine): boolean => {
+    const own = payloadToggles.get(line.seq);
+    if (own !== undefined) return own;
+    if (!payloadOpts.collapsed) return true;
+    return payloadOpts.remember && !!line.logger && loggersOpen.has(line.logger);
+  }, [payloadToggles, payloadOpts.collapsed, payloadOpts.remember, loggersOpen]);
+  const [openFields, setOpenFields] = useState<Set<number>>(new Set());
+  /*
+    What was opened belongs to the read it was opened in.
+
+    Payloads, fields and folded traces are kept by line number, and every
+    read numbers its lines from the start again — so a payload opened on
+    line 7, then a Fetch or another pod, left whatever is line 7 now open.
+    A new read starts with everything closed (or as remembered, above).
+  */
+  const openedIn = useRef(logRequestedAt);
+  useEffect(() => {
+    if (openedIn.current === logRequestedAt) return;
+    openedIn.current = logRequestedAt;
+    setPayloadToggles(new Map());
+    setOpenFields(new Set());
+    setExpanded(new Set());
+  }, [logRequestedAt]);
+
+  /*
+    A link to one line, copied from its own row.
+
+    The tick belongs to the line that was copied, not to the pointer: it stays
+    on that row for its second and a half while the pointer has already moved
+    on and the next row is offering its own link.
+  */
+  const [linkCopiedSeq, setLinkCopiedSeq] = useState<number>();
+  const linkTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(linkTimer.current), []);
+  const lineTarget = (line: MatchedLine) => {
+    /* A search result's line names its cluster `cluster`: its `context` is the
+       log view's yes/no for a neighbour line, and read as a cluster name it
+       built links to a cluster called "true". */
+    const own = line as MatchedLine & { pod?: string; namespace?: string; cluster?: string };
+    const pod = own.pod ?? detail?.name;
+    const namespace = own.namespace ?? detail?.namespace;
+    const context = own.cluster ?? detail?.context;
+    return pod && namespace && context ? { pod, namespace, context } : undefined;
+  };
+  const rowLink = (line: MatchedLine) => (
+    <button
+      type="button"
+      onClick={() => copyLineLink(line)}
+      title={linkCopiedSeq === line.seq ? 'Copied' : 'Copy a link to this line — it opens here in dk8s'}
+      aria-label="Copy a link to this line"
+      className={`dk-row-link flex items-center justify-center border-none bg-transparent cursor-pointer p-0${linkCopiedSeq === line.seq ? ' is-copied' : ''}`}
+      style={{ width: 14, height: 16 }}
+    >
+      {linkCopiedSeq === line.seq ? <CopyGlyph copied size={12} /> : <LinkIcon size={12} />}
+    </button>
+  );
+  /* The line itself, from the end of its row — the same tick as the link. */
+  const [lineCopiedSeq, setLineCopiedSeq] = useState<number>();
+  const lineTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(lineTimer.current), []);
+  const rowCopy = (line: MatchedLine) => (
+    <button
+      type="button"
+      onClick={e => {
+        e.stopPropagation();
+        void copyText(line.text).then(ok => {
+          if (!ok) return;
+          setLineCopiedSeq(line.seq);
+          clearTimeout(lineTimer.current);
+          lineTimer.current = setTimeout(() => setLineCopiedSeq(undefined), COPY_TICK_MS);
+        });
+      }}
+      title={lineCopiedSeq === line.seq ? 'Copied' : 'Copy this line'}
+      aria-label="Copy this line"
+      className={`dk-row-link flex items-center justify-center border-none bg-transparent cursor-pointer p-0${lineCopiedSeq === line.seq ? ' is-copied' : ''}`}
+      style={{ width: 14, height: 16 }}
+    >
+      <CopyGlyph copied={lineCopiedSeq === line.seq} size={12} />
+    </button>
+  );
+  const copyLineLink = (line: MatchedLine) => {
+    const t = lineTarget(line);
+    if (!t) return;
+    void copyText(podLogLink({ ...t, ts: line.ts, text: line.text.slice(0, 200) })).then(ok => {
+      if (!ok) return;
+      setLinkCopiedSeq(line.seq);
+      clearTimeout(linkTimer.current);
+      linkTimer.current = setTimeout(() => setLinkCopiedSeq(undefined), COPY_TICK_MS);
+    });
+  };
+  const toggleFields = useCallback((seq: number) => {
+    setOpenFields(prev => {
+      const next = new Set(prev);
+      if (next.has(seq)) next.delete(seq); else next.add(seq);
+      return next;
+    });
+  }, []);
+  const togglePayload = useCallback((line: MatchedLine) => {
+    const open = !isPayloadOpen(line);
+    setPayloadToggles(prev => new Map(prev).set(line.seq, open));
+    if (payloadOpts.remember && line.logger) setOpenLogger(line.logger, open);
+  }, [isPayloadOpen, payloadOpts.remember]);
 
   /*
     Put the linked line on screen, once.
@@ -974,13 +1679,33 @@ export function LogViewer() {
     be the view arguing.
   */
   const scrolledToLink = useRef<number | undefined>(undefined);
+  const jumpedToLink = useRef<number | undefined>(undefined);
   useEffect(() => {
     if (linkedSeq === undefined || scrolledToLink.current === linkedSeq) return;
     const el = document.querySelector(`[data-seq="${linkedSeq}"][data-linked="1"]`);
-    if (!el) return;
-    scrolledToLink.current = linkedSeq;
-    el.scrollIntoView({ block: 'center' });
-  }, [linkedSeq, slice]);
+    if (el) {
+      scrolledToLink.current = linkedSeq;
+      el.scrollIntoView({ block: 'center' });
+      return;
+    }
+    /*
+      Not drawn yet: the list only renders the rows near the viewport, and a
+      link into a window of thousands of lines lands far from the bottom
+      where the view opens. Move there first — the next render draws the row
+      and the branch above centres it.
+    */
+    /* Keeps trying while the log streams in, until the row is drawn and the
+       branch above centres it. Only the scroll repeats: turning follow off is
+       a store write, and one on every render of the list is a loop — React
+       stops it with "Maximum update depth exceeded" and the view goes blank.
+       So follow is turned off once per link, and only if it is on. */
+    const box = scrollRef.current;
+    const rowIndex = rows.findIndex(r => r.line.seq === linkedSeq || r.folded?.some(f => f.seq === linkedSeq));
+    if (!box || rowIndex === -1) return;
+    if (jumpedToLink.current !== linkedSeq && useK8sStore.getState().logFollow) setLogFollow(false);
+    jumpedToLink.current = linkedSeq;
+    box.scrollTop = Math.max(0, offsets[rowIndex] - box.clientHeight / 2);
+  }, [linkedSeq, slice, rows, offsets, setLogFollow]);
 
   /**
    * Record what a row actually measured.
@@ -1022,22 +1747,77 @@ export function LogViewer() {
 
   // Follow the tail, but only from the bottom. Yanking the view down while
   // someone is reading history is the worst thing a log viewer can do.
+  /*
+    Pinned until the rows have settled. One `scrollTop = scrollHeight` landed
+    short whenever the rows it revealed measured taller than estimated (an
+    open payload, a wrapped line) — the view sat a little above the newest
+    line, the scroll handler read that as the reader scrolling up, and
+    following quietly stopped following. So it re-pins for a few frames, and
+    the handler ignores scrolls this effect made.
+  */
+  const pinning = useRef(false);
   useEffect(() => {
     if (!logFollow || !scrollRef.current) return;
-    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    pinning.current = true;
+    let frames = 0;
+    let raf = 0;
+    const pin = () => {
+      const el = scrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+      if (++frames < 5) raf = requestAnimationFrame(pin);
+      else pinning.current = false;
+    };
+    pin();
+    return () => { cancelAnimationFrame(raf); pinning.current = false; };
   }, [total, logFollow]);
+
+  /*
+    A paged source: where the top of the screen is, as a line and an offset
+    into it — so when lines arrive above (the previous window) or are dropped
+    (the far end of a long scroll), the same line stays in the same place.
+  */
+  const anchorRef = useRef<{ seq: number; delta: number } | undefined>(undefined);
+  const PAGE_EDGE_PX = 1200;
 
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
     setScrollTop(el.scrollTop);
+    if (lineRangeRef.current && !pointerDownRef.current) {
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed && el.contains(sel.anchorNode)) sel.removeAllRanges();
+    }
+    if (paging) {
+      const i = rowAtRef.current(el.scrollTop);
+      const row = rowsRef.current[i];
+      if (row) anchorRef.current = { seq: row.line.seq, delta: el.scrollTop - offsetsRef.current[i] };
+      if (!paging.loading) {
+        if (el.scrollTop < PAGE_EDGE_PX && paging.first > 0) paging.loadEarlier();
+        else if (el.scrollHeight - el.scrollTop - el.clientHeight < PAGE_EDGE_PX
+          && paging.first + logs.length < paging.total) paging.loadLater();
+      }
+      return;
+    }
     // While the ribbon is being dragged, the scroll position is an OUTPUT of
     // the gesture. Feeding it back into the follow decision makes the two
     // fight each other, which is what the flicker was.
     if (draggingRef.current) return;
+    if (pinning.current) return;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
     if (atBottom !== logFollow) setLogFollow(atBottom);
-  }, [logFollow, setLogFollow]);
+  }, [logFollow, setLogFollow, paging, logs.length]);
+
+  /* After the window moves, put the anchored line back where it was. */
+  useLayoutEffect(() => {
+    if (!paging) return;
+    const el = scrollRef.current;
+    const a = anchorRef.current;
+    if (!el || !a) return;
+    const i = rows.findIndex(r => r.line.seq === a.seq || r.folded?.some(f => f.seq === a.seq));
+    if (i < 0) return;
+    const want = offsets[i] + a.delta;
+    if (Math.abs(el.scrollTop - want) > 1) el.scrollTop = want;
+  }, [rows, offsets, paging]);
 
   /**
    * Jump to a band.
@@ -1081,6 +1861,8 @@ export function LogViewer() {
       // `lastSelRef` deliberately survives this. Choosing a menu entry
       // collapses the selection before the handler runs, so the thing the user
       // picked the menu for is gone by the time we go to act on it.
+      /* A range of lines outlives the browser's selection — see `lineRange`. */
+      if (lineRangeRef.current) return null;
       selectionRef.current = null;
       setLogSelection(undefined);
       return null;
@@ -1100,6 +1882,9 @@ export function LogViewer() {
 
     const firstSeq = Math.min(a, b);
     const lastSeq = Math.max(a, b);
+    if (lineRangeRef.current?.first !== firstSeq || lineRangeRef.current?.last !== lastSeq) {
+      setLineRange({ anchor: a, first: firstSeq, last: lastSeq });
+    }
     // Rebuilt from the buffer, not from the DOM: the rendered text has no
     // timestamps and would drag the gutter along with it.
     const text = selectionText(logs, firstSeq, lastSeq);
@@ -1115,6 +1900,54 @@ export function LogViewer() {
     document.addEventListener('selectionchange', onChange);
     return () => document.removeEventListener('selectionchange', onChange);
   }, [captureSelection]);
+
+  /* The range is what the rest of the view reads as "the selection": Ask AI,
+     the menu, the footer's count. */
+  useEffect(() => {
+    if (!lineRange) return;
+    const text = selectionText(logs, lineRange.first, lineRange.last);
+    const count = logs.filter(l => l.seq >= lineRange.first && l.seq <= lineRange.last).length;
+    const prev = selectionRef.current;
+    selectionRef.current = { text, raw: prev?.raw ?? text, first: lineRange.first, last: lineRange.last, count };
+    lastSelRef.current = selectionRef.current;
+    setLogSelection({ text, firstSeq: lineRange.first, lastSeq: lineRange.last, lineCount: count });
+  }, [lineRange, logs, setLogSelection]);
+
+  /* Copy: the lines as they read. A word picked out of one line copies as itself. */
+  const logsRef = useRef(logs); logsRef.current = logs;
+  useEffect(() => {
+    const onCopy = (e: ClipboardEvent) => {
+      const r = lineRangeRef.current;
+      if (!r) return;
+      if ((document.activeElement as HTMLElement | null)?.closest('input, textarea, [contenteditable="true"]')) return;
+      const sel = window.getSelection();
+      const host = bodyRef.current;
+      if (sel && !sel.isCollapsed && host && !host.contains(sel.anchorNode)) return;
+      if (sel && !sel.isCollapsed && r.first === r.last) return;
+      e.clipboardData?.setData('text/plain', selectionText(logsRef.current, r.first, r.last));
+      e.preventDefault();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || !lineRangeRef.current) return;
+      /* An open menu takes Esc first; the next one lets go of the lines. */
+      if (document.querySelector('body > .fixed[class*="z-[9999]"]')) return;
+      /* Esc lets go of the lines — and only that, not the pod behind them. */
+      e.stopPropagation();
+      setLineRange(null);
+      selectionRef.current = null;
+      setLogSelection(undefined);
+      window.getSelection()?.removeAllRanges();
+    };
+    const up = () => { pointerDownRef.current = false; };
+    document.addEventListener('copy', onCopy);
+    window.addEventListener('keydown', onKey, true);
+    document.addEventListener('mouseup', up);
+    return () => {
+      document.removeEventListener('copy', onCopy);
+      window.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('mouseup', up);
+    };
+  }, [setLogSelection]);
 
   /**
    * Open the context menu on the selection that just ended.
@@ -1245,6 +2078,15 @@ export function LogViewer() {
     const onAction = (e: Event) => {
       const { action, text } = (e as CustomEvent<{ action: string; text: string }>).detail ?? {};
 
+      /* Copy from the menu: the selected lines as they read — see `lineRange`. */
+      if (action === 'copy') {
+        const r = lineRangeRef.current;
+        if (!r || r.first === r.last && (text ?? '').trim()) return;
+        e.preventDefault();
+        void copyText(selectionText(logsRef.current, r.first, r.last));
+        return;
+      }
+
       // The AI entries act on whole lines, so they run before the search term
       // is derived — `grepTermFor` rejects a multi-line selection as a search
       // term, and returning early on that would have taken these with it.
@@ -1277,15 +2119,48 @@ export function LogViewer() {
   const containers = detail?.containers ?? [];
   const oldest = logs.find(l => l.ts !== undefined)?.ts;
 
+  /*
+    One toolbar row or two — see the note on the controls group below. The
+    controls need their own width; the filter takes the rest of the row. Two rows only when even its minimum will not fit.
+  */
+  const barRef = useRef<HTMLDivElement>(null);
+  const filterBoxRef = useRef<HTMLDivElement>(null);
+  const groupRef = useRef<HTMLDivElement>(null);
+  const [stacked, setStacked] = useState(false);
+  useLayoutEffect(() => {
+    const bar = barRef.current, group = groupRef.current, filterBox = filterBoxRef.current;
+    if (!bar || !group || !filterBox) return;
+    const measure = () => {
+      const cs = getComputedStyle(bar);
+      const gap = parseFloat(cs.columnGap) || 12;
+      const avail = bar.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const others = [...bar.children].filter(c => c !== filterBox && c !== group);
+      const fixed = others.reduce((w, c) => w + c.getBoundingClientRect().width + gap, 0);
+      const ggap = parseFloat(getComputedStyle(group).columnGap) || 8;
+      const parts = [...group.children].filter(c => !c.classList.contains('flex-1'));
+      const need = parts.reduce((w, c) => w + c.getBoundingClientRect().width, 0) + ggap * Math.max(0, parts.length - 1);
+      /* The filter takes what the controls leave; it gives way down to its
+         minimum before the controls are sent to a row of their own. */
+      setStacked(fixed + FILTER_MIN + gap + need > avail);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(bar);
+    for (const c of group.children) ro.observe(c);
+    return () => ro.disconnect();
+  });
+
   return (
     <div ref={viewerRef} className="flex flex-col h-full min-h-0">
       {/* ── Controls: every strip lives up here ── */}
       <div className="flex flex-col shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-      <div className="flex items-center gap-3 px-4 py-2.5 flex-wrap shrink-0">
-        {/* Before the level chips, because it governs the panel beside them
-            rather than the rows — and because a control that hides a whole
-            column should not be buried at the end of a toolbar. */}
+      {/* In one row nothing wraps and nothing shrinks but the filter, which
+          gives way down to its minimum — its own style overrides the rule. */}
+      <div ref={barRef} className={`flex items-center gap-3 px-4 py-2.5 shrink-0 ${stacked ? 'flex-wrap' : 'flex-nowrap [&>*]:shrink-0'}`}>
+        {/* First, the field panel's switch: it governs the rail beside the lines
+            rather than the rows, and a control that hides a whole column should
+            not be buried at the end of a toolbar. */}
         <button
           type="button"
           onClick={toggleFacets}
@@ -1312,12 +2187,25 @@ export function LogViewer() {
 
         <LevelChips />
 
-        {/* Takes whatever is left between the chips and the controls, rather
-            than a fixed width with dead space after it. */}
-        <div className="flex-1" style={{ minWidth: 180, paddingRight: 8 }}>
+        {marks.length > 0 && <Sep />}
+        {marks.length > 0 && (
+          <MarkedBar
+            count={marks.length}
+            onlyMarked={onlyMarked}
+            onOnlyMarked={setOnlyMarked}
+            onClear={() => clearMarks(scopeOf(detail))}
+            field={markField}
+            onClearField={() => setMarkField(undefined)}
+          />
+        )}
+
+        {/* The filter takes the rest of the row, after the switch and the chips
+            that shape what it searches. */}
+        <div ref={filterBoxRef} className={stacked ? 'flex-1' : undefined}
+             style={stacked ? { minWidth: 220 } : { flex: '1 1 auto', minWidth: FILTER_MIN }}>
           <FilterInputView
-            value={logFilter}
-            onChange={(v: string) => setLogFilter(v)}
+            value={filterDraft}
+            onChange={(v: string) => typeFilter(v)}
             placeholder="Filter — text, or /regex/"
             size="sm"
             width="100%"
@@ -1332,10 +2220,23 @@ export function LogViewer() {
               control does, and only present when there is something to clear,
               so it never sits there as decoration.
             */
-            suffix={logFilter ? (
+            /* The match count sits in the box too, so it costs the toolbar no
+               width — held there empty, it was a gap after the context picker. */
+            suffix={logFilter || isHit ? (
+              <span className="flex items-center gap-2">
+              <span
+                className="text-[11px] tabular-nums whitespace-nowrap"
+                style={{ color: hits.length ? ACCENT : 'var(--color-text-muted)' }}
+                title={findContext > 0
+                  ? `${hits.length} matching lines, with ${findContext} either side`
+                  : `${hits.length} matching lines`}
+              >
+                {hits.length.toLocaleString()} {hits.length === 1 ? 'match' : 'matches'}
+              </span>
+              {logFilter && (
               <button
                 type="button"
-                onClick={() => setLogFilter('')}
+                onClick={clearFilterNow}
                 title="Clear filter"
                 aria-label="Clear filter"
                 className="flex items-center justify-center cursor-pointer border-none bg-transparent p-0"
@@ -1345,9 +2246,12 @@ export function LogViewer() {
                     ways out of a filter look like one idea. */}
                 <FilterClearIcon size={IconSize.item} />
               </button>
+              )}
+              </span>
             ) : undefined}
           />
         </div>
+
 
         {/*
           How much of each hit's surroundings to keep, and how many there are.
@@ -1356,7 +2260,9 @@ export function LogViewer() {
           empty filter box is a control for a state that does not exist, and
           the count would read "0 matches" for a log nobody has searched.
         */}
-        {logFilter.trim() !== '' && (
+        {/* Always there, so typing in the filter never moves the toolbar; idle
+            and quiet with nothing to find. */}
+        {(
           <div
             className="flex items-center gap-1.5 shrink-0"
             title={contextCap !== undefined
@@ -1383,15 +2289,6 @@ export function LogViewer() {
               size={CTL_SIZE}
               accentColor={ACCENT}
             />
-            <span
-              className="text-[11px] tabular-nums shrink-0"
-              style={{ color: hits.length ? ACCENT : 'var(--color-text-muted)' }}
-              title={findContext > 0
-                ? `${hits.length} matching lines, with ${findContext} either side`
-                : `${hits.length} matching lines`}
-            >
-              {hits.length.toLocaleString()} {hits.length === 1 ? 'match' : 'matches'}
-            </span>
           </div>
         )}
 
@@ -1400,6 +2297,7 @@ export function LogViewer() {
             {containers.map(c => <ContainerChip key={c.name} name={c.name} />)}
           </div>
         )}
+
 
         {/*
           Grouped by what each control does, not by the order they were added.
@@ -1416,8 +2314,17 @@ export function LogViewer() {
           One wrapping unit, because as siblings of the spacer these wrapped
           individually and a narrow panel flung Download and Analyze onto their
           own row at the far left — reading as a second, broken toolbar.
+
+          One row when there is room for it: the filter at about forty per cent
+          and these to its right, ending in what to do with the lines. A second
+          row only when they would not fit beside it — a narrow panel, a split
+          pane — and then the filter takes the whole first row. Measured, not a
+          breakpoint: a pane in a split is narrow on a wide screen.
         */}
-        <div className="flex items-center gap-2 flex-wrap justify-end">
+        {/* Tight gaps, and no control squeezed below its own width — so it reads
+            as one toolbar, and measures the same in either layout. */}
+        <div ref={groupRef} className="flex items-center gap-1.5 [&>*]:shrink-0"
+             style={stacked ? { flexBasis: '100%', flexWrap: 'wrap' } : { flex: '0 0 auto', flexWrap: 'nowrap' }}>
         {/* Modes, not actions, so they are icon toggles rather than labelled
             buttons — and they sit apart from the controls that fetch. */}
         <IconButton on={logWrap} onClick={() => chooseWrap(!logWrap)}
@@ -1437,7 +2344,44 @@ export function LogViewer() {
           feature. What is left — the filter, the levels, wrap, folding,
           download, Analyze — all works on lines, and works the same either way.
         */}
-        {!isSnapshot && (
+        {/* Find in this log — always here, not only behind Ctrl+F. */}
+        <IconButton on={findOpen} onClick={() => { setFindOpen(true); setTimeout(() => { findInputRef.current?.focus(); findInputRef.current?.select(); }, 0); }}
+                    title="Find in this log (Ctrl+F)" icon={<SearchIcon size={IconSize.item} />} />
+
+        {/*
+          While following, the controls that shape a read have nothing to
+          shape: there is no end, no line count and no window to a stream, and
+          Fetch would only stop it. So that whole group gives way to what a
+          stream does need — clearing what has piled up on screen.
+        */}
+        {!isSnapshot && logLive && (
+          <>
+            <Sep />
+            {/* Hold the screen still to read; the stream carries on, and Resume lets it in. */}
+            {setLogPaused && (
+              <ButtonView
+                label={logPaused ? `Resume${(logReceived ?? 0) > 0 ? ` · ${compactCount(logReceived ?? 0)} new` : ''}` : 'Pause'}
+                size={CTL_SIZE} variant="secondary" accentColor={ACCENT}
+                onClick={() => setLogPaused(!logPaused)}
+                title={logPaused ? 'Add what arrived while paused, and follow the newest line again' : 'Hold the screen still to read — the stream keeps running'}
+                iconLeft={logPaused ? <PlayIcon size={IconSize.action} /> : <PauseIcon size={IconSize.action} />}
+                style={{
+                  minWidth: 118,
+                  ...(logPaused ? {
+                    color: 'var(--color-warning)',
+                    borderColor: 'color-mix(in srgb, var(--color-warning) 45%, transparent)',
+                    background: 'color-mix(in srgb, var(--color-warning) 10%, transparent)',
+                  } : {}),
+                }}
+              />
+            )}
+            {clearLogs && (
+              <IconButton onClick={clearLogs} title="Clear the screen — Following carries on, from here"
+                          icon={<EraserIcon size={IconSize.item} />} />
+            )}
+          </>
+        )}
+        {!isSnapshot && !logLive && (
           <>
         <Sep />
 
@@ -1446,9 +2390,11 @@ export function LogViewer() {
             behaviour this whole view exists to avoid. */}
         {/* Part of WHAT is fetched, so it belongs with the query controls
             rather than stranded past Analyze at the far right. */}
+        {/* An icon, lit amber while on, so the row fits beside the filter. */}
         {(detail?.restarts ?? 0) > 0 && (
-          <CheckboxView label="previous run" checked={logPrevious} onChange={setLogPrevious}
-                        size={CTL_SIZE} accentColor="var(--color-warning)" />
+          <IconButton on={logPrevious} onClick={() => setLogPrevious(!logPrevious)} tone="var(--color-warning)"
+                      title={logPrevious ? 'Reading the previous run — the container before its last restart' : 'Read the previous run — the container before its last restart'}
+                      icon={<ClockIcon size={IconSize.item} />} />
         )}
 
         {/* A third choice, because "last 15 minutes" cannot answer what
@@ -1507,12 +2453,13 @@ export function LogViewer() {
         ) : (
         <SelectInputView
           value={logSince}
-          onChange={v => setLogSince(v as 'all' | 'restart' | '15m' | '1h' | '6h')}
+          onChange={v => setLogSince(v as 'all' | 'restart' | '15m' | '1h' | '2h' | '6h')}
           options={[
             { value: 'all', label: 'all time' },
             { value: 'restart', label: 'since last restart' },
             { value: '15m', label: 'last 15 min' },
             { value: '1h', label: 'last hour' },
+            { value: '2h', label: 'last 2 hours' },
             { value: '6h', label: 'last 6 hours' },
           ]}
           size={CTL_SIZE}
@@ -1541,7 +2488,12 @@ export function LogViewer() {
             fontWeight: 600,
           }}
         />
-
+          </>
+        )}
+        {!isSnapshot && (
+          <>
+        {/* What to do with what came back sits at the right end of the row. */}
+        <span className="flex-1" />
         <Sep />
 
         {/* Following is a decision, not a default. A pod doing hundreds of
@@ -1574,6 +2526,7 @@ export function LogViewer() {
           </>
         )}
 
+        {isSnapshot && <span className="flex-1" />}
         <Sep />
 
         {/* Icon only. A quiet outlined button next to Analyze's filled one
@@ -1584,6 +2537,26 @@ export function LogViewer() {
           title="Download — write this pod's log to a file, with the same options as a bulk export"
           icon={<DownloadIcon size={IconSize.item} />}
         />
+
+        {/* Counted rather than asked: the summary is arithmetic over the
+            window, so it is offered beside Analyze and costs nothing. Only
+            where there is something to count. */}
+        {determinants.length > 0 && (
+          <ButtonView
+            label="Summary"
+            size={CTL_SIZE}
+            variant="secondary"
+            accentColor={ACCENT}
+            color={summaryOpen ? ACCENT : 'var(--color-text-secondary)'}
+            onClick={() => setSummaryOpen(v => !v)}
+            title={`What ran in this window, by ${determinants.length} pattern${determinants.length === 1 ? '' : 's'}`}
+            style={{
+              background: summaryOpen
+                ? `color-mix(in srgb, ${ACCENT} 16%, transparent)`
+                : 'transparent',
+            }}
+          />
+        )}
 
         <ButtonView
           label="Analyze"
@@ -1663,8 +2636,19 @@ export function LogViewer() {
             meant the loading state had one column and the loaded state had
             two, so the rail arrived from nowhere and pushed the lines you had
             started reading sideways. */}
-        {(settling || logStatus === 'loading') && logs.length === 0 ? (
-          <LogSkeleton railOpen={facetsOpen} rowHeight={ROW_HEIGHT} />
+        {findOpen && (
+          <FindBar
+            inputRef={findInputRef}
+            text={findText} onText={setFindText}
+            matchCase={findCase} onMatchCase={() => setFindCase(v => !v)}
+            regex={findRegex} onRegex={() => setFindRegex(v => !v)}
+            at={findIdx} total={findRows.length}
+            onStep={stepFind} onClose={closeFind}
+          />
+        )}
+        {/* A snapshot still arriving keeps the skeleton — it lands whole. */}
+        {(settling || logStatus === 'loading' || (logStatus === 'streaming' && !logLive && (logReceived ?? 0) > 0)) && logs.length === 0 ? (
+          <LogSkeleton railOpen={facetsOpen} rowHeight={ROW_HEIGHT} received={logReceived} />
         ) : (
         <>
         {/* The rail sits inside the body rather than above it, so it scrolls
@@ -1716,7 +2700,18 @@ export function LogViewer() {
           accentColor={ACCENT}
           style={{ flex: 1, minWidth: 0, minHeight: 0 }}
           first={
-            <div className="flex flex-col h-full min-h-0">
+            /* The raised surface, as on the board — the rail reads as one panel
+               beside the lines, marks and fields alike. */
+            <div className="flex flex-col h-full min-h-0" style={{ background: 'var(--color-elevated)' }}>
+          {railLead}
+          <MarkedRail
+            patterns={catalogue}
+            idx={markIdx}
+            field={markField}
+            onNext={id => jumpToNextMark(id)}
+            onField={(field, value) => setMarkField(f =>
+              (f?.field === field && f.value === value ? undefined : { field, value }))}
+          />
           <FacetRail
             lines={logs}
             filters={logFieldFilters}
@@ -1736,6 +2731,8 @@ export function LogViewer() {
           }
           second={
             <div className="flex flex-col h-full min-w-0 min-h-0">
+          {summaryOpen && <SummaryPanel onClose={() => setSummaryOpen(false)} />}
+
           <FieldFilterStrip
             filters={logFieldFilters}
             onFlip={f => addFieldFilter(f)}
@@ -1746,6 +2743,22 @@ export function LogViewer() {
           <div
             ref={attachScroll}
             onScroll={onScroll}
+            onMouseDown={e => {
+              if (e.button !== 0) return;
+              const t = e.target as HTMLElement;
+              if (t.closest('button, a, input, textarea, [contenteditable="true"]')) return;
+              const row = t.closest('[data-seq]') as HTMLElement | null;
+              /* Shift+click: the lines from where the selection began to this one. */
+              if (e.shiftKey && row && lineRangeRef.current) {
+                e.preventDefault();
+                window.getSelection()?.removeAllRanges();
+                extendRange(Number(row.dataset.seq));
+                return;
+              }
+              pointerDownRef.current = true;
+              /* A fresh press starts a fresh selection. */
+              if (lineRangeRef.current) setLineRange(null);
+            }}
             /* Once, here, rather than on every row: thirty rows carrying the
                same three strings is thirty copies of one fact. A snapshot is
                left out — a search result is not a place a link can point. */
@@ -1756,12 +2769,22 @@ export function LogViewer() {
             className="flex-1 overflow-auto pl-4 pr-1 py-2 font-mono min-h-0 dk8s-no-scrollbar"
             style={{ fontSize: 11.5, lineHeight: `${ROW_HEIGHT}px` }}
           >
-            {total === 0 ? (
+            {paging?.searching ? (
+              <SearchingState {...paging.searching} />
+            ) : total === 0 ? (
               <div className="flex items-center justify-center h-full">
                 <span className="text-[12px] text-[var(--color-text-muted)]" style={{ fontFamily: 'inherit' }}>
                   {logs.length === 0
                     ? logStatus === 'streaming' ? 'Connected — waiting for the pod to say something.'
-                      : 'No output yet.'
+                      /* A link into a window the pod no longer holds: say why it is empty.
+                         kubectl serves only the current log file, and a busy pod's is
+                         rotated away within minutes. */
+                      : pendingLink && logDirection === 'between' && logStatus === 'ended'
+                        ? 'Nothing in this window — the pod has rotated its log since, and kubectl logs only has what came after. The archive search can still find the line.'
+                        /* An Errors read that found none — a good answer, said as one. */
+                        : logStatus === 'ended' && logDirection === 'between' && logLevels.length === 1 && logLevels[0] === 'error'
+                          ? `No errors between ${logFrom.replace('T', ' ').slice(0, 16)} and ${logTo.replace('T', ' ').slice(0, 16)}.`
+                          : 'No output yet.'
                     : `No line matches. ${logs.length.toLocaleString()} hidden by the filter.`}
                 </span>
               </div>
@@ -1771,10 +2794,20 @@ export function LogViewer() {
                   {slice.map((row, i) => {
                     const line = row.line;
                     const isOpen = expanded.has(line.seq);
-                    // Position in what is on screen, so it reads 1..N and the
-                    // last number is the count — the same thing an editor's
-                    // gutter tells you at a glance.
-                    const lineNo = first + i + 1;
+                    const payload = row.isFrame ? undefined : payloads.get(line.seq);
+                    const payloadIsOpen = payload ? isPayloadOpen(line) : false;
+                    const note = row.isFrame ? undefined : payloadNotes.get(line.seq);
+                    const shownText = sentenceOf(line, payload);
+                    const mark = row.isFrame ? undefined : markHits.get(line.seq);
+                    const markColor = mark ? MARK_COLORS[mark.color] : undefined;
+                    const fieldsAreOpen = openFields.has(line.seq);
+                    /* The line the page is about — "the line you clicked", "you
+                       came from here" — drawn as a card, see `ClickedLine`. */
+                    const card: LineCardKind | undefined = row.isFrame ? undefined
+                      : line.seq === selectedSeq && selectedLabel ? 'clicked'
+                      : line.seq === focusSeq && focusLabel ? 'from' : undefined;
+                    // Its line in the read — see `lineIndex`.
+                    const lineNo = lineOffset + (lineIndex.get(line.seq) ?? first + i) + 1;
                     return (
                       <div
                         key={`${line.seq}-${i}`}
@@ -1800,7 +2833,19 @@ export function LogViewer() {
                         */
                         data-log-ts={line.ts}
                         data-log-text={line.text}
-                        className="flex gap-2.5 items-start"
+                        /* A page that shows what a line names beside the log
+                           is told which line was clicked. Not a drag that
+                           selected text, and not a press on one of the row's
+                           own chips — those mean something else. */
+                        onClick={onSelectLine && !row.isFrame ? (e) => {
+                          if ((e.target as HTMLElement).closest('button, a, input')) return;
+                          if (window.getSelection()?.toString()) return;
+                          onSelectLine(line);
+                        } : undefined}
+                        /* A column, so a payload can be drawn under the line it
+                           came on. The row is what the virtualiser measures, so
+                           the card's height is accounted for by growing it. */
+                        className="dk-log-row flex flex-col"
                         style={{
                           minHeight: ROW_HEIGHT,
                           whiteSpace: logWrap ? 'pre-wrap' : 'pre',
@@ -1808,33 +2853,89 @@ export function LogViewer() {
                              level tint over it would leave the one line
                              somebody was sent looking like every other
                              warning on screen. */
-                          background: line.seq === linkedSeq
+                          cursor: onSelectLine && !row.isFrame ? 'pointer' : undefined,
+                          /* A hit or a find match: a bar in the gutter, the whole line tinted. */
+                          boxShadow: findCurrentSeq === line.seq ? `inset 3px 0 0 ${FIND_TONE}`
+                            : findSeqs.has(line.seq) ? `inset 3px 0 0 color-mix(in srgb, ${FIND_TONE} 70%, transparent)`
+                              : isHit?.(line) ? `inset 2px 0 0 color-mix(in srgb, ${HIT_TONE} 70%, transparent)` : undefined,
+                          background: findCurrentSeq === line.seq
+                            ? `color-mix(in srgb, ${FIND_TONE} 26%, transparent)`
+                          : findSeqs.has(line.seq)
+                            ? `color-mix(in srgb, ${FIND_TONE} 11%, transparent)`
+                          : line.seq === linkedSeq
                             ? `color-mix(in srgb, ${ACCENT} 22%, transparent)`
+                            : lineRange && line.seq >= lineRange.first && line.seq <= lineRange.last
+                              ? 'color-mix(in srgb, var(--color-log-info, #3b82f6) 22%, transparent)'
+                            : line.seq === selectedSeq
+                              ? `color-mix(in srgb, ${ACCENT} 12%, transparent)`
+                            /* A mark is drawn on the message it matched (below),
+                               not across the row — so the row keeps its level
+                               tint, and the time, level and logger stay plain. */
+                            : isHit?.(line) && !line.context
+                              ? `color-mix(in srgb, ${HIT_TONE} 9%, transparent)`
                             : line.level === 'error'
                               ? 'color-mix(in srgb, var(--color-error) 7%, transparent)'
                               : line.level === 'warn'
                                 ? 'color-mix(in srgb, var(--color-warning) 5%, transparent)'
                                 : 'transparent',
                           borderLeft: `2px solid ${
-                            line.seq === linkedSeq ? ACCENT
+                            line.seq === linkedSeq || line.seq === selectedSeq ? ACCENT
                             : line.level === 'error' ? 'var(--color-error)'
                             : line.level === 'warn' ? 'var(--color-warning)' : 'transparent'
                           }`,
                           paddingLeft: row.isFrame ? 22 : 6,
                           opacity: row.isFrame ? 0.75 : 1,
+                          ...(card ? cardRowStyle(card) : {}),
                         }}
                       >
+                        <LineCard kind={card} line={line} readers={fieldReaders}>
+                        <div className="flex gap-2.5 items-start">
+                        {/* With no line numbers, the link keeps a slot of its own first on the row. */}
+                        {!logLineNumbers && (
+                          <span className="shrink-0 flex items-center justify-end" style={{ width: 34, gap: 2, height: ROW_HEIGHT - 4 }}>
+                            {!row.isFrame && rowCopy(line)}
+                            {!row.isFrame && lineTarget(line) && rowLink(line)}
+                          </span>
+                        )}
+                        {/* Lines from several pods say which one, first on
+                            every row: the same thread name can be reused by
+                            another pod, and the pod is what tells them apart. */}
+                        {podColumn && !row.isFrame && (line as { pod?: string }).pod && (
+                          <span className="shrink-0 select-none truncate"
+                                title={(line as { pod?: string }).pod}
+                                style={{ width: podColWidth, color: (podColor ?? podHue)((line as { pod?: string }).pod!) }}>
+                            {podTail((line as { pod?: string }).pod!)}
+                          </span>
+                        )}
                         {/* Off is a real preference: on a narrow panel the
                             gutter is width a long line needs more. */}
                         {logLineNumbers && (
-                          <span className="shrink-0 select-none text-right"
+                          /* The link sits just before the number it belongs to —
+                             inside the gutter, in a slot the row always keeps, so
+                             nothing shifts when it appears. */
+                          <span className="shrink-0 select-none flex items-center justify-end"
                                 style={{
-                                  width: gutterWidth,
-                                  color: 'var(--color-text-muted)',
-                                  opacity: 0.45,
+                                  /* `gutterWidth` is a `ch` length — added to a number it was "5ch18", which is no width at all. */
+                                  width: `calc(${gutterWidth} + 36px)`,
+                                  gap: 4,
                                   fontVariantNumeric: 'tabular-nums',
                                 }}>
-                            {lineNo}
+                            {/* Copy the line, then link to it — both on hover, in a slot the row keeps. */}
+                            <span className="shrink-0 flex items-center justify-end" style={{ width: 32, gap: 2 }}>
+                              {!row.isFrame && rowCopy(line)}
+                              {!row.isFrame && lineTarget(line) && rowLink(line)}
+                            </span>
+                            {/* Click: this line. Shift+click: every line from the one selected to here. */}
+                            <span className="cursor-pointer" title="Select this line — Shift+click another to take the lines between"
+                                  onMouseDown={e => { if (!e.shiftKey) e.preventDefault(); }}
+                                  onClick={e => {
+                                    if (e.shiftKey) return;
+                                    window.getSelection()?.removeAllRanges();
+                                    setLineRange({ anchor: line.seq, first: line.seq, last: line.seq });
+                                  }}
+                                  style={{ color: 'var(--color-text-muted)', opacity: lineRange && line.seq >= lineRange.first && line.seq <= lineRange.last ? 0.9 : 0.45 }}>
+                              {lineNo}
+                            </span>
                           </span>
                         )}
 
@@ -1846,8 +2947,28 @@ export function LogViewer() {
                         )}
                         {!row.isFrame && <LevelTag level={line.level} />}
 
+                        {columns && !row.isFrame && columns.map(c => {
+                          const v = c.value(line);
+                          return (
+                            <span key={c.key} className="shrink-0 truncate"
+                                  title={v === undefined ? `no ${c.key} on this line` : `${c.key} = ${v}`}
+                                  style={{ maxWidth: 150, color: v === undefined ? 'var(--color-text-muted)' : 'var(--color-info, #9cdcfe)', opacity: v === undefined ? 0.4 : 1 }}>
+                              {v ?? '—'}
+                            </span>
+                          );
+                        })}
+
                         <span style={{
-                          color: line.level === 'error' ? 'var(--color-error)'
+                          /* A marked message: its pattern's colour at 16% behind it
+                             and a 2px edge in that colour, the text in the plain
+                             text colour so the mark, not the level, is what reads. */
+                          ...(markColor ? {
+                            background: `color-mix(in srgb, ${markColor} 16%, transparent)`,
+                            borderLeft: `2px solid ${markColor}`,
+                            paddingLeft: 5, marginLeft: -5,
+                          } : {}),
+                          color: markColor ? 'var(--color-text-primary)'
+                            : line.level === 'error' ? 'var(--color-error)'
                             : line.level === 'warn' ? 'var(--color-warning)'
                             : line.level === 'debug' ? 'var(--color-text-muted)'
                             : 'var(--color-text-primary)',
@@ -1865,11 +2986,11 @@ export function LogViewer() {
                             searched for.
                           */
                           opacity: line.context ? 0.5
-                            : row.isFrame && frameOrigin(line.text) === 'library' ? 0.55 : 1,
+                            : row.isFrame && frameOrigin(line.text, payloadOpts.homePackages) === 'library' ? 0.55 : 1,
                           flex: logWrap ? 1 : undefined,
                           minWidth: 0,
                         }}>
-                          <Highlighted text={displayText(line)} hits={line.hits} />
+                          <Highlighted text={shownText} hits={line.hits ?? highlightMatcher?.(shownText) ?? undefined} />
                           {/*
                             A cut line says it was cut.
 
@@ -1892,7 +3013,7 @@ export function LogViewer() {
 
                         {/* The fold. One row instead of forty, and the count is
                             on it so you know what you are choosing to open. */}
-                        {row.folded && row.folded.length > 0 && (
+                        {row.folded && row.folded.length > 0 && !row.yaml && (
                           <button
                             type="button"
                             onClick={() => setExpanded(prev => {
@@ -1921,6 +3042,12 @@ export function LogViewer() {
                                 them framework" says the same thing about where
                                 to look without inventing the other number.
                               */
+                              const home = payloadOpts.homePackages;
+                              /* With your packages stated, the count that matters: how many are yours. */
+                              if (home.length) {
+                                const mine = row.folded!.filter(f => frameOrigin(f.text, home) === 'app').length;
+                                return `${row.folded!.length} frames · ${mine} of yours`;
+                              }
                               const lib = row.folded!.filter(f => frameOrigin(f.text) === 'library').length;
                               return lib
                                 ? `… ${row.folded!.length} more frames · ${lib} framework`
@@ -1944,7 +3071,7 @@ export function LogViewer() {
                           one line at two heights is the first thing the eye
                           notices about a row it was meant to read.
                         */}
-                        {row.folded && row.folded.length > 0 && (
+                        {row.folded && row.folded.length > 0 && !row.yaml && (
                           <button
                             type="button"
                             onClick={() => askAboutTrace(line, row.folded!)}
@@ -1962,6 +3089,99 @@ export function LogViewer() {
                             <SparkleIcon size={IconSize.chip} /> Ask AI
                           </button>
                         )}
+
+                        {/*
+                          The machine half of the line, offered rather than
+                          drawn: one chip, and the payload stays where it was
+                          logged until somebody wants it. The same bargain the
+                          fold beside it makes, for the same reason — a body
+                          opened by default costs the screen the next ten lines
+                          were using.
+                        */}
+                        {payload && (
+                          <button
+                            type="button"
+                            onClick={() => togglePayload(line)}
+                            title={payloadIsOpen
+                              ? 'Fold this payload back into the line'
+                              : `Draw this ${payload.shape.toUpperCase()} payload`}
+                            className="shrink-0 flex items-center gap-1 px-1.5 rounded cursor-pointer border-none self-center"
+                            style={{
+                              background: `color-mix(in srgb, ${ACCENT} 16%, transparent)`,
+                              color: ACCENT,
+                              fontSize: 10, lineHeight: '15px',
+                            }}
+                          >
+                            {payloadIsOpen
+                              ? <ChevronDownIcon size={IconSize.chip} />
+                              : <ChevronRightIcon size={IconSize.chip} />}
+                            {payload.shape.toUpperCase()} · {payload.summary}
+                          </button>
+                        )}
+
+                        {/* A line that looks like it carries a payload, and why it is not drawn. */}
+                        {note && (
+                          <BadgeChipView tone="var(--color-warning)" size="xs" title={note} style={{ alignSelf: 'center' }}>
+                            payload not drawn
+                          </BadgeChipView>
+                        )}
+
+                        {/*
+                          What the line names, offered rather than re-typed.
+
+                          On every row that names anything at all — which is
+                          the rows a format parsed, a pattern claimed, or a
+                          payload came on. A row that names nothing has no
+                          chip, because a chip that opens "nothing here" is a
+                          chip that teaches people not to press it.
+                        */}
+                        {/* Only a line with keys of its own — MDC, a payload's leaves, a pattern's
+                            holes. Thread and logger are in the rail for every line already. */}
+                        {!row.isFrame && (Object.keys(line.fields ?? {}).length > 0
+                          || payload?.value !== undefined || Object.keys(mark?.fields ?? {}).length > 0
+                          || readFields(line, fieldReaders).length > 0) && (
+                          <button
+                            type="button"
+                            onClick={() => toggleFields(line.seq)}
+                            title={fieldsAreOpen ? 'Hide the fields' : 'What this line names, and what to follow'}
+                            className="shrink-0 flex items-center gap-1 px-1.5 rounded cursor-pointer border-none self-center"
+                            style={{
+                              background: 'var(--color-surface-hover)',
+                              color: 'var(--color-text-muted)',
+                              fontSize: 10, lineHeight: '15px',
+                            }}
+                          >
+                            {fieldsAreOpen
+                              ? <ChevronDownIcon size={IconSize.chip} />
+                              : <ChevronRightIcon size={IconSize.chip} />}
+                            fields
+                          </button>
+                        )}
+                        <span className="ml-auto shrink-0 flex items-center self-center" style={{ gap: 8, paddingLeft: 8 }}>
+                          {((line.seq === selectedSeq && selectedLabel) || (line.seq === focusSeq && focusLabel)) && (
+                            <span className="select-none"
+                                  style={{ color: FOLLOW, fontSize: 10.5, fontFamily: 'var(--font-sans, system-ui)' }}>
+                              {line.seq === focusSeq && focusLabel ? focusLabel : selectedLabel}
+                            </span>
+                          )}
+                        </span>
+                        </div>
+                        </LineCard>
+
+                        {fieldsAreOpen && (
+                          <LineFieldsView line={line} payload={payload} mark={mark} />
+                        )}
+
+                        {payload && payloadIsOpen && (
+                          <LogPayloadView
+                            payload={payload}
+                            mode={payloadOpts.mode}
+                            depth={payloadOpts.depth}
+                            hideSecrets={payloadOpts.hideSecrets}
+                            keepRaw={payloadOpts.keepRaw}
+                            title={[line.logger, line.ts !== undefined ? formatLogTime(line.ts) : undefined, detail?.name].filter(Boolean).join(' · ')}
+                          />
+                        )}
                       </div>
                     );
                   })}
@@ -1974,8 +3194,14 @@ export function LogViewer() {
         />
 
 
+        {marks.length > 0 && (
+          <MarkMapStrip rows={rows} offsets={offsets} contentHeight={contentHeight}
+                        index={markIdx.index} onJump={jumpToRow} />
+        )}
         <DensityRibbon
           lines={visible}
+          sharedRange={sharedRange}
+          viewTimes={viewTimes}
           scrollTop={scrollTop}
           contentHeight={contentHeight}
           viewportHeight={viewportH}
@@ -1985,6 +3211,7 @@ export function LogViewer() {
             if (!el) return;
             el.scrollTop = top;
           }}
+          onCompact={onGutterCompact}
           onDragStart={() => { draggingRef.current = true; setLogFollow(false); }}
           onDragEnd={() => {
             draggingRef.current = false;
@@ -2025,8 +3252,10 @@ export function LogViewer() {
       )}
 
       {/* ── Footer: what is held, and where you are ── */}
-      <div className="flex items-center gap-3 px-4 py-1.5 text-[10.5px] shrink-0"
-           style={{ borderTop: '1px solid var(--color-surface-border)', color: 'var(--color-text-muted)' }}>
+      {/* 32px and 11.5px, the LogsMarked board's footer, so its 24px
+          buttons stand in it with room either side. */}
+      <div className="flex items-center gap-3 px-4 py-1 text-[11.5px] shrink-0"
+           style={{ minHeight: 32, borderTop: '1px solid var(--color-surface-border)', color: 'var(--color-text-muted)' }}>
         {/*
           What is held, said as a fraction of what was asked for.
 
@@ -2046,21 +3275,40 @@ export function LogViewer() {
           about a result that simply is what it is.
         */}
         <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-          {isSnapshot
-            ? `${logs.length.toLocaleString()} line${logs.length === 1 ? '' : 's'}`
-            : `${logs.length.toLocaleString()} of the last ${logTail.toLocaleString()} lines`}
-          {!isSnapshot && logs.length >= logTail && ' · at the limit'}
+          {paging
+            ? `lines ${(paging.first + 1).toLocaleString()}–${(paging.first + logs.length).toLocaleString()} of ${paging.total.toLocaleString()}${paging.partial ? '…' : ''}`
+            : isSnapshot
+              ? `${logs.length.toLocaleString()} line${logs.length === 1 ? '' : 's'}`
+              /* Following starts empty, so there is no tail to be a fraction of either. */
+              : logLive
+                ? `${logs.length.toLocaleString()} line${logs.length === 1 ? '' : 's'} since following began`
+                /* The screen kept while a read replaces it — not yet "of the last N". */
+                : logStatus === 'loading' || logStatus === 'streaming'
+                  ? `reading the last ${logTail.toLocaleString()} lines…`
+                  : `${logs.length.toLocaleString()} of the last ${logTail.toLocaleString()} lines`}
+          {!isSnapshot && !logLive && logStatus !== 'loading' && logStatus !== 'streaming' && logs.length >= logTail && ' · at the limit'}
           {logs.length > 0 && ` · ${(bufferBytes(logs) / 1024 / 1024).toFixed(1)} MB`}
           {oldest !== undefined && ` · oldest ${formatLogTime(oldest)}`}
+          {marks.length > 0 && <MarkedCount inView={markedInView} />}
         </span>
         {visible.length !== logs.length && (
           <span style={{ color: ACCENT, fontVariantNumeric: 'tabular-nums' }}>
             {visible.length.toLocaleString()} shown
           </span>
         )}
+        {payloadOpts.draw && eventStats.events > 0 && (
+          <span style={{ fontVariantNumeric: 'tabular-nums' }}
+                title="Events, not lines: a folded stack trace or a YAML block is one event.">
+            {eventStats.events.toLocaleString()} event{eventStats.events === 1 ? '' : 's'}
+            {` · ${eventStats.withPayload.toLocaleString()} carry a payload`} · parsed on this machine, never sent anywhere
+          </span>
+        )}
+        {footerNote && <span>{footerNote}</span>}
         <div className="flex-1" />
         <span>
           {isSnapshot ? (logDetail ?? 'a search result')
+            : logLive && logPaused
+              ? `paused — ${(logReceived ?? 0).toLocaleString()} new line${logReceived === 1 ? '' : 's'} waiting`
             : logLive
               ? 'following — new lines append as they arrive'
               : `snapshot of the last ${logTail} lines`}
@@ -2069,7 +3317,7 @@ export function LogViewer() {
           <button
             type="button"
             onClick={() => setLogFollow(true)}
-            className="cursor-pointer bg-transparent border-none px-0 text-[10.5px]"
+            className="cursor-pointer bg-transparent border-none px-0 text-[11.5px]"
             style={{ color: ACCENT }}
           >
             ↓ jump to newest
@@ -2082,17 +3330,47 @@ export function LogViewer() {
             type="button"
             onClick={clearLinkedLine}
             title="Clear the highlight this link left"
-            className="cursor-pointer bg-transparent border-none px-0 text-[10.5px]"
+            className="cursor-pointer bg-transparent border-none px-0 text-[11.5px]"
             style={{ color: ACCENT }}
           >
             linked line · clear
           </button>
         )}
         <span>select any text to ask AI about it</span>
+        {/* The board's pair, side by side and alike: Jump to next match, then
+            the window on screen asked about as a whole — the Ask the log tab. */}
+        {marks.length > 0 && <MarkedJump inView={markedInView} onNext={() => jumpToNextMark()} />}
+        {!isSnapshot && (
+          <ButtonView variant="secondary" accentColor={AI_ACCENT}
+                      disabled={!logs.length}
+                      title="Ask a question of this pod's log over a window, with the lines behind every answer"
+                      onClick={() => useK8sStore.getState().setDetailTab('ask')}
+                      style={OUTLINE_BUTTON}>
+            Ask AI about this window
+          </ButtonView>
+        )}
+        <ButtonView variant="secondary" accentColor={ACCENT}
+                    title="Settings → DK8S → Logs: payloads, stack traces and what the counters count"
+                    onClick={() => useTabsStore.getState().openSettingsTab('dk8s-logs')}
+                    style={OUTLINE_BUTTON}>
+          Rendering settings
+        </ButtonView>
       </div>
 
     </div>
   );
+}
+
+/**
+ * What the row reads: the message, with the payload lifted off it.
+ *
+ * The chip beside it stands for the payload, so the row stays a sentence. The
+ * whole line comes back when a search hit falls inside the payload — a match
+ * the reader cannot see is a match they will think is wrong — and for a line
+ * that is nothing but its payload.
+ */
+function sentenceOf(line: MatchedLine, payload: LogPayload | undefined): string {
+  return sentenceWithout(displayText(line), payload, at => !!line.hits?.some(([, to]) => to > at));
 }
 
 function ContainerChip({ name }: { name: string }) {
@@ -2106,5 +3384,44 @@ function ContainerChip({ name }: { name: string }) {
       accentColor={ACCENT}
       onClick={() => setLogContainer(on ? undefined : name)}
     />
+  );
+}
+/**
+ * A whole-file filter on its way: the subject of the pane until it answers.
+ *
+ * The same moment as the search dialog's "Scanning", drawn at the size of the
+ * pane it fills — a big glass with a ring running round it, what is being
+ * looked for, and how far through the file the host has read.
+ */
+function SearchingState({ query, scanned, total, matched }: { query: string; scanned: number; total: number; matched: number }) {
+  const accent = 'var(--color-dk8s)';
+  const pct = total ? Math.min(100, (scanned / total) * 100) : 0;
+  return (
+    <div data-testid="log-searching" className="flex flex-col items-center justify-center h-full gap-4 px-8 text-center"
+         style={{ fontFamily: 'var(--font-sans, system-ui, sans-serif)', lineHeight: 1.4 }}>
+      <span className="relative grid place-items-center" style={{ width: 96, height: 96 }}>
+        <span className="absolute inset-0 rounded-full"
+              style={{ background: `radial-gradient(circle, color-mix(in srgb, ${accent} 22%, transparent), color-mix(in srgb, ${accent} 6%, transparent) 70%)` }} />
+        <span className="absolute inset-0 rounded-full animate-spin"
+              style={{
+                border: `3px solid color-mix(in srgb, ${accent} 16%, transparent)`,
+                borderTopColor: accent, borderRightColor: accent, animationDuration: '0.9s',
+              }} />
+        <SearchIcon size={IconSize.hero} color={accent} />
+      </span>
+      <span className="flex flex-col gap-1 items-center">
+        <span className="text-[16px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>Searching</span>
+        <span className="text-[12px] max-w-[520px]" style={{ color: 'var(--color-text-secondary)' }}>
+          {query ? <>Looking for <span className="font-mono" style={{ color: accent }}>{query}</span> in </> : 'Reading '}
+          all {total.toLocaleString()} lines of the download
+        </span>
+      </span>
+      <span className="flex flex-col gap-1.5 items-center" style={{ width: 300 }}>
+        <span className="w-full"><ProgressBarView value={scanned ? pct : undefined} color={accent} /></span>
+        <span className="text-[11px]" style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+          {scanned ? `${Math.round(pct)}% read · ${matched.toLocaleString()} match${matched === 1 ? '' : 'es'} so far` : 'Starting…'}
+        </span>
+      </span>
+    </div>
   );
 }

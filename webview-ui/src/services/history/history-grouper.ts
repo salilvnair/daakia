@@ -13,15 +13,20 @@ interface HistoryItem {
   created_at?: string;
 }
 
-export interface SubGroup {
+/*
+  Generic over what is grouped: only `created_at` is read, so anything with a
+  time — a history entry, a Daakia AI conversation — groups the same way and
+  reads the same in its list.
+*/
+export interface SubGroup<T = HistoryItem> {
   label: string;
-  items: HistoryItem[];
-  subGroups?: SubGroup[]; // 3-level: year → month → date → items
+  items: T[];
+  subGroups?: SubGroup<T>[]; // 3-level: year → month → date → items
 }
 
-export interface TopGroup {
+export interface TopGroup<T = HistoryItem> {
   label: string;
-  subGroups: SubGroup[];
+  subGroups: SubGroup<T>[];
 }
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -49,20 +54,20 @@ export function formatFullTimestamp(d: Date): string {
   return `${month} ${day}, ${year}, ${hours}:${minutes}:${seconds} ${ampm}`;
 }
 
-export function buildGroups(items: HistoryItem[]): TopGroup[] {
+export function buildGroups<T extends { created_at?: string } = HistoryItem>(items: T[]): TopGroup<T>[] {
   const now = new Date();
-  const result: TopGroup[] = [];
+  const result: TopGroup<T>[] = [];
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth();
 
-  const todayItems: HistoryItem[] = [];
-  const yesterdayItems: HistoryItem[] = [];
+  const todayItems: T[] = [];
+  const yesterdayItems: T[] = [];
 
   // For same year, non-current-month dates: Map<monthIndex, Map<dateKey, items>>
-  const sameYearMonthMap = new Map<number, Map<string, HistoryItem[]>>();
+  const sameYearMonthMap = new Map<number, Map<string, T[]>>();
 
   // For past years: Map<year, Map<monthIndex, Map<dateKey, items>>>
-  const pastYearMap = new Map<number, Map<number, Map<string, HistoryItem[]>>>();
+  const pastYearMap = new Map<number, Map<number, Map<string, T[]>>>();
 
   for (const item of items) {
     const d = item.created_at ? new Date(item.created_at) : now;
@@ -102,7 +107,7 @@ export function buildGroups(items: HistoryItem[]): TopGroup[] {
 
   // Today — sub-grouped by hour intervals (unchanged)
   if (todayItems.length > 0) {
-    const hourBuckets = new Map<string, HistoryItem[]>();
+    const hourBuckets = new Map<string, T[]>();
     for (const item of todayItems) {
       const d = item.created_at ? new Date(item.created_at) : now;
       const diffMs = now.getTime() - d.getTime();
@@ -143,7 +148,7 @@ export function buildGroups(items: HistoryItem[]): TopGroup[] {
       }
     } else {
       // Past month → top-level "May" → sub-groups "May 31", "May 30" → items
-      const dateSubGroups: SubGroup[] = [];
+      const dateSubGroups: SubGroup<T>[] = [];
       const sortedDates = Array.from(dateMap.entries()).sort(([a], [b]) => {
         const da = parseInt(a.split(' ')[1]);
         const db = parseInt(b.split(' ')[1]);
@@ -161,12 +166,12 @@ export function buildGroups(items: HistoryItem[]): TopGroup[] {
   for (const year of sortedYears) {
     const yearMonthMap = pastYearMap.get(year)!;
     const sortedPastMonths = Array.from(yearMonthMap.keys()).sort((a, b) => b - a);
-    const yearSubGroups: SubGroup[] = [];
+    const yearSubGroups: SubGroup<T>[] = [];
 
     for (const monthIdx of sortedPastMonths) {
       const dateMap = yearMonthMap.get(monthIdx)!;
       const monthName = MONTHS[monthIdx];
-      const dateSubGroups: SubGroup[] = [];
+      const dateSubGroups: SubGroup<T>[] = [];
 
       const sortedDates = Array.from(dateMap.entries()).sort(([a], [b]) => {
         const da = parseInt(a.split(' ')[1]);

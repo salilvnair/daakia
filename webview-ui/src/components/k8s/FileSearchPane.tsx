@@ -397,7 +397,7 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload, m
             </div>
 
             {open && (
-            <FileBrowserView
+            <FileBrowserView className="dk-fb-actions"
               style={{ ['--dui-file-badge' as string]: ACCENT } as React.CSSProperties}
               entries={entries}
               showHeader={false}

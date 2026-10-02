@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckIcon } from '../../../icons';
 
@@ -211,7 +211,25 @@ function SubmenuFlyout({ items, anchorRect, onSelect, onCloseAll, keepOpenOnSele
 
 // ─── Main Context Menu ────────────────────────────────────────────────────────
 
-export function ContextMenu({ items, position, onSelect, onClose }: ContextMenuProps) {
+/**
+ * Separators only between groups: never first, never last, never two in a row.
+ *
+ * A menu builds its groups conditionally — a single-instance tab has no Rename,
+ * Duplicate or Pin — and the separator written to sit above the next group
+ * then opened the menu as a bare bar along its top.
+ */
+export function tidySeparators<T extends { separator?: boolean }>(items: T[]): T[] {
+  const out: T[] = [];
+  for (const item of items) {
+    if (item.separator && (!out.length || out[out.length - 1].separator)) continue;
+    out.push(item);
+  }
+  while (out.length && out[out.length - 1].separator) out.pop();
+  return out;
+}
+
+export function ContextMenu({ items: given, position, onSelect, onClose }: ContextMenuProps) {
+  const items = useMemo(() => tidySeparators(given), [given]);
   const menuRef = useRef<HTMLDivElement>(null);
   const [openSubmenuId, setOpenSubmenuId] = useState<string | null>(null);
   const [submenuAnchor, setSubmenuAnchor] = useState<DOMRect | null>(null);

@@ -104,3 +104,26 @@ describe('finding the line again', () => {
     expect(findLinkedLine(lines, { context: 'c', namespace: 'n', pod: 'p' })).toBeUndefined();
   });
 });
+
+describe('a link waiting while the log streams in', () => {
+  const at = Date.parse('2026-09-24T06:26:11.878Z');
+  const early = [
+    { ts: at - 13_000, text: 'calling prsu-inventory for requestDataId=9705' },
+    { ts: at - 12_900, text: 'pool stats active=4' },
+  ];
+  const target = { context: 'c', namespace: 'n', pod: 'p', ts: at, text: 'read timed out calling zp-python-validation for requestDataId=9259' };
+
+  it('does not settle for the nearest line before the log reaches the time', () => {
+    expect(findLinkedLine(early, target, { streaming: true })).toBeUndefined();
+  });
+
+  it('finds the line itself once it arrives', () => {
+    const later = [...early, { ts: at, text: target.text }, { ts: at + 500, text: 'x' }];
+    expect(findLinkedLine(later, target, { streaming: true })?.text).toBe(target.text);
+  });
+
+  it('falls back to the nearest time once the log has gone past it', () => {
+    const past = [...early, { ts: at + 5_000, text: 'something else' }];
+    expect(findLinkedLine(past, target, { streaming: true })?.ts).toBe(at + 5_000);
+  });
+});

@@ -14,12 +14,22 @@ import { SkeletonView, TableSkeletonView } from '@salilvnair/dui';
 /** The width FacetRail sets on itself, repeated so nothing shifts on arrival. */
 const RAIL_WIDTH = 208;
 
-export function LogSkeleton({ railOpen, rowHeight }: {
+export function LogSkeleton({ railOpen, rowHeight, received }: {
   railOpen: boolean;
   rowHeight: number;
+  /** Lines a read has brought in so far, said quietly in a corner. */
+  received?: number;
 }) {
   return (
-    <div className="flex flex-1 min-h-0 w-full">
+    <div className="relative flex flex-1 min-h-0 w-full">
+      {!!received && (
+        <span className="absolute z-10" style={{
+          right: 16, top: 10, fontSize: 11, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums',
+          padding: '2px 8px', borderRadius: 6, background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)',
+        }}>
+          Reading {received.toLocaleString()} lines…
+        </span>
+      )}
       {railOpen && (
         <>
           <div

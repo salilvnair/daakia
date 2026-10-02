@@ -6,13 +6,14 @@ import {
   SelectInputView, EditorView, ResizablePanelView, ButtonView, IconButtonView,
   ToggleSwitchView, TextInputView, CheckboxView, DurationInputView, type SelectOption,
 } from '@salilvnair/dui';
-import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern } from '../../../icons';
+import { TrashIcon, DiagonalLinesPattern } from '../../../icons';
 import { ConfirmDialog } from '../../shared';
 import { MQTT_SAMPLES } from '../samples';
 import type { MockServer } from '../mock-types';
 import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
 import { logUiEvent } from '../../../store/ui-audit-store';
 import type { MQTTMockTopic } from '../mock-types';
+import { CopyUrlButton } from './CopyUrlButton';
 
 const MQTT_SAMPLE_OPTIONS: SelectOption[] = [
   { value: '', label: 'Load Sample...' },
@@ -34,17 +35,9 @@ export function MQTTConfig({ server, onUpdate }: MQTTConfigProps) {
   const topics = server.mqttTopics || [];
   const [selectedSample, setSelectedSample] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showDeleteAll, setShowDeleteAll] = useState(false);
 
   const mqttUrl = server.running && server.port ? `ws://localhost:${server.port}` : '';
-
-  const copyMqttUrl = (id: string) => {
-    if (!mqttUrl) return;
-    navigator.clipboard.writeText(mqttUrl);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 1500);
-  };
 
   const applySample = (sampleId: string) => {
     if (!sampleId) return;
@@ -189,12 +182,7 @@ export function MQTTConfig({ server, onUpdate }: MQTTConfigProps) {
               />
             )}
             {mqttUrl && topic.enabled && (
-              <IconButtonView
-                size="sm"
-                icon={copiedId === topic.id ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
-                onClick={() => copyMqttUrl(topic.id)}
-                title="Copy MQTT URL"
-              />
+              <CopyUrlButton text={mqttUrl} title="Copy MQTT URL" />
             )}
             {topic.enabled && (
               <IconButtonView

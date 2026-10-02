@@ -8,10 +8,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { useTabsStore } from '../../store/tabs-store';
-import { DiceIcon, CopyIcon, CheckIcon, RefreshIcon } from '../../icons';
+import { DiceIcon, RefreshIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { ModalView, AIButtonView, ButtonView, EditorView, MultilineInputView } from '@salilvnair/dui';
 import { sendAiRequest } from '../../services/ai/ai-client';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,7 +56,7 @@ export function AiDataGeneratorModal({ tabId, onApply, onClose }: Props) {
   const [result, setResult] = useState('');
   const [streaming, setStreaming] = useState('');
   const [error, setError] = useState('');
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
 
   const accumulatedRef = useRef('');
   const reqIdRef = useRef('');
@@ -104,7 +105,6 @@ export function AiDataGeneratorModal({ tabId, onApply, onClose }: Props) {
     setLoading(true);
     setError('');
     setStreaming('');
-    setCopied(false);
     accumulatedRef.current = '';
 
     const pid = `ai-datagen-${Date.now()}`;
@@ -153,9 +153,8 @@ export function AiDataGeneratorModal({ tabId, onApply, onClose }: Props) {
   const handleCopy = useCallback(async () => {
     if (!result) return;
     await navigator.clipboard.writeText(result);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [result]);
+    flash();
+  }, [result, flash]);
 
   // ── Apply to body editor ──────────────────────────────────────────────────
 
@@ -196,10 +195,10 @@ export function AiDataGeneratorModal({ tabId, onApply, onClose }: Props) {
               <ButtonView
                 variant="secondary"
                 size="sm"
-                iconLeft={copied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}
+                iconLeft={<CopyGlyph copied={copied} size={11} />}
                 onClick={handleCopy}
               >
-                {copied ? 'Copied!' : 'Copy'}
+                Copy
               </ButtonView>
               {onApply && (
                 <ButtonView variant="primary" size="sm" onClick={handleApply}>

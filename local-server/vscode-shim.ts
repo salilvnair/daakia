@@ -87,6 +87,10 @@ const Uri = {
   file(fsPath: string) {
     return { fsPath, scheme: 'file', toString: () => `file://${fsPath}` };
   },
+  /* A URL as given — enough for env.openExternal, which only reads it back. */
+  parse(value: string) {
+    return { fsPath: value, scheme: value.split(':')[0] ?? '', toString: () => value };
+  },
 };
 
 // ─── env ──────────────────────────────────────────────────────────────────────

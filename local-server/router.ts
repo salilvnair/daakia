@@ -80,7 +80,12 @@ import {
   handleDk8sShell, handleDk8sProbePod, handleDk8sMarkRuntime, handleDk8sAsk,
   handleDk8sCollect, handleDk8sAnalyze, handleDk8sRevealArtifacts,
   handleDk8sLoadPv, handleDk8sSavePv, handleDk8sOpenLogFile, handleDk8sSetLogLineNumbers,
+  handleDk8sScanLoggers,
+  handleDk8sCaptureStart, handleDk8sCaptureRead, handleDk8sCaptureFilter, handleDk8sCaptureLocate, handleDk8sCaptureClose,
 } from '../src/panel/main/handlers/k8s-handler';
+import {
+  handleDk8sReadProject, handleDk8sReadPodLoggers, handleDk8sAskLog, handleDk8sExportCatalogue,
+} from '../src/panel/main/handlers/loggers-handler';
 import {
   handleDk8sPodMounts, handleDk8sPvList, handleDk8sPvSearch, handleDk8sPodPicker,
 } from '../src/panel/main/handlers/pv-in-pod-handler';
@@ -97,6 +102,7 @@ import { archiveHistoryEntry, archiveHistoryBatch } from '../src/services/bin';
 import {
   handleGitSyncGetSettings, handleGitSyncSaveSettings, handleGitSyncGetStatus, handleGitSyncInit,
   handleGitSyncNow, handleGitSyncExportOnly, handleGitSyncImportOnly, handleGitSyncSetIdentity,
+  handleDk8sTeamPrefs,
 } from '../src/panel/main/handlers/git-sync-handler';
 import {
   handleGetWorkspaces, handleSwitchWorkspace, handleCreateWorkspace,
@@ -129,7 +135,10 @@ import {
   handleSmWorkflowSaveFolder, handleSmWorkflowDeleteFolder, handleSmWorkflowSaveTodos,
 } from '../src/panel/main/handlers/sm-workflow-handler';
 import { handleSaveUiState, handleGetUiState, handleSaveWorkspaceSnapshot, handleGetWorkspaceSnapshot } from '../src/panel/main/handlers/ui-state-handler';
-import { handleAiSend, handleAiCancel, handleAiChat, handleAiStream, handleAiStreamRequest } from '../src/panel/main/handlers/ai-handler';
+import {
+  handleAiSend, handleAiCancel, handleAiKubectlSuggest, handleAiChat, handleAiStream, handleAiStreamRequest,
+  handleAiSaveConversation, handleAiLoadConversations, handleAiLoadConversation, handleAiDeleteConversation,
+} from '../src/panel/main/handlers/ai-handler';
 import { handleLoadStart, handleLoadStop } from '../src/panel/main/handlers/load-handler';
 import { handleBulkRun, handleBulkStop } from '../src/panel/main/handlers/bulk-handler';
 import { handleInterceptorStart, handleInterceptorStop } from '../src/panel/main/handlers/interceptor-handler';
@@ -159,6 +168,16 @@ import {
   handleTerminalOpen, handleTerminalInput, handleTerminalResize,
   handleTerminalClose, closeAllTerminals,
 } from '../src/panel/main/handlers/terminal-handler';
+import {
+  handlePyProbe, handlePyPods, handlePyRun, handlePyStop, handlePyEndSession,
+  handlePyDebugStart, handlePyDebugCmd, handlePyDebugConsole, handlePyDebugBreakpoints,
+  handlePyDebugWatches, handlePyDebugStop, handlePyDebugEval, handlePyIntel,
+  handlePyScriptsList, handlePyScriptsSave, handlePyScriptsDelete,
+} from '../src/panel/main/handlers/python-handler';
+import {
+  handlePfList, handlePfPorts, handlePfCheck, handlePfStart, handlePfStop, handlePfStopAll, handlePfForget, handlePfRestart,
+} from '../src/panel/main/handlers/port-forward-handler';
+import { handlePfCall, handlePfAttach, handlePfDump, handlePfOpenApi } from '../src/panel/main/handlers/port-forward-use-handler';
 
 export type PostMessage = (msg: unknown) => void;
 import { historyCap } from '../src/services/history-cap';
@@ -189,6 +208,7 @@ export function broadcastSyncedData(post: PostMessage) {
   handleGetEnvironments(post);
   handleGetThemes(post);
   handleGetWorkspaces(post);
+  handleDk8sTeamPrefs(post);
 }
 
 /** Mirrors MainPanel.refreshInitialState() for the subsystems wired here. */
@@ -260,6 +280,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'gitSync:setIdentity':
       handleGitSyncSetIdentity(msg as { id?: string }, post);
+      break;
+    case 'gitSync:dk8sTeamPrefs':
+      handleDk8sTeamPrefs(post);
       break;
     case 'themes:save':
       handleSaveTheme(msg, post);
@@ -513,6 +536,40 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
     case 'dk8s:importArtifact':
       handleDk8sImportArtifact(post);
       break;
+    /* In the browser there is no folder dialog to fall back to, so a scan
+       without a path is a scan that cannot be run — say so rather than hang. */
+    case 'dk8s:scanLoggers':
+      void handleDk8sScanLoggers(msg, post);
+      break;
+    /* The Loggers tab — the same four MainPanel routes. A folder read without
+       a path gets the shim's folder, so type the path here. */
+    case 'dk8s:readProject':
+      void handleDk8sReadProject(msg, post);
+      break;
+    case 'dk8s:readPodLoggers':
+      void handleDk8sReadPodLoggers(msg, post);
+      break;
+    case 'dk8s:askLog':
+      void handleDk8sAskLog(msg, post);
+      break;
+    case 'dk8s:exportCatalogue':
+      void handleDk8sExportCatalogue(msg, post);
+      break;
+    case 'dk8s:captureStart':
+      void handleDk8sCaptureStart(msg, post);
+      break;
+    case 'dk8s:captureRead':
+      handleDk8sCaptureRead(msg, post);
+      break;
+    case 'dk8s:captureFilter':
+      void handleDk8sCaptureFilter(msg, post);
+      break;
+    case 'dk8s:captureLocate':
+      handleDk8sCaptureLocate(msg, post);
+      break;
+    case 'dk8s:captureClose':
+      handleDk8sCaptureClose(msg);
+      break;
     case 'dk8s:deleteArtifact':
       handleDk8sDeleteArtifact(msg, post);
       break;
@@ -547,7 +604,7 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       handleDk8sCancelExport(post);
       break;
     case 'dk8s:cancelSearch':
-      handleDk8sCancelSearch(post);
+      handleDk8sCancelSearch(post, msg);
       break;
     case 'dk8s:setKubectlPath':
       await handleDk8sSetKubectlPath(msg, post);
@@ -608,6 +665,94 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'term:close':
       handleTerminalClose(msg);
+      break;
+    // ── Port forwarding — the forwards live as long as this server, not the page ──
+    case 'dk8s:pf:list':
+      handlePfList(msg, post);
+      break;
+    case 'dk8s:pf:ports':
+      await handlePfPorts(msg, post);
+      break;
+    case 'dk8s:pf:check':
+      await handlePfCheck(msg, post);
+      break;
+    case 'dk8s:pf:start':
+      await handlePfStart(msg, post);
+      break;
+    case 'dk8s:pf:stop':
+      handlePfStop(msg, post);
+      break;
+    case 'dk8s:pf:stopAll':
+      handlePfStopAll(msg, post);
+      break;
+    case 'dk8s:pf:forget':
+      handlePfForget(msg, post);
+      break;
+    case 'dk8s:pf:call':
+      await handlePfCall(msg, post);
+      break;
+    case 'dk8s:pf:attach':
+      await handlePfAttach(msg, post);
+      break;
+    case 'dk8s:pf:dump':
+      await handlePfDump(msg, post, process.cwd());
+      break;
+    case 'dk8s:pf:openapi':
+      await handlePfOpenApi(msg, post);
+      break;
+    case 'dk8s:pf:restart':
+      handlePfRestart(msg, post);
+      break;
+    // ── Python in a pod — the same handlers the extension routes to ──
+    case 'py:probe':
+      await handlePyProbe(msg, post);
+      break;
+    case 'py:pods':
+      await handlePyPods(msg, post);
+      break;
+    case 'py:run':
+      /* Not awaited: a run lasts as long as the script does, and the socket
+         has other messages to deliver meanwhile — a Stop among them. */
+      void handlePyRun(msg, post);
+      break;
+    case 'py:stop':
+      handlePyStop(msg);
+      break;
+    case 'py:endSession':
+      await handlePyEndSession(msg, post);
+      break;
+    case 'py:debug:start':
+      void handlePyDebugStart(msg, post);
+      break;
+    case 'py:debug:cmd':
+      handlePyDebugCmd(msg);
+      break;
+    case 'py:debug:console':
+      handlePyDebugConsole(msg);
+      break;
+    case 'py:debug:breakpoints':
+      handlePyDebugBreakpoints(msg);
+      break;
+    case 'py:debug:watches':
+      handlePyDebugWatches(msg);
+      break;
+    case 'py:debug:eval':
+      handlePyDebugEval(msg, post);
+      break;
+    case 'py:intel':
+      void handlePyIntel(msg, post);
+      break;
+    case 'py:debug:stop':
+      handlePyDebugStop(msg, post);
+      break;
+    case 'py:scripts:list':
+      handlePyScriptsList(msg, post);
+      break;
+    case 'py:scripts:save':
+      handlePyScriptsSave(msg, post);
+      break;
+    case 'py:scripts:delete':
+      handlePyScriptsDelete(msg, post);
       break;
     case 'dk8s:shell':
       await handleDk8sShell(msg, post);
@@ -1162,6 +1307,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
     case 'ai:cancel':
       handleAiCancel(msg, post);
       break;
+    case 'ai:kubectlSuggest':
+      void handleAiKubectlSuggest(msg, post);
+      break;
 
     // ── Load testing — real requests, measured.
     // ── Bulk URL checks — real responses, run with a worker pool.
@@ -1237,6 +1385,20 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       if (templates && typeof templates === 'object') setAiPromptTemplates(templates);
       break;
     }
+
+    // ── Daakia AI conversation history (the rail) — the same handlers the extension routes ──
+    case 'ai:saveConversation':
+      handleAiSaveConversation(msg, post);
+      break;
+    case 'ai:loadConversations':
+      handleAiLoadConversations(msg, post);
+      break;
+    case 'ai:loadConversation':
+      handleAiLoadConversation(msg, post);
+      break;
+    case 'ai:deleteConversation':
+      handleAiDeleteConversation(msg, post);
+      break;
 
     // ── Daakia AI conversation ──
     case 'aiConversation:load':

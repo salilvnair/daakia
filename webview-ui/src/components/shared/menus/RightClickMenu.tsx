@@ -788,6 +788,12 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
  * scroller above it. A row without a pod above it — a search result, which is
  * not a place a link can point — offers nothing.
  */
+/** The log line under the pointer, as the pod wrote it — any log view, a search result's included. */
+function logLineText(target?: HTMLElement | null): string | undefined {
+  const row = target?.closest('[data-log-text]') as HTMLElement | null;
+  return row?.dataset.logText ?? undefined;
+}
+
 function logLineLink(target?: HTMLElement | null): string | undefined {
   const row = target?.closest('[data-log-text]') as HTMLElement | null;
   if (!row) return undefined;
@@ -887,6 +893,12 @@ export function RightClickMenu() {
       return;
     }
 
+    if (action === 'dk8s:copyLine') {
+      const text = logLineText(target);
+      if (text !== undefined) await navigator.clipboard?.writeText(text);
+      return;
+    }
+
     if (action === 'compareClipboard') {
       /* Read the clipboard at click time — it is the one input genuinely
          allowed to change between opening the menu and choosing. */
@@ -952,6 +964,15 @@ export function RightClickMenu() {
 
     // General text selection — copy
     if (action === 'copy') {
+      /* A surface that knows better copies for itself — a log view copies the
+         lines it has selected, with their times and levels, not the page text. */
+      const surface = target?.closest('[data-selection-actions]');
+      if (surface) {
+        const handled = !target!.dispatchEvent(new CustomEvent('daakia:selection-action', {
+          bubbles: true, cancelable: true, detail: { action: 'copy', text: selectedText },
+        }));
+        if (handled) return;
+      }
       if (selectedText) await navigator.clipboard.writeText(selectedText);
       return;
     }
@@ -1025,14 +1046,18 @@ export function RightClickMenu() {
     with: it is about the line under the cursor, which is what was clicked,
     while everything below acts on whatever text happens to be highlighted.
   */
-  const linkItems: ContextMenuItem[] = logLineLink(menu.target)
+  /* The line itself goes on any log row — search results and other snapshots
+     too, which have no link to offer; the link only where it can open again. */
+  const onLine = logLineText(menu.target) !== undefined;
+  const linkItems: ContextMenuItem[] = onLine
     ? [
-        {
+        { id: 'dk8s:copyLine', label: 'Copy line', icon: <CopyIcon size={13} />, iconColor: 'var(--color-ctx-duplicate)' },
+        ...(logLineLink(menu.target) ? [{
           id: 'dk8s:copyLineLink',
           label: 'Copy link to this line',
           icon: <LinkIcon size={13} />,
           iconColor: 'var(--color-ctx-duplicate)',
-        },
+        }] : []),
         { id: 'dk8s:link-sep', label: '', separator: true },
       ]
     : [];

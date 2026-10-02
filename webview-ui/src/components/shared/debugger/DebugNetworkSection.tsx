@@ -6,8 +6,9 @@
  */
 import { useState } from 'react';
 import { useDebugStore, type DebugSubRequest } from '../../../store/debug-store';
-import { CopyIcon, CheckIcon, ChevronDownIcon, ArrowUpRightIcon, ArrowDownLeftIcon, InfoCircleIcon } from '../../../icons/daakia-icons';
+import { ChevronDownIcon, ArrowUpRightIcon, ArrowDownLeftIcon, InfoCircleIcon } from '../../../icons/daakia-icons';
 import { CollapsibleSectionView } from '@salilvnair/dui';
+import { useCopyTick, CopyGlyph } from '../CopyTick';
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -70,12 +71,10 @@ function MethodBadge({ method }: { method: string }) {
 }
 
 function CopyButton({ text, size = 13 }: { text: string; size?: number }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    void navigator.clipboard.writeText(text).then(flash);
   };
   return (
     <button
@@ -86,7 +85,7 @@ function CopyButton({ text, size = 13 }: { text: string; size?: number }) {
       }`}
       title={copied ? 'Copied!' : 'Copy'}
     >
-      {copied ? <CheckIcon size={size} /> : <CopyIcon size={size} />}
+      <CopyGlyph copied={copied} size={size} />
     </button>
   );
 }

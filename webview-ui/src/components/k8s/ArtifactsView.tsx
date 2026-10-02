@@ -11,7 +11,7 @@
  * are durable, imported ones live alongside them, and clicking either opens
  * the analyzer that understands it.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ButtonView, SearchInputView, SegmentedControlView, CheckboxView, HudView,
   CheckSquareIcon, EmptySquareIcon, FilterInputView, IconSize,
@@ -19,7 +19,7 @@ import {
 import { CopyButtonView } from '@salilvnair/dui';
 import {
   MemoryIcon, CpuIcon, FileTextIcon, TimelineIcon, NetworkIcon,
-  FolderOpenIcon, TrashIcon, PlusIcon, StethoscopeIcon, CloseIcon,
+  FolderOpenIcon, TrashIcon, PlusIcon, StethoscopeIcon, CloseIcon, RefreshIcon,
 } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useDk8sArtifactStore, type StoredArtifact } from '../../store/dk8s-artifact-store';
@@ -141,14 +141,46 @@ function Row({ a, picked, onPick, onAskDelete }: {
   );
 }
 
-export function ArtifactsView() {
+export function ArtifactsView({ active = true }: { active?: boolean }) {
   const { artifacts, dir, error, load, importFile, reveal, remove,
     unsupported, dismissUnsupported } = useDk8sArtifactStore();
   const [filter, setFilter] = useState('');
   const [kind, setKind] = useState<'all' | 'heap' | 'threads' | 'logs' | 'cpu'>('all');
   const [picked, setPicked] = useState<string[]>([]);
 
-  useEffect(() => { load(); }, [load]);
+  /*
+    The folder is a folder, and other things write to it.
+
+    This listed once, on mount — and the dk8s tabs stay mounted after their
+    first visit, so "once" meant once per Daakia. A heap dump dropped in from
+    Explorer, or pulled down by another window, was not there until the whole
+    app was restarted, which is a lot to ask of a file the reader can see on
+    disk.
+
+    So it lists again on every arrival at this tab and whenever the window
+    comes back to the front — the two moments when someone has just put a file
+    there. A listing is a directory read on the host; the guard below only
+    stops the burst from tab-flipping.
+  */
+  const lastLoad = useRef(0);
+  const reload = useCallback(() => {
+    const now = Date.now();
+    if (now - lastLoad.current < 1200) return;
+    lastLoad.current = now;
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    if (!active) return;
+    reload();
+    const onFocus = () => reload();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, [active, reload]);
 
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase();
@@ -268,6 +300,15 @@ export function ArtifactsView() {
         {/* "Folder" named a noun and left you to guess the verb. It opens the
             directory these files live in, in the system file manager — the
             path is in the footer, and this saves copying it. */}
+        {/* The listing follows you into the tab and back to the window, but a
+            file that lands while you are looking at it still needs asking for.
+            `load`, not `reload`: a press means now, not maybe. */}
+        <ButtonView label="Refresh" size="sm" variant="secondary"
+                    iconLeft={<RefreshIcon size={IconSize.action} />}
+                    onClick={() => { lastLoad.current = Date.now(); load(); }}
+                    title="Read the artifact folder again"
+                    style={{ height: CTRL_H, background: 'transparent' }} />
+
         <ButtonView label="Show folder" size="sm" variant="secondary"
                     iconLeft={<FolderOpenIcon size={IconSize.action} />}
                     onClick={reveal}

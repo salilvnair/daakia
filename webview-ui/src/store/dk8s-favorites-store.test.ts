@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  favoriteKey, favoritesFirst, favoriteChoices, starredKeyOf,
+  favoriteKey, favoritesFirst, favoriteChoices, starredKeyOf, starredHere, starredView,
 } from './dk8s-favorites-store';
 import type { PodSummary } from './k8s-store';
 
@@ -135,5 +135,68 @@ describe('what a star can be attached to', () => {
       ['kind-dk8s/prod/Pod/api-7bb88bcc45-27sqb'],
     );
     expect((sorted[0] as typeof pod).name).toBe('api-7bb88bcc45-27sqb');
+  });
+});
+
+/*
+  The chip beside the star counted the SAVED list, which spans every cluster and
+  namespace: fourteen stars across a fleet read "14" over a namespace holding
+  two of them, and over one holding none it still offered a scope that shows
+  nothing at all.
+*/
+describe('starredHere', () => {
+  const here = (name: string, workload?: string) => pod({
+    name, namespace: 'payments', context: 'prod', uid: name,
+    ...(workload ? { workload: { kind: 'Deployment', name: workload } } : {}),
+  } as Partial<PodSummary>);
+
+  const keys = [
+    'prod/payments/Deployment/ledger',
+    'prod/billing/Deployment/invoices',
+    'dev/payments/Deployment/ledger',
+  ];
+
+  it('counts only the stars that belong to these pods', () => {
+    expect(starredHere([here('ledger-1', 'ledger'), here('cart-1', 'cart')], keys)).toBe(1);
+  });
+
+  it('counts a starred workload once, not once per replica', () => {
+    const replicas = [here('ledger-1', 'ledger'), here('ledger-2', 'ledger'), here('ledger-3', 'ledger')];
+    expect(starredHere(replicas, keys)).toBe(1);
+  });
+
+  it('is zero in a namespace whose pods are none of them', () => {
+    // What made the scope a dead end: the control offered a filter that hid
+    // everything, because the count it was drawn from was about elsewhere.
+    expect(starredHere([here('cart-1', 'cart')], keys)).toBe(0);
+  });
+
+  it('sees a pod-scoped star too, for a pod nothing owns', () => {
+    expect(starredHere([here('debug-shell')], ['prod/payments/Pod/debug-shell'])).toBe(1);
+  });
+
+  it('is zero for an empty list either way', () => {
+    expect(starredHere([], keys)).toBe(0);
+    expect(starredHere([here('ledger-1', 'ledger')], [])).toBe(0);
+  });
+});
+
+describe('starredView', () => {
+  const xx = (name: string) => pod({ name, namespace: 'com-zp-xx', context: 'c', workload: { kind: 'Deployment', name } });
+  const yy = (name: string) => pod({ name, namespace: 'com-zp-yy', context: 'c', workload: { kind: 'Deployment', name } });
+
+  it('keeps stars to the namespace they were made in', () => {
+    const pods = [xx('api'), xx('web'), xx('db'), yy('api'), yy('web')];
+    const keys = [favoriteKey(xx('api')), favoriteKey(xx('web'))];
+    /* com-zp-xx: its two stars. com-zp-yy has none, so all of it — not nothing. */
+    expect(starredView(pods, keys).map(p => `${p.namespace}/${p.name}`))
+      .toEqual(['com-zp-xx/api', 'com-zp-xx/web', 'com-zp-yy/api', 'com-zp-yy/web']);
+  });
+
+  it('counts a legacy star made on one pod, and leaves everything when nothing is starred', () => {
+    const one = pod({ name: 'api-0', namespace: 'n', context: 'c' });
+    const pods = [one, pod({ name: 'api-1', namespace: 'n', context: 'c' })];
+    expect(starredView(pods, [favoriteKey(one, 'pod')])).toEqual([one]);
+    expect(starredView(pods, [])).toEqual(pods);
   });
 });

@@ -15,14 +15,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   SparklineView, SearchInputView, SegmentedControlView, CheckSquareIcon, EmptySquareIcon,
   ModalView, ButtonView, IconSize, EmptyStateView,
-  LoadingStateView } from '@salilvnair/dui';
+  LoadingStateView, SkeletonView } from '@salilvnair/dui';
 import { useLongPress } from './use-long-press';
 import { PodContextMenu } from './PodContextMenu';
 import { PvCheckModal } from './PvCheckModal';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import {
   useFavoriteKeys, toggleFavorite, favoriteKey, favoritesFirst,
-  starredKeyOf,
+  starredKeyOf, starredHere, starredView,
 } from '../../store/dk8s-favorites-store';
 import { isScheduled } from '@daakia/k8s-workload';
 import { PodFilterPopup } from './PodFilterPopup';
@@ -36,7 +36,7 @@ import { logLineSettings } from './log-settings';
 import { useMetricsAuto, METRICS_AUTO_KEY } from '../settings/metrics-refresh';
 import { postMsg } from '../../vscode';
 import { HIDE_CRONJOBS_PREF } from '../settings/cronjob-visibility';
-import { useUiStateStore } from '../../store/ui-state-store';
+import { useUiStateStore, usePersistedPref } from '../../store/ui-state-store';
 import { ExportLogsModal } from './ExportLogsModal';
 import { LogSearchModal } from './LogSearchModal';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
@@ -54,6 +54,7 @@ import {
 import { ACCENT, OK, MUTED, MATCH } from './tone';
 import { isTypingTarget } from '../../utils/typing-target';
 import { RunningCommand } from './RunningCommand';
+import { ForwardsChip, ForwardsPanel, PodForwardBadge } from './ForwardsPanel';
 /* Amber, not the dk8s accent: a star is a personal mark, not a status, and
    reusing the accent made starred rows look selected. */
 /* Scheduled work reads as its own thing — not an error, not a service. */
@@ -226,6 +227,46 @@ function readable(ms: number): string {
  * reading there is nothing to put in them, and an empty column is worse than
  * no column.
  */
+/**
+ * Which pods the grid is about: the service's pods, the runs of its jobs, or
+ * both.
+ *
+ * A namespace with a CronJob firing every few minutes fills with finished
+ * runs — one pod each, Completed, never coming back — and they crowd out the
+ * pods somebody opened the grid to read. So the grid starts on Pod, and the
+ * runs are one click away under CronJob. The counts above follow it.
+ */
+type PodKind = 'all' | 'pod' | 'cronjob';
+const POD_KINDS: readonly PodKind[] = ['all', 'pod', 'cronjob'];
+const POD_KIND_PREF = 'dk8s.pods.kind';
+
+function isJobRun(p: PodSummary): boolean {
+  const k = p.workload?.kind;
+  return k === 'CronJob' || k === 'Job';
+}
+
+function ofKind(p: PodSummary, kind: PodKind): boolean {
+  return kind === 'all' ? true : kind === 'cronjob' ? isJobRun(p) : !isJobRun(p);
+}
+
+function PodKindControl() {
+  const [kind, setKind] = usePersistedPref<PodKind>(POD_KIND_PREF, 'pod', POD_KINDS);
+  return (
+    <SegmentedControlView
+      value={kind}
+      onChange={v => setKind(v as PodKind)}
+      options={[
+        { value: 'all', label: 'All' },
+        { value: 'pod', label: 'Pod' },
+        { value: 'cronjob', label: 'CronJob' },
+      ]}
+      size="md"
+      variant="rounded"
+      accentColor={ACCENT}
+    />
+  );
+}
+
 function UsageControl() {
   const live = useMetricsAuto();
   const setPref = useUiStateStore(s => s.setPref);
@@ -359,7 +400,9 @@ function Pulse({ pods }: { pods: PodSummary[] }) {
 
       {/* When it was read, beside the controls that read it — the right-hand
           end of the row, where the things you act on live. */}
+      <ForwardsChip />
       <WatchIndicator />
+      <PodKindControl />
       <UsageControl />
       {/*
         Searching across pods, where the pods are.
@@ -483,6 +526,25 @@ function FavoriteStar({ pod, size = 13 }: { pod: PodSummary; size?: number }) {
   );
 }
 
+/** A card's shape while the pod list is read again: name, owner, status, restarts. */
+function PodCardSkeleton() {
+  return (
+    <div className="flex flex-col gap-2 p-3 rounded-lg relative overflow-hidden" aria-busy
+         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)', minWidth: 0 }}>
+      <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: 'var(--color-surface-border)' }} />
+      <div className="flex flex-col pl-2" style={{ gap: 9 }}>
+        <SkeletonView variant="block" width="78%" height={12} />
+        <span className="flex items-center" style={{ gap: 6 }}>
+          <SkeletonView variant="block" width={70} height={12} />
+          <SkeletonView variant="block" width="34%" height={10} />
+        </span>
+        <SkeletonView variant="block" width="46%" height={10} />
+        <SkeletonView variant="block" width="30%" height={10} />
+      </div>
+    </div>
+  );
+}
+
 function PodCard({ pod, onOpen, onMenu }: {
   pod: PodSummary;
   onOpen: () => void;
@@ -588,8 +650,9 @@ function PodCard({ pod, onOpen, onMenu }: {
         </span>
       </div>
 
-      <div className="pl-2">
+      <div className="pl-2 flex flex-col gap-1">
         <StatusLine pod={pod} severity={severity} />
+        <PodForwardBadge pod={pod} />
       </div>
 
       <div className="flex items-center justify-between gap-2 pl-2 min-w-0">
@@ -650,6 +713,7 @@ function PodTable({ pods, onOpen, onMenu }: {
     if (held.current) beginSelection(held.current.uid);
   });
   const togglePodSelected = useK8sStore(s => s.togglePodSelected);
+  const refreshing = useK8sStore(s => s.refreshing === true);
 
   // No Namespace column: the group heading above the table already says which
   // namespace and cluster these rows belong to, so repeating it on every row
@@ -693,7 +757,21 @@ function PodTable({ pods, onOpen, onMenu }: {
           </tr>
         </thead>
         <tbody>
-          {pods.map((pod, i) => {
+          {refreshing && pods.map((pod, i) => (
+            /* One skeleton row per row that was there, each cell a bar its
+               column's width — the table keeps its height while it is read. */
+            <tr key={`${pod.namespace}/${pod.name}`} aria-busy>
+              {cols.map((h, c) => (
+                <td key={h} className="px-3" style={{ height: 31, borderBottom: '1px solid var(--color-surface-border)' }}>
+                  {h === SELECT_COL ? null : (
+                    <SkeletonView variant="block" height={10}
+                                  width={c === (selectMode ? 1 : 0) ? `${58 + ((i * 17) % 30)}%` : h === 'Type' ? 72 : '60%'} />
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+          {!refreshing && pods.map((pod, i) => {
             const sev = severityOf(pod);
             const color = severityColor(sev);
             const u = usage[pod.name];
@@ -946,6 +1024,9 @@ function NamespaceGroup({ group, onOpen, onMenu, collapsed, onToggle }: {
   collapsed: boolean;
   onToggle: () => void;
 }) {
+  /* A refresh turns each card into its own skeleton, in its own place — so the
+     grid keeps its shape, and every namespace shows it is being read again. */
+  const refreshing = useK8sStore(s => s.refreshing === true);
   return (
     <div className="flex flex-col gap-2 rounded-lg p-3"
          style={{ border: `1px solid ${group.tint.border}`, background: group.tint.wash }}>
@@ -957,9 +1038,9 @@ function NamespaceGroup({ group, onOpen, onMenu, collapsed, onToggle }: {
           {/* Keyed by name: a card drawn from a table row has no uid yet, and
               a key that changes when the full list lands remounts the card
               under the reader. */}
-          {group.pods.map(p => (
-            <PodCard key={`${p.namespace}/${p.name}`} pod={p} onOpen={() => onOpen(p)} onMenu={onMenu} />
-          ))}
+          {group.pods.map(p => (refreshing
+            ? <PodCardSkeleton key={`${p.namespace}/${p.name}`} />
+            : <PodCard key={`${p.namespace}/${p.name}`} pod={p} onOpen={() => onOpen(p)} onMenu={onMenu} />))}
         </div>
       )}
     </div>
@@ -1006,6 +1087,11 @@ export function PodGrid() {
     capped, selectMode, selected, exportOpen, exportState, busy,
     toggleSelectMode, selectAllVisible, openExport, closeExport,
   } = useK8sStore();
+
+  /* The kind picked beside refresh — Pod by default, so a CronJob's finished
+     runs do not crowd out the service's own pods. */
+  const [podKind] = usePersistedPref<PodKind>(POD_KIND_PREF, 'pod', POD_KINDS);
+  const kindPods = useMemo(() => pods.filter(p => ofKind(p, podKind)), [pods, podKind]);
 
   /*
     ── When to stop waiting ──
@@ -1104,6 +1190,9 @@ export function PodGrid() {
     filterable.
   */
   const favKeys = useFavoriteKeys();
+  /* How many of them are on this context and namespace — the number the chip
+     shows, because the saved list spans every cluster. See `starredHere`. */
+  const starCount = useMemo(() => starredHere(pods, favKeys), [pods, favKeys]);
   /*
     Not persisted. Opening dk8s starts on starred, every time.
 
@@ -1115,7 +1204,9 @@ export function PodGrid() {
   */
   const favScope = useK8sStore(s => s.podScope);
   const setFavScope = useK8sStore(s => s.setPodScope);
-  const scope = favKeys.length === 0 ? 'all' : favScope;
+  /* Nothing starred in THIS namespace is the same dead end as nothing starred
+     at all, so the fallback to `all` follows the count that is on screen. */
+  const scope = starCount === 0 ? 'all' : favScope;
 
   /*
     Pods that stay up and runs of something are two different questions.
@@ -1168,13 +1259,11 @@ export function PodGrid() {
   const splitPrefs = useUiStateStore(s2 => s2.prefs);
   const lineSettings = useMemo(() => logLineSettings(splitPrefs), [splitPrefs]);
   const visible = useMemo(() => {
-    const matched = pods.filter(p => matchesFilter(p, filter));
-    const scoped = scope === 'fav'
-      ? matched.filter(p => favKeys.includes(favoriteKey(p)))
-      : matched;
+    const matched = kindPods.filter(p => matchesFilter(p, filter));
+    const scoped = scope === 'fav' ? starredView(matched, favKeys) : matched;
     const narrowed = scoped.filter(p => matchesPodFilter(p, podFilter));
     return favoritesFirst(sortPods(narrowed, now), favKeys);
-  }, [pods, filter, now, scope, favKeys, podFilter]);
+  }, [kindPods, filter, now, scope, favKeys, podFilter]);
 
   /*
     What the facets get to choose from.
@@ -1184,11 +1273,9 @@ export function PodGrid() {
     or each facet would only ever offer the value already chosen.
   */
   const filterable = useMemo(() => {
-    const matched = pods.filter(p => matchesFilter(p, filter));
-    return scope === 'fav'
-      ? matched.filter(p => favKeys.includes(favoriteKey(p)))
-      : matched;
-  }, [pods, filter, scope, favKeys]);
+    const matched = kindPods.filter(p => matchesFilter(p, filter));
+    return scope === 'fav' ? starredView(matched, favKeys) : matched;
+  }, [kindPods, filter, scope, favKeys]);
 
   const chips = useMemo(() => filterChips(podFilter), [podFilter]);
   const filterOn = !isEmptyFilter(podFilter);
@@ -1229,8 +1316,9 @@ export function PodGrid() {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-      <Pulse pods={pods} />
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
+      <ForwardsPanel />
+      <Pulse pods={kindPods} />
 
       <div className="flex items-center gap-2 px-4 py-2 flex-shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
@@ -1381,12 +1469,12 @@ export function PodGrid() {
           nothing is a dead end, and there is no way to star from inside it.
         */}
 
-        {favKeys.length > 0 && (
+        {starCount > 0 && (
           <SegmentedControlView
             value={scope}
             onChange={v => setFavScope(v as 'fav' | 'all')}
             options={[
-              { value: 'fav', label: `★ ${favKeys.length}` },
+              { value: 'fav', label: `★ ${starCount}` },
               { value: 'all', label: 'all' },
             ]}
             size="md"
@@ -1822,7 +1910,25 @@ export function PodGrid() {
                                   collapsed={collapsed.has(groupKey(g))}
                                   onToggle={() => toggle(groupKey(g))} />
             ))}
-            {!visible.length && (
+            {!kindPods.length ? (
+              /* Pods, just none of the kind picked beside refresh — said as
+                 that, with the way back, not as a search that found nothing. */
+              <div className="grid place-items-center px-8 py-10">
+                <EmptyStateView
+                  variant="medallion"
+                  icon={<LayersIcon size={IconSize.medallion} />}
+                  title={podKind === 'cronjob' ? 'No CronJob runs' : 'Only CronJob runs here'}
+                  message={podKind === 'cronjob'
+                    ? 'None of the pods in the namespaces being watched were started by a CronJob or Job.'
+                    : `All ${pods.length} pods in the namespaces being watched were started by a CronJob or Job.`}
+                  accentColor={MUTED}
+                  action={{
+                    label: 'Show all pods',
+                    onClick: () => useUiStateStore.getState().setPref(POD_KIND_PREF, 'all'),
+                  }}
+                />
+              </div>
+            ) : !visible.length && (
               /* The filter is echoed in the match colour, so the reader can
                  see the typo without looking back up at the box. */
               <div className="grid place-items-center px-8 py-10">
@@ -1880,7 +1986,7 @@ export function PodGrid() {
             </ButtonView>
             <ButtonView variant="primary" size="sm" accentColor="var(--color-warning)"
                         onClick={() => {
-                          if (unstar) toggleFavorite(favoriteKey(unstar));
+                          if (unstar) toggleFavorite(starredKeyOf(unstar, favKeys) ?? favoriteKey(unstar));
                           setUnstar(undefined);
                         }}>
               Remove

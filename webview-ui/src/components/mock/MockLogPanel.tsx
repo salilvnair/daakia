@@ -3,13 +3,14 @@
  * Left: list of log entries. Right: detail panel with Request/Response/Network Logs tabs.
  */
 import { useState, useRef, useEffect } from 'react';
-import { TrashIcon, ArrowUpIcon, ArrowDownIcon, AutoScrollIcon, CopyIcon, CheckIcon, ArrowDownLeftIcon, ArrowUpRightIcon, InfoCircleIcon, ChevronDownIcon, PanelMinimizeIcon, PanelMaximizeIcon } from '../../icons';
+import { TrashIcon, ArrowUpIcon, ArrowDownIcon, AutoScrollIcon, ArrowDownLeftIcon, ArrowUpRightIcon, InfoCircleIcon, ChevronDownIcon, PanelMinimizeIcon, PanelMaximizeIcon } from '../../icons';
 import type { MockLogEntry } from './mock-types';
 import { METHOD_COLORS } from '../../colors';
 import { JsonTreeViewer, tryParseJson } from '../shared/display/JsonTreeViewer';
 import { ConfirmDialog } from '../shared/modals/ConfirmDialog';
 import { IconButtonView, TabView, PilledTabView, type PilledTab } from '@salilvnair/dui';
 import { logUiEvent } from '../../store/ui-audit-store';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 type DetailTab = 'request' | 'response' | 'network-logs';
 
@@ -523,18 +524,16 @@ function HeadersTable({ headers }: { headers: Record<string, string> }) {
 }
 
 function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
     logUiEvent('mock.log_copy');
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    void navigator.clipboard.writeText(text).then(flash);
   };
   return (
     <IconButtonView
       size="default"
-      icon={copied ? <CheckIcon size={10} className="text-[var(--color-success)]" /> : <CopyIcon size={10} />}
+      icon={<CopyGlyph copied={copied} size={10} />}
       onClick={handleCopy}
       className="opacity-0 group-hover/hdr:opacity-100 flex-shrink-0"
     />
@@ -542,7 +541,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 function CopyAllButton({ entry, tab }: { entry: MockLogEntry; tab: DetailTab }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
   const handleCopy = () => {
     let text = '';
     if (tab === 'request') {
@@ -562,14 +561,12 @@ function CopyAllButton({ entry, tab }: { entry: MockLogEntry; tab: DetailTab }) 
       if (entry.responseBody) text += '\n\n' + entry.responseBody;
       if (entry.duration !== undefined) text += `\n\nCompleted in ${entry.duration}ms`;
     }
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    void navigator.clipboard.writeText(text).then(flash);
   };
   return (
     <IconButtonView
       size="default"
-      icon={copied ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
+      icon={<CopyGlyph copied={copied} size={12} />}
       onClick={handleCopy}
       tooltip={copied ? 'Copied!' : 'Copy'}
     />

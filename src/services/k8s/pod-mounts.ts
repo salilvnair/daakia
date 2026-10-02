@@ -159,6 +159,13 @@ export interface PickablePod {
   /** Best guess at the app this pod belongs to — what a path is keyed on. */
   app: string;
   phase: string;
+  /**
+   * Container names, in spec order.
+   *
+   * The PV check never needed them; the Scripts screen does, to offer the
+   * same container across every pod it runs a script on.
+   */
+  containers?: string[];
 }
 
 /**
@@ -186,6 +193,7 @@ export async function listAppPods(
       metadata?: { name?: string; ownerReferences?: { kind?: string; name?: string }[];
         labels?: Record<string, string> };
       status?: { phase?: string };
+      spec?: { containers?: { name?: string }[] };
     }[];
   };
   try {
@@ -206,6 +214,7 @@ export async function listAppPods(
         ?? item.metadata?.ownerReferences?.[0]?.name
         ?? name,
       phase: item.status?.phase ?? '',
+      containers: (item.spec?.containers ?? []).map(c => c.name ?? '').filter(Boolean),
     });
   }
 

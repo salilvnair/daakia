@@ -20,8 +20,9 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CopyIcon, DownloadIcon, EyeIcon, CloseIcon, SparkleIcon } from '../../icons';
-import { ContextMenuView, BadgeChipView, IconSize } from '@salilvnair/dui';
+import { ContextMenuView, BadgeChipView, PopoverView, ButtonView, IconSize } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { useK8sStore } from '../../store/k8s-store';
 import { redactLines, copyText, type RedactedLine } from './file-redact';
@@ -41,7 +42,7 @@ export function FileViewer({
   const [tooLarge, setTooLarge] = useState(false);
   const [binary, setBinary] = useState(false);
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
-  const [copied, setCopied] = useState(false);
+  const { copied, flash: flashCopied } = useCopyTick();
   /*
     The viewer's own menu, because the browser's is wrong here.
 
@@ -129,18 +130,25 @@ export function FileViewer({
    */
   const copy = () => {
     void navigator.clipboard?.writeText(copyText(lines, revealed));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1400);
+    flashCopied();
   };
 
   const save = () => postMsg({
     type: 'files:download', context, namespace, pod, container, path, name,
   });
 
-  const ask = () => {
+  /* Ask AI opens a preview first: the question, and exactly what goes with it. */
+  const [askOpen, setAskOpen] = useState(false);
+  const [askQ, setAskQ] = useState(DEFAULT_FILE_QUESTION);
+  const [showSent, setShowSent] = useState(false);
+  const askAnchor = useRef<HTMLSpanElement>(null);
+
+  const ask = (question?: string) => {
     if (text === null) return;
+    setAskOpen(false);
     askAi({
       promptKey: 'dk8s.file.explain',
+      question: question?.trim() && question.trim() !== DEFAULT_FILE_QUESTION ? question.trim() : undefined,
       title: `Explain ${name}`,
       evidence: copyText(lines, revealed),
       evidenceLabel: `FILE ${path} (${lines.length} line${lines.length === 1 ? '' : 's'}`
@@ -200,44 +208,96 @@ export function FileViewer({
           model — which is the exact failure the redaction exists to prevent.
           A line the reader deliberately revealed goes as they revealed it.
         */}
-        <button
-          type="button"
-          onClick={ask}
-          disabled={text === null}
-          title="Ask AI what this file configures and whether anything looks wrong"
-          /*
-            The badge recipe, in this button's own colour.
-
-            It sat between two chips — the masked count on one side, the mount
-            chip in Get Info on the other — wearing a flatter version of the
-            same idea, which read as an odd one out rather than as a button.
-            Same geometry and the same three shadows as those, keeping the
-            violet: it is still the one control here that sends the file
-            somewhere, and that is worth a colour of its own.
-          */
-          className="border-none bg-transparent p-0"
-          style={{ cursor: text === null ? 'default' : 'pointer' }}
-        >
-          {/* A chip that happens to be clickable, so it matches the two beside
-              it rather than inventing a third shape for the same row. */}
-          <BadgeChipView
-            tone={AI}
-            style={{ opacity: text === null ? 0.4 : 1, gap: 3 }}
-          >
-            <SparkleIcon size={IconSize.chip} /> Ask AI
-          </BadgeChipView>
-        </button>
-        {copied && (
-          <span className="text-[10px]" style={{ color: 'var(--color-success)' }}>copied</span>
-        )}
-        <IconBtn label="Copy what is shown" onClick={copy} disabled={text === null}>
-          <CopyIcon size={IconSize.inline} />
+        {/* A sparkle beside the other actions, not a badge — it read as a
+            label. It opens a preview of what would be sent, and sending is
+            that preview's own button: this is the one control here that takes
+            the file off the machine. */}
+        {/* The popover opens at its anchor's left edge; an invisible anchor as
+            wide as the popover, flush with the sparkle's right edge, opens it
+            leftward under the button instead of against the window's edge. */}
+        <span className="inline-flex relative">
+          <span ref={askAnchor} aria-hidden className="absolute pointer-events-none"
+                style={{ right: 0, top: 0, bottom: 0, width: ASK_POP_W, visibility: 'hidden' }} />
+          <IconBtn label="Ask AI about this file — see what is sent first" tone={AI}
+                   onClick={() => { setShowSent(false); setAskOpen(o => !o); }} disabled={text === null}>
+            <SparkleIcon size={IconSize.action} />
+          </IconBtn>
+        </span>
+        <PopoverView open={askOpen} onClose={() => setAskOpen(false)} anchorEl={askAnchor.current}
+                     placement="bottom" borderRadius={10} className="dk-pop-flush">
+          <div className="flex flex-col" style={{ width: ASK_POP_W }}>
+            <div className="flex items-center gap-2 px-3 py-2"
+                 style={{
+                   borderBottom: '1px solid var(--color-surface-border)',
+                   background: `linear-gradient(135deg, color-mix(in srgb, ${AI} 16%, transparent), transparent 70%)`,
+                 }}>
+              <SparkleIcon size={IconSize.action} color={AI} />
+              <span className="text-[12px] font-semibold truncate" style={{ color: 'var(--color-text-primary)' }}>Ask AI about {name}</span>
+            </div>
+            <div className="flex flex-col gap-2.5 p-3">
+              <div className="flex flex-col gap-1">
+                <span style={ASK_LABEL}>asked</span>
+                <textarea value={askQ} onChange={e => setAskQ(e.target.value)} rows={2}
+                          onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) ask(askQ); }}
+                          className="w-full rounded-md px-2.5 py-1.5 text-[12px] resize-y"
+                          style={{ background: 'var(--color-panel)', border: '1px solid var(--color-surface-border)', color: 'var(--color-text-primary)', outlineColor: AI }} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <span style={ASK_LABEL}>sent with it</span>
+                <div className="grid text-[11.5px]" style={{ gridTemplateColumns: '78px 1fr', rowGap: 3, columnGap: 8 }}>
+                  <span style={{ color: 'var(--color-text-muted)' }}>file</span>
+                  <span className="font-mono truncate" style={{ color: 'var(--color-text-primary)' }} title={path}>{path}</span>
+                  <span style={{ color: 'var(--color-text-muted)' }}>text</span>
+                  <span style={{ color: 'var(--color-text-primary)' }}>
+                    {lines.length.toLocaleString()} line{lines.length === 1 ? '' : 's'}, as shown
+                    {maskedCount > 0 && <span style={{ color: BAD }}> · {maskedCount} value{maskedCount === 1 ? '' : 's'} masked, sent masked</span>}
+                  </span>
+                  <span style={{ color: 'var(--color-text-muted)' }}>pod</span>
+                  <span className="font-mono truncate" style={{ color: 'var(--color-text-primary)' }}>{pod} · {namespace}</span>
+                  <span style={{ color: 'var(--color-text-muted)' }}>its state</span>
+                  <span style={{ color: 'var(--color-text-primary)' }}>
+                    {[detail?.phase, detail?.restarts !== undefined ? `${detail.restarts} restarts` : undefined, detail?.reason].filter(Boolean).join(' · ') || '—'}
+                  </span>
+                  <span style={{ color: 'var(--color-text-muted)' }}>image</span>
+                  <span className="font-mono truncate" style={{ color: 'var(--color-text-primary)' }} title={detail?.containers?.[0]?.image}>
+                    {detail?.containers?.[0]?.image ?? '—'}
+                  </span>
+                </div>
+                <button type="button" onClick={() => setShowSent(v => !v)}
+                        className="self-start border-none bg-transparent p-0 cursor-pointer text-[11px] mt-1"
+                        style={{ color: AI }}>
+                  {showSent ? 'Hide the text sent' : 'Show the text sent'}
+                </button>
+                {showSent && (
+                  <pre className="m-0 font-mono text-[11px] leading-[17px] overflow-auto rounded-md px-2.5 py-2"
+                       style={{ maxHeight: 180, background: 'var(--color-panel)', color: 'var(--color-text-secondary)', whiteSpace: 'pre' }}>
+                    {copyText(lines, revealed)}
+                  </pre>
+                )}
+              </div>
+              <div className="flex items-center gap-2 pt-0.5">
+                <span className="text-[10.5px] leading-snug" style={{ color: 'var(--color-text-muted)' }}>
+                  The instructions are &ldquo;Explain a file from a pod&rdquo; in the Prompt Library. Ctrl+Enter asks.
+                </span>
+                <span className="flex-1" />
+                <ButtonView size="sm" variant="secondary" onClick={() => setAskOpen(false)}>Cancel</ButtonView>
+                <ButtonView size="sm" variant="secondary" accentColor={AI} color={AI} disabled={!askQ.trim()}
+                            iconLeft={<SparkleIcon size={IconSize.chip} />} onClick={() => ask(askQ)}>
+                  Ask
+                </ButtonView>
+              </div>
+            </div>
+          </div>
+        </PopoverView>
+        <IconBtn label={copied ? 'Copied' : 'Copy what is shown'} tone={copied ? 'var(--color-success)' : 'var(--color-ctx-duplicate)'}
+                 onClick={copy} disabled={text === null}>
+          <CopyGlyph copied={copied} size={IconSize.action} />
         </IconBtn>
-        <IconBtn label="Save to disk" onClick={save}>
-          <DownloadIcon size={IconSize.inline} />
+        <IconBtn label="Save to disk" tone="var(--color-success)" onClick={save}>
+          <DownloadIcon size={IconSize.action} />
         </IconBtn>
-        <IconBtn label="Close" onClick={onClose}>
-          <CloseIcon size={IconSize.inline} />
+        <IconBtn label="Close" tone="var(--color-text-muted)" hover="var(--color-error)" onClick={onClose}>
+          <CloseIcon size={IconSize.action} />
         </IconBtn>
       </div>
 
@@ -340,10 +400,10 @@ export function FileViewer({
           },
           { id: 'sep', label: '', separator: true },
           {
-            id: 'ask', label: 'Ask AI about this file',
+            id: 'ask', label: 'Ask AI about this file…',
             icon: <SparkleIcon size={IconSize.action} />, iconColor: AI,
             disabled: text === null,
-            onClick: () => { setMenu(null); ask(); },
+            onClick: () => { setMenu(null); setShowSent(false); setAskOpen(true); },
           },
           {
             id: 'save', label: 'Save to disk',
@@ -561,13 +621,27 @@ function colourFor(s: string): React.CSSProperties {
   return /^\s*[#;]/.test(s) ? { opacity: 0.85 } : {};
 }
 
-function IconBtn({ label, onClick, disabled, children }: {
-  label: string; onClick: () => void; disabled?: boolean; children: React.ReactNode;
+const ASK_POP_W = 420;
+
+/** What Ask AI asks of a file unless the reader writes their own question. */
+const DEFAULT_FILE_QUESTION = 'What does this file configure, and does anything in it look wrong?';
+
+const ASK_LABEL: React.CSSProperties = {
+  fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-muted)',
+};
+
+/**
+ * A glyph in its own colour — copy, download, ask — that grows under the
+ * pointer, with no box behind it. Close is grey until the pointer is on it,
+ * then red (`hover`).
+ */
+function IconBtn({ label, onClick, disabled, children, tone = 'var(--color-text-muted)', hover }: {
+  label: string; onClick: () => void; disabled?: boolean; children: React.ReactNode; tone?: string; hover?: string;
 }) {
   return (
     <button
       type="button" title={label} aria-label={label} onClick={onClick} disabled={disabled}
-      className="flex items-center justify-center rounded"
+      className="dk-icon-btn flex items-center justify-center rounded"
       /*
         The glyph, and nothing around it.
 
@@ -577,11 +651,13 @@ function IconBtn({ label, onClick, disabled, children }: {
         distinct enough to find without a frame drawn round each one.
       */
       style={{
-        width: 20, height: 18, cursor: disabled ? 'default' : 'pointer',
+        width: 24, height: 22, cursor: disabled ? 'default' : 'pointer',
         opacity: disabled ? 0.4 : 1,
-        color: 'var(--color-text-muted)',
+        color: tone,
         background: 'transparent',
         border: 'none',
+        ['--tone' as string]: tone,
+        ...(hover ? { ['--hover' as string]: hover } : {}),
       }}
     >{children}</button>
   );

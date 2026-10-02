@@ -33,6 +33,30 @@ export interface SearchedPod {
 }
 import type { LogLevel } from './k8s-store';
 import type { FieldFilter } from '../components/k8s/log-view';
+import type { Condition } from '../components/k8s/follow';
+
+/**
+ * Following a value from a hit: the conditions, and where it started.
+ *
+ * Kept with the page, not in the Follow view, so "Back to the hits" and then
+ * Follow again on another card lands on a fresh follow while the hits behind
+ * it are exactly as they were left.
+ */
+export interface FollowState {
+  conds: Condition[];
+  /** The line it was followed from: its pod, its instant, its text. */
+  anchor: { pod: string; ts?: number; text: string };
+  /** Seconds either side of the anchor. */
+  width: number;
+  /** Merge the pods into one timeline, or keep each pod whole. */
+  oneTimeline: boolean;
+  /** Only the anchor's pod — a thread name means nothing on another pod. */
+  onlyPod: boolean;
+  /** The tagged search that answers it; a new tag per run. */
+  tag: string;
+  /** The pods to read, where they are not the result's own — a saved follow reopened. */
+  pods?: SearchedPod[];
+}
 
 export interface ResultTabState {
   /** What was searched for, verbatim — the page's title and its highlight. */
@@ -79,10 +103,29 @@ export interface ResultTabState {
   pods: string[];
   setPods: (p: string[]) => void;
   fields: FieldFilter[];
+  /** Adding one that is there flips it — the same as the pod view's field menu. */
   addField: (f: FieldFilter) => void;
-  removeField: (f: FieldFilter) => void;
+  removeField: (field: string, value: string) => void;
+  clearFields: () => void;
   wrap: boolean;
   setWrap: (w: boolean) => void;
+
+  /** The line whose fields the rail shows. */
+  selected?: number;
+  setSelected: (seq: number | undefined) => void;
+  /** Fields drawn as columns: "Add as column". */
+  columns: string[];
+  toggleColumn: (key: string) => void;
+  /** "Only when ≥ N", per numeric field. */
+  floors: { field: string; min: number }[];
+  setFloor: (field: string, min: number | undefined) => void;
+  /** Numeric fields charted in the rail: "Chart it". */
+  charts: string[];
+  toggleChart: (field: string) => void;
+
+  follow?: FollowState;
+  setFollow: (f: FollowState | undefined) => void;
+  patchFollow: (p: Partial<FollowState>) => void;
 
   open: (snapshot: {
     query: string; regex: boolean; caseSensitive: boolean; contextLines: number;
@@ -111,16 +154,49 @@ export const useResultTabStore = create<ResultTabState>((set, get) => ({
   pods: [],
   setPods: (pods) => set({ pods }),
   fields: [],
-  addField: (f) => set(s => (
-    s.fields.some(x => x.field === f.field && x.value === f.value && x.mode === f.mode)
-      ? s
-      : { fields: [...s.fields, f] }
-  )),
-  removeField: (f) => set(s => ({
-    fields: s.fields.filter(x => !(x.field === f.field && x.value === f.value && x.mode === f.mode)),
+  /*
+    The pod view's rule: a chip that is already there flips between "only
+    these" and "not these" rather than doubling. The view calls remove with a
+    field and a value, never a whole filter — this used to take a filter and
+    compare it against those two strings, so removing a chip did nothing.
+  */
+  addField: (f) => set(s => {
+    const existing = s.fields.find(x => x.field === f.field && x.value === f.value);
+    if (!existing) return { fields: [...s.fields, f] };
+    if (existing.mode === f.mode && f.mode === 'include') return s;
+    return {
+      fields: s.fields.map(x => (x === existing
+        ? { ...x, mode: x.mode === 'include' ? 'exclude' as const : 'include' as const }
+        : x)),
+    };
+  }),
+  removeField: (field, value) => set(s => ({
+    fields: s.fields.filter(x => !(x.field === field && x.value === value)),
   })),
+  clearFields: () => set({ fields: [] }),
   wrap: false,
   setWrap: (wrap) => set({ wrap }),
+
+  selected: undefined,
+  setSelected: (selected) => set({ selected }),
+  columns: [],
+  toggleColumn: (key) => set(s => ({
+    columns: s.columns.includes(key) ? s.columns.filter(k => k !== key) : [...s.columns, key],
+  })),
+  floors: [],
+  setFloor: (field, min) => set(s => ({
+    floors: min === undefined
+      ? s.floors.filter(f => f.field !== field)
+      : [...s.floors.filter(f => f.field !== field), { field, min }],
+  })),
+  charts: [],
+  toggleChart: (field) => set(s => ({
+    charts: s.charts.includes(field) ? s.charts.filter(k => k !== field) : [...s.charts, field],
+  })),
+
+  follow: undefined,
+  setFollow: (follow) => set({ follow }),
+  patchFollow: (p) => set(s => (s.follow ? { follow: { ...s.follow, ...p } } : s)),
 
   /*
     Opening replaces what was here, and resets what the reader had set.
@@ -138,5 +214,10 @@ export const useResultTabStore = create<ResultTabState>((set, get) => ({
     pods: [],
     fields: [],
     wrap: get().wrap,
+    selected: undefined,
+    columns: [],
+    floors: [],
+    charts: [],
+    follow: undefined,
   }),
 }));

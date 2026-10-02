@@ -182,7 +182,7 @@ function ActionCard({ action }: { action: PodAction }) {
           </button>
           <button type="button" onClick={fire}
                   className="px-2 py-1 rounded text-[10.5px] cursor-pointer border-none"
-                  style={{ background: 'var(--color-warning)', color: '#1a1205', fontWeight: 600 }}>
+                  style={{ background: 'var(--color-warning)', color: 'var(--color-on-warning, #1a1205)', fontWeight: 600 }}>
             {meta.confirmLabel}
           </button>
         </div>

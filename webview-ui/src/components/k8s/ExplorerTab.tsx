@@ -293,7 +293,19 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
     something else triggered a load — a list that is confidently wrong, which
     is worse than an empty one.
   */
-  useEffect(() => { go(path || '/'); /* eslint-disable-next-line */ }, [container]);
+  /*
+    Only on a real change. Run on mount as well, it listed `/` in a race with
+    the first listing below: whichever `ls` answered last set the rows, so a
+    link that opened on /var/log/app could show the root's rows under
+    /var/log/app's breadcrumb.
+  */
+  const lastContainer = useRef(container);
+  useEffect(() => {
+    if (lastContainer.current === container) return;
+    lastContainer.current = container;
+    go(path || '/');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [container]);
 
   const request = useCallback(<T,>(type: string, body: Record<string, unknown>): Promise<T> => {
     const requestId = `fx-${++seq.current}`;
@@ -939,7 +951,7 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
         </div>
       ) : mode === 'files' ? (
         <FileBrowserView
-          className="flex-1 min-h-0"
+          className="dk-fb-actions flex-1 min-h-0"
           // Tight rows, small chips, bare glyphs. A directory of 400 entries
           // is a list you scan, and a box around every icon on every row is
           // more border than content.
@@ -999,7 +1011,7 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
         />
       ) : (
         <FileBrowserView
-          className="flex-1 min-h-0"
+          className="dk-fb-actions flex-1 min-h-0"
           dense
           entries={hitRows}
           actions={actions.filter(a => a.id !== 'saveDir')}
@@ -1287,7 +1299,7 @@ function ScopedSearch({
                background: 'var(--color-surface)',
              }}>
           <FileBrowserView
-            className="h-full"
+            className="dk-fb-actions h-full"
             style={{ ['--dui-file-badge' as string]: ACCENT } as React.CSSProperties}
             dense
             entries={rows}

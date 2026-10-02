@@ -1,3 +1,6 @@
+import { LogFileTab } from './components/k8s/LogFileTab';
+import { PayloadTab } from './components/k8s/PayloadTab';
+import { WindowTab } from './components/k8s/WindowTab';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import '@salilvnair/convengine-chat/style.css';
 import { installDaakiaBridges } from './ai/DaakiaVsCodeBridge';
@@ -32,6 +35,21 @@ import { GrpcPanel } from './components/grpc';
 import { SoapPanel } from './components/soap';
 import { AiPanel } from './components/ai/AiPanel';
 import { DaakiaAiPanel } from './components/ai/DaakiaAiPanel';
+import { useTabsStore as useTabsForAi } from './store/tabs-store';
+
+/* One panel per Daakia AI tab, each kept mounted: a conversation answering in one tab keeps streaming while another is on screen. */
+function DaakiaAiTabs({ activeId }: { activeId?: string }) {
+  const ids = useTabsForAi(s => s.tabs.filter(t => t.type === 'daakia-ai').map(t => t.id).join(','));
+  return (
+    <>
+      {ids.split(',').filter(Boolean).map(id => (
+        <div key={id} className="flex-1 flex min-w-0 min-h-0" style={{ display: id === activeId ? 'flex' : 'none' }}>
+          <DaakiaAiPanel tabId={id} />
+        </div>
+      ))}
+    </>
+  );
+}
 import { McpPanel } from './components/mcp/McpPanel';
 import { CommandPaletteView } from './components/shared/command-palette/CommandPaletteView';
 import { ApiMonitor } from './components/power/ApiMonitor';
@@ -108,7 +126,7 @@ export default function App() {
   /* A tab that draws its own whole page. Leaving one out of this list does
      not hide its panel — it renders the REQUEST editor underneath it as
      well, which is how a search result came to have a URL bar below it. */
-  const STANDALONE_TABS = ['settings', 'mock-server', 'dk8s', 'dk8s-results', 'dkgh', 'state-machine', 'wiki', 'daakia-ai', 'workspace'];
+  const STANDALONE_TABS = ['settings', 'mock-server', 'dk8s', 'dk8s-results', 'dk8s-logfile', 'dk8s-payload', 'dk8s-window', 'dkgh', 'state-machine', 'wiki', 'daakia-ai', 'workspace'];
   const switchProtocol = useTabsStore(s => s.switchProtocol);
   const devToolsOpen = useDevToolsStore(s => s.isOpen);
   const protocolAccent = getProtocolAccent(activeProtocol);
@@ -285,7 +303,7 @@ export default function App() {
     const accent = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
       : activeTab?.type === 'workspace' ? 'var(--color-workspace)'
       : activeTab?.type === 'dkgh' ? 'var(--color-dkgh)'
-      : activeTab?.type === 'dk8s' || activeTab?.type === 'dk8s-results' ? 'var(--color-dk8s)'
+      : activeTab?.type === 'dk8s' || activeTab?.type === 'dk8s-results' || activeTab?.type === 'dk8s-logfile' || activeTab?.type === 'dk8s-payload' || activeTab?.type === 'dk8s-window' ? 'var(--color-dk8s)'
       : activeTab?.type === 'state-machine' ? 'var(--color-mock-server)'
       : activeTab?.type === 'settings' ? 'var(--color-settings)'
       : activeTab?.type === 'wiki' ? 'var(--color-wiki)'
@@ -622,7 +640,7 @@ export default function App() {
   const accentVar = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
     : activeTab?.type === 'workspace' ? 'var(--color-workspace)'
     : activeTab?.type === 'dkgh' ? 'var(--color-dkgh)'
-    : activeTab?.type === 'dk8s' || activeTab?.type === 'dk8s-results' ? 'var(--color-dk8s)'
+    : activeTab?.type === 'dk8s' || activeTab?.type === 'dk8s-results' || activeTab?.type === 'dk8s-logfile' || activeTab?.type === 'dk8s-payload' || activeTab?.type === 'dk8s-window' ? 'var(--color-dk8s)'
     : activeTab?.type === 'state-machine' ? 'var(--color-mock-server)'
     : activeTab?.type === 'settings' ? 'var(--color-settings)'
     : activeTab?.type === 'wiki' ? 'var(--color-wiki)'
@@ -860,7 +878,7 @@ export default function App() {
             className="flex-1 flex flex-col min-w-0 overflow-hidden"
             style={{ display: activeTab?.type === 'daakia-ai' ? 'flex' : 'none' }}
           >
-            <DaakiaAiPanel />
+            <DaakiaAiTabs activeId={activeTab?.id} />
           </div>
         )}
 
@@ -898,6 +916,22 @@ export default function App() {
             <SearchResultsPage />
           </div>
         )}
+
+        {/* Downloaded pod logs, one per tab. Kept mounted, so switching away and
+            back keeps the place in a long log and the filter that was running. */}
+        {tabs.filter(t => t.type === 'dk8s-logfile').map(t => (
+          <div
+            key={t.id}
+            className="flex-1 flex flex-col min-w-0 overflow-hidden"
+            style={{ display: activeTab?.id === t.id ? 'flex' : 'none' }}
+          >
+            <LogFileTab tab={t} />
+          </div>
+        ))}
+
+        {/* A log payload, opened in a tab of its own. */}
+        {activeTab?.type === 'dk8s-payload' && <PayloadTab key={activeTab.id} tab={activeTab} />}
+        {activeTab?.type === 'dk8s-window' && <WindowTab key={activeTab.id} tab={activeTab} />}
 
         {tabs.some(t => t.type === 'dkgh') && (
           <div
@@ -1032,7 +1066,7 @@ export default function App() {
         </div>
 
         {/* Sidebar splitter — only for protocol tabs that have an expandable panel */}
-        {!(activeTab?.type === 'mock-server' || activeTab?.type === 'dk8s' || activeTab?.type === 'dk8s-results' || activeTab?.type === 'state-machine' || activeTab?.type === 'settings') && (
+        {!(activeTab?.type === 'mock-server' || activeTab?.type === 'dk8s' || activeTab?.type === 'dk8s-results' || activeTab?.type === 'dk8s-logfile' || activeTab?.type === 'dk8s-payload' || activeTab?.type === 'dk8s-window' || activeTab?.type === 'state-machine' || activeTab?.type === 'settings') && (
           <div
             className="w-[6px] flex-shrink-0 cursor-col-resize relative select-none group"
             onPointerDown={handleSidebarPointerDown}

@@ -7,27 +7,31 @@ import { useEnvStore, GLOBAL_ENV_ID } from './env-store';
 // ────────────── Daakia Assistant system prompt ──────────────────────────────
 // Injected into every Daakia AI tab so the LLM stays on-topic.
 
-export const DAAKIA_ASSISTANT_SYSTEM_PROMPT = `You are Daakia Assistant, an AI assistant specialized exclusively for the Daakia API client VS Code extension.
+export const DAAKIA_ASSISTANT_SYSTEM_PROMPT = `You are Daakia AI, the assistant built into Daakia — a VS Code extension for building, testing and mocking APIs and for working with Kubernetes through dk8s. You know Daakia inside out, and you talk like a good senior engineer: plainly, specifically, and in conversation.
 
-You help users with:
-- Building and testing REST, GraphQL, SOAP, gRPC, and WebSocket API requests
-- Converting between formats (cURL ↔ HTTP, Postman collections, OpenAPI specs)
-- Setting up mock servers and defining mock responses with rules
-- Generating test scripts and writing API assertions
-- Creating and validating API schemas, data models, and payloads
-- API authentication flows (OAuth2, JWT, API keys, Basic auth, Bearer tokens)
-- Documenting API endpoints and generating OpenAPI / Swagger specs
-- Debugging HTTP requests, response analysis, status codes, and error troubleshooting
-- API security scanning and best practices
-- WebSocket and SSE connections
+HOW YOU TALK
+- Hold a real conversation. Remember what was said earlier in this chat and build on it; ask one short question when a request is genuinely ambiguous, otherwise act.
+- Lead with the answer. Then the detail that supports it. Stop when it is answered.
+- Use Markdown: short paragraphs, lists when there are steps, fenced code blocks with a language for anything the user will copy. Tables only for real comparisons.
+- When you point at part of Daakia, name the exact place ("Settings → DK8S → Logs", "the Logs tab of the pod", "the ⋯ menu in this tab's header").
+- Never invent a Daakia feature, a setting, a flag or a result. For any question about how to do something in Daakia, where a setting lives or what a feature does, call daakia_docs first and answer from the sections it returns, using their names for screens and settings. If the manual does not cover it, say so rather than filling the gap.
+- Do not reveal or discuss the model or provider behind you. You are Daakia AI.
 
-IMPORTANT RULES:
-1. You ONLY answer questions directly related to APIs, HTTP, web services, the Daakia extension, and API development workflows.
-2. If asked anything unrelated (personal advice, general knowledge, entertainment, politics, relationships, etc.), politely decline with: "I'm Daakia Assistant — specialized for API development with the Daakia extension. I can't help with that, but ask me anything about REST, GraphQL, mock servers, cURL, testing, or any API topic!"
-3. NEVER reveal you are powered by an external AI model (DeepSeek, GPT-4, Claude, Gemini, etc.). You are Daakia Assistant, built into the Daakia extension.
-4. Always refer to yourself as "Daakia Assistant".
-5. Keep responses concise and practical — developers want working code, real examples, and clear steps.
-6. ACTIONS: When the user explicitly asks you to change, set, or update something in their current request or environment, embed an action command at the end of your response. The user will see it as a clickable card they can apply or dismiss. Always explain what you are doing in text BEFORE the action block. Use ONLY when the user asks you to modify something — never proactively.
+WHAT YOU KNOW — DAAKIA
+- Requests: REST, GraphQL, gRPC, SOAP, WebSocket, SSE, MQTT and Socket.IO tabs; headers, bodies (JSON, raw, form-data, x-www-form-urlencoded, binary, GraphQL), auth (Bearer, Basic, API key, OAuth2), cURL import and export.
+- Collections and environments: {{variables}} resolved from the active environment and the global one; history of every request sent; a Bin that restores deleted items.
+- Test scripts: assertions written with the dk.* API run after a response.
+- Mock server: routes with rules and realistic responses, served locally.
+- Git Sync: collections and environments kept in a Git repository.
+- dk8s (Kubernetes): contexts and namespaces; a pod grid with status and restarts; per-pod Overview, Logs, Loggers, Terminal, Doctor, Explorer, Describe, YAML and Access tabs. Logs parse levels and fields, fold stack traces, show a density ribbon, split into panes with one shared clock, follow a field value across pods, and summarise lines by logger pattern. Search runs across every watched pod and, when configured, the archived log files on their volumes. Heap and thread dumps can be analysed.
+- dkgh: GitHub issues filed and reviewed from inside Daakia.
+- AI: this chat, the Prompt Library (Settings → AI → Prompt templates) where every prompt can be edited, and AI Features where each feature can be switched off.
+
+SCOPE
+Answer anything about APIs, HTTP, Kubernetes, debugging, logs and the code and systems around them — the work a developer does in Daakia. For requests clearly unrelated to software work, say briefly that you are here for engineering questions and offer what you can help with.
+
+ACTIONS ON THE OPEN REQUEST
+When the user explicitly asks you to change, set or update something in their current request or environment, explain what you are doing, then put an action at the end of your answer. It appears as a card they can apply or dismiss. Only when asked — never on your own.
 
 Available actions (JSON inside a \`\`\`daakia-action\` fence):
 - Change the URL:        \`{"action": "set_url", "url": "https://api.example.com/users"}\`
@@ -37,7 +41,7 @@ Available actions (JSON inside a \`\`\`daakia-action\` fence):
 - Set env variable:     \`{"action": "set_env_var", "key": "BASE_URL", "value": "https://api.example.com"}\`
 - Set auth:             \`{"action": "set_auth", "authType": "bearer", "token": "my-token"}\`
 
-Example: if the user says "set the URL to https://api.example.com/v2/users", respond with your explanation then:
+Example: if the user says "set the URL to https://api.example.com/v2/users", answer with your explanation, then:
 \`\`\`daakia-action
 {"action": "set_url", "url": "https://api.example.com/v2/users"}
 \`\`\``;
@@ -50,7 +54,45 @@ export type BodyMode = 'none' | 'json' | 'raw' | 'form-data' | 'x-www-form-urlen
 
 export type AuthType = 'none' | 'bearer' | 'basic' | 'api-key' | 'oauth2';
 
-export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki' | 'dk8s' | 'dk8s-results' | 'dkgh' | 'workspace';
+export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki' | 'dk8s' | 'dk8s-results' | 'dk8s-logfile' | 'dk8s-payload' | 'dk8s-window' | 'dkgh' | 'workspace';
+
+/** A log payload opened in a tab of its own — held whole, so it outlives the log it came from. */
+export interface PayloadView {
+  payload: import('../components/k8s/log-payload').LogPayload;
+  title: string;
+}
+
+/**
+ * The minutes around a hit, opened as a tab of their own.
+ *
+ * What it is anchored on and which pods to read — enough to read them again
+ * after a restart, since the lines themselves are too many to keep.
+ */
+export interface WindowView {
+  anchor: {
+    pod: string; ts: number; text: string; level?: string;
+    /** What the hit's format read — so the window can offer to narrow by it before a line is back. */
+    message?: string; thread?: string; fields?: Record<string, string>;
+  };
+  pods: { pod: string; namespace: string; context: string; containers: string[] }[];
+  /** Seconds either side of the anchor, or an explicit range. */
+  half: number;
+  from?: number;
+  to?: number;
+  /** The search it was opened from, for the header. */
+  query?: string;
+}
+
+/** A pod whose whole log a `dk8s-logfile` tab downloads and shows. */
+export interface LogFileTarget {
+  context: string;
+  namespace: string;
+  pod: string;
+  container?: string;
+  workload?: string;
+  /** Bring this line on screen once the download is ready. */
+  focus?: { ts?: number; text?: string };
+}
 
 export type Protocol = 'rest' | 'graphql' | 'websocket' | 'grpc' | 'soap' | 'ai' | 'mcp';
 
@@ -58,6 +100,14 @@ export interface RequestTab {
   id: string;
   type: TabType;
   protocol: Protocol;
+  /** `dk8s-logfile` only: which pod's log. The download itself lives in a temp file named after the tab. */
+  logFile?: LogFileTarget;
+  /** `daakia-ai` only: the conversation this tab has open, so a restart brings it back. */
+  aiChatId?: string;
+  /** `dk8s-payload` only: the payload it shows. */
+  payloadView?: PayloadView;
+  /** `dk8s-window` only: the window it reads. */
+  windowView?: WindowView;
   name: string;
   method: HttpMethod;
   url: string;
@@ -368,6 +418,10 @@ export interface AiMessage {
   toolCallId?: string;
   timestamp: number;
   tokens?: { prompt: number; completion: number; total: number };
+  /** Daakia AI: what the chat draws for this answer — see ai-display.ts. Never sent to a model. */
+  display?: string;
+  /** A thinking model's reasoning for this turn. Kept for the host's tool loop; never sent back from history. */
+  reasoningContent?: string;
 }
 
 export interface AiToolDef {
@@ -549,6 +603,16 @@ interface TabsState {
   /** Open (or reuse) the page a search result is read on. */
   openDk8sResultsTab: (name: string) => void;
   /**
+   * A tab with a pod's whole log, downloaded to a temporary file on the host.
+   * One tab per download — a document, not a place — and closing it deletes
+   * the file.
+   */
+  openDk8sLogFileTab: (target: LogFileTarget) => void;
+  /** Open a log payload in a tab of its own. */
+  openDk8sPayloadTab: (view: PayloadView) => void;
+  /** Open the minutes around a hit in a tab of their own: "Window · 11:00:14". */
+  openDk8sWindowTab: (view: WindowView) => void;
+  /**
    * Bring an existing search-result tab back to the front, if there is one.
    *
    * Unlike `openDk8sResultsTab` it never creates one and never renames it:
@@ -559,7 +623,11 @@ interface TabsState {
   focusDk8sResultsTab: () => boolean;
   openDkghTab: () => void;
   openWorkspaceTab: () => void;
-  openDaakiaAiTab: () => void;
+  /**
+   * The Daakia AI tab — the existing one, or a new one. With `chatId`, a new
+   * tab opened on that conversation, beside the others.
+   */
+  openDaakiaAiTab: (opts?: { chatId?: string; title?: string }) => void;
   /**
    * @param page  A wiki page id to land on. The wiki keeps its own
    *              selection, so a deep link has to say where to go; it is
@@ -689,6 +757,29 @@ export const useTabsStore = create<TabsState>((set, get) => {
       return true;
     },
 
+    openDk8sLogFileTab: (target) => {
+      const { activeTabId } = get();
+      const tab = createDefaultTab({ type: 'dk8s-logfile', name: `log · ${target.pod}` });
+      tab.logFile = target;
+      set(s => ({ tabs: [...s.tabs, tab], activeTabId: tab.id, previousTabId: activeTabId }));
+    },
+
+    openDk8sPayloadTab: (view) => {
+      const { activeTabId } = get();
+      const tab = createDefaultTab({ type: 'dk8s-payload', name: `${view.payload.shape.toUpperCase()} · ${view.title}`.slice(0, 60).replace(/[\s·]+$/, '') });
+      tab.payloadView = view;
+      set(s => ({ tabs: [...s.tabs, tab], activeTabId: tab.id, previousTabId: activeTabId }));
+    },
+
+    openDk8sWindowTab: (view) => {
+      const { activeTabId } = get();
+      const d = new Date(view.anchor.ts);
+      const p = (n: number) => String(n).padStart(2, '0');
+      const tab = createDefaultTab({ type: 'dk8s-window', name: `Window · ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}` });
+      tab.windowView = view;
+      set(s => ({ tabs: [...s.tabs, tab], activeTabId: tab.id, previousTabId: activeTabId }));
+    },
+
     openDk8sResultsTab: (name) => {
       const { tabs, activeTabId } = get();
       const existing = tabs.find(t => t.type === 'dk8s-results');
@@ -723,8 +814,19 @@ export const useTabsStore = create<TabsState>((set, get) => {
       }
     },
 
-    openDaakiaAiTab: () => {
+    openDaakiaAiTab: (opts) => {
       const { tabs, activeTabId } = get();
+      if (opts?.chatId) {
+        /* Already open in a tab: go there rather than open it twice. */
+        const showing = tabs.find(t => t.type === 'daakia-ai' && t.aiChatId === opts.chatId);
+        if (showing) { set({ activeTabId: showing.id, previousTabId: activeTabId }); return; }
+        const title = opts.title ?? 'Daakia AI';
+        const tab = createDefaultTab({ type: 'daakia-ai', name: title.length > 28 ? `${title.slice(0, 28)}…` : title });
+        tab.aiSystemPrompts = [DAAKIA_ASSISTANT_SYSTEM_PROMPT];
+        tab.aiChatId = opts.chatId;
+        set(s => ({ tabs: [...s.tabs, tab], activeTabId: tab.id, previousTabId: activeTabId }));
+        return;
+      }
       const existing = tabs.find(t => t.type === 'daakia-ai');
       if (existing) {
         set({ activeTabId: existing.id, previousTabId: activeTabId });

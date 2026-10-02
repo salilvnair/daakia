@@ -20,20 +20,25 @@
  * panes following two pods means two streams, two filters and two tails, and
  * the single-pod store has one of each.
  */
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { IconSize, SplitPanelView, type SplitDirection } from '@salilvnair/dui';
 import {
-  CloseIcon, ChevronLeftIcon, ColumnsIcon, RowsIcon, LayoutGridIcon,
+  CloseIcon, ChevronLeftIcon, ColumnsIcon, RowsIcon, LayoutGridIcon, ClockIcon,
 } from '../../icons';
+import { usePersistedPref } from '../../store/ui-state-store';
+import { sharedSpan } from './log-view';
 import { LogViewer } from './LogViewer';
 import { LogSourceProvider, type LogSource } from './log-source';
 import {
   useSplitStore, MAX_PANES, type SplitMode, type SplitPane,
 } from '../../store/dk8s-split-store';
-import { useK8sStore, type PodSummary } from '../../store/k8s-store';
+import { useK8sStore, localTime, type PodSummary } from '../../store/k8s-store';
 import { useTabsStore } from '../../store/tabs-store';
-import { severityColor, severityOf, workloadColor } from './pod-view';
+import { severityOf } from './pod-view';
 import { ACCENT } from './tone';
+import { replicaHue } from './pod-hue';
+import { FOLLOW, tint } from './follow-tone';
 
 /**
  * The arrangements a selection can be opened in.
@@ -61,14 +66,28 @@ export const SPLIT_MODES: { id: SplitMode; label: string; Icon: typeof ColumnsIc
  * screen — so it carries the pod, its health, and the way out, and nothing
  * else.
  */
-function Pane({ pane, focused }: { pane: SplitPane; focused: boolean }) {
-  const { patch, refetch, closePane, focus, panes } = useSplitStore();
+function Pane({ pane, focused, sharedRange }: {
+  pane: SplitPane;
+  focused: boolean;
+  /** Set when the split shares one clock — see `timeBuckets`. */
+  sharedRange?: { from: number; to: number };
+}) {
+  const { patch, refetch, stopFollowing, closePane, focus, panes } = useSplitStore();
   const logLineNumbers = useK8sStore(s => s.logLineNumbers);
   const pod = useK8sStore(s => s.pods.find(
     p => p.name === pane.pod && p.namespace === pane.namespace,
   ));
 
-  const color = pod ? severityColor(severityOf(pod)) : 'var(--color-text-muted)';
+  /*
+    The replica's colour, not its health: in a split the question is which of
+    three near-identical pods a line is on, and red, amber, blue in the order
+    they were opened is what Follow and the search rail call them too. Health
+    is on the title, for whoever hovers the pod's name.
+  */
+  const color = replicaHue(pane.pod, panes.map(p => p.pod));
+  const health = pod ? severityOf(pod) : undefined;
+  /* Whether this pane's gutter is down to ticks — only the gutter knows its height. */
+  const [compact, setCompact] = useState(false);
 
   /*
     A pod-shaped stand-in for the view's own uses — export, Analyze, the
@@ -92,23 +111,30 @@ function Pane({ pane, focused }: { pane: SplitPane; focused: boolean }) {
   } as PodSummary), [pod, pane]);
 
   const source = useMemo(() => ({
+    sharedRange,
     logs: pane.logs,
     logStatus: pane.status,
     logDetail: pane.detail,
     logDropped: pane.dropped,
+    logReceived: pane.held?.length ?? 0,
     logFilter: pane.filter,
     logLevels: pane.levels,
     logRequestedAt: pane.requestedAt,
     logFieldFilters: pane.fields,
-    addFieldFilter: (f: SplitPane['fields'][number]) => patch(pane.id, {
-      fields: pane.fields.some(x => x.field === f.field && x.value === f.value && x.mode === f.mode)
-        ? pane.fields
-        : [...pane.fields, f],
-    }),
-    removeFieldFilter: (f: SplitPane['fields'][number]) => patch(pane.id, {
-      fields: pane.fields.filter(
-        x => !(x.field === f.field && x.value === f.value && x.mode === f.mode),
-      ),
+    /* The pod view's rule: a chip already there flips between "only these" and
+       "not these". The view removes by field and value — this used to take a
+       whole filter, so removing a chip in a pane did nothing. */
+    addFieldFilter: (f: SplitPane['fields'][number]) => {
+      const existing = pane.fields.find(x => x.field === f.field && x.value === f.value);
+      if (existing && existing.mode === f.mode && f.mode === 'include') return;
+      patch(pane.id, {
+        fields: existing
+          ? pane.fields.map(x => (x === existing ? { ...x, mode: x.mode === 'include' ? 'exclude' as const : 'include' as const } : x))
+          : [...pane.fields, f],
+      });
+    },
+    removeFieldFilter: (field: string, value: string) => patch(pane.id, {
+      fields: pane.fields.filter(x => !(x.field === field && x.value === value)),
     }),
     clearFieldFilters: () => patch(pane.id, { fields: [] }),
     logFollow: pane.follow,
@@ -118,27 +144,41 @@ function Pane({ pane, focused }: { pane: SplitPane; focused: boolean }) {
     logSince: 0,
     logWrap: pane.wrap,
     logPrevious: pane.previous,
-    logFrom: undefined,
-    logTo: undefined,
+    logFrom: pane.from,
+    logTo: pane.to,
     logLineNumbers,
     logContainer: undefined,
     logExportOpen: false,
     detail: asPod,
     runtime: undefined,
     setLogFilter: (filter: string) => patch(pane.id, { filter }),
-    toggleLogLevel: (level: SplitPane['levels'][number]) => patch(pane.id, {
-      levels: pane.levels.includes(level)
-        ? pane.levels.filter(l => l !== level)
-        : [...pane.levels, level],
-    }),
+    toggleLogLevel: (level: SplitPane['levels'][number]) => {
+      const levels = pane.levels.includes(level) ? pane.levels.filter(l => l !== level) : [...pane.levels, level];
+      /* An errors pane holds nothing else: letting go of ERROR reads its window again, whole. */
+      if (pane.onlyErrors && !levels.includes('error')) {
+        patch(pane.id, { levels, onlyErrors: false });
+        refetch(pane.id);
+      } else patch(pane.id, { levels });
+    },
     setLogWrap: (wrap: boolean) => patch(pane.id, { wrap }),
     setLogFollow: (follow: boolean) => patch(pane.id, { follow }),
-    setLogLive: (live: boolean) => { patch(pane.id, { live }); refetch(pane.id); },
+    setLogLive: (live: boolean) => {
+      if (!live) { stopFollowing(pane.id); return; }
+      patch(pane.id, { live, follow: true, paused: false });
+      refetch(pane.id);
+    },
+    logPaused: !!pane.paused,
+    setLogPaused: (paused: boolean) => patch(pane.id, paused
+      ? { paused: true, follow: false }
+      : { paused: false, follow: true, logs: [...pane.logs, ...(pane.held ?? [])].slice(-20_000), held: undefined }),
+    clearLogs: () => patch(pane.id, { logs: [], held: undefined, dropped: 0 }),
     setLogTail: (tail: number) => patch(pane.id, { tail }),
-    setLogDirection: (direction: 'first' | 'last') => patch(pane.id, { direction }),
+    setLogDirection: (direction: 'first' | 'last' | 'between') => patch(pane.id, direction === 'between' && !pane.from
+      ? { direction, from: localTime(Date.now() - 3_600_000), to: localTime(Date.now()) }
+      : { direction }),
     setLogPrevious: (previous: boolean) => patch(pane.id, { previous }),
     setLogSince: () => {},
-    setLogWindow: () => {},
+    setLogWindow: (from: string, to: string) => patch(pane.id, { from, to }),
     setLogSelection: () => {},
     setLogContainer: () => {},
     fetchLogs: () => refetch(pane.id),
@@ -146,7 +186,8 @@ function Pane({ pane, focused }: { pane: SplitPane; focused: boolean }) {
     closeLogExport: () => {},
     /* The view's own "back" closes this pane rather than the whole split. */
     closeDetail: () => closePane(pane.id),
-  } as unknown as LogSource), [pane, asPod, logLineNumbers, patch, refetch, closePane]);
+    onGutterCompact: setCompact,
+  } as unknown as LogSource), [pane, asPod, logLineNumbers, patch, refetch, stopFollowing, closePane, sharedRange]);
 
   return (
     <div
@@ -171,32 +212,31 @@ function Pane({ pane, focused }: { pane: SplitPane; focused: boolean }) {
         border: `1px solid ${focused && panes.length > 1
           ? `color-mix(in srgb, ${ACCENT} 45%, transparent)`
           : 'var(--color-surface-border)'}`,
-        borderRadius: 6,
-        background: 'var(--color-panel)',
+        borderRadius: 8,
+        background: 'var(--color-surface)',
       }}
     >
-      <div className="flex items-center gap-2 px-2.5 py-1.5 shrink-0"
-           style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        <span style={{
-          width: 6, height: 6, borderRadius: 6, background: color, flexShrink: 0,
-        }} />
-        <span className="text-[11.5px] font-mono truncate"
-              style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
+      {/* The pod, and what its gutter is doing: a count of lines, or — once
+          the pane is too short for density — "compact", so a column of ticks
+          is not read as a quiet log. */}
+      <div className="flex items-center shrink-0"
+           style={{ gap: 8, height: 26, padding: '0 10px', borderBottom: '1px solid var(--color-surface-border)', fontSize: 11 }}>
+        <span style={{ width: 7, height: 7, borderRadius: 2, background: color, flexShrink: 0 }} />
+        <span className="truncate" style={{ color: 'var(--color-text-secondary)' }}
+              title={[pane.pod, pane.namespace, pod?.workload?.kind, health].filter(Boolean).join(' · ')}>
           {pane.pod}
         </span>
-        {pod?.workload && (
-          <span className="text-[9px] px-1 py-px rounded uppercase tracking-wide shrink-0"
-                style={{
-                  color: workloadColor(pod.workload.kind),
-                  background: `color-mix(in srgb, ${workloadColor(pod.workload.kind)} 14%, transparent)`,
-                }}>
-            {pod.workload.kind}
+        <span className="flex-1" />
+        {compact ? (
+          <span style={{ padding: '0 6px', borderRadius: 999, fontSize: 10, color: FOLLOW, background: tint(FOLLOW, 16) }}
+                title="Too short for density — errors and warnings as ticks">
+            compact
+          </span>
+        ) : (
+          <span style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+            {pane.logs.length.toLocaleString()}
           </span>
         )}
-        <span className="text-[10px] truncate" style={{ color: 'var(--color-text-muted)' }}>
-          {pane.namespace}
-        </span>
-        <span className="flex-1" />
         {/* The one destructive control in the strip, and it says so on the way
             in rather than after the fact — see `.dk-close-btn`. `currentColor`
             so the icon travels with it. */}
@@ -228,6 +268,40 @@ const DUI_DIRECTION: Record<'vertical' | 'horizontal', SplitDirection> = {
   vertical: 'horizontal',
   horizontal: 'vertical',
 };
+
+/**
+ * Where a pane sits in the arrangement.
+ *
+ * The arrangement nests: three panes are a split whose second side is another
+ * split. Closing one re-nests the rest, and a React element that changes
+ * parent is a new element — so every remaining pane used to unmount and mount
+ * again on any close, losing its scroll, its open rows and its context width.
+ *
+ * So each pane renders once, through a portal, into a node of its own; the
+ * arrangement places empty slots, and a slot takes in its pane's node. When
+ * the layout changes the node moves to its new slot and the pane under it is
+ * the same pane. The scroll positions inside it are put back after the move,
+ * since a node taken out of the page forgets them.
+ */
+const scrolls = new WeakMap<HTMLElement, [Element, number, number][]>();
+
+function Slot({ host }: { host: HTMLDivElement }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (host.parentNode !== el) el.appendChild(host);
+    for (const [node, top, left] of scrolls.get(host) ?? []) { node.scrollTop = top; node.scrollLeft = left; }
+    scrolls.delete(host);
+    return () => {
+      /* Still in the page here: remember where everything was scrolled to before it moves. */
+      const at: [Element, number, number][] = [];
+      host.querySelectorAll('*').forEach(n => { if (n.scrollTop || n.scrollLeft) at.push([n, n.scrollTop, n.scrollLeft]); });
+      scrolls.set(host, at);
+    };
+  }, [host]);
+  return <div ref={ref} className="h-full w-full min-w-0 min-h-0" />;
+}
 
 /** Nothing smaller than this, as a share of the axis. */
 const MIN_PANE_PCT = 12;
@@ -333,6 +407,41 @@ export function SplitLogs() {
     return () => window.removeEventListener('message', handler);
   }, [apply]);
 
+  /*
+    One clock, when asked for.
+
+    Off by default: each ribbon scaled to its own lines is the better view of
+    one log, and most splits are read one pane at a time. On, every ribbon
+    spans the earliest to the latest line across ALL panes, so a burst that hit
+    three pods at 14:02 sits at the same height in each of them.
+
+    Remembered, because somebody who lines pods up once will want it the next
+    time they open a split for the same reason.
+  */
+  const [clock, setClock] = usePersistedPref<'own' | 'shared'>(
+    'dk8s.split.clock', 'own', ['own', 'shared']);
+  /* The overlap, not the union — see `sharedSpan`. No overlap, no clock: each
+     pane falls back to its own scale rather than a clock empty in all of them. */
+  const sharedRange = useMemo(
+    () => (clock === 'shared' && panes.length > 1 ? sharedSpan(panes.map(p => p.logs)) : undefined),
+    [clock, panes],
+  );
+
+  /* One node per pane, for as long as the pane lives — see Slot. */
+  const hosts = useRef(new Map<string, HTMLDivElement>());
+  const hostFor = (id: string) => {
+    let h = hosts.current.get(id);
+    if (!h) {
+      h = document.createElement('div');
+      h.style.cssText = 'height:100%;width:100%;min-width:0;min-height:0;display:flex;';
+      hosts.current.set(id, h);
+    }
+    return h;
+  };
+  useEffect(() => {
+    for (const id of [...hosts.current.keys()]) if (!panes.some(p => p.id === id)) hosts.current.delete(id);
+  }, [panes]);
+
   if (!panes.length) return null;
 
   return (
@@ -367,6 +476,32 @@ export function SplitLogs() {
 
         <span className="flex-1" />
 
+        {panes.length > 1 && (
+          <button
+            type="button"
+            onClick={() => setClock(clock === 'shared' ? 'own' : 'shared')}
+            title={clock === 'shared'
+              ? sharedRange
+                ? 'Every ribbon spans the time all the panes have lines for, so the same height is the same instant in each. Lines outside that stretch are not on the clock.'
+                : 'On, but these panes have no stretch of time in common — each ribbon is on its own scale until they do.'
+              : 'Each ribbon is scaled to its own lines. Share a clock to line a burst up across the panes.'}
+            className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] cursor-pointer"
+            style={{
+              color: clock === 'shared' ? ACCENT : 'var(--color-text-secondary)',
+              background: clock === 'shared'
+                ? `color-mix(in srgb, ${ACCENT} 14%, transparent)`
+                : 'transparent',
+              border: `1px solid ${clock === 'shared'
+                ? `color-mix(in srgb, ${ACCENT} 40%, transparent)`
+                : 'var(--color-surface-border)'}`,
+              fontWeight: clock === 'shared' ? 600 : 400,
+            }}
+          >
+            <ClockIcon size={IconSize.action} color={clock === 'shared' ? ACCENT : 'var(--color-text-muted)'} />
+            One clock
+          </button>
+        )}
+
         {/* The layout, changeable without reopening. Which arrangement reads
             best depends on the log — long lines want rows, short ones want
             columns — and that is not knowable until they are on screen. */}
@@ -394,12 +529,12 @@ export function SplitLogs() {
       </div>
 
       <div className="flex-1 min-h-0 p-2">
-        <Arrangement
-          mode={mode}
-          nodes={panes.map(pane => (
-            <Pane key={pane.id} pane={pane} focused={pane.id === focused} />
-          ))}
-        />
+        <Arrangement mode={mode} nodes={panes.map(pane => <Slot key={pane.id} host={hostFor(pane.id)} />)} />
+        {panes.map(pane => createPortal(
+          <Pane pane={pane} focused={pane.id === focused} sharedRange={sharedRange} />,
+          hostFor(pane.id),
+          pane.id,
+        ))}
       </div>
     </div>
   );

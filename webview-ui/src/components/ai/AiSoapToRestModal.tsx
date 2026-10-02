@@ -4,9 +4,10 @@
  */
 import { useState, useRef, useEffect } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
-import { SparkleIcon, CopyIcon, CheckIcon, DownloadIcon } from '../../icons';
+import { SparkleIcon, DownloadIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { ModalView, AIButtonView, ButtonView, EditorView, SplitPanelView, ResizablePanelView } from '@salilvnair/dui';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 interface Props {
   onClose: () => void;
@@ -42,7 +43,7 @@ export function AiSoapToRestModal({ onClose }: Props) {
   const [output, setOutput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
   const streamRef = useRef('');
 
   useEffect(() => {
@@ -103,8 +104,7 @@ openapi: "3.1.0"
 
   const handleCopy = () => {
     navigator.clipboard.writeText(output).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      flash();
     });
   };
 
@@ -152,11 +152,11 @@ openapi: "3.1.0"
             <ButtonView
               variant="secondary"
               size="md"
-              iconLeft={copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
+              iconLeft={<CopyGlyph copied={copied} size={12} />}
               style={{ color: copied ? 'var(--color-success)' : ACCENT }}
               onClick={handleCopy}
             >
-              {copied ? 'Copied!' : 'Copy'}
+              Copy
             </ButtonView>
             <ButtonView
               variant="secondary"

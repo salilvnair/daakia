@@ -28,6 +28,7 @@ import {
 import { GhHarvest, useHarvest } from './GhHarvest';
 import { GhSchedule, type Schedule } from './GhSchedule';
 import type { BoardIssue, ProposedDimension } from './board-types';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 /** The mock's own glyph per format. */
 const FORMAT_ICON: Record<Format, IcoName> = {
@@ -67,6 +68,7 @@ export function GhExport({
   const [frozen, setFrozen] = useState(true);
   const [saving, setSaving] = useState(false);
   const [said, setSaid] = useState('');
+  const { copied, flash } = useCopyTick();
   /*
     15D — the whole repository, which is not on the board.
 
@@ -453,9 +455,9 @@ export function GhExport({
               <button
                 type="button"
                 className="btn"
-                onClick={() => { navigator.clipboard?.writeText(text()); setSaid('Copied.'); }}
+                onClick={() => { void navigator.clipboard?.writeText(text()).then(flash); }}
               >
-                <Ico name="copy" />Copy to clipboard
+                <CopyGlyph copied={copied} size={12} />Copy to clipboard
               </button>
             )}
             {/* 15E. Beside Save rather than behind a menu: somebody who has

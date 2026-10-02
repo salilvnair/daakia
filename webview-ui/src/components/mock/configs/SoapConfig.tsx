@@ -4,7 +4,7 @@ import {
   TextInputView, DurationInputView, TabView, type SelectOption, type TabItem,
 } from '@salilvnair/dui';
 import { ConfirmDialog } from '../../shared';
-import { TrashIcon, DiagonalLinesPattern, ChevronRightIcon, CopyIcon, CheckIcon, ExternalLinkIcon, FolderOpenIcon } from '../../../icons';
+import { TrashIcon, DiagonalLinesPattern, ChevronRightIcon, ExternalLinkIcon, FolderOpenIcon } from '../../../icons';
 import { postMsg } from '../../../vscode';
 import { SOAP_MOCK_SAMPLES } from '../samples/soap';
 import { useUiStateStore } from '../../../store/ui-state-store';
@@ -15,6 +15,7 @@ import { SequencePanel } from '../wiremock/SequencePanel';
 import { MatchBuilderPanel } from '../wiremock/MatchBuilderPanel';
 import { FaultInjectionPanel } from '../wiremock/FaultInjectionPanel';
 import { StateMachineTriggerSelect } from '../wiremock/StateMachinePanel';
+import { CopyUrlButton } from './CopyUrlButton';
 
 type SoapOpTab = 'response' | 'sequence' | 'matching' | 'advanced';
 
@@ -107,7 +108,6 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
   });
   const [expandedOpId, setExpandedOpId] = useState<string | null>(storedOpId || null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'service' | 'operation'; id: string; label: string } | null>(null);
-  const [copiedService, setCopiedService] = useState<string | null>(null);
   const [showDeleteAll, setShowDeleteAll] = useState(false);
 
   const operations: OperationRow[] = (server.soapOperations || []).map(op => ({
@@ -309,16 +309,10 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
                   )}
                   {svcEnabled && (
                     <div onClick={e => e.stopPropagation()}>
-                      <IconButtonView
-                        size="sm"
-                        icon={copiedService === group.service ? <CheckIcon size={11} className="text-[var(--color-success)]" /> : <CopyIcon size={11} />}
-                        onClick={() => {
-                          const svcName = group.service.replace(/[^a-zA-Z0-9]/g, '');
-                          navigator.clipboard.writeText(`localhost:${server.port || 8000}/${svcName}?wsdl`);
-                          setCopiedService(group.service);
-                          setTimeout(() => setCopiedService(null), 1500);
-                        }}
+                      <CopyUrlButton
+                        text={`localhost:${server.port || 8000}/${group.service.replace(/[^a-zA-Z0-9]/g, '')}?wsdl`}
                         title="Copy WSDL URL"
+                        size={11}
                       />
                     </div>
                   )}

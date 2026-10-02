@@ -2420,6 +2420,8 @@ export interface AiConversationRow {
   token_total: number;
   created_at: string;
   updated_at: string;
+  /** In the list only: 1 when an answer in it searched dk8s or ran kubectl. */
+  dk8s?: number;
 }
 
 export function upsertAiConversation(row: Omit<AiConversationRow, 'created_at' | 'updated_at'>): void {
@@ -2443,7 +2445,8 @@ export function upsertAiConversation(row: Omit<AiConversationRow, 'created_at' |
 export function getAiConversations(limit = 50): AiConversationRow[] {
   if (!_db) { return []; }
   const stmt = _db.prepare(
-    `SELECT id, title, provider, model, message_count, token_total, created_at, updated_at
+    `SELECT id, title, provider, model, message_count, token_total, created_at, updated_at,
+            instr(messages, 'dk8s-search') > 0 AS dk8s
      FROM ai_conversations ORDER BY updated_at DESC LIMIT ?`
   );
   stmt.bind([limit]);

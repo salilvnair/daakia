@@ -23,7 +23,7 @@ import {
 import { useResultTabStore } from '../../store/dk8s-result-tab-store';
 import { useTabsStore } from '../../store/tabs-store';
 import { useK8sStore } from '../../store/k8s-store';
-import { favoriteKey, useFavoriteKeys } from '../../store/dk8s-favorites-store';
+import { useFavoriteKeys, starredView } from '../../store/dk8s-favorites-store';
 import { useFileSearch, FileSearchResults, type HitTarget } from './FileSearchPane';
 import { literalOf } from './search-pattern';
 import { FileViewer } from './FileViewer';
@@ -230,8 +230,8 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
   const podScope = useK8sStore(s => s.podScope);
   const favKeys = useFavoriteKeys();
   const scoped = useMemo(() => {
-    if (podScope !== 'fav' || favKeys.length === 0) return pods;
-    return pods.filter(p => favKeys.includes(favoriteKey(p)));
+    if (podScope !== 'fav') return pods;
+    return starredView(pods, favKeys);
   }, [pods, podScope, favKeys]);
 
   const pickable = useMemo(() => {
@@ -392,7 +392,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
     // Not onClose(): that is the deliberate-exit path, which forgets where you
     // were. This one records it so the pod's Back returns to these results.
     useDk8sSearchStore.getState().jumpedToPod(scrollRef.current?.scrollTop ?? 0);
-    openDetail(pod);
+    openDetail(pod, { from: { kind: 'search' } });
   };
 
   // Reopened from a pod's Back — put the list back where it was. One frame
@@ -1129,7 +1129,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                 // The same way back the log hits use: this records the scroll
                 // so returning lands on the row you left.
                 useDk8sSearchStore.getState().jumpedToPod(scrollRef.current?.scrollTop ?? 0);
-                openDetail(pod);
+                openDetail(pod, { from: { kind: 'search' } });
                 // openDetail restores the tab last read on that pod, so the
                 // Explorer has to be asked for after it, not instead.
                 setDetailTab('explorer');

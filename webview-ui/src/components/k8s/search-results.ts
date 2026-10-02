@@ -23,7 +23,7 @@
  * greys out the entire result. The cluster travels as `cluster` here.
  */
 import type { LogLevel } from '../../store/k8s-store';
-import type { SearchMatch, PodGroup } from '../../store/dk8s-search-store';
+import type { SearchMatch, PodGroup, LineParse } from '../../store/dk8s-search-store';
 import type { MatchedLine } from './log-view';
 
 /**
@@ -67,14 +67,18 @@ export function resultLines(groups: PodGroup[]): ResultLine[] {
 
   const push = (
     g: PodGroup, m: SearchMatch, text: string, isContext: boolean,
-    hits?: [number, number][], lineNo?: number,
+    hits?: [number, number][], lineNo?: number, parse?: LineParse | null,
   ) => {
+    const shown = shownFor(text, hits, parse);
     out.push({
+      /* The thread, logger and MDC the pod's format read — the same fields the Logs tab gives the line. */
+      ...(parse ?? {}),
+      message: shown.message,
       seq: seq++,
       ts: isContext ? undefined : m.ts,
       level: m.level,
       text,
-      hits,
+      hits: shown.hits,
       context: isContext || undefined,
       pod: m.pod,
       namespace: m.namespace,
@@ -95,13 +99,38 @@ export function resultLines(groups: PodGroup[]): ResultLine[] {
         stays honest: a frame three above the match is `line - 3`, and a reader
         comparing this against `kubectl logs` has to find the same numbers.
       */
-      m.before.forEach((t, i) => push(g, m, t, true, undefined, m.line - (m.before.length - i)));
-      push(g, m, m.text, false, m.hits);
-      m.after.forEach((t, i) => push(g, m, t, true, undefined, m.line + i + 1));
+      m.before.forEach((t, i) => push(g, m, t, true, undefined, m.line - (m.before.length - i), m.beforeParse?.[i]));
+      push(g, m, m.text, false, m.hits, undefined, m.parse);
+      m.after.forEach((t, i) => push(g, m, t, true, undefined, m.line + i + 1, m.afterParse?.[i]));
     }
   }
 
   return out;
+}
+
+/**
+ * What a row shows, and where its highlights fall on it.
+ *
+ * The host's hits are offsets into the raw line; a row with a parsed message
+ * shows the message. Each hit is found again in the message, in order. A hit
+ * that is only in the stripped prefix — a search for the thread name — cannot
+ * be highlighted in the message, so that row shows the raw line instead: the
+ * highlight is what says why the line is here.
+ */
+export function shownFor(
+  text: string, hits: [number, number][] | undefined, parse: LineParse | null | undefined,
+): { message?: string; hits?: [number, number][] } {
+  const message = parse?.message;
+  if (!message || !hits?.length) return { message, hits };
+  const moved: [number, number][] = [];
+  let from = 0;
+  for (const [a, b] of hits) {
+    const at = message.indexOf(text.slice(a, b), from);
+    if (at < 0) return { message: undefined, hits };
+    moved.push([at, at + (b - a)]);
+    from = at + (b - a);
+  }
+  return { message, hits: moved };
 }
 
 /**
@@ -230,4 +259,24 @@ export function levelsIn(lines: ResultLine[]): Record<LogLevel, number> {
     out[l.level] = (out[l.level] ?? 0) + 1;
   }
   return out;
+}
+
+/**
+ * The search term as the page's filter box has to say it.
+ *
+ * The box treats `/…/` as a regex and anything else as a case-blind
+ * substring. A regex search (`timeout|refused`) went in bare and matched
+ * nothing — the page opened on "No line matches" over the very hits it was
+ * showing — and a case-sensitive search quietly became case-blind.
+ */
+export function searchFilterOf(query: string, regex: boolean, caseSensitive: boolean): string {
+  if (!query) return '';
+  if (regex) return `/${query}/${caseSensitive ? '' : 'i'}`;
+  if (caseSensitive) return `/${query.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}/`;
+  return query;
+}
+
+/** Where a line sits in its own source: one pod's live log, or one archived file. */
+export function sourceKey(l: Pick<ResultLine, 'pod' | 'source' | 'file' | 'rel'>, line: number): string {
+  return `${l.pod}\u0000${l.source}\u0000${l.rel ?? l.file ?? ''}\u0000${line}`;
 }

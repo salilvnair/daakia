@@ -175,7 +175,13 @@ export async function searchPvInPod(
         /* Room for the context lines, which grep counts against the same cap
            — otherwise a search with five lines either side comes back with a
            fraction of the matches it was asked for. */
-        maxLines: opts.maxMatchesPerPod * (1 + 2 * Math.max(0, opts.contextLines)),
+        /* A window is filtered here, after grep, so grep may return many
+           lines outside it: give it the whole budget rather than the match cap. */
+        maxLines: cutoffMs !== undefined || untilMs !== undefined
+          ? Number.MAX_SAFE_INTEGER
+          : opts.maxMatchesPerPod * (1 + 2 * Math.max(0, opts.contextLines)),
+        /* Skip files that ended before the window began — see PvSearchOptions.sinceMs. */
+        ...(cutoffMs !== undefined ? { sinceMs: cutoffMs } : {}),
       },
     );
 

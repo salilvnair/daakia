@@ -5,7 +5,7 @@ import { useEnvStore, GLOBAL_ENV_ID } from '../../store/env-store';
 import { selectedEnvId } from './env-selector';
 import { getProtocolAccent } from '../../colors';
 import { MethodBadge, ConfirmDialog, ContextMenu, type ContextMenuItem, type ContextMenuSubItem } from '../shared';
-import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, GeneralAssistantIcon, FilterIcon, BookOpenIcon, Dk8sIcon, SearchIcon, IssueOpenedIcon, StethoscopeIcon, LayoutGridIcon, PinIcon, UnpinIcon } from '../../icons';
+import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, DaakiaMarkIcon, FilterIcon, BookOpenIcon, Dk8sIcon, SearchIcon, IssueOpenedIcon, StethoscopeIcon, LayoutGridIcon, PinIcon, UnpinIcon, ClockIcon } from '../../icons';
 import { IconButtonView, StateMachineIcon, SelectInputView, type SelectOption } from '@salilvnair/dui';
 import { logUiEvent } from '../../store/ui-audit-store';
 
@@ -460,10 +460,14 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
           /* A search result wears dk8s's colour and a magnifier: it belongs to
              dk8s, and it is not the pods. */
           const isDk8sResults = tab.type === 'dk8s-results';
+          /* A downloaded pod log: dk8s's colour, and a page icon — it is a document. */
+          const isDk8sLogFile = tab.type === 'dk8s-logfile' || tab.type === 'dk8s-payload';
+          /* The minutes around a hit: dk8s's colour, and a clock — it is a stretch of time. */
+          const isDk8sWindow = tab.type === 'dk8s-window';
           const isDkgh = tab.type === 'dkgh';
           const isWorkspace = tab.type === 'workspace';
           const SM_ACCENT = 'var(--color-sm-tab, #f59e0b)';
-          const tabAccent = isSettings ? 'var(--color-settings)' : isMockServer ? 'var(--color-mock-server)' : isDaakiaAi ? 'var(--color-protocol-ai)' : isStateMachine ? SM_ACCENT : isWiki ? 'var(--color-wiki)' : isDk8s || isDk8sResults ? 'var(--color-dk8s)' : isDkgh ? 'var(--color-dkgh)' : isWorkspace ? 'var(--color-workspace)' : (tab.protocol ? getProtocolAccent(tab.protocol) : requestAccentColor);
+          const tabAccent = isSettings ? 'var(--color-settings)' : isMockServer ? 'var(--color-mock-server)' : isDaakiaAi ? 'var(--color-ai-accent, #D97757)' : isStateMachine ? SM_ACCENT : isWiki ? 'var(--color-wiki)' : isDk8s || isDk8sResults || isDk8sLogFile || isDk8sWindow ? 'var(--color-dk8s)' : isDkgh ? 'var(--color-dkgh)' : isWorkspace ? 'var(--color-workspace)' : (tab.protocol ? getProtocolAccent(tab.protocol) : requestAccentColor);
           const isDragOver = dragOverIdx === idx && dragIdx !== idx;
           return (
             <div
@@ -498,13 +502,17 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
               ) : isStateMachine ? (
                 <StateMachineIcon size={13} className="flex-shrink-0" style={{ color: SM_ACCENT }} />
               ) : isDaakiaAi ? (
-                <GeneralAssistantIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-protocol-ai)' }} />
+                <span className="flex-shrink-0 inline-flex"><DaakiaMarkIcon size={13} tint={tabAccent} /></span>
               ) : isWiki ? (
                 <BookOpenIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-wiki)' }} />
               ) : isDk8s ? (
                 <Dk8sIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />
               ) : isDk8sResults ? (
                 <SearchIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />
+              ) : isDk8sLogFile ? (
+                <Dk8sIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />
+              ) : isDk8sWindow ? (
+                <ClockIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />
               ) : isDkgh ? (
                 <IssueOpenedIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dkgh)' }} />
               ) : isWorkspace ? (

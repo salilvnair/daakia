@@ -4,7 +4,7 @@
  */
 import { useState, useEffect } from 'react';
 import { MOCK_PROTOCOL_COLORS, getMockProtocolBg, getMockProtocolLabel } from '../../colors';
-import { TrashIcon, CopyIcon, CheckIcon, ExternalLinkIcon } from '../../icons';
+import { TrashIcon, ExternalLinkIcon } from '../../icons';
 import { TabView, TextInputView, MultilineInputView, ButtonView, IconButtonView } from '@salilvnair/dui';
 import type { TabItem } from '@salilvnair/dui';
 import type { MockServer, MockRoute } from './mock-types';
@@ -23,6 +23,7 @@ import { ChaosPanel } from './wiremock/ChaosPanel';
 import { MockApiCatalog } from './wiremock/MockApiCatalog';
 import { SmWorkflowDashboard } from './SmWorkflowDashboard';
 import { useSMWorkspaceStore, useSMTabsStore } from '@salilvnair/state-machine';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 type ServerTab = 'routes' | 'state' | 'traffic' | 'import' | 'export' | 'chaos' | 'catalog';
 
 // All protocols that get the full WireMock tab bar.
@@ -108,8 +109,8 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
        too. What this reacts to is the text changing. */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [portText, fixedPort]);
-  const [urlCopied, setUrlCopied] = useState(false);
-  const [wsdlCopied, setWsdlCopied] = useState(false);
+  const { copied: urlCopied, flash: flashUrl } = useCopyTick();
+  const { copied: wsdlCopied, flash: flashWsdl } = useCopyTick();
   const [serverTab, setServerTab] = useState<ServerTab>('routes');
   const aiScenarioEnabled = useAiFeaturesStore(s => s.isEnabled('aiScenarioManager'));
 
@@ -129,9 +130,7 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
   const copyUrl = () => {
     if (!serverUrl) return;
     logUiEvent('mock.url_copy', { serverId: server.id, protocol: server.protocol });
-    navigator.clipboard.writeText(serverUrl);
-    setUrlCopied(true);
-    setTimeout(() => setUrlCopied(false), 1500);
+    void navigator.clipboard.writeText(serverUrl).then(flashUrl);
   };
 
   const handleTry = () => { logUiEvent('mock.try', { serverId: server.id, protocol: server.protocol }); openTryTab(server, serverUrl); };
@@ -234,7 +233,7 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
             <>
               <span className="text-[11px] font-mono text-[var(--color-success)]">{serverUrl}</span>
               <IconButtonView
-                icon={urlCopied ? <CheckIcon size={11} className="text-[var(--color-success)]" /> : <CopyIcon size={11} />}
+                icon={<CopyGlyph copied={urlCopied} size={11} />}
                 size="default"
                 onClick={copyUrl}
                 tooltip="Copy URL"
@@ -248,9 +247,9 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] font-mono text-[var(--color-text-muted)]">WSDL: {serverUrl}?wsdl</span>
             <IconButtonView
-              icon={wsdlCopied ? <CheckIcon size={10} className="text-[var(--color-success)]" /> : <CopyIcon size={10} />}
+              icon={<CopyGlyph copied={wsdlCopied} size={10} />}
               size="default"
-              onClick={() => { navigator.clipboard.writeText(`${serverUrl}?wsdl`); setWsdlCopied(true); setTimeout(() => setWsdlCopied(false), 1500); }}
+              onClick={() => { void navigator.clipboard.writeText(`${serverUrl}?wsdl`).then(flashWsdl); }}
               tooltip="Copy WSDL URL"
             />
           </div>

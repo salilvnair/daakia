@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { postMsg } from '../../vscode';
-import { ChevronRightIcon, ChevronDownIcon, XmlTagIcon, SchemaIcon, CopyIcon, CheckIcon, ExpandAllIcon, CollapseAllIcon } from '../../icons';
+import { ChevronRightIcon, ChevronDownIcon, XmlTagIcon, SchemaIcon, ExpandAllIcon, CollapseAllIcon } from '../../icons';
 import type { SoapServiceDef, SoapPortDef, SoapOperationDef } from '../../store/tabs-store';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 type ViewMode = 'details' | 'xml';
 
@@ -21,8 +22,7 @@ export function SoapWsdlBrowser() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>('details');
   const [search, setSearch] = useState('');
-  const [copiedXml, setCopiedXml] = useState(false);
-  const [copiedRowKey, setCopiedRowKey] = useState<string | null>(null);
+  const { copied: copiedXml, flash: flashXml } = useCopyTick();
 
   if (!activeTab) return null;
 
@@ -87,16 +87,10 @@ export function SoapWsdlBrowser() {
   };
 
   const handleCopyXml = () => {
-    navigator.clipboard.writeText(rawWsdl);
-    setCopiedXml(true);
-    setTimeout(() => setCopiedXml(false), 1500);
+    void navigator.clipboard.writeText(rawWsdl).then(flashXml);
   };
 
-  const copyRowXml = (key: string, xml: string) => {
-    navigator.clipboard.writeText(xml);
-    setCopiedRowKey(key);
-    setTimeout(() => setCopiedRowKey(null), 1200);
-  };
+  const copyRowXml = (xml: string) => navigator.clipboard.writeText(xml);
 
   const filteredServices = useMemo(() => {
     if (!search.trim()) return services;
@@ -173,7 +167,6 @@ export function SoapWsdlBrowser() {
             activeTab={activeTab}
             rawWsdl={rawWsdl}
             copyRowXml={copyRowXml}
-            copiedRowKey={copiedRowKey}
           />
         ) : (
           <XmlView rawWsdl={rawWsdl} onCopy={handleCopyXml} copied={copiedXml} />
@@ -185,7 +178,7 @@ export function SoapWsdlBrowser() {
 
 /* ─── Details Tree View ─── */
 function DetailsView({
-  services, expanded, toggle, selectOperation, activeTab, rawWsdl, copyRowXml, copiedRowKey,
+  services, expanded, toggle, selectOperation, activeTab, rawWsdl, copyRowXml,
 }: {
   services: SoapServiceDef[];
   expanded: Set<string>;
@@ -193,8 +186,7 @@ function DetailsView({
   selectOperation: (svc: SoapServiceDef, port: SoapPortDef, op: SoapOperationDef) => void;
   activeTab: { soapOperation?: string; soapPort?: string };
   rawWsdl: string;
-  copyRowXml: (key: string, xml: string) => void;
-  copiedRowKey: string | null;
+  copyRowXml: (xml: string) => Promise<void>;
 }) {
   if (services.length === 0) {
     return <div className="px-3 py-6 text-center text-[11px] text-[var(--color-text-muted)]">No results match your search.</div>;
@@ -213,8 +205,7 @@ function DetailsView({
               icon={<NodeBadge bg="rgba(232,121,249,0.12)"><SchemaIcon size={9} className="text-[var(--color-protocol-soap)]" /></NodeBadge>}
               label={service.name}
               badge={<span className="block text-[8px] px-1.5 py-0.5 rounded-full bg-[rgba(232,121,249,0.1)] text-[var(--color-protocol-soap)]">{opCount}</span>}
-              copyXml={() => copyRowXml(svcKey, extractServiceXml(rawWsdl, service.name))}
-              copied={copiedRowKey === svcKey}
+              copyXml={() => copyRowXml(extractServiceXml(rawWsdl, service.name))}
             />
 
             {svcExpanded && service.ports.map(port => {
@@ -227,8 +218,7 @@ function DetailsView({
                     icon={<NodeBadge bg="rgba(96,165,250,0.1)"><span className="text-[7px] font-bold text-[#60a5fa]">{port.soapVersion}</span></NodeBadge>}
                     label={port.name}
                     sublabel={port.address}
-                    copyXml={() => copyRowXml(portKey, extractPortXml(rawWsdl, port.name))}
-                    copied={copiedRowKey === portKey}
+                    copyXml={() => copyRowXml(extractPortXml(rawWsdl, port.name))}
                   />
 
                   {portExpanded && port.operations.map(op => {
@@ -244,10 +234,9 @@ function DetailsView({
                           selected={isSelected}
                           onSelect={() => selectOperation(service, port, op)}
                           badge={<StyleBadge style={op.style} />}
-                          copyXml={() => copyRowXml(opKey, extractOperationXml(rawWsdl, op.name))}
-                          copied={copiedRowKey === opKey}
+                          copyXml={() => copyRowXml(extractOperationXml(rawWsdl, op.name))}
                         />
-                        {opExpanded && <OperationDetail operation={op} port={port} parentKey={opKey} expanded={expanded} toggle={toggle} rawWsdl={rawWsdl} copyRowXml={copyRowXml} copiedRowKey={copiedRowKey} />}
+                        {opExpanded && <OperationDetail operation={op} port={port} parentKey={opKey} expanded={expanded} toggle={toggle} rawWsdl={rawWsdl} copyRowXml={copyRowXml} />}
                       </div>
                     );
                   })}
@@ -262,9 +251,9 @@ function DetailsView({
 }
 
 /* ─── Operation Detail ─── */
-function OperationDetail({ operation, port, parentKey, expanded, toggle, rawWsdl, copyRowXml, copiedRowKey }: {
+function OperationDetail({ operation, port, parentKey, expanded, toggle, rawWsdl, copyRowXml }: {
   operation: SoapOperationDef; port: SoapPortDef; parentKey: string; expanded: Set<string>; toggle: (k: string) => void;
-  rawWsdl: string; copyRowXml: (key: string, xml: string) => void; copiedRowKey: string | null;
+  rawWsdl: string; copyRowXml: (xml: string) => Promise<void>;
 }) {
   const inputKey = `${parentKey}:input`;
   const outputKey = `${parentKey}:output`;
@@ -290,7 +279,7 @@ function OperationDetail({ operation, port, parentKey, expanded, toggle, rawWsdl
           <span className="text-[7px] font-bold px-1 py-[1px] rounded bg-[rgba(74,222,128,0.12)] text-[#4ade80]">REQ</span>
           <span className="text-[10px] font-medium text-[var(--color-text-primary)]">{operation.inputMessage || operation.name}</span>
           <span className="ml-auto">
-            <CopyXmlBtn onClick={(e) => { e.stopPropagation(); copyRowXml(inputKey, extractMessageXml(rawWsdl, operation.inputMessage || operation.name)); }} copied={copiedRowKey === inputKey} />
+            <CopyXmlBtn copy={() => copyRowXml(extractMessageXml(rawWsdl, operation.inputMessage || operation.name))} />
           </span>
         </div>
         {inputExpanded && (
@@ -307,7 +296,7 @@ function OperationDetail({ operation, port, parentKey, expanded, toggle, rawWsdl
           <span className="text-[7px] font-bold px-1 py-[1px] rounded bg-[rgba(251,146,60,0.12)] text-[#fb923c]">RES</span>
           <span className="text-[10px] font-medium text-[var(--color-text-primary)]">{operation.outputMessage || `${operation.name}Response`}</span>
           <span className="ml-auto">
-            <CopyXmlBtn onClick={(e) => { e.stopPropagation(); copyRowXml(outputKey, extractMessageXml(rawWsdl, operation.outputMessage || `${operation.name}Response`)); }} copied={copiedRowKey === outputKey} />
+            <CopyXmlBtn copy={() => copyRowXml(extractMessageXml(rawWsdl, operation.outputMessage || `${operation.name}Response`))} />
           </span>
         </div>
         {outputExpanded && (
@@ -450,8 +439,8 @@ function XmlView({ rawWsdl, onCopy, copied }: { rawWsdl: string; onCopy: () => v
   return (
     <div className="relative h-full">
       <button onClick={onCopy} className="absolute top-2 right-3 z-10 flex items-center gap-1 px-2 py-1 rounded text-[10px] bg-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] border border-[var(--color-surface-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_10%,transparent)] cursor-pointer transition-colors" title="Copy WSDL XML">
-        {copied ? <CheckIcon size={10} className="text-[var(--color-success)]" /> : <CopyIcon size={10} />}
-        {copied ? 'Copied' : 'Copy'}
+        <CopyGlyph copied={copied} size={10} />
+        Copy
       </button>
       <pre className="px-3 py-2 pt-10 text-[10px] font-mono leading-[1.6] text-[var(--color-text-primary)] overflow-auto h-full [scrollbar-gutter:stable] whitespace-pre-wrap break-all">
         <XmlHighlight xml={rawWsdl} />
@@ -480,11 +469,12 @@ function XmlHighlight({ xml }: { xml: string }) {
 }
 
 /* ─── Reusable Components ─── */
-function TreeRow({ depth, expanded, onToggle, icon, label, sublabel, badge, selected, onSelect, copyXml, copied }: {
+function TreeRow({ depth, expanded, onToggle, icon, label, sublabel, badge, selected, onSelect, copyXml }: {
   depth: number; expanded: boolean; onToggle: () => void; icon: React.ReactNode; label: string;
   sublabel?: string; badge?: React.ReactNode; selected?: boolean; onSelect?: () => void;
-  copyXml?: () => void; copied?: boolean;
+  copyXml?: () => Promise<void>;
 }) {
+  const { copied, flash } = useCopyTick();
   return (
     <div
       className={`group flex items-center gap-1.5 pr-2 py-[4px] cursor-pointer select-none transition-colors ${
@@ -507,25 +497,26 @@ function TreeRow({ depth, expanded, onToggle, icon, label, sublabel, badge, sele
       {badge && <span className="ml-auto shrink-0">{badge}</span>}
       {copyXml && (
         <button
-          onClick={(e) => { e.stopPropagation(); copyXml(); }}
+          onClick={(e) => { e.stopPropagation(); void copyXml().then(flash); }}
           className={`opacity-0 group-hover:opacity-100 w-[16px] h-[16px] flex items-center justify-center rounded hover:bg-[color-mix(in_srgb,var(--color-text-primary)_10%,transparent)] transition-all cursor-pointer shrink-0 ${badge ? 'ml-1.5' : 'ml-auto'} ${copied ? '!opacity-100' : ''}`}
           title="Copy XML"
         >
-          {copied ? <CheckIcon size={8} className="text-[var(--color-success)]" /> : <XmlTagIcon size={8} className="text-[var(--color-text-muted)]" />}
+          {copied ? <CopyGlyph copied size={8} /> : <XmlTagIcon size={8} className="text-[var(--color-text-muted)]" />}
         </button>
       )}
     </div>
   );
 }
 
-function CopyXmlBtn({ onClick, copied }: { onClick: (e: React.MouseEvent) => void; copied: boolean }) {
+function CopyXmlBtn({ copy }: { copy: () => Promise<void> }) {
+  const { copied, flash } = useCopyTick();
   return (
     <button
-      onClick={onClick}
+      onClick={(e) => { e.stopPropagation(); void copy().then(flash); }}
       className={`opacity-0 group-hover:opacity-100 w-[16px] h-[16px] flex items-center justify-center rounded hover:bg-[color-mix(in_srgb,var(--color-text-primary)_10%,transparent)] transition-all cursor-pointer shrink-0 ${copied ? '!opacity-100' : ''}`}
       title="Copy XML"
     >
-      {copied ? <CheckIcon size={8} className="text-[var(--color-success)]" /> : <XmlTagIcon size={8} className="text-[var(--color-text-muted)]" />}
+      {copied ? <CopyGlyph copied size={8} /> : <XmlTagIcon size={8} className="text-[var(--color-text-muted)]" />}
     </button>
   );
 }

@@ -402,6 +402,16 @@
   --color-workspace: #0d9488;
   --color-dk8s: #0891b2;
   --color-dk8s-muted: #0e7490;
+  /* The Follow boards' hues (see `follow-tone.ts`). Dark takes the boards' own
+     hexes from each `var()`'s fallback; these are the ones that go thin on
+     white, stepped deeper the way the other hues in this block are. */
+  --color-follow: #3d7f8c;
+  --color-follow-ink: #ffffff;
+  --color-follow-check: #0d9488;
+  --color-follow-field: #7c3aed;
+  --color-follow-ok: #047857;
+  --color-gutter-calm: #6fb3a0;
+  --color-gutter-warn: #d4a72c;
   /* Deeper on a light ground, the way the other tab hues are — #DE7356 is
      built for the dark panel and goes thin on white. */
   --color-dkgh: #c0543a;
@@ -1181,6 +1191,114 @@ input[type="number"] {
   background: color-mix(in srgb, var(--editor-accent, var(--color-accent)) 90%, transparent) !important;
 }
 
+/* ─── A dui popover whose content pads itself ───
+   PopoverView pads its content by its size's paddingY (12–16px). Panels that
+   already pad themselves — or draw a header edge to edge — got that and their
+   own, and read as a box floating in a box. */
+.dui_popover.dk-pop-flush {
+  padding: 0 !important;
+}
+
+/* ─── Copied: the green tick ───
+   Every copy in Daakia turns its glyph into a tick that pops in and draws
+   itself (components/shared/CopyTick.tsx). dui's CopyButtonView swaps to its
+   own tick and titles itself "Copied!" meanwhile — the second selector gives
+   it the same entrance, so the two read as one thing. */
+@keyframes dk-tick-pop {
+  0%   { transform: scale(0.4); opacity: 0; }
+  60%  { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+/* The tick's points run from its long arm's top back down to the short arm,
+   so a positive offset drew it backwards — long stroke first. A negative one
+   reveals it from the short arm up, the way a tick is written. */
+@keyframes dk-tick-draw {
+  from { stroke-dashoffset: -24; }
+  to   { stroke-dashoffset: 0; }
+}
+.dk-copy-tick > svg,
+button[title="Copied!"] > svg {
+  animation: dk-tick-pop 360ms cubic-bezier(0.2, 1.3, 0.4, 1) both;
+}
+.dk-copy-tick > svg polyline,
+button[title="Copied!"] > svg polyline {
+  stroke-dasharray: 24;
+  stroke-dashoffset: -24;
+  animation: dk-tick-draw 300ms 80ms ease-out forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dk-copy-tick > svg, button[title="Copied!"] > svg,
+  .dk-copy-tick > svg polyline, button[title="Copied!"] > svg polyline {
+    animation: none; stroke-dashoffset: 0;
+  }
+}
+
+/* ─── Port forwarding (pf-ui.tsx) ───
+   A row's own Stop shows on hover, like the Logs rows' copy link; the 24px
+   buttons brighten under the pointer rather than changing colour. */
+.pf-row .pf-row-stop { opacity: 0; }
+.pf-row:hover .pf-row-stop, .pf-row .pf-row-stop:focus-visible { opacity: 1; }
+.pf-row:hover { border-color: color-mix(in srgb, var(--color-dk8s) 45%, var(--color-surface-border)) !important; }
+.pf-btn:hover:not(:disabled) { filter: brightness(1.18); }
+/* The live dot: a soft ring breathing out from it while a tunnel is up. */
+.pf-live-dot { width: 8px; height: 8px; border-radius: 99px; flex-shrink: 0; background: var(--c, var(--color-success)); position: relative; }
+.pf-live-dot.on { box-shadow: 0 0 0 0 color-mix(in srgb, var(--c) 55%, transparent); animation: pf-breathe 2.2s ease-out infinite; }
+@keyframes pf-breathe { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--c) 55%, transparent); } 70%, 100% { box-shadow: 0 0 0 7px transparent; } }
+/* The tunnel: a line from this machine to the pod, its dashes moving while it carries traffic. */
+.pf-tunnel { flex: 1; min-width: 40px; height: 2px; position: relative; border-radius: 2px;
+  background-image: repeating-linear-gradient(90deg, var(--c) 0 6px, transparent 6px 11px); background-size: 22px 2px; opacity: .8; }
+.pf-tunnel.flowing { animation: pf-flow .9s linear infinite; }
+@keyframes pf-flow { from { background-position: 0 0; } to { background-position: 22px 0; } }
+.pf-tunnel-icon { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: grid; place-items: center;
+  width: 20px; height: 20px; border-radius: 99px; background: var(--color-panel); border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); }
+.pf-icon-btn:hover { background: var(--color-surface-hover) !important; color: var(--color-text-primary) !important; }
+.pf-panel { animation: pf-slide .18s ease-out; }
+@keyframes pf-slide { from { transform: translateX(16px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pf-live-dot.on, .pf-tunnel.flowing, .pf-panel { animation: none; } }
+
+/* ─── dk8s views, inside the chat ───
+   The chat library resets padding and margin on everything under
+   `.ce-chat-root`, unlayered — which beats every Tailwind spacing class
+   (those sit in a layer). So the fields box and the payload tree drawn in a
+   Daakia AI card lost all their padding. Not restated here: `revert-layer`
+   hands the two properties back to the layers, so the views look exactly as
+   they do on the Logs tab and follow it when it changes. */
+.ce-chat-root .dk-embed,
+.ce-chat-root .dk-embed * { padding: revert-layer; margin: revert-layer; }
+
+/* ─── A Logs row's copy-link button ───
+   Always laid out, so the row never reflows; shown on the row under the
+   pointer at once (no fade — it moves with the pointer), and kept on the row
+   that was just copied while its tick plays. */
+.dk-log-row .dk-row-link { opacity: 0; color: var(--color-text-muted); }
+.dk-log-row:hover .dk-row-link,
+.dk-log-row .dk-row-link.is-copied,
+.dk-log-row .dk-row-link:focus-visible { opacity: 1; }
+.dk-log-row .dk-row-link:hover { color: var(--color-dk8s, var(--color-accent)); }
+
+/* ─── A glyph button that grows under the pointer ───
+   No box behind it: the glyph itself gets bigger, and takes its hover colour
+   (--hover) where it has one — close is grey until the pointer is on it,
+   then red. The file viewer's header uses .dk-icon-btn; the Explorer's row
+   actions are dui FileBrowserView buttons with no class of their own, so they
+   are reached through the class the Explorer puts on the browser. */
+.dk-icon-btn,
+.dk-fb-actions button[aria-label][style*="place-items"] {
+  transition: transform 120ms ease, color 120ms ease;
+}
+.dk-icon-btn:not(:disabled):hover,
+.dk-fb-actions button[aria-label][style*="place-items"]:not(:disabled):hover {
+  transform: scale(1.25);
+  background: transparent !important;
+}
+.dk-icon-btn:not(:disabled):hover {
+  color: var(--hover, var(--tone)) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dk-icon-btn:not(:disabled):hover,
+  .dk-fb-actions button[aria-label][style*="place-items"]:not(:disabled):hover { transform: none; }
+}
+
 /* ─── Monaco Find/Replace Widget ─── */
 
 .monaco-editor .find-widget {
@@ -1381,6 +1499,16 @@ input[type="number"] {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23e5c335' d='M8.879 14H5C3.897 14 3 13.103 3 12V4C3 2.897 3.897 2 5 2H8.879C9.405 2 9.921 2.213 10.293 2.586L14.505 6.798C14.826 7.119 15.003 7.546 15.003 8C15.003 8.454 14.826 8.881 14.505 9.202L10.293 13.414C9.921 13.787 9.405 14 8.879 14Z'/%3E%3Ccircle cx='7' cy='8' r='2' fill='%23ef4444'/%3E%3C/svg%3E");
 }
 
+/* Python-in-a-pod: the values after the paused line, the way VS Code prints
+   them. Muted and italic so they read as annotation rather than as code the
+   reader might think they wrote. */
+.dk-py-inline-value {
+  color: var(--color-warning);
+  opacity: 0.85;
+  font-style: italic;
+  margin-left: 2ch;
+}
+
 /* ─── Sidebar shimmer skeleton animation ─── */
 .sidebar-shimmer {
   animation: sidebarShimmer 1.5s ease-in-out infinite;
@@ -1402,11 +1530,13 @@ input[type="number"] {
 /* ─── Monaco Find widget: fix X close button vertical alignment ──────────────
    Real class: .button.codicon.codicon-widget-close (SimpleButton in findWidget.js)
    Monaco positions it `position:absolute; top:5px` in a 33px widget.
-   Button total height = 16px + 3px padding × 2 = 22px → perfect center = (33-22)/2 = 5.5px.
-   Use calc(50% - 11px) so it works regardless of our border overrides.
+   Button total height = 16px + 3px padding × 2 = 22px → centred on the FIND
+   row = (33-22)/2 = 5.5px. A fixed offset, not 50%: with Replace open the
+   widget is two rows tall, and 50% dropped the X between them — VS Code keeps
+   it on the Find row.
    ─────────────────────────────────────────────────────────────────────────── */
 .monaco-editor .find-widget > .button.codicon-widget-close {
-  top: calc(50% - 11px) !important;
+  top: 5.5px !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -1814,6 +1944,53 @@ input[type="number"] {
   is white on white here, and that is the actual bug the override was papering
   over.
 */
+/* ─── dk8s colours that only ever had a dark fallback ───
+   Each was written `var(--token, #darkvalue)` and the token was never set, so
+   the light theme drew pale-blue syntax, near-white teal and dark text on
+   saturated fills — readable on #1e1e1e, lost on white. Set here for both. */
+:root {
+  --color-dk8s-loggers: #a855f7;
+  --color-dk8s-loggers-ink: #1a0b2b;
+  --color-dk8s-hole: #2dd4bf;
+  --color-dk8s-ink: #0b1a1e;
+  --color-dk8s-note: #7eacb5;
+  --color-dk8s-syn-var: #9cdcfe;
+  --color-dk8s-syn-call: #dcdcaa;
+  --color-dk8s-syn-string: #ce9178;
+  --color-asklog-link: #2dd4bf;
+  --color-protocol-ai-ink: #10262b;
+  --color-find: #e2b93d;
+  --color-hit: #b8adf6;
+  --color-on-warning: #1a1205;
+  --color-on-error: #1b0b0a;
+  /* The log view's own INFO and its ribbon. The app's info is indigo in the
+     light theme — its primary — which turned every INFO label and the whole
+     ribbon violet; a log reads INFO as blue in either. */
+  --color-log-info: #3b82f6;
+  --color-ribbon-info: color-mix(in srgb, var(--color-log-info) 72%, var(--color-panel));
+  --color-ribbon-error: var(--color-error);
+}
+[data-theme="light"] {
+  --color-dk8s-loggers: #7c3aed;
+  --color-dk8s-loggers-ink: #ffffff;
+  --color-dk8s-hole: #0f766e;
+  --color-dk8s-ink: #ffffff;
+  --color-dk8s-note: #3d7f8c;
+  --color-dk8s-syn-var: #0451a5;
+  --color-dk8s-syn-call: #795e26;
+  --color-dk8s-syn-string: #a31515;
+  --color-asklog-link: #0f766e;
+  --color-protocol-ai-ink: #ffffff;
+  --color-find: #d4a017;
+  --color-hit: #8b7cf6;
+  --color-on-warning: #ffffff;
+  --color-on-error: #ffffff;
+  /* On white the ribbon is a light wash, not a wall of saturated blocks. */
+  --color-log-info: #2563eb;
+  --color-ribbon-info: color-mix(in srgb, #2563eb 34%, var(--color-panel));
+  --color-ribbon-error: color-mix(in srgb, #cf222e 72%, var(--color-panel));
+}
+
 [data-theme="light"] .dui_tab__pill,
 [data-theme="light"] .dui_tab__picker {
   border: 1px solid #d1d5db;

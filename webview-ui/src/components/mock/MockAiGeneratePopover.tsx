@@ -16,7 +16,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useAiProvidersStore } from '../../store/ai-providers-store';
 import { useTabsStore } from '../../store/tabs-store';
 import { useAiPromptTemplatesStore, type AiPromptTemplateKey } from '../../store/prompt-template';
-import { SparkleIcon, RefreshIcon, PlusIcon, CopyIcon, CheckIcon } from '../../icons';
+import { SparkleIcon, RefreshIcon, PlusIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
 import type { MockRoute, HttpMethod } from './mock-types';
@@ -24,6 +24,7 @@ import { useAiFeaturesStore } from '../../store/ai-features-store';
 import { AIButtonView, EditorView, MultilineInputView, TextInputView, ButtonView, IconButtonView, ModalView, TabView, type EditorLanguage } from '@salilvnair/dui';
 import { logUiEvent } from '../../store/ui-audit-store';
 import { sendAiRequest } from '../../services/ai/ai-client';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 const ACCENT = 'var(--color-mock-server)';
 
@@ -467,7 +468,7 @@ export function MockAiGeneratePopover({
   const [parsedRoutes, setParsedRoutes] = useState<ParsedRoute[]>(initialRoutes);
   const [parsedItems, setParsedItems] = useState<ParsedGenericItem[]>(initialItems);
   const [detectedSdl, setDetectedSdl] = useState<string | null>(initialSdl);
-  const [sdlCopied, setSdlCopied] = useState(false);
+  const { copied: sdlCopied, flash: flashSdl } = useCopyTick();
   const [streaming, setStreaming] = useState(false);  // don't auto-start
   const [error, setError] = useState('');
   const [fetchKey, setFetchKey] = useState(0);
@@ -501,7 +502,6 @@ export function MockAiGeneratePopover({
     setParsedRoutes([]);
     setParsedItems([]);
     setDetectedSdl(null);
-    setSdlCopied(false);
     setStreaming(true);
     setError('');
     setAddedAll(false);
@@ -615,7 +615,6 @@ export function MockAiGeneratePopover({
     setParsedRoutes([]);
     setParsedItems([]);
     setDetectedSdl(null);
-    setSdlCopied(false);
     setError('');
     setAddedAll(false);
     setAddedIds(new Set());
@@ -654,7 +653,6 @@ export function MockAiGeneratePopover({
     setParsedRoutes([]);
     setParsedItems([]);
     setDetectedSdl(null);
-    setSdlCopied(false);
     setError('');
     setAddedAll(false);
     setAddedIds(new Set());
@@ -673,7 +671,6 @@ export function MockAiGeneratePopover({
     setParsedRoutes([]);
     setParsedItems([]);
     setDetectedSdl(null);
-    setSdlCopied(false);
     setError('');
     setAddedAll(false);
     setAddedIds(new Set());
@@ -736,10 +733,9 @@ export function MockAiGeneratePopover({
   const handleCopySdl = useCallback(() => {
     if (!detectedSdl) return;
     navigator.clipboard.writeText(detectedSdl).then(() => {
-      setSdlCopied(true);
-      setTimeout(() => setSdlCopied(false), 2000);
+      flashSdl();
     });
-  }, [detectedSdl]);
+  }, [detectedSdl, flashSdl]);
 
   // ── Header right: streaming dots OR refine+regenerate ──────────────────────
   const headerRight = (
@@ -789,10 +785,10 @@ export function MockAiGeneratePopover({
           size="md"
           variant="ghost"
           accentColor={sdlCopied ? 'var(--color-success)' : 'var(--color-protocol-graphql, #ec4899)'}
-          iconLeft={sdlCopied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}
+          iconLeft={<CopyGlyph copied={sdlCopied} size={11} />}
           onClick={handleCopySdl}
         >
-          {sdlCopied ? 'SDL Copied!' : 'Copy SDL'}
+          Copy SDL
         </ButtonView>
       )}
       {onAddGeneratedRoutes && parsedRoutes.length > 0 && (

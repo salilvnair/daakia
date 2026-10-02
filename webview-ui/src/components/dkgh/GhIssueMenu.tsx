@@ -26,6 +26,7 @@ import { useCallback, useRef, useState } from 'react';
 import { Ico, type IcoName } from './GhIcons';
 import { dropPortal, dropStyle, useDropPanel } from './drop-panel';
 import { openExternal } from './open-external';
+import { CopyGlyph } from '../shared/CopyTick';
 
 /** What `gh auth refresh` has to be given for the two writes to work. */
 export const PROJECT_SCOPE_CMD = 'gh auth refresh --scopes project';
@@ -130,8 +131,7 @@ export function GhIssueMenu({ url, place, canWriteProject, onArchive, onRemove }
           className={`ghmenu-r${it.danger ? ' danger' : ''}${done === it.id ? ' ok' : ''}`}
           onClick={it.run}
         >
-          <Ico name={done === it.id ? 'check' : it.icon}
-               className={done === it.id ? 'popped' : undefined} />
+          {done === it.id ? <CopyGlyph copied size={12} /> : <Ico name={it.icon} />}
           <span className="ghmenu-t">
             {it.label}
             {it.note && <i>{it.note}</i>}

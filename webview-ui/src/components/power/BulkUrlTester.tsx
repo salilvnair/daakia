@@ -15,7 +15,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { postMsg } from '../../vscode';
 import { ModalView, ButtonView, TextInputView, MultilineInputView } from '@salilvnair/dui';
 import { logUiEvent } from '../../store/ui-audit-store';
-import { PlayIcon, CopyIcon, SearchIcon } from '../../icons';
+import { PlayIcon, SearchIcon } from '../../icons';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 type RowState = 'queued' | 'running' | 'done';
 
@@ -132,7 +133,7 @@ export function BulkUrlTester({ onClose }: Props) {
   const [running, setRunning] = useState(false);
   const [filter, setFilter] = useState('');
   const [only, setOnly] = useState<'all' | 'failed'>('all');
-  const [copied, setCopied] = useState(false);
+  const { copied, flash } = useCopyTick();
 
   const runIdRef = useRef(0);
 
@@ -214,10 +215,8 @@ export function BulkUrlTester({ onClose }: Props) {
         r.redirects ?? 0, r.contentType ?? '', (r.error ?? '').replace(/,/g, ';'),
       ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')))
       .join('\n');
-    navigator.clipboard?.writeText(csv);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1600);
-  }, [done]);
+    void navigator.clipboard?.writeText(csv).then(flash);
+  }, [done, flash]);
 
   const retryFailed = useCallback(() => {
     const failedUrls = done
@@ -251,8 +250,8 @@ export function BulkUrlTester({ onClose }: Props) {
               {failed > 0 && (
                 <ButtonView size="md" variant="secondary" onClick={retryFailed}>Load failures</ButtonView>
               )}
-              <ButtonView size="md" variant="secondary" onClick={copyCsv} iconLeft={<CopyIcon size={12} />}>
-                {copied ? 'Copied' : 'Copy CSV'}
+              <ButtonView size="md" variant="secondary" onClick={copyCsv} iconLeft={<CopyGlyph copied={copied} size={12} />}>
+                Copy CSV
               </ButtonView>
             </>
           )}

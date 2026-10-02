@@ -33,7 +33,7 @@ export type AiScreen =
   | 'Workspace · Overview'
   | 'Mock Server' | 'Daakia AI' | 'Settings'
   | 'dk8s · Pods' | 'dk8s · Logs' | 'dk8s · Terminal' | 'dk8s · Explorer'
-  | 'dk8s · Doctor' | 'dk8s · Search'
+  | 'dk8s · Doctor' | 'dk8s · Search' | 'dk8s · Python'
   | 'dkgh · New issue';
 
 /** The model knobs. Anything omitted takes the default below. */
@@ -47,6 +47,8 @@ export interface AiSettingsOverrides {
   frequencyPenalty?: number;
   presencePenalty?: number;
   seed?: number | null;
+  /** 'off': answer without thinking first — see the host's `AiSettings.thinking`. */
+  thinking?: 'off';
 }
 
 export interface AiCallOptions {
@@ -73,6 +75,14 @@ export interface AiCallOptions {
   settings?: AiSettingsOverrides;
   /** MCP servers whose tools this call may reach for. */
   mcpServerConfigs?: unknown[];
+  /**
+   * Daakia AI only: whether the model may search the watched pods' logs (the
+   * dk8s chip in its header). The host offers `dk8s_search` only when this is
+   * not false and something is being watched.
+   */
+  dk8s?: boolean;
+  /** The pods on screen, which are the ones `dk8s_search` may read. */
+  dk8sTargets?: { context: string; namespace: string; pod: string; containers?: string[]; workload?: string }[];
   /** Images to send alongside the prompt, for the features that read pictures. */
   images?: unknown[];
 

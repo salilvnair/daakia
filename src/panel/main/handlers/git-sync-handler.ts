@@ -5,7 +5,7 @@
 import {
   getAutoSyncSeconds, getSyncFolder, getRemoteUrl, getBranch, getSyncScope, saveGitSyncSettings,
   getGitStatus, ensureGitRepo, gitSyncNow, exportFullBundle, importFullBundle,
-  getSyncIdentity, setSyncIdentityId, listTeam, showSharedInSwitcher,
+  getSyncIdentity, setSyncIdentityId, listTeam, showSharedInSwitcher, listTeamDk8sPrefs,
 } from '../../../services/git-sync';
 import { handleGetWorkspaces } from './workspace-handler';
 
@@ -84,4 +84,16 @@ export function handleGitSyncSetIdentity(msg: { id?: string }, post: PostMessage
   const result = setSyncIdentityId(String(msg.id ?? ''));
   post({ type: 'gitSync:identityResult', result });
   handleGitSyncGetSettings(post);
+}
+
+/**
+ * The dk8s prefs teammates share with their workspaces — their determinants
+ * and custom field readers — for the pages that show them beside yours.
+ *
+ * Asked for by those pages when they open, and sent again after every sync
+ * (see the callers of `broadcastSyncedData`), so a teammate's new question
+ * appears without anybody reopening Settings.
+ */
+export function handleDk8sTeamPrefs(post: PostMessage): void {
+  post({ type: 'dk8s:teamPrefs', sources: listTeamDk8sPrefs() });
 }

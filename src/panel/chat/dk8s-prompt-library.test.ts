@@ -15,7 +15,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  DK8S_PROMPTS, DK8S_USER_PROMPTS, DK8S_USER_VARIABLES, renderDk8sUserPrompt,
+  DK8S_PROMPTS, DK8S_USER_PROMPTS, DK8S_USER_VARIABLES, renderDk8sUserPrompt, dk8sVariablesFor,
 } from './dk8s-prompts';
 import {
   AI_PROMPT_TEMPLATE_DEFAULTS, AI_PROMPT_TEMPLATE_LABELS,
@@ -23,6 +23,14 @@ import {
 } from '../../../webview-ui/src/store/prompt-template';
 
 const KEYS = Object.keys(DK8S_PROMPTS);
+
+/*
+  dk8s prompts the webview resolves and sends itself, through the Prompt
+  Library's own `resolve` — so they have no host registry entry to match.
+  Python's ghost text and Ask AI, and Ask the log's reading of a question's
+  time into kubectl logs flags.
+*/
+const WEBVIEW_KEYS = ['dk8s.python.complete', 'dk8s.python.ask', 'dk8s.log.askScope'];
 
 /** The library derives the system key this way — see toSystemKey. */
 const systemKey = (k: string) => `${k}.system`;
@@ -63,8 +71,9 @@ describe('dk8s prompts in the Prompt Library', () => {
 
   it('offers the variables the user template actually interpolates', () => {
     for (const key of KEYS) {
+      /* The usual set, and for Ask the log the two its own handler adds. */
       expect(AI_PROMPT_TEMPLATE_VARIABLES[key as never], key)
-        .toEqual(DK8S_USER_VARIABLES);
+        .toEqual(dk8sVariablesFor(key));
       // Instructions take no variables, matching every other `.system` entry.
       expect(AI_PROMPT_TEMPLATE_VARIABLES[systemKey(key) as never], key).toEqual([]);
     }
@@ -82,7 +91,7 @@ describe('dk8s prompts in the Prompt Library', () => {
   it('lists exactly the host registry under the dk8s category', () => {
     const cat = AI_TEMPLATE_CATEGORIES.find(c => c.id === 'dk8s');
     expect(cat).toBeDefined();
-    expect([...cat!.keys].sort()).toEqual([...KEYS].sort());
+    expect([...cat!.keys].sort()).toEqual([...KEYS, ...WEBVIEW_KEYS].sort());
   });
 
   /*
@@ -93,7 +102,7 @@ describe('dk8s prompts in the Prompt Library', () => {
   it('uses only variables the handler passes', () => {
     for (const key of KEYS) {
       const named = [...DK8S_USER_PROMPTS[key]!.matchAll(/\{\w+\}/g)].map(m => m[0]);
-      for (const v of named) expect(DK8S_USER_VARIABLES, `${key} → ${v}`).toContain(v);
+      for (const v of named) expect(dk8sVariablesFor(key), `${key} → ${v}`).toContain(v);
     }
   });
 });

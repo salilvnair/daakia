@@ -9,6 +9,17 @@ import {
   handleTerminalOpen, handleTerminalInput, handleTerminalResize,
   handleTerminalClose, closeAllTerminals,
 } from './handlers/terminal-handler';
+import {
+  handlePyProbe, handlePyPods, handlePyRun, handlePyStop, handlePyEndSession,
+  handlePyDebugStart, handlePyDebugCmd, handlePyDebugConsole, handlePyDebugBreakpoints,
+  handlePyDebugWatches, handlePyDebugStop, handlePyDebugEval, handlePyIntel,
+  handlePyScriptsList, handlePyScriptsSave, handlePyScriptsDelete, disposePython,
+} from './handlers/python-handler';
+import {
+  handlePfList, handlePfPorts, handlePfCheck, handlePfStart, handlePfStop, handlePfStopAll, handlePfForget,
+  disposePortForwards, onForwardsChange, handlePfRestart,
+} from './handlers/port-forward-handler';
+import { handlePfCall, handlePfAttach, handlePfDump, handlePfOpenApi } from './handlers/port-forward-use-handler';
 import * as path from 'path';
 import * as fs from 'fs';
 import { getSqliteStatus, getDbPath, getHistory, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt, getAiPromptTemplates, setAiPromptTemplates, saveAiConversation, loadAiConversation, clearAiConversation, type AiConversationMessage, getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries, insertUiAudit, getUiAuditEntries, clearUiAuditEntries, getDbTables, getDbTableRows, deleteDbRow, onDbReloaded, describeDbReload } from '../../storage/db';
@@ -71,7 +82,7 @@ import { handleMqttConnect, handleMqttDisconnect, handleMqttSubscribe, handleMqt
 import { handleGrpcInvoke, handleGrpcCancel, handleGrpcStreamSend, handleGrpcStreamEnd, handleGrpcReflect, handleGrpcLoadProto, cleanupAllGrpcStreams } from './handlers/grpc-handler';
 import { handleSoapInvoke, handleSoapCancel, handleLoadWsdl, handleLoadWsdlContent, handleGenerateEnvelope, handleExtractFields, handleGenerateSecurity, handleInjectSecurity, handleImportSoapUiProject, handleImportWsdlToCollection } from './handlers/soap-handler';
 import {
-  handleAiSend, handleAiCancel,
+  handleAiSend, handleAiCancel, handleAiKubectlSuggest,
   handleAiSaveConversation, handleAiLoadConversations, handleAiLoadConversation,
   handleAiDeleteConversation, handleAiClearConversations,
   handleAiChat, handleAiStream, handleAiStreamRequest,
@@ -87,6 +98,7 @@ import { handleSaveUiState, handleGetUiState, handleSaveWorkspaceSnapshot, handl
 import {
   handleGitSyncGetSettings, handleGitSyncSaveSettings, handleGitSyncGetStatus,
   handleGitSyncInit, handleGitSyncNow, handleGitSyncExportOnly, handleGitSyncImportOnly, handleGitSyncSetIdentity,
+  handleDk8sTeamPrefs,
 } from './handlers/git-sync-handler';
 import {
   handleVaultGetStatus, handleVaultSetPassphrase, handleVaultUnlock, handleVaultLock, handleVaultClear,
@@ -99,12 +111,17 @@ import { handleDebugMessage } from './handlers/debug-handler';
 import { noteProtocolSend, auditProtocolResponse } from '../../services/protocol-audit';
 import { noteSessionConnect, auditSessionMessage, flushOpenSessions } from '../../services/session-audit';
 import {
+  handleDk8sReadProject, handleDk8sReadPodLoggers, handleDk8sAskLog, handleDk8sExportCatalogue,
+} from './handlers/loggers-handler';
+import {
   handleDk8sProbe, handleDk8sCommands, handleDk8sSetClusterTimeout, handleDk8sUseContext, handleDk8sSetDefaultContext, handleDk8sNamespaces,
   handleDk8sSetNamespace, handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSetLogLineNumbers, handleDk8sSearchLogs, handleDk8sCancelSearch, handleDk8sCancelExport,
   handleDk8sLoadPv, handleDk8sSavePv, handleDk8sOpenLogFile, handleDk8sProbeAccess,
   handleDk8sGetFormats, handleDk8sSaveFormat, handleDk8sDeleteFormat,
   handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat,
   handleDk8sListArtifacts, handleDk8sImportArtifact, handleDk8sDeleteArtifact,
+  handleDk8sScanLoggers,
+  handleDk8sCaptureStart, handleDk8sCaptureRead, handleDk8sCaptureFilter, handleDk8sCaptureLocate, handleDk8sCaptureClose,
   handleDk8sOpenArtifact, handleDk8sSetKubectlPath, handleDk8sSetCache,
   handleDk8sWatchPods, handleDk8sMetricsActive, handleDk8sPodUsageOnce, handleDk8sRefreshPods, handleDk8sStopWatch, disposeDk8s,
   handleDk8sPinNamespace, handleDk8sUnpinNamespace,
@@ -165,7 +182,7 @@ import {
   handleDkghScheduleRan, disposeDkgh, handleDkghFieldMap, handleDkghLabelsFrom,
   handleDkghSearchIssues, handleDkghPlanCreate, handleDkghApplyCreate,
 } from './handlers/dkgh-handler';
-import { scheduleAutoExport, COLLECTION_MUTATION_TYPES, startAutoSyncTimer, stopAutoSyncTimer } from '../../services/git-sync';
+import { scheduleAutoExport, COLLECTION_MUTATION_TYPES, SCRIPT_MUTATION_TYPES, startAutoSyncTimer, stopAutoSyncTimer } from '../../services/git-sync';
 import {
   initSmWorkflowStorage,
   handleSmWorkflowGetAll,
@@ -239,6 +256,21 @@ export class MainPanel {
 
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
 
+    /* Forwards up, in the status bar — a tunnel into a cluster should never be
+       something you forgot was open. Hidden when there are none. */
+    const pfBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 40);
+    pfBar.command = 'daakia.openPanel';
+    const offPf = onForwardsChange(forwards => {
+      const up = forwards.filter(f => f.state === 'connecting' || f.state === 'forwarding');
+      if (!up.length) { pfBar.hide(); return; }
+      const prod = up.some(f => f.prod);
+      pfBar.text = `$(plug) ${up.length} forwarding${prod ? ' · PROD' : ''}`;
+      pfBar.tooltip = up.map(f => `localhost:${f.ports.map(p => p.local).join(', :')} → ${f.pod}${f.prod ? ' (production)' : ''}`).join('\n');
+      pfBar.backgroundColor = prod ? new vscode.ThemeColor('statusBarItem.errorBackground') : undefined;
+      pfBar.show();
+    });
+    this._disposables.push(pfBar, { dispose: offPf });
+
     /* Another Daakia (the browser build, or a second VS Code window) rewrote
        the database file and it was reloaded here: re-send everything, and
        say so when it matters. See storage/db.ts. */
@@ -284,6 +316,10 @@ export class MainPanel {
     // coming, and the long-lived ones are the most worth having recorded.
     flushOpenSessions();
     disposeDk8s();
+    // A script mid-run or a pdb at a breakpoint is a process in someone's pod.
+    disposePython();
+    // A forward is a tunnel into a cluster; none outlives the panel.
+    disposePortForwards();
     disposeDkgh();
     stopAutoSyncTimer();
     disposeMonitors();
@@ -340,6 +376,8 @@ export class MainPanel {
     handleGetThemes(this._post);
     /* Teammates' shared workspaces arrive, change and leave with a sync. */
     handleGetWorkspaces(this._post);
+    /* And the dk8s questions that travel with them. */
+    handleDk8sTeamPrefs(this._post);
   }
 
   // ────────────────── Message Router ──────────────────
@@ -357,7 +395,7 @@ export class MainPanel {
     }
 
     // ── Git-native sync: write collections through to workspace files (debounced) ──
-    if (COLLECTION_MUTATION_TYPES.has(msg.type)) {
+    if (COLLECTION_MUTATION_TYPES.has(msg.type) || SCRIPT_MUTATION_TYPES.has(msg.type)) {
       queueMicrotask(() => scheduleAutoExport());
     }
 
@@ -657,6 +695,38 @@ export class MainPanel {
       case 'dk8s:importArtifact':
         handleDk8sImportArtifact(this._post);
         break;
+      case 'dk8s:scanLoggers':
+        void handleDk8sScanLoggers(msg, this._post);
+        break;
+      // The Loggers tab: Add loggers' project and pod sources, Ask the log,
+      // and Export catalogue. See loggers-handler.ts.
+      case 'dk8s:readProject':
+        void handleDk8sReadProject(msg, this._post);
+        break;
+      case 'dk8s:readPodLoggers':
+        void handleDk8sReadPodLoggers(msg, this._post);
+        break;
+      case 'dk8s:askLog':
+        void handleDk8sAskLog(msg, this._post);
+        break;
+      case 'dk8s:exportCatalogue':
+        void handleDk8sExportCatalogue(msg, this._post);
+        break;
+      case 'dk8s:captureStart':
+        void handleDk8sCaptureStart(msg, this._post);
+        break;
+      case 'dk8s:captureRead':
+        handleDk8sCaptureRead(msg, this._post);
+        break;
+      case 'dk8s:captureFilter':
+        void handleDk8sCaptureFilter(msg, this._post);
+        break;
+      case 'dk8s:captureLocate':
+        handleDk8sCaptureLocate(msg, this._post);
+        break;
+      case 'dk8s:captureClose':
+        handleDk8sCaptureClose(msg);
+        break;
       case 'dk8s:deleteArtifact':
         handleDk8sDeleteArtifact(msg, this._post);
         break;
@@ -704,7 +774,7 @@ export class MainPanel {
         handleDk8sCancelExport(this._post);
         break;
       case 'dk8s:cancelSearch':
-        handleDk8sCancelSearch(this._post);
+        handleDk8sCancelSearch(this._post, msg);
         break;
       case 'dk8s:setKubectlPath':
         handleDk8sSetKubectlPath(msg, this._post);
@@ -765,6 +835,92 @@ export class MainPanel {
         break;
       case 'term:close':
         handleTerminalClose(msg);
+        break;
+      // ── Port forwarding: the Ports tab and the Forwards panel ──
+      case 'dk8s:pf:list':
+        handlePfList(msg, this._post);
+        break;
+      case 'dk8s:pf:ports':
+        void handlePfPorts(msg, this._post);
+        break;
+      case 'dk8s:pf:check':
+        void handlePfCheck(msg, this._post);
+        break;
+      case 'dk8s:pf:start':
+        void handlePfStart(msg, this._post);
+        break;
+      case 'dk8s:pf:stop':
+        handlePfStop(msg, this._post);
+        break;
+      case 'dk8s:pf:stopAll':
+        handlePfStopAll(msg, this._post);
+        break;
+      case 'dk8s:pf:forget':
+        handlePfForget(msg, this._post);
+        break;
+      case 'dk8s:pf:call':
+        void handlePfCall(msg, this._post);
+        break;
+      case 'dk8s:pf:attach':
+        void handlePfAttach(msg, this._post);
+        break;
+      case 'dk8s:pf:dump':
+        void handlePfDump(msg, this._post, this._extensionUri.fsPath);
+        break;
+      case 'dk8s:pf:openapi':
+        void handlePfOpenApi(msg, this._post);
+        break;
+      case 'dk8s:pf:restart':
+        handlePfRestart(msg, this._post);
+        break;
+      // ── Python in a pod: the pod tab and the Scripts screen ──
+      case 'py:probe':
+        void handlePyProbe(msg, this._post);
+        break;
+      case 'py:pods':
+        void handlePyPods(msg, this._post);
+        break;
+      case 'py:run':
+        void handlePyRun(msg, this._post);
+        break;
+      case 'py:stop':
+        handlePyStop(msg);
+        break;
+      case 'py:endSession':
+        void handlePyEndSession(msg, this._post);
+        break;
+      case 'py:debug:start':
+        void handlePyDebugStart(msg, this._post);
+        break;
+      case 'py:debug:cmd':
+        handlePyDebugCmd(msg);
+        break;
+      case 'py:debug:console':
+        handlePyDebugConsole(msg);
+        break;
+      case 'py:debug:breakpoints':
+        handlePyDebugBreakpoints(msg);
+        break;
+      case 'py:debug:watches':
+        handlePyDebugWatches(msg);
+        break;
+      case 'py:debug:eval':
+        handlePyDebugEval(msg, this._post);
+        break;
+      case 'py:intel':
+        void handlePyIntel(msg, this._post);
+        break;
+      case 'py:debug:stop':
+        handlePyDebugStop(msg, this._post);
+        break;
+      case 'py:scripts:list':
+        handlePyScriptsList(msg, this._post);
+        break;
+      case 'py:scripts:save':
+        handlePyScriptsSave(msg, this._post);
+        break;
+      case 'py:scripts:delete':
+        handlePyScriptsDelete(msg, this._post);
         break;
       case 'dk8s:shell':
         void handleDk8sShell(msg, this._post);
@@ -878,6 +1034,9 @@ export class MainPanel {
         break;
       case 'ai:cancel':
         handleAiCancel(msg, this._post);
+        break;
+      case 'ai:kubectlSuggest':
+        void handleAiKubectlSuggest(msg, this._post);
         break;
       case 'ai:saveConversation':
         handleAiSaveConversation(msg, this._post);
@@ -1707,6 +1866,9 @@ export class MainPanel {
         break;
       case 'gitSync:setIdentity':
         handleGitSyncSetIdentity(msg as { id?: string }, this._post);
+        break;
+      case 'gitSync:dk8sTeamPrefs':
+        handleDk8sTeamPrefs(this._post);
         break;
 
       // ── Vault (Environments secret encryption) ──

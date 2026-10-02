@@ -13,6 +13,7 @@ import { useUiStateStore } from './ui-state-store';
 import type { MarkTarget } from '../components/k8s/mark-runtime';
 import { NO_POD_FILTER, type PodFilter } from '../components/k8s/pod-filter';
 import { findLinkedLine, type LogTarget } from '../components/k8s/pod-link';
+import { logLineSettings } from '../components/k8s/log-settings';
 
 /** What somebody said a pod's runtime is. Mirrors services/k8s/runtime-marks. */
 export interface RuntimeMark {
@@ -103,6 +104,41 @@ export const ALL_ACCESS: Access = {
  * decision that has to be finished, and choosing where to look is the rest of
  * it.
  */
+/**
+ * Is this message about what the reader is looking at NOW?
+ *
+ * Switching context or namespace does not un-send what is already in flight.
+ * A `kubectl get pods` against the old namespace was started before the click
+ * and lands after it, and the handlers below were happy to take it: the grid
+ * cleared, then refilled with the pods of the namespace somebody had just
+ * left, under a breadcrumb naming the new one. The same race put an old
+ * cluster's watch status and usage on a new cluster's screen.
+ *
+ * The host does stop the old watches — but it stops them when it hears about
+ * the new selection, which is necessarily after the answers already on their
+ * way. So the last word has to be here: anything naming a target that is not
+ * currently selected is thrown away, whatever asked for it and whenever it
+ * arrives.
+ *
+ * A message that names no target at all is not about one selection, and is
+ * kept.
+ */
+export function isCurrentTarget(
+  s: { targets: WatchTarget[]; context?: string; namespace?: string },
+  context?: string,
+  namespace?: string,
+): boolean {
+  if (!context && !namespace) return true;
+  if (s.targets.length) {
+    return s.targets.some(t =>
+      (!context || t.context === context) && (!namespace || t.namespace === namespace));
+  }
+  if (context && s.context && context !== s.context) return false;
+  if (namespace && s.namespace && namespace !== s.namespace) return false;
+  /* Nothing selected yet — the first answer after a fresh start is wanted. */
+  return true;
+}
+
 function leavingCluster() {
   /*
     Tell the host to let go of the old cluster.
@@ -210,6 +246,24 @@ export interface ContainerSummary {
   reason?: string;
   lastReason?: string;
 }
+
+/** The same pod — by name, namespace and cluster, never by uid, which a restart keeps but a rename does not. */
+function samePod(a: { name: string; namespace: string; context?: string }, b: { name: string; namespace: string; context?: string }): boolean {
+  return a.name === b.name && a.namespace === b.namespace && (a.context ?? '') === (b.context ?? '');
+}
+
+/**
+ * A place Back can return to.
+ *
+ * `pod` — a pod, on one of its tabs; `pods` — the grid; `search` — the log
+ * search results the pod was opened from; `app` — another Daakia tab (Daakia
+ * AI's "Open in dk8s") that sent the reader here.
+ */
+export type NavEntry =
+  | { kind: 'pod'; pod: PodSummary; tab: DetailTab }
+  | { kind: 'pods' }
+  | { kind: 'search' }
+  | { kind: 'app'; tabId: string };
 
 export interface PodSummary {
   name: string;
@@ -327,6 +381,12 @@ export interface PodCapabilities {
   jmap: boolean;
   jfr: boolean;
   targetPid?: string;
+  /** `Python 3.11.6` — what the header's runtime badge is built from. */
+  python3Version?: string;
+  /** A bare `python`'s version; on the images that have one, usually 2.7. */
+  pythonVersion?: string;
+  /** Where a script could be copied — see pod-classify on the host. */
+  writableDirs?: string[];
   unreachable?: string;
 }
 
@@ -339,7 +399,7 @@ export interface PodAction {
   mutatesPod?: boolean;
 }
 
-export type DetailTab = 'overview' | 'logs' | 'terminal' | 'doctor' | 'explorer' | 'yaml' | 'describe' | 'access';
+export type DetailTab = 'overview' | 'logs' | 'loggers' | 'ask' | 'terminal' | 'doctor' | 'python' | 'explorer' | 'ports' | 'yaml' | 'describe' | 'access';
 
 export interface MemoryProfile {
   limitBytes?: number;
@@ -467,7 +527,22 @@ export type Dk8sStage =
  * switch to `analyze`, and that happens from the artifact store — a collected
  * dump should land on its analyzer without you navigating there yourself.
  */
-export type Dk8sView = 'pods' | 'artifacts';
+/* `scripts` is the standalone Python screen: one script, several pods. */
+export type Dk8sView = 'pods' | 'artifacts' | 'scripts';
+
+/** A `datetime-local` reading of an instant, in this machine's zone — what the window pickers hold. */
+export function localTime(ms: number): string {
+  const d = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+    + `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+/** A tail the Lines picker offers — the one asked for if it does, else the default from Settings. */
+function tailFor(tail: number): number {
+  const { tailLadder, tailDefault } = logLineSettings(useUiStateStore.getState().prefs);
+  return tailLadder.includes(tail) ? tail : tailDefault;
+}
 
 interface K8sState {
   stage: Dk8sStage;
@@ -631,6 +706,19 @@ interface K8sState {
   detail?: PodSummary;
   detailTab: DetailTab;
   /**
+   * Where Back goes, newest last: every move records the place it left — a
+   * pod's tab, another pod, the grid, the search results, another Daakia tab
+   * — so Back walks the way the reader came, not straight to the pod grid.
+   */
+  navBack: NavEntry[];
+  pushNav: (entry: NavEntry) => void;
+  /**
+   * Take the newest place off the history and go there. A pod or the grid is
+   * opened here; `search` and `app` are returned for the caller to open, since
+   * they live in other stores.
+   */
+  popNav: () => NavEntry | undefined;
+  /**
    * Where the Explorer should open, when something already knows.
    *
    * A file search hit is a place, not just a pod — landing on the default
@@ -662,6 +750,18 @@ interface K8sState {
   logDetail?: string;
   /** Lines discarded because the pod outran the reader. */
   logDropped: number;
+  /**
+   * Lines a snapshot read has brought in so far, held back until it ends.
+   * Drawn all at once: a read of twenty thousand lines arriving in sixty-ms
+   * batches redrew the whole view every batch, and the page flickered and
+   * froze for seconds. The skeleton says how far it has got instead.
+   */
+  logReceived: number;
+  /**
+   * Following, but held still to read. The stream keeps running and what it
+   * brings is held (counted in `logReceived`) until Resume adds it.
+   */
+  logPaused: boolean;
   logFilter: string;
   logLevels: LogLevel[];
   /**
@@ -686,7 +786,7 @@ interface K8sState {
   /** Which end of the log — the tail, or what the pod said on startup. */
   logDirection: 'last' | 'first' | 'between';
   /** Range pushed down to kubectl. */
-  logSince: 'all' | 'restart' | '15m' | '1h' | '6h';
+  logSince: 'all' | 'restart' | '15m' | '1h' | '2h' | '6h';
   /**
    * The two ends of a `between` window, as the reader's own clock reads them.
    *
@@ -696,6 +796,8 @@ interface K8sState {
    */
   logFrom: string;
   logTo: string;
+  /** This read asked the host for error events only — the Errors window. */
+  logOnlyErrors: boolean;
   setLogWindow: (from: string, to: string) => void;
   /** Per-pod Download, using the same options as the grid's bulk export. */
   logExportOpen: boolean;
@@ -788,7 +890,22 @@ interface K8sState {
   setFilter: (v: string) => void;
   setView: (v: 'cards' | 'table') => void;
   selectPod: (name?: string) => void;
-  openDetail: (pod: PodSummary) => void;
+  /**
+   * Open a pod. The place being left goes on the Back history — or `from`,
+   * when the caller knows better (a search result, another Daakia tab);
+   * `noHistory` for Back itself.
+   */
+  openDetail: (pod: PodSummary, opts?: {
+    from?: NavEntry; noHistory?: boolean;
+    /**
+     * The log as another view already has it — the last split pane handing its
+     * pod over. Laid over the reset, and no new read is started: the pane's
+     * lines, filters and stream carry on rather than the view reloading.
+     */
+    carry?: Partial<Pick<K8sState, 'logs' | 'logStatus' | 'logDetail' | 'logDropped' | 'logRequestedAt'
+      | 'logFilter' | 'logLevels' | 'logFieldFilters' | 'logFollow' | 'logLive' | 'logTail' | 'logDirection'
+      | 'logPrevious' | 'logWrap' | 'logFrom' | 'logTo' | 'logOnlyErrors' | 'detailTab'>>;
+  }) => void;
   /**
    * Open a pod somebody sent you a link to, and find the line they meant.
    *
@@ -797,14 +914,21 @@ interface K8sState {
    * here but the line has rotated out of the window; the pod is not here at
    * all. Silently opening the nearest thing would be the worst of them.
    */
-  openPodLink: (t: LogTarget) => 'opened' | 'no-line' | 'no-pod';
+  openPodLink: (t: LogTarget, opts?: { from?: NavEntry }) => 'opened' | 'no-line' | 'no-pod';
+  /**
+   * A pod's errors over a window — its own Logs tab, read for that window and
+   * narrowed to ERROR. Stack traces stay: the stream gives a continuation its
+   * event's level, so the level filter keeps a trace under its error.
+   */
+  openErrors: (pod: PodSummary, range: { fromMs: number; toMs: number }) => void;
   /** The line a link asked for, once it has been found in the log. */
   linkedLine?: { seq: number; text: string };
   /** What a link is still waiting to find, once its log arrives. */
   pendingLink?: LogTarget;
   clearLinkedLine: () => void;
   closeDetail: () => void;
-  setDetailTab: (tab: DetailTab) => void;
+  /** Switch the pod's tab; the tab left goes on the Back history unless `noHistory`. */
+  setDetailTab: (tab: DetailTab, opts?: { noHistory?: boolean }) => void;
   setExplorerPath: (path?: string) => void;
   openExplorerAt: (a: { path?: string; highlight?: string; fromSearch?: boolean }) => void;
   clearExplorerHighlight: () => void;
@@ -816,16 +940,25 @@ interface K8sState {
   toggleLogLevel: (level: LogLevel) => void;
   setLogFollow: (v: boolean) => void;
   setLogLive: (v: boolean) => void;
+  /** Empty the screen without stopping the read — Following's Clear. */
+  clearLogs: () => void;
+  /** Hold the screen still while following, or let what arrived meanwhile in. */
+  setLogPaused: (paused: boolean) => void;
   setLogTail: (n: number) => void;
   setLogDirection: (d: 'last' | 'first' | 'between') => void;
-  setLogSince: (v: 'all' | 'restart' | '15m' | '1h' | '6h') => void;
+  setLogSince: (v: 'all' | 'restart' | '15m' | '1h' | '2h' | '6h') => void;
   fetchLogs: () => void;
   openLogExport: () => void;
   closeLogExport: () => void;
   setLogWrap: (v: boolean) => void;
   setLogPrevious: (v: boolean) => void;
   setLogContainer: (c?: string) => void;
-  reloadLogs: () => void;
+  /**
+   * Read again with the current settings. `keepScreen` leaves what is shown
+   * in place until the new read lands, then swaps it whole — no skeleton in
+   * between, for a read the reader did not ask to start from blank.
+   */
+  reloadLogs: (opts?: { keepScreen?: boolean }) => void;
   setLogSelection: (sel?: LogSelection) => void;
   openShell: () => void;
   openVsCodeShell: () => void;
@@ -876,6 +1009,21 @@ interface K8sState {
 */
 let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 
+/** A snapshot's lines while it is still arriving — see `logReceived`. */
+let held: LogLine[] = [];
+/** The read in flight replaces the screen when it lands, rather than adding to it. */
+let replaceOnLand = false;
+
+/**
+ * From a read this view has moved past. Every read is asked with its
+ * `logRequestedAt` as `readId` and the host echoes it; a stopped stream's
+ * last lines, already in flight, carry the old one. No id — an older host —
+ * is taken as current.
+ */
+function staleRead(msg: Record<string, unknown>): boolean {
+  return msg.readId !== undefined && msg.readId !== useK8sStore.getState().logRequestedAt;
+}
+
 export const useK8sStore = create<K8sState>((set, get) => ({
   stage: 'probing',
   // Not persisted: you come back to dk8s to look at pods, so that is where it
@@ -917,6 +1065,8 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   logStatus: 'idle',
   logRequestedAt: 0,
   logDropped: 0,
+  logReceived: 0,
+  logPaused: false,
   logFilter: '',
   logLevels: [],
   logFieldFilters: [],
@@ -927,6 +1077,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   logSince: 'all',
   logFrom: '',
   logTo: '',
+  logOnlyErrors: false,
   logExportOpen: false,
   // Wrap on by default. A stack frame or a JSON payload running off the right
   // edge is the common case in a pod log, and horizontal scrolling to read it
@@ -979,7 +1130,20 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     logUiEvent('dk8s.namespace_switch', {
       namespace: ns, pinned: !!pin, context: get().context, from: get().namespace,
     });
-    set({ namespace: ns, stage: 'ready', pods: [], usage: {}, usageHistory: {}, watchStatus: 'idle' });
+    /*
+      `targets` comes with it, because the host is about to watch exactly one.
+
+      Left as it was, a multi-namespace selection made earlier stayed in the
+      store while the host watched one namespace — and the guard that throws
+      away answers about namespaces nobody is looking at would have gone on
+      accepting all of them.
+    */
+    const ctx = get().context;
+    set({
+      namespace: ns, stage: 'ready', pods: [], usage: {}, usageHistory: {},
+      watchStatus: 'idle',
+      targets: ctx ? [{ context: ctx, namespace: ns }] : [],
+    });
     postMsg({ type: 'dk8s:setNamespace', namespace: ns, pin: !!pin });
   },
 
@@ -1063,7 +1227,32 @@ export const useK8sStore = create<K8sState>((set, get) => ({
 
   clearExplorerHighlight: () => set({ explorerHighlight: undefined }),
 
-  openDetail: (pod) => {
+  navBack: [],
+  pushNav: (entry) => set(s => ({ navBack: [...s.navBack, entry].slice(-40) })),
+  popNav: () => {
+    const list = get().navBack;
+    const top = list[list.length - 1];
+    if (!top) return undefined;
+    set({ navBack: list.slice(0, -1) });
+    if (top.kind === 'pod') {
+      const cur = get().detail;
+      if (!cur || !samePod(cur, top.pod)) get().openDetail(top.pod, { noHistory: true });
+      get().setDetailTab(top.tab, { noHistory: true });
+    } else if (top.kind === 'pods') {
+      get().closeDetail();
+    }
+    return top;
+  },
+
+  openDetail: (pod, opts) => {
+    if (!opts?.noHistory) {
+      const cur = get().detail;
+      if (opts?.from) get().pushNav(opts.from);
+      else if (!cur || !samePod(cur, pod)) {
+        get().pushNav(cur ? { kind: 'pod', pod: cur, tab: get().detailTab } : { kind: 'pods' });
+      }
+    }
+    held = [];
     // Reset every per-pod field. Carrying the last pod's logs into this one's
     // panel for the moment before the first frame arrives is the kind of bug
     // that gets someone reading the wrong pod's stack trace.
@@ -1079,9 +1268,17 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       // for a pod is still readable by eye in the database.
       detailTab: (useUiStateStore.getState()
         .prefs[`${DETAIL_TAB_PREF}${pod.namespace}/${pod.name}`] as DetailTab | undefined) ?? 'logs',
-      logs: [], logStatus: 'loading', logDetail: undefined, logDropped: 0,
+      logs: [], logStatus: 'loading', logDetail: undefined, logDropped: 0, logReceived: 0, logPaused: false,
       logRequestedAt: Date.now(),
-      logFilter: '', logLevels: [], logFieldFilters: [], logFollow: true, logLive: false,
+      logFilter: '', logLevels: [], logFieldFilters: [], logFollow: true, logLive: false, logOnlyErrors: false,
+      /*
+        The tail carries from pod to pod — somebody reading 1000 lines wants the
+        next pod at 1000 too — but only a tail the Lines picker offers. A number
+        it does not (an errors window's, a link's) left every later pod reading
+        twenty thousand lines behind a picker that said 200: a few seconds of
+        the view redrawing batch after batch on every open.
+      */
+      logTail: tailFor(get().logTail),
       logDirection: 'last', logSince: 'all', logExportOpen: false,
       logPrevious: false, logContainer: undefined, logSelection: undefined,
       /* A mark belongs to the pod it was found in. */
@@ -1092,11 +1289,16 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       shellNotice: undefined,
     });
     const base = { context: pod.context, namespace: pod.namespace, pod: pod.name };
-    // Snapshot, not a stream. See logLive.
-    postMsg({
-      type: 'dk8s:openLogs', ...base,
-      follow: false, direction: 'last', tailLines: get().logTail,
-    });
+    if (opts?.carry) {
+      /* Its stream, if it had one, is still open and addressed to this pod — its lines keep arriving here. */
+      set(opts.carry);
+    } else {
+      // Snapshot, not a stream. See logLive.
+      postMsg({
+        type: 'dk8s:openLogs', ...base,
+        follow: false, direction: 'last', tailLines: get().logTail, readId: get().logRequestedAt,
+      });
+    }
     postMsg({ type: 'dk8s:describe', ...base });
     /*
       One event for opening a pod, carrying what makes it worth opening.
@@ -1123,8 +1325,10 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     set({ detail: undefined, logs: [], logStatus: 'idle', logSelection: undefined });
   },
 
-  setDetailTab: (detailTab) => {
+  setDetailTab: (detailTab, opts) => {
     const pod = get().detail;
+    const left = get().detailTab;
+    if (pod && !opts?.noHistory && left !== detailTab) get().pushNav({ kind: 'pod', pod, tab: left });
     if (pod) {
       useUiStateStore.getState()
         .setScopedPref(DETAIL_TAB_PREF, `${pod.namespace}/${pod.name}`, detailTab);
@@ -1144,7 +1348,8 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       it for as long as it stays true, so a second visit costs nothing, and
       the answer genuinely can change when a pod restarts into a new image.
     */
-    if (pod && (detailTab === 'doctor' || detailTab === 'terminal' || detailTab === 'explorer')) {
+    if (pod && (detailTab === 'doctor' || detailTab === 'terminal' || detailTab === 'explorer'
+      || detailTab === 'python')) {
       set({ probeBusy: true });
       postMsg({
         type: 'dk8s:probePod',
@@ -1179,20 +1384,49 @@ export const useK8sStore = create<K8sState>((set, get) => ({
 
   clearFieldFilters: () => set({ logFieldFilters: [] }),
 
-  toggleLogLevel: (level) => set(s => ({
-    logLevels: s.logLevels.includes(level)
-      ? s.logLevels.filter(l => l !== level)
-      : [...s.logLevels, level],
-  })),
+  toggleLogLevel: (level) => {
+    set(s => ({
+      logLevels: s.logLevels.includes(level)
+        ? s.logLevels.filter(l => l !== level)
+        : [...s.logLevels, level],
+    }));
+    /* An errors read holds nothing else: letting go of ERROR reads the window again, whole. */
+    if (get().logOnlyErrors && !get().logLevels.includes('error')) {
+      set({ logOnlyErrors: false });
+      get().reloadLogs();
+    }
+  },
 
   setLogFollow: (logFollow) => set({ logFollow }),
 
+  clearLogs: () => { held = []; replaceOnLand = false; set({ logs: [], logDropped: 0, logReceived: 0, logSelection: undefined }); },
+
+  setLogPaused: (paused) => {
+    if (paused) { set({ logPaused: true, logFollow: false }); return; }
+    const all = get().logs.concat(held);
+    held = [];
+    const overflow = all.length - LOG_BUFFER_MAX;
+    set(s => ({
+      logPaused: false, logFollow: true, logReceived: 0,
+      ...(overflow > 0 ? { logs: all.slice(overflow), logDropped: s.logDropped + overflow } : { logs: all }),
+    }));
+  },
+
   setLogLive: (logLive) => {
-    set({ logLive });
-    // Going live re-opens the stream with --follow; leaving live stops the
-    // process outright rather than letting it run unread in the background.
-    if (logLive) get().reloadLogs();
-    else postMsg({ type: 'dk8s:closeLogs' });
+    /* Following starts at the newest line, wherever the reader had scrolled to. */
+    if (logLive) {
+      set({ logLive, logFollow: true, logPaused: false });
+      get().reloadLogs();
+      return;
+    }
+    /*
+      Leaving live is back to reading the pod the ordinary way — the last 200
+      lines, or whatever the read controls say. The new read replaces the
+      stream (the host stops it before opening another), and what Following
+      showed stays on screen until that read lands, so there is no blank.
+    */
+    set({ logLive, logPaused: false });
+    get().reloadLogs({ keepScreen: true });
   },
 
   // These only change what the NEXT fetch will ask for. Nothing reloads until
@@ -1253,14 +1487,17 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   setLogPrevious: (logPrevious) => { set({ logPrevious }); get().reloadLogs(); },
   setLogContainer: (logContainer) => { set({ logContainer }); get().reloadLogs(); },
 
-  reloadLogs: () => {
+  reloadLogs: (opts) => {
     const {
       detail, logPrevious, logContainer, logLive, logTail, logDirection, logSince,
-      logFrom, logTo,
+      logFrom, logTo, logOnlyErrors,
     } = get();
     if (!detail) return;
+    held = [];
+    replaceOnLand = !!opts?.keepScreen;
     set({
-      logs: [], logDropped: 0, logStatus: 'loading',
+      ...(replaceOnLand ? {} : { logs: [], logDropped: 0 }),
+      logStatus: 'loading', logReceived: 0, logPaused: false,
       logDetail: undefined, logSelection: undefined, logRequestedAt: Date.now(),
     });
 
@@ -1277,7 +1514,9 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     };
 
     const SINCE: Record<string, number | undefined> = {
-      all: undefined, '15m': 900, '1h': 3600, '6h': 21600,
+      /* Two hours is the Loggers tab's window — "EVENTS 2H" — and its Read
+         button asks for exactly that. */
+      all: undefined, '15m': 900, '1h': 3600, '2h': 7200, '6h': 21600,
       // "Since the last restart" is the most useful of these and the only one
       // that needs the pod's own history rather than a fixed window.
       restart: detail.lastRestartAt
@@ -1289,6 +1528,8 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       type: 'dk8s:openLogs',
       context: detail.context, namespace: detail.namespace, pod: detail.name,
       previous: logPrevious, container: logContainer,
+      /* Lines from the read this one replaced are dropped by it — see `staleRead`. */
+      readId: get().logRequestedAt,
       // Following always tails: a head slice cannot grow.
       follow: logLive,
       /*
@@ -1298,10 +1539,19 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         a tail from the end of that window.
       */
       direction: logLive || logDirection === 'between' ? 'last' : logDirection,
-      tailLines: logTail,
-      ...(logDirection === 'between' && !logLive
-        ? { fromIso: isoOf(logFrom), toMs: msOf(logTo) }
-        : { sinceSeconds: SINCE[logSince] }),
+      /*
+        Following starts from an empty window: the lines that arrive from now
+        on, and nothing read before. It used to refill with the last N lines
+        first, so pressing it looked like nothing had happened — the same
+        screen, with new lines eventually under it.
+      */
+      tailLines: logLive ? 0 : logTail,
+      /* Errors only, read that way at the source — see `openErrors`. */
+      ...(logOnlyErrors ? { levels: ['error'] } : {}),
+      ...(logLive ? {}
+        : logDirection === 'between'
+          ? { fromIso: isoOf(logFrom), toMs: msOf(logTo) }
+          : { sinceSeconds: SINCE[logSince] }),
     });
   },
 
@@ -1439,7 +1689,18 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     tab is set after it rather than before — the same ordering the context
     menu's other destinations use.
   */
-  openPodLink: (t) => {
+  openErrors: (pod, range) => {
+    /* `carry` skips openDetail's own read of the newest lines — the window read below replaces it. */
+    get().openDetail(pod, { carry: { detailTab: 'logs' } });
+    set({
+      logDirection: 'between', logLive: false,
+      logFrom: localTime(range.fromMs), logTo: localTime(range.toMs),
+      logLevels: ['error'], logOnlyErrors: true,
+    });
+    get().reloadLogs();
+  },
+
+  openPodLink: (t, opts) => {
     const pod = get().pods.find(
       p => p.name === t.pod && p.namespace === t.namespace
         && (!t.context || (p.context ?? '') === t.context),
@@ -1451,12 +1712,39 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     */
     if (!pod) return 'no-pod';
 
-    get().openDetail(pod);
+    get().openDetail(pod, { from: opts?.from });
     set({ detailTab: 'logs', linkedLine: undefined, pendingLink: undefined });
     if (t.ts === undefined && !t.text) return 'opened';
 
     /* The log is being fetched. `apply` looks for the line when it lands. */
     set({ pendingLink: t });
+
+    /*
+      A link with a time asks for the log AROUND that time, not the newest N
+      lines. On a busy pod the last 200 lines are a few seconds old, so a line
+      from Daakia AI's answer five minutes ago was never in the buffer and the
+      link opened on the right pod with nothing highlighted. A window around it,
+      read forward from its start, holds the line and its
+      neighbours; the window is shown in the Fetch bar, so it can be widened.
+      Twenty seconds each side: a pod writing forty lines a second fills the
+      view's buffer in about a minute, and a wider window pushes the very
+      line it was opened for out of the front of it.
+    */
+    if (t.ts !== undefined) {
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const local = (ms: number) => {
+        const d = new Date(ms);
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+          + `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      };
+      set(s => ({
+        logDirection: 'between', logLive: false,
+        logFrom: local(t.ts! - 20_000), logTo: local(t.ts! + 20_000),
+        logTail: Math.max(s.logTail, 5000),
+        pendingLink: t,
+      }));
+      get().reloadLogs();
+    }
     return 'opened';
   },
 
@@ -1535,7 +1823,15 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     });
   },
 
-  openContextPicker: () => set({ stage: 'pick-context' }),
+  /*
+    With no clusters in hand — the list was lost when the host restarted, say —
+    an empty picker stuck on "Connecting…" is a dead end. Start the wizard
+    again instead: the probe lists the kubeconfig's contexts afresh.
+  */
+  openContextPicker: () => {
+    if (!get().contexts.length) { set({ stage: 'probing' }); get().probe(); return; }
+    set({ stage: 'pick-context', busy: false });
+  },
   openNamespacePicker: () => {
     const { selectedContexts, context, targets } = get();
     const ctxs = selectedContexts.length ? selectedContexts : (context ? [context] : []);
@@ -1652,6 +1948,8 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         // the others as they arrive.
         const ctx = msg.context as string;
         const ns = msg.namespace as string;
+        /* A list that was already running when the selection changed. */
+        if (!isCurrentTarget(get(), ctx, ns)) break;
         const incoming = ((msg.pods as PodSummary[]) ?? []).map(p => ({ ...p, context: ctx }));
         set(s => ({
           pods: [...s.pods.filter(p => !(p.context === ctx && p.namespace === ns)), ...incoming],
@@ -1667,6 +1965,9 @@ export const useK8sStore = create<K8sState>((set, get) => ({
 
       case 'dk8s:podEvent': {
         const pod = { ...(msg.pod as PodSummary), context: msg.context as string };
+        /* An event from a watch that is being torn down. The pod is real and
+           belongs to a namespace nobody is looking at any more. */
+        if (!isCurrentTarget(get(), pod.context, pod.namespace)) break;
         const kind = msg.eventType as string;
         const at = Date.now();
         set(s => {
@@ -1685,6 +1986,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       case 'dk8s:watchStatus':
         // With several watches, the header shows the WORST state — one
         // reconnecting namespace matters more than three healthy ones.
+        if (!isCurrentTarget(get(), msg.context as string, msg.namespace as string)) break;
         set(s => {
           const rank: Record<string, number> = { reconnecting: 0, idle: 1, stopped: 2, connected: 3 };
           const incoming = msg.status as WatchStatus;
@@ -1807,6 +2109,8 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         break;
 
       case 'dk8s:podUsage': {
+        /* `top pods` against the namespace that was open a second ago. */
+        if (!isCurrentTarget(get(), msg.context as string, msg.namespace as string)) break;
         const available = !!msg.available;
         if (!available) { set({ metricsAvailable: false }); break; }
         const rows = (msg.usage as { name: string; cpuMilli: number; memBytes: number }[]) ?? [];
@@ -1827,9 +2131,27 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         // Ignore frames from a pod that is no longer open: closing the panel
         // and opening another races the in-flight batch, and without this the
         // new pod's view briefly shows the old pod's lines.
-        if (msg.pod !== get().detail?.name) break;
+        /*
+          The pod that is open, in the namespace it is open in.
+
+          A name alone is not an address: `api-0` exists in staging and in
+          prod, and switching between two pods of the same name let the first
+          one's lines keep arriving into the second one's view.
+        */
+        const open = get().detail;
+        if (!open || msg.pod !== open.name) break;
+        if (staleRead(msg)) break;
+        if (msg.namespace && open.namespace && msg.namespace !== open.namespace) break;
+        if (msg.context && open.context && msg.context !== open.context) break;
         const incoming = (msg.lines as LogLine[]) ?? [];
         if (!incoming.length) break;
+        /* A snapshot is held until it ends — see `logReceived`. Following draws as it goes. */
+        if ((!get().logLive && get().logStatus !== 'ended') || get().logPaused) {
+          held.push(...incoming);
+          if (held.length > LOG_BUFFER_MAX * 1.2) held.splice(0, held.length - LOG_BUFFER_MAX);
+          set({ logReceived: held.length });
+          break;
+        }
         set(s => {
           const merged = s.logs.concat(incoming);
           const overflow = merged.length - LOG_BUFFER_MAX;
@@ -1847,7 +2169,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         {
           const want = get().pendingLink;
           if (want) {
-            const hit = findLinkedLine(get().logs, want);
+            const hit = findLinkedLine(get().logs, want, { streaming: true });
             if (hit) set({ linkedLine: { seq: hit.seq, text: hit.text }, pendingLink: undefined });
           }
         }
@@ -1856,11 +2178,34 @@ export const useK8sStore = create<K8sState>((set, get) => ({
 
       case 'dk8s:logStatus':
         if (msg.pod !== get().detail?.name) break;
+        if (staleRead(msg)) break;
+        /* The read is over: everything it held lands at once. */
+        if (msg.status === 'ended' || msg.status === 'error' || msg.status === 'idle') {
+          if (replaceOnLand) {
+            replaceOnLand = false;
+            const all = held;
+            held = [];
+            set({ logs: all.slice(-LOG_BUFFER_MAX), logDropped: Math.max(0, all.length - LOG_BUFFER_MAX), logReceived: 0 });
+          } else if (held.length) {
+            const all = get().logs.concat(held);
+            held = [];
+            const overflow = all.length - LOG_BUFFER_MAX;
+            set(s => (overflow > 0
+              ? { logs: all.slice(overflow), logDropped: s.logDropped + overflow, logReceived: 0 }
+              : { logs: all, logReceived: 0 }));
+          }
+        }
         set({ logStatus: msg.status as LogStatus, logDetail: msg.detail as string | undefined });
+        /* The log is all here: a link still waiting takes the nearest line by time. */
+        if (msg.status === 'ended' && get().pendingLink) {
+          const hit = findLinkedLine(get().logs, get().pendingLink!);
+          if (hit) set({ linkedLine: { seq: hit.seq, text: hit.text }, pendingLink: undefined });
+        }
         break;
 
       case 'dk8s:logDropped':
         if (msg.pod !== get().detail?.name) break;
+        if (staleRead(msg)) break;
         set(s => ({ logDropped: s.logDropped + (msg.count as number) }));
         break;
 

@@ -25,10 +25,14 @@ import { useMetricsVisibility } from './useMetricsVisibility';
 import { useTabsStore } from '../../store/tabs-store';
 import { useMetricsAuto } from '../settings/metrics-refresh';
 import { useDk8sAiStore, applyDk8sAiError } from '../../store/dk8s-ai-store';
+import { useDk8sAskLogStore } from '../../store/dk8s-ask-log-store';
 import { useDk8sDoctorStore } from '../../store/dk8s-doctor-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { useDk8sArtifactStore } from '../../store/dk8s-artifact-store';
 import { ArtifactsView } from './ArtifactsView';
+import { ScriptsScreen } from './python/ScriptsScreen';
+import { ErrorsDialog } from './ErrorsDialog';
+import { usePyStore, ensurePyListener } from '../../store/dk8s-python-store';
 import { ArtifactDetail } from './ArtifactDetail';
 import { openArtifactIn, type AnalyzerId } from '../../store/dk8s-analyze-store';
 import { useUiStateStore } from '../../store/ui-state-store';
@@ -99,9 +103,16 @@ function Breadcrumb() {
   const onPods = useK8sStore(st => st.panel) === 'pods';
   const isProd = !!context && sensitivity[context] === 'production';
 
-  const clusterNames = selectedContexts.length ? selectedContexts : (context ? [context] : []);
+  /*
+    Only what is actually in effect. While the clusters are being chosen (or
+    dk8s is still finding them), the last choice is not the one on screen —
+    naming it above a "Which clusters?" picker said you were somewhere you
+    were not. The namespace waits until they are being watched.
+  */
+  const choosingCluster = stage !== 'ready' && stage !== 'pick-namespace';
+  const clusterNames = choosingCluster ? [] : selectedContexts.length ? selectedContexts : (context ? [context] : []);
   // De-duplicated: two namespaces in one cluster should not name it twice.
-  const namespaceNames = [...new Set(targets.map(t => t.namespace))];
+  const namespaceNames = stage === 'ready' ? [...new Set(targets.map(t => t.namespace))] : [];
 
   return (
     <div
@@ -226,9 +237,15 @@ function ViewSwitch({ view, onChange }: {
   // Artifacts carried a count and Pods did not, which read as though only one
   // of them held anything.
   const podCount = useK8sStore(s => s.pods.length);
+  /* The library's size, asked for up front for the same reason as the
+     artifact count above: a badge that fills in only after the click is
+     describing something you have already opened. */
+  const scriptCount = usePyStore(s => s.scripts.length);
+  useEffect(() => { ensurePyListener(); usePyStore.getState().loadScripts(); }, []);
   const TABS = [
     { id: 'pods' as const, label: 'Pods', icon: null, badge: podCount },
     { id: 'artifacts' as const, label: 'Artifacts', icon: null, badge: count },
+    { id: 'scripts' as const, label: 'Scripts', icon: null, badge: scriptCount },
   ];
   return (
     <div className="flex items-center gap-1 px-4 pt-2 shrink-0"
@@ -322,6 +339,13 @@ export function K8sPanel() {
       const type = typeof msg?.type === 'string' ? msg.type : '';
       if (!type) return;
 
+      /* Ask the log streams on its own id, and its store takes only what is
+         on that id — so every `ai:` message is offered to it first and still
+         goes on to the side panel's store below. */
+      if (type.startsWith('ai:') || type.startsWith('dk8s:askLog')) {
+        useDk8sAskLogStore.getState().apply(msg);
+        if (type.startsWith('dk8s:askLog')) return;
+      }
       if (type === 'dk8s:aiError') { applyDk8sAiError(msg); return; }
       // The host's account of what it actually sent to the model.
       if (type === 'dk8s:aiEvidence') { applyAi(msg); return; }
@@ -334,7 +358,8 @@ export function K8sPanel() {
       // Collection messages belong to the doctor store; everything else to the
       // pod store. Both are dk8s:-prefixed, so the split is by name.
       if (/^dk8s:(collect|handoff)/.test(type)) applyDoctor(msg);
-      else if (/^dk8s:search/.test(type)) applySearch(msg);
+      /* A tagged search is a Follow's or a Window's, and has its own store. */
+      else if (/^dk8s:search/.test(type)) { if (!msg.tag) applySearch(msg); }
       else if (/^dk8s:artifact/.test(type)) applyArtifacts(msg);
       else apply(msg);
     };
@@ -398,10 +423,21 @@ export function K8sPanel() {
               Analyze holds a parsed dump and Artifacts holds a filter, and
               both were being thrown away by a trip to the pod list — you came
               back to an empty analyzer and had to re-open the file. */}
+          {/* Kept mounted once opened, like Artifacts: a run on three pods is
+              still streaming when you glance at the pod list, and coming back
+              to an empty output would lose it. */}
+          {seen.has('scripts') && (
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden"
+                 style={{ display: view === 'scripts' ? 'flex' : 'none' }}>
+              <ScriptsScreen />
+            </div>
+          )}
           {seen.has('artifacts') && (
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden"
                  style={{ display: view === 'artifacts' ? 'flex' : 'none' }}>
-              <ArtifactsView />
+              {/* Kept mounted, so it has to be told when it is the one on
+                  screen: that is when it lists the folder again. */}
+              <ArtifactsView active={view === 'artifacts'} />
             </div>
           )}
           {view === 'pods' && (
@@ -421,6 +457,7 @@ export function K8sPanel() {
       {/* Over the panel like the pod detail, and above it in the same sense:
           a split is a place you went, not a layer over the grid. */}
       <SplitLogs />
+      <ErrorsDialog />
 
       {/* Over the panel, like the pod detail: an analysis is one artifact you
           opened, not a place you navigate to. */}

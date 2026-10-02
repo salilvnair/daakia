@@ -98,6 +98,48 @@ export function starredKeyOf(pod: {
   return favoriteChoices(pod).map(c => c.key).find(k => keys.includes(k));
 }
 
+/**
+ * How many favourites are among THESE pods.
+ *
+ * The saved list spans every cluster and namespace, so its length is not a
+ * number about the screen: a namespace holding two of your fourteen stars still
+ * read "★ 14", and one holding none offered a scope that shows nothing.
+ *
+ * Counted over distinct keys, the way starring counts — three replicas of one
+ * starred Deployment are one favourite, not three.
+ */
+export function starredHere(pods: {
+  name: string; namespace: string; context?: string;
+  workload?: { kind: string; name: string };
+}[], keys: string[]): number {
+  const here = new Set<string>();
+  for (const p of pods) {
+    const key = starredKeyOf(p, keys);
+    if (key) here.add(key);
+  }
+  return here.size;
+}
+
+/**
+ * The starred view, one namespace at a time.
+ *
+ * Stars belong to the namespace they were made in. Watching two namespaces at
+ * once, starred-only used to apply across both: two stars in com-zp-xx and the
+ * whole of com-zp-yy vanished, as if its pods were filtered out for not being
+ * starred somewhere else. Now a namespace with stars shows its starred pods,
+ * and a namespace with none shows all of its own — the same fallback a single
+ * namespace with no stars has always had.
+ */
+export function starredView<T extends {
+  name: string; namespace: string; context?: string;
+  workload?: { kind: string; name: string };
+}>(pods: T[], keys: string[]): T[] {
+  if (!keys.length) return pods;
+  const where = (p: T) => `${p.context ?? ''}/${p.namespace}`;
+  const withStars = new Set(pods.filter(p => starredKeyOf(p, keys)).map(where));
+  return pods.filter(p => !withStars.has(where(p)) || !!starredKeyOf(p, keys));
+}
+
 function parse(raw: string | undefined): string[] {
   if (!raw) return [];
   try {

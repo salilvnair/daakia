@@ -1,4 +1,4 @@
-import { EditorView } from '@salilvnair/dui';
+import { EditorView, type EditorOptions, type EditorContextMenuMode } from '@salilvnair/dui';
 import { registerVarCompletions } from '../../../services/template/monaco-var-completions';
 
 export type CodeLanguage = 'javascript' | 'json' | 'xml' | 'python' | 'text' | 'html' | 'typescript' | 'java' | 'graphql' | 'plaintext' | 'yaml';
@@ -27,6 +27,15 @@ interface Props {
   onGlyphContextMenu?: (line: number, pos: { x: number; y: number }) => void;
   /** Optional callback to receive editor + monaco instances after mount (e.g. for AI autocomplete) */
   onEditorMount?: (editor: any, monaco: any) => void;
+  /**
+   * 'none' leaves the right-click to the surface around the editor (a
+   * `data-context-menu` region with a dui menu of its own). dui re-applies
+   * Monaco's `contextmenu` option on every render, so this is the only way
+   * to turn Monaco's menu off that stays off.
+   */
+  contextMenuMode?: EditorContextMenuMode;
+  /** Merged over this wrapper's own options — they, too, are re-applied on every render. */
+  editorOptions?: EditorOptions;
 }
 
 // dui's EditorLanguage doesn't have a 'text' value — it's an alias for 'plaintext' here.
@@ -61,6 +70,8 @@ export function CodeEditor({
   onToggleBreakpoint,
   onGlyphContextMenu,
   onEditorMount,
+  contextMenuMode,
+  editorOptions,
 }: Props) {
   return (
     <EditorView
@@ -81,6 +92,7 @@ export function CodeEditor({
       pausedLine={pausedLine}
       onToggleBreakpoint={onToggleBreakpoint}
       onGlyphContextMenu={onGlyphContextMenu}
+      contextMenuMode={contextMenuMode}
       onEditorMount={(editor, monaco) => {
         /* Every body and script editor in the app comes through here, so
            `{{` completes in all of them without each call site remembering
@@ -94,6 +106,7 @@ export function CodeEditor({
         // dui's defaults are conditional on glyphMargin, so pin them explicitly.
         renderLineHighlight: 'line',
         scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
+        ...editorOptions,
       }}
     />
   );
