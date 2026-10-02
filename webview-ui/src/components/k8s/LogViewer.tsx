@@ -22,7 +22,7 @@ import {
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
   WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon, CloseIcon,
-  ChevronLeftIcon, SidebarLeftIcon, SearchIcon, LinkIcon, ClockIcon, EraserIcon, BracesIcon, PauseIcon, PlayIcon,
+  ChevronLeftIcon, SidebarLeftIcon, SearchIcon, LinkIcon, ClockIcon, EraserIcon, PauseIcon, PlayIcon,
 } from '../../icons';
 import { CopyGlyph, COPY_TICK_MS } from '../shared/CopyTick';
 import { copyText } from '../../utils/clipboard';
@@ -48,7 +48,7 @@ import { useDeterminantsFor } from './use-determinants';
 import { SummaryPanel } from './SummaryPanel';
 import { usePatternsFor, MARK_COLORS, clearMarks } from '../../store/dk8s-logger-store';
 import { scopeOf } from './LoggersTab';
-import { payloadPrefs, openLoggers, setOpenLogger, setPayloadPref, PAYLOAD_MODE_PREF, type PayloadMode } from './log-payload-prefs';
+import { payloadPrefs, openLoggers, setOpenLogger } from './log-payload-prefs';
 import { LogPayloadView } from './LogPayloadView';
 import { FacetRail } from './FacetRail';
 import { podHue, podTail } from './pod-hue';
@@ -823,7 +823,6 @@ const HIT_TONE = 'var(--color-hit, #b8adf6)';
 let activeViewer: { id: symbol; el: HTMLElement } | null = null;
 
 /** The filter's share of a one-row toolbar, and the least it may be. */
-const FILTER_SHARE = 0.4;
 const FILTER_MIN = 180;
 
 export function LogViewer() {
@@ -1391,12 +1390,6 @@ export function LogViewer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [payloads, payloadOpts.shapes, payloadOpts.maxChars]);
 
-  /* Once a read shows payloads the picker stays for it — a filter that hides them should not move the toolbar. */
-  const payloadSeen = useRef(false);
-  const payloadFor = `${detail?.context ?? ''}/${detail?.namespace ?? ''}/${detail?.name ?? ''}`;
-  const payloadRead = useRef(payloadFor);
-  if (payloadRead.current !== payloadFor) { payloadRead.current = payloadFor; payloadSeen.current = false; }
-
   /* Events, not lines: a folded trace or a YAML block is one, and its frames are none. */
   const eventStats = useMemo(() => {
     let events = 0;
@@ -1406,7 +1399,6 @@ export function LogViewer() {
       events++;
       if (row.yaml || payloadOf(row.line)) withPayload++;
     }
-    if (withPayload > 0) payloadSeen.current = true;
     return { events, withPayload };
   }, [rows, payloadOf]);
 
@@ -2115,8 +2107,7 @@ export function LogViewer() {
 
   /*
     One toolbar row or two — see the note on the controls group below. The
-    controls need their own width; the filter takes up to its share beside
-    them. Two rows only when even its minimum will not fit.
+    controls need their own width; the filter takes the rest of the row. Two rows only when even its minimum will not fit.
   */
   const barRef = useRef<HTMLDivElement>(null);
   const filterBoxRef = useRef<HTMLDivElement>(null);
@@ -2134,7 +2125,7 @@ export function LogViewer() {
       const ggap = parseFloat(getComputedStyle(group).columnGap) || 8;
       const parts = [...group.children].filter(c => !c.classList.contains('flex-1'));
       const need = parts.reduce((w, c) => w + c.getBoundingClientRect().width, 0) + ggap * Math.max(0, parts.length - 1);
-      /* Forty per cent is the most the filter takes; it gives way down to its
+      /* The filter takes what the controls leave; it gives way down to its
          minimum before the controls are sent to a row of their own. */
       setStacked(fixed + FILTER_MIN + gap + need > avail);
     };
@@ -2197,7 +2188,7 @@ export function LogViewer() {
         {/* The filter takes the rest of the row, after the switch and the chips
             that shape what it searches. */}
         <div ref={filterBoxRef} className={stacked ? 'flex-1' : undefined}
-             style={stacked ? { minWidth: 220 } : { flex: `0 1 ${FILTER_SHARE * 100}%`, minWidth: FILTER_MIN }}>
+             style={stacked ? { minWidth: 220 } : { flex: '1 1 auto', minWidth: FILTER_MIN }}>
           <FilterInputView
             value={filterDraft}
             onChange={(v: string) => typeFilter(v)}
@@ -2215,7 +2206,20 @@ export function LogViewer() {
               control does, and only present when there is something to clear,
               so it never sits there as decoration.
             */
-            suffix={logFilter ? (
+            /* The match count sits in the box too, so it costs the toolbar no
+               width — held there empty, it was a gap after the context picker. */
+            suffix={logFilter || isHit ? (
+              <span className="flex items-center gap-2">
+              <span
+                className="text-[11px] tabular-nums whitespace-nowrap"
+                style={{ color: hits.length ? ACCENT : 'var(--color-text-muted)' }}
+                title={findContext > 0
+                  ? `${hits.length} matching lines, with ${findContext} either side`
+                  : `${hits.length} matching lines`}
+              >
+                {hits.length.toLocaleString()} {hits.length === 1 ? 'match' : 'matches'}
+              </span>
+              {logFilter && (
               <button
                 type="button"
                 onClick={clearFilterNow}
@@ -2228,6 +2232,8 @@ export function LogViewer() {
                     ways out of a filter look like one idea. */}
                 <FilterClearIcon size={IconSize.item} />
               </button>
+              )}
+              </span>
             ) : undefined}
           />
         </div>
@@ -2269,17 +2275,6 @@ export function LogViewer() {
               size={CTL_SIZE}
               accentColor={ACCENT}
             />
-            <span
-              className="text-[11px] tabular-nums shrink-0"
-              style={{ color: hits.length ? ACCENT : 'var(--color-text-muted)' }}
-              title={findContext > 0
-                ? `${hits.length} matching lines, with ${findContext} either side`
-                : `${hits.length} matching lines`}
-            >
-              <span style={{ visibility: logFilter.trim() || isHit ? 'visible' : 'hidden' }}>
-                {hits.length.toLocaleString()} {hits.length === 1 ? 'match' : 'matches'}
-              </span>
-            </span>
           </div>
         )}
 
@@ -2315,7 +2310,7 @@ export function LogViewer() {
         {/* Tight gaps, and no control squeezed below its own width — so it reads
             as one toolbar, and measures the same in either layout. */}
         <div ref={groupRef} className="flex items-center gap-1.5 [&>*]:shrink-0"
-             style={stacked ? { flexBasis: '100%', flexWrap: 'wrap' } : { flex: '1 0 auto', flexWrap: 'nowrap' }}>
+             style={stacked ? { flexBasis: '100%', flexWrap: 'wrap' } : { flex: '0 0 auto', flexWrap: 'nowrap' }}>
         {/* Modes, not actions, so they are icon toggles rather than labelled
             buttons — and they sit apart from the controls that fetch. */}
         <IconButton on={logWrap} onClick={() => chooseWrap(!logWrap)}
@@ -2324,34 +2319,6 @@ export function LogViewer() {
         <IconButton on={foldTraces} onClick={() => chooseFold(!foldTraces)}
                     title={foldTraces ? 'Stack traces are folded' : 'Stack traces shown in full'}
                     icon={<LayersIcon size={IconSize.item} />} />
-
-        {/*
-          How payloads open, for the whole tab — each line still keeps its own
-          switch. Only when there is a payload to draw: a control for lines that
-          do not exist is noise on a log that is all sentences.
-        */}
-        {payloadOpts.draw && (eventStats.withPayload > 0 || payloadSeen.current) && (
-          <>
-            <Sep />
-            {/* The toolbar's own height and corners, so it sits in the row rather than floating on it. */}
-            <span title={`How payloads open — ${eventStats.withPayload.toLocaleString()} of these events carry one. Each line keeps its own switch.`}
-                  className="dk8s-payload-mode inline-flex">
-            {/* A picker rather than three buttons: set once and left, so it
-                should not cost the filter the width of three. */}
-            <SelectInputView
-              size={CTL_SIZE}
-              accentColor={ACCENT}
-              value={payloadOpts.mode}
-              onChange={v => setPayloadPref(PAYLOAD_MODE_PREF, v as PayloadMode)}
-              options={[
-                { value: 'tree', label: 'Tree', icon: <BracesIcon size={12} /> },
-                { value: 'pretty', label: 'Pretty', icon: <BracesIcon size={12} /> },
-                ...(payloadOpts.keepRaw ? [{ value: 'raw', label: 'Raw', icon: <BracesIcon size={12} /> }] : []),
-              ]}
-            />
-            </span>
-          </>
-        )}
 
         {/*
           Everything that reaches back to the cluster.
