@@ -70,7 +70,7 @@ import { detectFormat, detectPattern } from '../../../services/k8s/log-format-de
 import { handleAiSend } from './ai-handler';
 import { handleHeapAnalyze, handleThreadsAnalyze, handleLogsAnalyze } from './heap-handler';
 import { handleJfrAnalyze } from './jfr-handler';
-import { streamLogs, type LogStreamHandle } from '../../../services/k8s/k8s-log-stream';
+import { streamLogs, type LogStreamHandle, type LogLevel } from '../../../services/k8s/k8s-log-stream';
 import { run, kubectlBinary, resolveBinary } from '../../../services/k8s/kubectl';
 import { clearAccessCache } from '../../../services/k8s/k8s-access';
 import { probeCapabilities, classifyFromSpec, availableActions, execFailureKind } from '../../../services/k8s/pod-classify';
@@ -1317,6 +1317,9 @@ export async function handleDk8sLogsOpen(
        no `--until-time`. */
     fromIso: msg.fromIso as string | undefined,
     toMs: msg.toMs as number | undefined,
+    levels: Array.isArray(msg.levels)
+      ? (msg.levels as unknown[]).filter((l): l is LogLevel => l === 'error' || l === 'warn' || l === 'info' || l === 'debug' || l === 'other')
+      : undefined,
   }, {
     // Named on screen, so it is always clear which format is running and how
     // it was picked — a wrong format is much easier to spot than to debug.

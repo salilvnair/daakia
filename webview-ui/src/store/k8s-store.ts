@@ -529,6 +529,17 @@ export type Dk8sStage =
 /* `scripts` is the standalone Python screen: one script, several pods. */
 export type Dk8sView = 'pods' | 'artifacts' | 'scripts';
 
+/** A `datetime-local` reading of an instant, in this machine's zone — what the window pickers hold. */
+export function localTime(ms: number): string {
+  const d = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+    + `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+/** How many lines a split pane's errors window keeps — the buffer's own ceiling. */
+export const ERRORS_TAIL = 20_000;
+
 interface K8sState {
   stage: Dk8sStage;
   panel: Dk8sView;
@@ -769,6 +780,8 @@ interface K8sState {
    */
   logFrom: string;
   logTo: string;
+  /** This read asked the host for error events only — the Errors window. */
+  logOnlyErrors: boolean;
   setLogWindow: (from: string, to: string) => void;
   /** Per-pod Download, using the same options as the grid's bulk export. */
   logExportOpen: boolean;
@@ -866,7 +879,17 @@ interface K8sState {
    * when the caller knows better (a search result, another Daakia tab);
    * `noHistory` for Back itself.
    */
-  openDetail: (pod: PodSummary, opts?: { from?: NavEntry; noHistory?: boolean }) => void;
+  openDetail: (pod: PodSummary, opts?: {
+    from?: NavEntry; noHistory?: boolean;
+    /**
+     * The log as another view already has it — the last split pane handing its
+     * pod over. Laid over the reset, and no new read is started: the pane's
+     * lines, filters and stream carry on rather than the view reloading.
+     */
+    carry?: Partial<Pick<K8sState, 'logs' | 'logStatus' | 'logDetail' | 'logDropped' | 'logRequestedAt'
+      | 'logFilter' | 'logLevels' | 'logFieldFilters' | 'logFollow' | 'logLive' | 'logTail' | 'logDirection'
+      | 'logPrevious' | 'logWrap' | 'logFrom' | 'logTo' | 'detailTab'>>;
+  }) => void;
   /**
    * Open a pod somebody sent you a link to, and find the line they meant.
    *
@@ -876,6 +899,12 @@ interface K8sState {
    * all. Silently opening the nearest thing would be the worst of them.
    */
   openPodLink: (t: LogTarget, opts?: { from?: NavEntry }) => 'opened' | 'no-line' | 'no-pod';
+  /**
+   * A pod's errors over a window — its own Logs tab, read for that window and
+   * narrowed to ERROR. Stack traces stay: the stream gives a continuation its
+   * event's level, so the level filter keeps a trace under its error.
+   */
+  openErrors: (pod: PodSummary, range: { fromMs: number; toMs: number }) => void;
   /** The line a link asked for, once it has been found in the log. */
   linkedLine?: { seq: number; text: string };
   /** What a link is still waiting to find, once its log arrives. */
@@ -1006,6 +1035,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   logSince: 'all',
   logFrom: '',
   logTo: '',
+  logOnlyErrors: false,
   logExportOpen: false,
   // Wrap on by default. A stack frame or a JSON payload running off the right
   // edge is the common case in a pod log, and horizontal scrolling to read it
@@ -1197,7 +1227,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         .prefs[`${DETAIL_TAB_PREF}${pod.namespace}/${pod.name}`] as DetailTab | undefined) ?? 'logs',
       logs: [], logStatus: 'loading', logDetail: undefined, logDropped: 0,
       logRequestedAt: Date.now(),
-      logFilter: '', logLevels: [], logFieldFilters: [], logFollow: true, logLive: false,
+      logFilter: '', logLevels: [], logFieldFilters: [], logFollow: true, logLive: false, logOnlyErrors: false,
       logDirection: 'last', logSince: 'all', logExportOpen: false,
       logPrevious: false, logContainer: undefined, logSelection: undefined,
       /* A mark belongs to the pod it was found in. */
@@ -1208,11 +1238,16 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       shellNotice: undefined,
     });
     const base = { context: pod.context, namespace: pod.namespace, pod: pod.name };
-    // Snapshot, not a stream. See logLive.
-    postMsg({
-      type: 'dk8s:openLogs', ...base,
-      follow: false, direction: 'last', tailLines: get().logTail,
-    });
+    if (opts?.carry) {
+      /* Its stream, if it had one, is still open and addressed to this pod — its lines keep arriving here. */
+      set(opts.carry);
+    } else {
+      // Snapshot, not a stream. See logLive.
+      postMsg({
+        type: 'dk8s:openLogs', ...base,
+        follow: false, direction: 'last', tailLines: get().logTail,
+      });
+    }
     postMsg({ type: 'dk8s:describe', ...base });
     /*
       One event for opening a pod, carrying what makes it worth opening.
@@ -1298,11 +1333,18 @@ export const useK8sStore = create<K8sState>((set, get) => ({
 
   clearFieldFilters: () => set({ logFieldFilters: [] }),
 
-  toggleLogLevel: (level) => set(s => ({
-    logLevels: s.logLevels.includes(level)
-      ? s.logLevels.filter(l => l !== level)
-      : [...s.logLevels, level],
-  })),
+  toggleLogLevel: (level) => {
+    set(s => ({
+      logLevels: s.logLevels.includes(level)
+        ? s.logLevels.filter(l => l !== level)
+        : [...s.logLevels, level],
+    }));
+    /* An errors read holds nothing else: letting go of ERROR reads the window again, whole. */
+    if (get().logOnlyErrors && !get().logLevels.includes('error')) {
+      set({ logOnlyErrors: false });
+      get().reloadLogs();
+    }
+  },
 
   setLogFollow: (logFollow) => set({ logFollow }),
 
@@ -1375,7 +1417,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   reloadLogs: () => {
     const {
       detail, logPrevious, logContainer, logLive, logTail, logDirection, logSince,
-      logFrom, logTo,
+      logFrom, logTo, logOnlyErrors,
     } = get();
     if (!detail) return;
     set({
@@ -1419,10 +1461,19 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         a tail from the end of that window.
       */
       direction: logLive || logDirection === 'between' ? 'last' : logDirection,
-      tailLines: logTail,
-      ...(logDirection === 'between' && !logLive
-        ? { fromIso: isoOf(logFrom), toMs: msOf(logTo) }
-        : { sinceSeconds: SINCE[logSince] }),
+      /*
+        Following starts from an empty window: the lines that arrive from now
+        on, and nothing read before. It used to refill with the last N lines
+        first, so pressing it looked like nothing had happened — the same
+        screen, with new lines eventually under it.
+      */
+      tailLines: logLive ? 0 : logTail,
+      /* Errors only, read that way at the source — see `openErrors`. */
+      ...(logOnlyErrors ? { levels: ['error'] } : {}),
+      ...(logLive ? {}
+        : logDirection === 'between'
+          ? { fromIso: isoOf(logFrom), toMs: msOf(logTo) }
+          : { sinceSeconds: SINCE[logSince] }),
     });
   },
 
@@ -1560,6 +1611,17 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     tab is set after it rather than before — the same ordering the context
     menu's other destinations use.
   */
+  openErrors: (pod, range) => {
+    /* `carry` skips openDetail's own read of the newest lines — the window read below replaces it. */
+    get().openDetail(pod, { carry: { detailTab: 'logs' } });
+    set({
+      logDirection: 'between', logLive: false,
+      logFrom: localTime(range.fromMs), logTo: localTime(range.toMs),
+      logLevels: ['error'], logOnlyErrors: true,
+    });
+    get().reloadLogs();
+  },
+
   openPodLink: (t, opts) => {
     const pod = get().pods.find(
       p => p.name === t.pod && p.namespace === t.namespace

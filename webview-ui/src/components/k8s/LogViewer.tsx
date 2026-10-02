@@ -742,6 +742,10 @@ function IconButton({ on, onClick, title, icon }: {
 const RAIL_MIN = 208;
 const RAIL_MAX = RAIL_MIN * 2;
 
+/** The filter's share of a one-row toolbar, and the least it may be. */
+const FILTER_SHARE = 0.4;
+const FILTER_MIN = 240;
+
 export function LogViewer() {
   const {
     logs, logStatus, logDetail, logDropped, logFilter, logLevels, logRequestedAt,
@@ -1076,7 +1080,9 @@ export function LogViewer() {
 
     Starts at 0 — the old behaviour — so nobody's filter changes under them.
   */
-  const [findContext, setFindContext] = useState(0);
+  /* A search result opens at the width it was searched with: the neighbours it
+     fetched are on screen from the start, not hidden until ±N is picked. */
+  const [findContext, setFindContext] = useState(contextCap ?? 0);
   useEffect(() => { onFindContext?.(findContext); }, [findContext, onFindContext]);
 
   /*
@@ -1087,9 +1093,9 @@ export function LogViewer() {
     const all = lineSettings.contextLadder;
     if (contextCap === undefined) return all;
     const within = all.filter(v => v <= contextCap);
-    /* Always at least "none" and the width it was searched at, even when the
-       cap falls between two rungs. */
-    return within.length ? within : [0];
+    /* Always "none" and the width it was searched at, even when the cap falls
+       between two rungs — a search at ±3 on a 0/5/10 ladder offered only 0. */
+    return [...new Set([0, ...within, contextCap])].sort((a, b) => a - b);
   }, [lineSettings.contextLadder, contextCap]);
 
   const visible = useMemo(
@@ -1348,6 +1354,30 @@ export function LogViewer() {
       style={{ width: 14, height: 16 }}
     >
       {linkCopiedSeq === line.seq ? <CopyGlyph copied size={12} /> : <LinkIcon size={12} />}
+    </button>
+  );
+  /* The line itself, from the end of its row — the same tick as the link. */
+  const [lineCopiedSeq, setLineCopiedSeq] = useState<number>();
+  const lineTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(lineTimer.current), []);
+  const rowCopy = (line: MatchedLine) => (
+    <button
+      type="button"
+      onClick={e => {
+        e.stopPropagation();
+        void copyText(line.text).then(ok => {
+          if (!ok) return;
+          setLineCopiedSeq(line.seq);
+          clearTimeout(lineTimer.current);
+          lineTimer.current = setTimeout(() => setLineCopiedSeq(undefined), COPY_TICK_MS);
+        });
+      }}
+      title={lineCopiedSeq === line.seq ? 'Copied' : 'Copy this line'}
+      aria-label="Copy this line"
+      className={`dk-row-link flex items-center justify-center border-none bg-transparent cursor-pointer p-0${lineCopiedSeq === line.seq ? ' is-copied' : ''}`}
+      style={{ width: 16, height: 16 }}
+    >
+      <CopyGlyph copied={lineCopiedSeq === line.seq} size={12} />
     </button>
   );
   const copyLineLink = (line: MatchedLine) => {
@@ -1737,12 +1767,44 @@ export function LogViewer() {
   const containers = detail?.containers ?? [];
   const oldest = logs.find(l => l.ts !== undefined)?.ts;
 
+  /*
+    One toolbar row or two — see the note on the controls group below. The
+    controls need their own width; the filter takes up to its share beside
+    them. Two rows only when even its minimum will not fit.
+  */
+  const barRef = useRef<HTMLDivElement>(null);
+  const filterBoxRef = useRef<HTMLDivElement>(null);
+  const groupRef = useRef<HTMLDivElement>(null);
+  const [stacked, setStacked] = useState(false);
+  useLayoutEffect(() => {
+    const bar = barRef.current, group = groupRef.current, filterBox = filterBoxRef.current;
+    if (!bar || !group || !filterBox) return;
+    const measure = () => {
+      const cs = getComputedStyle(bar);
+      const gap = parseFloat(cs.columnGap) || 12;
+      const avail = bar.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const others = [...bar.children].filter(c => c !== filterBox && c !== group);
+      const fixed = others.reduce((w, c) => w + c.getBoundingClientRect().width + gap, 0);
+      const ggap = parseFloat(getComputedStyle(group).columnGap) || 8;
+      const parts = [...group.children].filter(c => !c.classList.contains('flex-1'));
+      const need = parts.reduce((w, c) => w + c.getBoundingClientRect().width, 0) + ggap * Math.max(0, parts.length - 1);
+      /* Forty per cent is the most the filter takes; it gives way down to its
+         minimum before the controls are sent to a row of their own. */
+      setStacked(fixed + FILTER_MIN + gap + need > avail);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(bar);
+    for (const c of group.children) ro.observe(c);
+    return () => ro.disconnect();
+  });
+
   return (
     <div ref={viewerRef} className="flex flex-col h-full min-h-0">
       {/* ── Controls: every strip lives up here ── */}
       <div className="flex flex-col shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-      <div className="flex items-center gap-3 px-4 py-2.5 flex-wrap shrink-0">
+      <div ref={barRef} className="flex items-center gap-3 px-4 py-2.5 flex-wrap shrink-0">
         {/* First, the field panel's switch: it governs the rail beside the lines
             rather than the rows, and a control that hides a whole column should
             not be buried at the end of a toolbar. */}
@@ -1786,7 +1848,8 @@ export function LogViewer() {
 
         {/* The filter takes the rest of the row, after the switch and the chips
             that shape what it searches. */}
-        <div className="flex-1" style={{ minWidth: 220 }}>
+        <div ref={filterBoxRef} className={stacked ? 'flex-1' : undefined}
+             style={stacked ? { minWidth: 220 } : { flex: `0 1 ${FILTER_SHARE * 100}%`, minWidth: FILTER_MIN }}>
           <FilterInputView
             value={logFilter}
             onChange={(v: string) => setLogFilter(v)}
@@ -1891,13 +1954,14 @@ export function LogViewer() {
           individually and a narrow panel flung Download and Analyze onto their
           own row at the far left — reading as a second, broken toolbar.
 
-          Always the second row, the full width of it — not only when the panel
-          is narrow enough to push it there. On a wide screen it used to ride
-          on the filter's row and squeeze the filter; now the first row is what
-          narrows the lines (levels, the filter) and the second is how they are
-          fetched and drawn, with what to do with them at its right end.
+          One row when there is room for it: the filter at about forty per cent
+          and these to its right, ending in what to do with the lines. A second
+          row only when they would not fit beside it — a narrow panel, a split
+          pane — and then the filter takes the whole first row. Measured, not a
+          breakpoint: a pane in a split is narrow on a wide screen.
         */}
-        <div className="flex items-center gap-2 flex-wrap" style={{ flexBasis: '100%' }}>
+        <div ref={groupRef} className="flex items-center gap-2"
+             style={stacked ? { flexBasis: '100%', flexWrap: 'wrap' } : { flex: '1 1 auto', flexWrap: 'nowrap', minWidth: 0 }}>
         {/* Modes, not actions, so they are icon toggles rather than labelled
             buttons — and they sit apart from the controls that fetch. */}
         <IconButton on={logWrap} onClick={() => chooseWrap(!logWrap)}
@@ -2312,7 +2376,10 @@ export function LogViewer() {
                          rotated away within minutes. */
                       : pendingLink && logDirection === 'between' && logStatus === 'ended'
                         ? 'Nothing in this window — the pod has rotated its log since, and kubectl logs only has what came after. The archive search can still find the line.'
-                        : 'No output yet.'
+                        /* An Errors read that found none — a good answer, said as one. */
+                        : logStatus === 'ended' && logDirection === 'between' && logLevels.length === 1 && logLevels[0] === 'error'
+                          ? `No errors between ${logFrom.replace('T', ' ').slice(0, 16)} and ${logTo.replace('T', ' ').slice(0, 16)}.`
+                          : 'No output yet.'
                     : `No line matches. ${logs.length.toLocaleString()} hidden by the filter.`}
                 </span>
               </div>
@@ -2668,6 +2735,7 @@ export function LogViewer() {
                               {line.seq === focusSeq && focusLabel ? focusLabel : selectedLabel}
                             </span>
                           )}
+                          {!row.isFrame && rowCopy(line)}
                         </span>
                         </div>
                         </LineCard>
@@ -2783,8 +2851,11 @@ export function LogViewer() {
             ? `lines ${(paging.first + 1).toLocaleString()}–${(paging.first + logs.length).toLocaleString()} of ${paging.total.toLocaleString()}${paging.partial ? '…' : ''}`
             : isSnapshot
               ? `${logs.length.toLocaleString()} line${logs.length === 1 ? '' : 's'}`
-              : `${logs.length.toLocaleString()} of the last ${logTail.toLocaleString()} lines`}
-          {!isSnapshot && logs.length >= logTail && ' · at the limit'}
+              /* Following starts empty, so there is no tail to be a fraction of either. */
+              : logLive
+                ? `${logs.length.toLocaleString()} line${logs.length === 1 ? '' : 's'} since following began`
+                : `${logs.length.toLocaleString()} of the last ${logTail.toLocaleString()} lines`}
+          {!isSnapshot && !logLive && logs.length >= logTail && ' · at the limit'}
           {logs.length > 0 && ` · ${(bufferBytes(logs) / 1024 / 1024).toFixed(1)} MB`}
           {oldest !== undefined && ` · oldest ${formatLogTime(oldest)}`}
           {marks.length > 0 && <MarkedCount inView={markedInView} />}

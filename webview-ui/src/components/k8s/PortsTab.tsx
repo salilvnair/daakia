@@ -26,8 +26,11 @@ const portOf = (s: string) => { const n = Number(s); return Number.isInteger(n) 
 
 /** The mock's row: name · port · protocol · role · → local · action. */
 const ROW: React.CSSProperties = {
-  display: 'grid', gridTemplateColumns: '120px 80px 56px minmax(90px, 1fr) 118px 96px',
-  gap: 10, alignItems: 'center', padding: '7px 10px', borderRadius: 8, border: `1px solid ${PF.bd}`, background: PF.panel,
+  /* Name and role share what is left; the rest are their own width, and the
+     local port sits right beside the button that uses it — no column of air
+     between what a port is and forwarding it. */
+  display: 'grid', gridTemplateColumns: 'minmax(110px, 1.2fr) 64px 40px minmax(90px, 1fr) auto auto',
+  gap: 14, alignItems: 'center', padding: '7px 10px 7px 12px', borderRadius: 8, border: `1px solid ${PF.bd}`, background: PF.panel,
 };
 const LIVE: React.CSSProperties = { borderColor: `color-mix(in srgb, ${PF.ok} 40%, ${PF.bd})`, background: `color-mix(in srgb, ${PF.ok} 5%, ${PF.panel})` };
 const NOTE: React.CSSProperties = { fontSize: 11, color: PF.mu };
@@ -125,7 +128,7 @@ export function PortsTab() {
 
   return (
     <div className="h-full overflow-auto">
-      <div className="flex flex-col" style={{ gap: 12, padding: '12px 14px', maxWidth: 880 }}>
+      <div className="flex flex-col" style={{ gap: 12, padding: '12px 14px', maxWidth: 680 }}>
         {prod && <PfBar tone="er"><b>{detail.context}</b> is production. A forward from here asks first, and stops on its own after an hour.</PfBar>}
 
         {(up.length > 0 || finished.length > 0) && (

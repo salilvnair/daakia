@@ -120,6 +120,26 @@ export function starredHere(pods: {
   return here.size;
 }
 
+/**
+ * The starred view, one namespace at a time.
+ *
+ * Stars belong to the namespace they were made in. Watching two namespaces at
+ * once, starred-only used to apply across both: two stars in com-zp-xx and the
+ * whole of com-zp-yy vanished, as if its pods were filtered out for not being
+ * starred somewhere else. Now a namespace with stars shows its starred pods,
+ * and a namespace with none shows all of its own — the same fallback a single
+ * namespace with no stars has always had.
+ */
+export function starredView<T extends {
+  name: string; namespace: string; context?: string;
+  workload?: { kind: string; name: string };
+}>(pods: T[], keys: string[]): T[] {
+  if (!keys.length) return pods;
+  const where = (p: T) => `${p.context ?? ''}/${p.namespace}`;
+  const withStars = new Set(pods.filter(p => starredKeyOf(p, keys)).map(where));
+  return pods.filter(p => !withStars.has(where(p)) || !!starredKeyOf(p, keys));
+}
+
 function parse(raw: string | undefined): string[] {
   if (!raw) return [];
   try {

@@ -314,11 +314,15 @@ export function filterLines(lines: LogLine[], spec: LogFilterSpec): MatchedLine[
     two lines of context share one. So the indices to keep are collected as a
     set and emitted once, in order — not by concatenating a window per hit.
   */
+  /* Lines from several pods — a search result — keep a hit's context to its
+     own pod: the line after the last hit in one pod is another pod's first. */
+  const podOf = (l: MatchedLine) => (l as { pod?: string }).pod;
   const keep = new Set<number>();
   for (const i of hitAt) {
-    for (let j = Math.max(0, i - context); j <= Math.min(candidates.length - 1, i + context); j++) {
-      keep.add(j);
-    }
+    const pod = podOf(candidates[i]);
+    keep.add(i);
+    for (let j = i - 1; j >= Math.max(0, i - context) && podOf(candidates[j]) === pod; j--) keep.add(j);
+    for (let j = i + 1; j <= Math.min(candidates.length - 1, i + context) && podOf(candidates[j]) === pod; j++) keep.add(j);
   }
   return [...keep].sort((a, b) => a - b).map(i => (
     hitAt.has(i) ? candidates[i] : { ...candidates[i], context: true }

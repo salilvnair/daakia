@@ -23,7 +23,7 @@ import {
 import { useResultTabStore } from '../../store/dk8s-result-tab-store';
 import { useTabsStore } from '../../store/tabs-store';
 import { useK8sStore } from '../../store/k8s-store';
-import { favoriteKey, useFavoriteKeys } from '../../store/dk8s-favorites-store';
+import { useFavoriteKeys, starredView } from '../../store/dk8s-favorites-store';
 import { useFileSearch, FileSearchResults, type HitTarget } from './FileSearchPane';
 import { literalOf } from './search-pattern';
 import { FileViewer } from './FileViewer';
@@ -230,8 +230,8 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
   const podScope = useK8sStore(s => s.podScope);
   const favKeys = useFavoriteKeys();
   const scoped = useMemo(() => {
-    if (podScope !== 'fav' || favKeys.length === 0) return pods;
-    return pods.filter(p => favKeys.includes(favoriteKey(p)));
+    if (podScope !== 'fav') return pods;
+    return starredView(pods, favKeys);
   }, [pods, podScope, favKeys]);
 
   const pickable = useMemo(() => {

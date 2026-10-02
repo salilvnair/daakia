@@ -31,6 +31,7 @@ import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { useDk8sArtifactStore } from '../../store/dk8s-artifact-store';
 import { ArtifactsView } from './ArtifactsView';
 import { ScriptsScreen } from './python/ScriptsScreen';
+import { ErrorsDialog } from './ErrorsDialog';
 import { usePyStore, ensurePyListener } from '../../store/dk8s-python-store';
 import { ArtifactDetail } from './ArtifactDetail';
 import { openArtifactIn, type AnalyzerId } from '../../store/dk8s-analyze-store';
@@ -456,6 +457,7 @@ export function K8sPanel() {
       {/* Over the panel like the pod detail, and above it in the same sense:
           a split is a place you went, not a layer over the grid. */}
       <SplitLogs />
+      <ErrorsDialog />
 
       {/* Over the panel, like the pod detail: an analysis is one artifact you
           opened, not a place you navigate to. */}

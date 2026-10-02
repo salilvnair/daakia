@@ -50,7 +50,7 @@ import { useTabsStore } from '../../store/tabs-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { AiSplit } from './AiAnswerPanel';
-import { resultLines, podsLabel, podsIn, timings, totals, type ResultLine } from './search-results';
+import { resultLines, podsLabel, podsIn, timings, totals, searchFilterOf, sourceKey, type ResultLine } from './search-results';
 import { HitsByPodRail, HitFieldsRail } from './HitRails';
 import { FollowView } from './FollowView';
 import { useFieldReaders, useFollowPrefs, type SavedFollow } from './follow-prefs';
@@ -763,7 +763,7 @@ export function SearchResultsPage() {
   const [fieldsRail, setFieldsRail] = usePersistedPref<'open' | 'closed'>('dk8s.search.fieldsRail', 'open', ['open', 'closed']);
   const fieldsOpen = fieldsRail === 'open';
   const {
-    query, groups, at, scanned, searched,
+    query, regex, caseSensitive, groups, at, scanned, searched,
     tab, setTab, filter, setFilter, levels, setLevels, contextLines,
     fields, addField, removeField, clearFields, wrap, setWrap,
     pods: shownPods, setPods, selected, setSelected, columns, toggleColumn,
@@ -811,24 +811,36 @@ export function SearchResultsPage() {
     numeric card. The floor keeps a hit's neighbours with it — the lines around
     a slow call are why anybody asked for the slow calls.
   */
-  const lines = useMemo(() => {
-    let out = shownPods.length ? allLines.filter(l => shownPods.includes(l.pod)) : allLines;
-    if (floors.length) {
-      const keep = new Set<string>();
-      for (const l of out) {
-        if (l.context) continue;
-        const ok = floors.every(f => atLeast([l], f.field, f.min, readers).length > 0);
-        if (ok) keep.add(`${l.pod}\u0000${l.sourceLine}`);
-      }
-      out = out.filter(l => {
-        for (let d = -contextLines; d <= contextLines; d++) if (keep.has(`${l.pod}\u0000${l.sourceLine + d}`)) return true;
-        return false;
-      });
+  /* Neighbours are by position in their own source — a live line and an
+     archived file's line with the same number are not each other's. */
+  const floored = useMemo(() => {
+    if (!floors.length) return allLines;
+    const keep = new Set<string>();
+    for (const l of allLines) {
+      if (l.context) continue;
+      const ok = floors.every(f => atLeast([l], f.field, f.min, readers).length > 0);
+      if (ok) keep.add(sourceKey(l, l.sourceLine));
     }
-    return out;
-  }, [allLines, shownPods, floors, readers, contextLines]);
+    return allLines.filter(l => {
+      for (let d = -contextLines; d <= contextLines; d++) if (keep.has(sourceKey(l, l.sourceLine + d))) return true;
+      return false;
+    });
+  }, [allLines, floors, readers, contextLines]);
+  const lines = useMemo(
+    () => (shownPods.length ? floored.filter(l => shownPods.includes(l.pod)) : floored),
+    [floored, shownPods],
+  );
+  /* What the pods rail counts: the view's own filters applied, the pod pick not
+     — or picking one pod would zero every other pod's count. */
+  const railLines = useMemo(
+    () => filterLines(floored, { query: filter, levels, fields, contextLines: 0 }) as ResultLine[],
+    [floored, filter, levels, fields],
+  );
 
-  const selectedLine = useMemo(() => allLines.find(l => l.seq === selected), [allLines, selected]);
+  /* A line the reader clicked, while it is still on screen. */
+  const selectedLine = useMemo(() => lines.find(l => l.seq === selected), [lines, selected]);
+  /* How wide the view's context is — it opens at the width the search fetched. */
+  const [shownContext, setShownContext] = useState(contextLines);
 
   const [downloadOpen, setDownloadOpen] = useState(false);
 
@@ -841,9 +853,9 @@ export function SearchResultsPage() {
   */
   const onScreen = useMemo(
     () => filterLines(lines, {
-      query: filter, levels, fields, contextLines: 0,
+      query: filter, levels, fields, contextLines: shownContext,
     }) as ResultLine[],
-    [lines, filter, levels, fields],
+    [lines, filter, levels, fields, shownContext],
   );
 
   /*
@@ -855,10 +867,21 @@ export function SearchResultsPage() {
     shows every line that came back, neighbours included, which is the other
     thing people want here.
   */
+  const searchFilter = searchFilterOf(query, regex, caseSensitive);
   useEffect(() => {
-    if (query) setFilter(query);
+    if (searchFilter) setFilter(searchFilter);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, at]);
+  }, [searchFilter, at]);
+
+  /* Everything the page and the view narrow by, back to how the search opened. */
+  const narrowed = shownPods.length > 0 || floors.length > 0 || levels.length > 0 || fields.length > 0 || filter !== searchFilter;
+  const resetAll = useCallback(() => {
+    setPods([]);
+    for (const f of floors) setFloor(f.field, undefined);
+    setLevels([]);
+    clearFields();
+    setFilter(searchFilter);
+  }, [setPods, floors, setFloor, setLevels, clearFields, setFilter, searchFilter]);
 
   /*
     A pod-shaped stand-in for the thing these lines are about.
@@ -912,6 +935,7 @@ export function SearchResultsPage() {
     /* The page can only show neighbours the search brought back. */
     contextCap: contextLines,
     extra: {
+      onFindContext: setShownContext,
       selectedSeq: selected,
       onSelectLine: (l) => setSelected(l.seq === selected ? undefined : l.seq),
       selectedLabel: 'the line you clicked',
@@ -923,20 +947,26 @@ export function SearchResultsPage() {
       })),
       railLead: (
         <HitsByPodRail
-          lines={allLines}
+          lines={railLines}
           pods={podNames}
           shown={shownPods}
           current={selectedLine?.pod}
-          onTogglePod={pod => setPods(shownPods.includes(pod) ? shownPods.filter(p => p !== pod) : [pod])}
-          onLogger={logger => addField({ field: 'logger', value: logger, mode: 'include' })}
+          /* Several pods at once — comparing two replicas is the usual reason to pick. */
+          onTogglePod={pod => setPods(shownPods.includes(pod) ? shownPods.filter(p => p !== pod) : [...shownPods, pod])}
+          activeLoggers={fields.filter(f => f.field === 'logger' && f.mode === 'include').map(f => f.value)}
+          onLogger={logger => (fields.some(f => f.field === 'logger' && f.value === logger && f.mode === 'include')
+            ? removeField('logger', logger)
+            : addField({ field: 'logger', value: logger, mode: 'include' }))}
+          onReset={narrowed ? resetAll : undefined}
         />
       ),
       footerNote: 'Fields come from the logger’s own pattern and its MDC — nothing is guessed.',
     },
   }), [
-    lines, allLines, filter, levels, fields, wrap, logLineNumbers, asPod, at, sums, query,
+    lines, railLines, filter, levels, fields, wrap, logLineNumbers, asPod, at, sums, query,
     addField, removeField, clearFields, setFilter, setLevels, setWrap, goBack, contextLines,
     selected, setSelected, podNames, columns, readers, toggleColumn, shownPods, setPods, selectedLine,
+    narrowed, resetAll,
   ]);
 
   if (!groups.length && !searched.length) {

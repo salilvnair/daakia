@@ -149,6 +149,15 @@ export interface LogStreamOptions {
    */
   toMs?: number;
   timestamps?: boolean;
+  /**
+   * Send only these levels — the Errors window. Judged as each line is read,
+   * after its level is known: a stack frame takes its event's level, so a
+   * trace stays under its error and the rest of the log never crosses the
+   * wire. On a pod writing forty lines a second, an hour of errors otherwise
+   * arrives as an hour of everything, and the view's buffer fills with the
+   * lines it was about to hide.
+   */
+  levels?: LogLevel[];
 }
 
 export interface LogStreamHandle {
@@ -505,6 +514,8 @@ export function streamLogs(
   let seq = 0;
   /** A line past the end of a bounded window has been seen. */
   let past = false;
+  const levelSet = opts.levels?.length ? new Set(opts.levels) : undefined;
+  const keepLevel = (l: LogLine) => !levelSet || levelSet.has(l.level);
   let pending: LogLine[] = [];
   let carry = '';
   /**
@@ -563,8 +574,8 @@ export function streamLogs(
       return;
     }
     seq++;
-    pending.push(parsed);
     remember(parsed);
+    if (keepLevel(parsed)) pending.push(parsed);
   };
 
   /*
@@ -701,8 +712,9 @@ export function streamLogs(
       }
 
       if (carry) {
-        pending.push(parseLine(carry, seq++, opts.timestamps !== false, compiled, meter, prev));
-        remember(pending[pending.length - 1]);
+        const last = parseLine(carry, seq++, opts.timestamps !== false, compiled, meter, prev);
+        remember(last);
+        if (keepLevel(last)) pending.push(last);
         carry = '';
       }
       flush();

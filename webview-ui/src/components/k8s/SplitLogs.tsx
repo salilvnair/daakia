@@ -20,7 +20,8 @@
  * panes following two pods means two streams, two filters and two tails, and
  * the single-pod store has one of each.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { IconSize, SplitPanelView, type SplitDirection } from '@salilvnair/dui';
 import {
   CloseIcon, ChevronLeftIcon, ColumnsIcon, RowsIcon, LayoutGridIcon, ClockIcon,
@@ -32,7 +33,7 @@ import { LogSourceProvider, type LogSource } from './log-source';
 import {
   useSplitStore, MAX_PANES, type SplitMode, type SplitPane,
 } from '../../store/dk8s-split-store';
-import { useK8sStore, type PodSummary } from '../../store/k8s-store';
+import { useK8sStore, localTime, type PodSummary } from '../../store/k8s-store';
 import { useTabsStore } from '../../store/tabs-store';
 import { severityOf } from './pod-view';
 import { ACCENT } from './tone';
@@ -142,27 +143,32 @@ function Pane({ pane, focused, sharedRange }: {
     logSince: 0,
     logWrap: pane.wrap,
     logPrevious: pane.previous,
-    logFrom: undefined,
-    logTo: undefined,
+    logFrom: pane.from,
+    logTo: pane.to,
     logLineNumbers,
     logContainer: undefined,
     logExportOpen: false,
     detail: asPod,
     runtime: undefined,
     setLogFilter: (filter: string) => patch(pane.id, { filter }),
-    toggleLogLevel: (level: SplitPane['levels'][number]) => patch(pane.id, {
-      levels: pane.levels.includes(level)
-        ? pane.levels.filter(l => l !== level)
-        : [...pane.levels, level],
-    }),
+    toggleLogLevel: (level: SplitPane['levels'][number]) => {
+      const levels = pane.levels.includes(level) ? pane.levels.filter(l => l !== level) : [...pane.levels, level];
+      /* An errors pane holds nothing else: letting go of ERROR reads its window again, whole. */
+      if (pane.onlyErrors && !levels.includes('error')) {
+        patch(pane.id, { levels, onlyErrors: false });
+        refetch(pane.id);
+      } else patch(pane.id, { levels });
+    },
     setLogWrap: (wrap: boolean) => patch(pane.id, { wrap }),
     setLogFollow: (follow: boolean) => patch(pane.id, { follow }),
     setLogLive: (live: boolean) => { patch(pane.id, { live }); refetch(pane.id); },
     setLogTail: (tail: number) => patch(pane.id, { tail }),
-    setLogDirection: (direction: 'first' | 'last') => patch(pane.id, { direction }),
+    setLogDirection: (direction: 'first' | 'last' | 'between') => patch(pane.id, direction === 'between' && !pane.from
+      ? { direction, from: localTime(Date.now() - 3_600_000), to: localTime(Date.now()) }
+      : { direction }),
     setLogPrevious: (previous: boolean) => patch(pane.id, { previous }),
     setLogSince: () => {},
-    setLogWindow: () => {},
+    setLogWindow: (from: string, to: string) => patch(pane.id, { from, to }),
     setLogSelection: () => {},
     setLogContainer: () => {},
     fetchLogs: () => refetch(pane.id),
@@ -252,6 +258,40 @@ const DUI_DIRECTION: Record<'vertical' | 'horizontal', SplitDirection> = {
   vertical: 'horizontal',
   horizontal: 'vertical',
 };
+
+/**
+ * Where a pane sits in the arrangement.
+ *
+ * The arrangement nests: three panes are a split whose second side is another
+ * split. Closing one re-nests the rest, and a React element that changes
+ * parent is a new element — so every remaining pane used to unmount and mount
+ * again on any close, losing its scroll, its open rows and its context width.
+ *
+ * So each pane renders once, through a portal, into a node of its own; the
+ * arrangement places empty slots, and a slot takes in its pane's node. When
+ * the layout changes the node moves to its new slot and the pane under it is
+ * the same pane. The scroll positions inside it are put back after the move,
+ * since a node taken out of the page forgets them.
+ */
+const scrolls = new WeakMap<HTMLElement, [Element, number, number][]>();
+
+function Slot({ host }: { host: HTMLDivElement }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (host.parentNode !== el) el.appendChild(host);
+    for (const [node, top, left] of scrolls.get(host) ?? []) { node.scrollTop = top; node.scrollLeft = left; }
+    scrolls.delete(host);
+    return () => {
+      /* Still in the page here: remember where everything was scrolled to before it moves. */
+      const at: [Element, number, number][] = [];
+      host.querySelectorAll('*').forEach(n => { if (n.scrollTop || n.scrollLeft) at.push([n, n.scrollTop, n.scrollLeft]); });
+      scrolls.set(host, at);
+    };
+  }, [host]);
+  return <div ref={ref} className="h-full w-full min-w-0 min-h-0" />;
+}
 
 /** Nothing smaller than this, as a share of the axis. */
 const MIN_PANE_PCT = 12;
@@ -377,6 +417,21 @@ export function SplitLogs() {
     [clock, panes],
   );
 
+  /* One node per pane, for as long as the pane lives — see Slot. */
+  const hosts = useRef(new Map<string, HTMLDivElement>());
+  const hostFor = (id: string) => {
+    let h = hosts.current.get(id);
+    if (!h) {
+      h = document.createElement('div');
+      h.style.cssText = 'height:100%;width:100%;min-width:0;min-height:0;display:flex;';
+      hosts.current.set(id, h);
+    }
+    return h;
+  };
+  useEffect(() => {
+    for (const id of [...hosts.current.keys()]) if (!panes.some(p => p.id === id)) hosts.current.delete(id);
+  }, [panes]);
+
   if (!panes.length) return null;
 
   return (
@@ -464,12 +519,12 @@ export function SplitLogs() {
       </div>
 
       <div className="flex-1 min-h-0 p-2">
-        <Arrangement
-          mode={mode}
-          nodes={panes.map(pane => (
-            <Pane key={pane.id} pane={pane} focused={pane.id === focused} sharedRange={sharedRange} />
-          ))}
-        />
+        <Arrangement mode={mode} nodes={panes.map(pane => <Slot key={pane.id} host={hostFor(pane.id)} />)} />
+        {panes.map(pane => createPortal(
+          <Pane pane={pane} focused={pane.id === focused} sharedRange={sharedRange} />,
+          hostFor(pane.id),
+          pane.id,
+        ))}
       </div>
     </div>
   );

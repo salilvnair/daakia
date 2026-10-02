@@ -788,6 +788,12 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
  * scroller above it. A row without a pod above it — a search result, which is
  * not a place a link can point — offers nothing.
  */
+/** The log line under the pointer, as the pod wrote it — any log view, a search result's included. */
+function logLineText(target?: HTMLElement | null): string | undefined {
+  const row = target?.closest('[data-log-text]') as HTMLElement | null;
+  return row?.dataset.logText ?? undefined;
+}
+
 function logLineLink(target?: HTMLElement | null): string | undefined {
   const row = target?.closest('[data-log-text]') as HTMLElement | null;
   if (!row) return undefined;
@@ -884,6 +890,12 @@ export function RightClickMenu() {
     if (action === 'dk8s:copyLineLink') {
       const link = logLineLink(target);
       if (link) await navigator.clipboard?.writeText(link);
+      return;
+    }
+
+    if (action === 'dk8s:copyLine') {
+      const text = logLineText(target);
+      if (text !== undefined) await navigator.clipboard?.writeText(text);
       return;
     }
 
@@ -1025,14 +1037,18 @@ export function RightClickMenu() {
     with: it is about the line under the cursor, which is what was clicked,
     while everything below acts on whatever text happens to be highlighted.
   */
-  const linkItems: ContextMenuItem[] = logLineLink(menu.target)
+  /* The line itself goes on any log row — search results and other snapshots
+     too, which have no link to offer; the link only where it can open again. */
+  const onLine = logLineText(menu.target) !== undefined;
+  const linkItems: ContextMenuItem[] = onLine
     ? [
-        {
+        { id: 'dk8s:copyLine', label: 'Copy line', icon: <CopyIcon size={13} />, iconColor: 'var(--color-ctx-duplicate)' },
+        ...(logLineLink(menu.target) ? [{
           id: 'dk8s:copyLineLink',
           label: 'Copy link to this line',
           icon: <LinkIcon size={13} />,
           iconColor: 'var(--color-ctx-duplicate)',
-        },
+        }] : []),
         { id: 'dk8s:link-sep', label: '', separator: true },
       ]
     : [];

@@ -260,3 +260,23 @@ export function levelsIn(lines: ResultLine[]): Record<LogLevel, number> {
   }
   return out;
 }
+
+/**
+ * The search term as the page's filter box has to say it.
+ *
+ * The box treats `/…/` as a regex and anything else as a case-blind
+ * substring. A regex search (`timeout|refused`) went in bare and matched
+ * nothing — the page opened on "No line matches" over the very hits it was
+ * showing — and a case-sensitive search quietly became case-blind.
+ */
+export function searchFilterOf(query: string, regex: boolean, caseSensitive: boolean): string {
+  if (!query) return '';
+  if (regex) return `/${query}/${caseSensitive ? '' : 'i'}`;
+  if (caseSensitive) return `/${query.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}/`;
+  return query;
+}
+
+/** Where a line sits in its own source: one pod's live log, or one archived file. */
+export function sourceKey(l: Pick<ResultLine, 'pod' | 'source' | 'file' | 'rel'>, line: number): string {
+  return `${l.pod}\u0000${l.source}\u0000${l.rel ?? l.file ?? ''}\u0000${line}`;
+}

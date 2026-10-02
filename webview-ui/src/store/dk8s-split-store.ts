@@ -66,7 +66,12 @@ export interface SplitPane {
   levels: LogLevel[];
   fields: FieldFilter[];
   tail: number;
-  direction: 'first' | 'last';
+  direction: 'first' | 'last' | 'between';
+  /** The window, as `datetime-local` readings, when `direction` is `between`. */
+  from: string;
+  to: string;
+  /** Read for error events only — the Errors popup. */
+  onlyErrors: boolean;
   follow: boolean;
   live: boolean;
   wrap: boolean;
@@ -91,7 +96,9 @@ interface SplitState {
     reading a moment ago.
   */
   origin?: 'pods' | 'results';
-  open: (pods: PodSummary[], mode: SplitMode, tail: number, origin?: 'pods' | 'results') => void;
+  open: (pods: PodSummary[], mode: SplitMode, tail: number, origin?: 'pods' | 'results',
+    /** Panes read for a window and narrowed to levels — the Errors popup's split. */
+    opts?: { levels?: LogLevel[]; window?: { from: string; to: string } }) => void;
   close: () => void;
   closePane: (id: string) => void;
   setMode: (mode: SplitMode) => void;
@@ -104,6 +111,31 @@ interface SplitState {
 
 function keyOf(p: { context: string; namespace: string; pod: string }): string {
   return `${p.context}/${p.namespace}/${p.pod}`;
+}
+
+/**
+ * A pane's window as the host takes it — a start and an end — or nothing.
+ * The same conversion the detail view makes: a zoneless local reading is the
+ * device's own time.
+ */
+function windowOf(pane: Pick<SplitPane, 'direction' | 'from' | 'to'>): { fromIso?: string; toMs?: number } {
+  if (pane.direction !== 'between') return {};
+  const from = Date.parse(pane.from), to = Date.parse(pane.to);
+  return {
+    ...(Number.isFinite(from) ? { fromIso: new Date(from).toISOString() } : {}),
+    ...(Number.isFinite(to) ? { toMs: to } : {}),
+  };
+}
+
+/** A pane's log, in the shape the pod's own Logs tab keeps it. */
+export function carryOf(pane: SplitPane) {
+  return {
+    detailTab: 'logs' as const,
+    logs: pane.logs, logStatus: pane.status, logDetail: pane.detail, logDropped: pane.dropped,
+    logRequestedAt: pane.requestedAt, logFilter: pane.filter, logLevels: pane.levels, logFieldFilters: pane.fields,
+    logFollow: pane.follow, logLive: pane.live, logTail: pane.tail, logDirection: pane.direction,
+    logPrevious: pane.previous, logWrap: pane.wrap, logFrom: pane.from, logTo: pane.to,
+  };
 }
 
 /**
@@ -143,7 +175,7 @@ export const useSplitStore = create<SplitState>((set, get) => ({
   panes: [],
   mode: 'vertical',
 
-  open: (pods, mode, tail, origin = 'pods') => {
+  open: (pods, mode, tail, origin = 'pods', opts = {}) => {
     const capped = pods.slice(0, MAX_PANES[mode]);
     const panes: SplitPane[] = capped.map(p => ({
       id: keyOf({ context: p.context ?? '', namespace: p.namespace, pod: p.name }),
@@ -155,10 +187,13 @@ export const useSplitStore = create<SplitState>((set, get) => ({
       status: 'loading',
       dropped: 0,
       filter: '',
-      levels: [],
+      levels: opts.levels ?? [],
       fields: [],
       tail,
-      direction: 'last',
+      direction: opts.window ? 'between' : 'last',
+      from: opts.window?.from ?? '',
+      to: opts.window?.to ?? '',
+      onlyErrors: !!opts.levels?.length && opts.levels.every(l => l === 'error'),
       follow: true,
       live: false,
       /* The view seeds this from the remembered choice on mount — see
@@ -185,6 +220,8 @@ export const useSplitStore = create<SplitState>((set, get) => ({
       pod: pane.pod,
       tailLines: pane.tail,
       direction: 'last',
+      ...windowOf(pane),
+      ...(pane.onlyErrors ? { levels: ['error'] } : {}),
       follow: false,
       alongside: i > 0,
     }));
@@ -221,14 +258,15 @@ export const useSplitStore = create<SplitState>((set, get) => ({
       was two steps away, through a Back that went to the grid.
 
       Closing the last but one is a statement about which pod you care about,
-      so it opens that pod properly. `openDetail` starts its own log stream
-      without `alongside`, which closes the pane's, so nothing is left running
-      behind it.
+      so it opens that pod properly — on its Logs tab, carrying the pane's log
+      over as it stands: the lines already read, the filters, the tail, and a
+      live stream still live. Reading it all again made the one pane you kept
+      blank out and reload, and dropped whatever you had narrowed it to.
     */
     if (left.length === 1) {
       const last = left[0];
       set({ panes: [], focused: undefined, origin: undefined });
-      useK8sStore.getState().openDetail(podForPane(last));
+      useK8sStore.getState().openDetail(podForPane(last), { carry: carryOf(last) });
       return;
     }
 
@@ -280,8 +318,11 @@ export const useSplitStore = create<SplitState>((set, get) => ({
       context: pane.context,
       namespace: pane.namespace,
       pod: pane.pod,
-      tailLines: pane.tail,
-      direction: pane.direction,
+      /* Following starts from an empty pane — what arrives from now on. */
+      tailLines: pane.live ? 0 : pane.tail,
+      direction: pane.live || pane.direction === 'between' ? 'last' : pane.direction,
+      ...(pane.live ? {} : windowOf(pane)),
+      ...(pane.onlyErrors ? { levels: ['error'] } : {}),
       follow: pane.live,
       previous: pane.previous,
       /* Always alongside: a refetch in one pane must not stop the others. */

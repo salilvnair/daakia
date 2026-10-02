@@ -50,7 +50,7 @@ import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 /* ── Left ── */
 
-export function HitsByPodRail({ lines, pods, shown, current, onTogglePod, onLogger }: {
+export function HitsByPodRail({ lines, pods, shown, current, onTogglePod, onLogger, activeLoggers = [], onReset }: {
   lines: ResultLine[];
   /** Every pod searched, so a pod with nothing is listed as nothing. */
   pods: string[];
@@ -63,6 +63,10 @@ export function HitsByPodRail({ lines, pods, shown, current, onTogglePod, onLogg
   current?: string;
   onTogglePod: (pod: string) => void;
   onLogger: (logger: string) => void;
+  /** Loggers narrowed to — clicked again, they let go. */
+  activeLoggers?: string[];
+  /** Set while anything narrows the page: puts every filter back. */
+  onReset?: () => void;
 }) {
   const { byPod, loggers } = useMemo(() => {
     const p = new Map<string, number>(pods.map(x => [x, 0]));
@@ -78,11 +82,18 @@ export function HitsByPodRail({ lines, pods, shown, current, onTogglePod, onLogg
     };
   }, [lines, pods]);
 
-  if (byPod.length < 2 && !loggers.length) return null;
+  if (byPod.length < 2 && !loggers.length && !onReset) return null;
 
   return (
     <div className="flex flex-col shrink-0"
          style={{ padding: '10px 0', borderBottom: '1px solid var(--color-surface-border)' }}>
+      {onReset && (
+        <button type="button" onClick={onReset} title="Every pod, every level, no field filters, the search term back in the box"
+                className="self-start cursor-pointer border-none bg-transparent hover:underline"
+                style={{ margin: '0 12px 8px', padding: 0, fontSize: 11.5, color: FOLLOW }}>
+          Reset filters
+        </button>
+      )}
       {byPod.length > 1 && (
         <>
           <div style={{ ...railLabel, padding: '0 12px 8px' }}>hits by pod</div>
@@ -91,7 +102,7 @@ export function HitsByPodRail({ lines, pods, shown, current, onTogglePod, onLogg
             const on = filtered || (!shown.length && pod === current);
             return (
               <button key={pod} type="button" onClick={() => onTogglePod(pod)}
-                      title={filtered ? 'Show every pod again' : `Only ${pod}`}
+                      title={filtered ? `Hide ${pod}` : shown.length ? `Add ${pod}` : `Only ${pod}`}
                       className="flex items-center w-full text-left cursor-pointer border-none"
                       style={{
                         gap: 9, padding: '7px 12px', fontSize: 12,
@@ -117,9 +128,10 @@ export function HitsByPodRail({ lines, pods, shown, current, onTogglePod, onLogg
           <div style={{ padding: '0 12px', ...mono, fontSize: 11, lineHeight: 1.9 }}>
             {loggers.map(([logger, n]) => (
               <button key={logger} type="button" onClick={() => onLogger(logger)}
-                      title={`Only lines from ${logger}`}
+                      title={activeLoggers.includes(logger) ? `Every logger again` : `Only lines from ${logger}`}
+                      aria-pressed={activeLoggers.includes(logger)}
                       className="block w-full truncate text-left cursor-pointer border-none bg-transparent p-0 hover:underline"
-                      style={{ font: 'inherit', lineHeight: 'inherit', color: 'var(--color-text-secondary)' }}>
+                      style={{ font: 'inherit', lineHeight: 'inherit', color: activeLoggers.includes(logger) ? FOLLOW : 'var(--color-text-secondary)' }}>
                 {logger} <span style={{ color: 'var(--color-text-muted)' }}>&middot; {n}</span>
               </button>
             ))}

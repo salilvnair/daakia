@@ -18,10 +18,11 @@
  */
 import { useMemo } from 'react';
 import { ContextMenuView, type ContextMenuItem, IconSize } from '@salilvnair/dui';
+import { useErrorsDialog } from './ErrorsDialog';
 import {
   StarIcon, CopyIcon, LinkIcon, TerminalIcon, FileTextIcon, StethoscopeIcon, FolderOpenIcon,
   CheckCircleIcon, XCircleIcon, CpuIcon, MemoryIcon, NetworkIcon, TimelineIcon,
-  ColumnsIcon,
+  ColumnsIcon, WarningTriangleIcon,
 } from '../../icons';
 import { isScheduled } from '@daakia/k8s-workload';
 import { filterMenuRow } from './pod-filter-menu';
@@ -239,6 +240,22 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onTestPv
         label: 'Show logs',
         icon: <FileTextIcon size={IconSize.item} />,
         onClick: () => { onOpen(pod, 'logs'); onClose(); },
+      },
+      /*
+        Errors over a window. On the picked pods when this one is among two or
+        more of them — a split, one pane each — else on this pod alone.
+      */
+      {
+        id: 'errors',
+        iconColor: 'var(--color-error)',
+        label: selectedPods.length > 1 && selectedPods.some(p => p.uid === pod.uid)
+          ? `Errors in ${selectedPods.length} pods…` : 'Errors…',
+        description: 'The last 10, 30 or 60 minutes, or a range — in the log view, filtered to ERROR.',
+        icon: <WarningTriangleIcon size={IconSize.item} />,
+        onClick: () => {
+          useErrorsDialog.getState().open(selectedPods.length > 1 && selectedPods.some(p => p.uid === pod.uid) ? selectedPods : [pod]);
+          onClose();
+        },
       },
       /*
         Split open, where the selection can fill more than one pane.

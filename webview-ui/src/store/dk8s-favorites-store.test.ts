@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  favoriteKey, favoritesFirst, favoriteChoices, starredKeyOf, starredHere,
+  favoriteKey, favoritesFirst, favoriteChoices, starredKeyOf, starredHere, starredView,
 } from './dk8s-favorites-store';
 import type { PodSummary } from './k8s-store';
 
@@ -178,5 +178,25 @@ describe('starredHere', () => {
   it('is zero for an empty list either way', () => {
     expect(starredHere([], keys)).toBe(0);
     expect(starredHere([here('ledger-1', 'ledger')], [])).toBe(0);
+  });
+});
+
+describe('starredView', () => {
+  const xx = (name: string) => pod({ name, namespace: 'com-zp-xx', context: 'c', workload: { kind: 'Deployment', name } });
+  const yy = (name: string) => pod({ name, namespace: 'com-zp-yy', context: 'c', workload: { kind: 'Deployment', name } });
+
+  it('keeps stars to the namespace they were made in', () => {
+    const pods = [xx('api'), xx('web'), xx('db'), yy('api'), yy('web')];
+    const keys = [favoriteKey(xx('api')), favoriteKey(xx('web'))];
+    /* com-zp-xx: its two stars. com-zp-yy has none, so all of it — not nothing. */
+    expect(starredView(pods, keys).map(p => `${p.namespace}/${p.name}`))
+      .toEqual(['com-zp-xx/api', 'com-zp-xx/web', 'com-zp-yy/api', 'com-zp-yy/web']);
+  });
+
+  it('counts a legacy star made on one pod, and leaves everything when nothing is starred', () => {
+    const one = pod({ name: 'api-0', namespace: 'n', context: 'c' });
+    const pods = [one, pod({ name: 'api-1', namespace: 'n', context: 'c' })];
+    expect(starredView(pods, [favoriteKey(one, 'pod')])).toEqual([one]);
+    expect(starredView(pods, [])).toEqual(pods);
   });
 });

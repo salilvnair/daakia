@@ -22,7 +22,7 @@ import { PvCheckModal } from './PvCheckModal';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import {
   useFavoriteKeys, toggleFavorite, favoriteKey, favoritesFirst,
-  starredKeyOf, starredHere,
+  starredKeyOf, starredHere, starredView,
 } from '../../store/dk8s-favorites-store';
 import { isScheduled } from '@daakia/k8s-workload';
 import { PodFilterPopup } from './PodFilterPopup';
@@ -1260,9 +1260,7 @@ export function PodGrid() {
   const lineSettings = useMemo(() => logLineSettings(splitPrefs), [splitPrefs]);
   const visible = useMemo(() => {
     const matched = kindPods.filter(p => matchesFilter(p, filter));
-    const scoped = scope === 'fav'
-      ? matched.filter(p => favKeys.includes(favoriteKey(p)))
-      : matched;
+    const scoped = scope === 'fav' ? starredView(matched, favKeys) : matched;
     const narrowed = scoped.filter(p => matchesPodFilter(p, podFilter));
     return favoritesFirst(sortPods(narrowed, now), favKeys);
   }, [kindPods, filter, now, scope, favKeys, podFilter]);
@@ -1276,9 +1274,7 @@ export function PodGrid() {
   */
   const filterable = useMemo(() => {
     const matched = kindPods.filter(p => matchesFilter(p, filter));
-    return scope === 'fav'
-      ? matched.filter(p => favKeys.includes(favoriteKey(p)))
-      : matched;
+    return scope === 'fav' ? starredView(matched, favKeys) : matched;
   }, [kindPods, filter, scope, favKeys]);
 
   const chips = useMemo(() => filterChips(podFilter), [podFilter]);
@@ -1990,7 +1986,7 @@ export function PodGrid() {
             </ButtonView>
             <ButtonView variant="primary" size="sm" accentColor="var(--color-warning)"
                         onClick={() => {
-                          if (unstar) toggleFavorite(favoriteKey(unstar));
+                          if (unstar) toggleFavorite(starredKeyOf(unstar, favKeys) ?? favoriteKey(unstar));
                           setUnstar(undefined);
                         }}>
               Remove
