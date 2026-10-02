@@ -11,7 +11,9 @@
 import { useMemo, useState } from 'react';
 import { create } from 'zustand';
 import { DateTimeInputView, IconSize, ModalView, SegmentedControlView } from '@salilvnair/dui';
-import { useK8sStore, localTime, ERRORS_TAIL, type PodSummary } from '../../store/k8s-store';
+import { useK8sStore, localTime, type PodSummary } from '../../store/k8s-store';
+import { useUiStateStore } from '../../store/ui-state-store';
+import { logLineSettings } from './log-settings';
 import { useSplitStore, MAX_PANES, type SplitMode } from '../../store/dk8s-split-store';
 import { logUiEvent } from '../../store/ui-audit-store';
 import { SPLIT_MODES } from './SplitLogs';
@@ -57,7 +59,8 @@ function ErrorsDialogBody({ pods }: { pods: PodSummary[] }) {
     if (!range) return;
     logUiEvent('dk8s.logs_open', { errors: true, pods: pods.length, minutes: Math.round((range.toMs - range.fromMs) / 60_000) });
     if (many) {
-      useSplitStore.getState().open(pods, mode, ERRORS_TAIL, 'pods', {
+      /* The usual tail: a window is read whole whatever it says, and a pane keeps it after. */
+      useSplitStore.getState().open(pods, mode, logLineSettings(useUiStateStore.getState().prefs).tailDefault, 'pods', {
         levels: ['error'], window: { from: localTime(range.fromMs), to: localTime(range.toMs) },
       });
     } else {

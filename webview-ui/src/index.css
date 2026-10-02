@@ -1944,6 +1944,53 @@ button[title="Copied!"] > svg polyline {
   is white on white here, and that is the actual bug the override was papering
   over.
 */
+/* ─── dk8s colours that only ever had a dark fallback ───
+   Each was written `var(--token, #darkvalue)` and the token was never set, so
+   the light theme drew pale-blue syntax, near-white teal and dark text on
+   saturated fills — readable on #1e1e1e, lost on white. Set here for both. */
+:root {
+  --color-dk8s-loggers: #a855f7;
+  --color-dk8s-loggers-ink: #1a0b2b;
+  --color-dk8s-hole: #2dd4bf;
+  --color-dk8s-ink: #0b1a1e;
+  --color-dk8s-note: #7eacb5;
+  --color-dk8s-syn-var: #9cdcfe;
+  --color-dk8s-syn-call: #dcdcaa;
+  --color-dk8s-syn-string: #ce9178;
+  --color-asklog-link: #2dd4bf;
+  --color-protocol-ai-ink: #10262b;
+  --color-find: #e2b93d;
+  --color-hit: #b8adf6;
+  --color-on-warning: #1a1205;
+  --color-on-error: #1b0b0a;
+  /* The log view's own INFO and its ribbon. The app's info is indigo in the
+     light theme — its primary — which turned every INFO label and the whole
+     ribbon violet; a log reads INFO as blue in either. */
+  --color-log-info: #3b82f6;
+  --color-ribbon-info: color-mix(in srgb, var(--color-log-info) 72%, var(--color-panel));
+  --color-ribbon-error: var(--color-error);
+}
+[data-theme="light"] {
+  --color-dk8s-loggers: #7c3aed;
+  --color-dk8s-loggers-ink: #ffffff;
+  --color-dk8s-hole: #0f766e;
+  --color-dk8s-ink: #ffffff;
+  --color-dk8s-note: #3d7f8c;
+  --color-dk8s-syn-var: #0451a5;
+  --color-dk8s-syn-call: #795e26;
+  --color-dk8s-syn-string: #a31515;
+  --color-asklog-link: #0f766e;
+  --color-protocol-ai-ink: #ffffff;
+  --color-find: #d4a017;
+  --color-hit: #8b7cf6;
+  --color-on-warning: #ffffff;
+  --color-on-error: #ffffff;
+  /* On white the ribbon is a light wash, not a wall of saturated blocks. */
+  --color-log-info: #2563eb;
+  --color-ribbon-info: color-mix(in srgb, #2563eb 34%, var(--color-panel));
+  --color-ribbon-error: color-mix(in srgb, #cf222e 72%, var(--color-panel));
+}
+
 [data-theme="light"] .dui_tab__pill,
 [data-theme="light"] .dui_tab__picker {
   border: 1px solid #d1d5db;

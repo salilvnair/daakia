@@ -22,7 +22,7 @@ export function levelColor(level: LogLevel): string {
   switch (level) {
     case 'error': return 'var(--color-error)';
     case 'warn': return 'var(--color-warning)';
-    case 'info': return 'var(--color-info, #6aa9ff)';
+    case 'info': return 'var(--color-log-info, var(--color-info, #6aa9ff))';
     case 'debug': return 'var(--color-text-muted)';
     default: return 'var(--color-text-secondary)';
   }
@@ -327,6 +327,25 @@ export function filterLines(lines: LogLine[], spec: LogFilterSpec): MatchedLine[
   return [...keep].sort((a, b) => a - b).map(i => (
     hitAt.has(i) ? candidates[i] : { ...candidates[i], context: true }
   ));
+}
+
+/**
+ * The lines a page counts as hits, and up to `n` either side of each — the
+ * search page's ±N, now that its term is marked rather than typed into the
+ * filter. Neighbours stay inside the hit's own pod, and are flagged `context`
+ * so they draw quieter. `n` 0 is the hits alone.
+ */
+export function keepAround(lines: MatchedLine[], isHit: (l: MatchedLine) => boolean, n: number): MatchedLine[] {
+  const podOf = (l: MatchedLine) => (l as { pod?: string }).pod;
+  const keep = new Map<number, boolean>();
+  lines.forEach((l, i) => {
+    if (!isHit(l)) return;
+    keep.set(i, true);
+    const pod = podOf(l);
+    for (let j = i - 1; j >= Math.max(0, i - n) && podOf(lines[j]) === pod; j--) if (!keep.has(j)) keep.set(j, false);
+    for (let j = i + 1; j <= Math.min(lines.length - 1, i + n) && podOf(lines[j]) === pod; j++) if (!keep.has(j)) keep.set(j, false);
+  });
+  return [...keep.keys()].sort((a, b) => a - b).map(i => (keep.get(i) ? { ...lines[i], context: undefined } : { ...lines[i], context: true }));
 }
 
 // ── Density ribbon ──────────────────────────────────────────────────────────
@@ -647,9 +666,20 @@ export function formatLogTime(ts?: number): string {
  * often the whole answer and a naive innerText copy loses it.
  */
 export function selectionText(lines: LogLine[], firstSeq: number, lastSeq: number): string {
+  /* As the row reads — its time, its level, its message — so a pasted line
+     says when and how bad, not only what. A stack frame carries no level of
+     its own, so it goes in bare under the line it belongs to. */
   return lines
     .filter(l => l.seq >= firstSeq && l.seq <= lastSeq)
-    .map(l => (l.ts !== undefined ? `${new Date(l.ts).toISOString()} ${l.text}` : l.text))
+    .map(l => {
+      const frame = l.continuation || isStackFrame(l.text);
+      const parts = [
+        l.ts !== undefined ? new Date(l.ts).toISOString() : '',
+        !frame && l.level !== 'other' ? l.level.toUpperCase() : '',
+        frame ? l.text : displayText(l),
+      ];
+      return parts.filter(Boolean).join(' ');
+    })
     .join('\n');
 }
 

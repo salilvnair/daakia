@@ -964,6 +964,15 @@ export function RightClickMenu() {
 
     // General text selection — copy
     if (action === 'copy') {
+      /* A surface that knows better copies for itself — a log view copies the
+         lines it has selected, with their times and levels, not the page text. */
+      const surface = target?.closest('[data-selection-actions]');
+      if (surface) {
+        const handled = !target!.dispatchEvent(new CustomEvent('daakia:selection-action', {
+          bubbles: true, cancelable: true, detail: { action: 'copy', text: selectedText },
+        }));
+        if (handled) return;
+      }
       if (selectedText) await navigator.clipboard.writeText(selectedText);
       return;
     }

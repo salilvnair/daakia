@@ -58,7 +58,7 @@ export const GUTTER_CALM = 'var(--color-gutter-calm, #2f6b5e)';
  * with the same key as the lines beside it: red ERROR, amber WARN, blue INFO.
  * Mixed a little toward the panel so an error is still the loudest thing in it.
  */
-export const GUTTER_INFO = 'color-mix(in srgb, var(--color-info, #6aa9ff) 72%, var(--color-panel, #1e1e1e))';
+export const GUTTER_INFO = 'var(--color-ribbon-info, color-mix(in srgb, var(--color-info, #6aa9ff) 72%, var(--color-panel, #1e1e1e)))';
 export const GUTTER_WARN = 'var(--color-gutter-warn, #8a7320)';
 
 /** A colour at a strength, over whatever is behind it. */

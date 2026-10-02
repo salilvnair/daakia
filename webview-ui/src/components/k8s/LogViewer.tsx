@@ -15,14 +15,14 @@
  *   - Stack traces fold to one row. An unfolded Java exception costs a screen
  *     and a half, so three of them mean you never see the fourth.
  */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback, useDeferredValue } from 'react';
 import {
   FilterInputView, SelectInputView, SegmentedControlView, CheckboxView, ButtonView,
   BadgeChipView, IconSize, SplitPanelView, DateTimeInputView, ProgressBarView } from '@salilvnair/dui';
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
   WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon, CloseIcon,
-  ChevronLeftIcon, SidebarLeftIcon, SearchIcon, LinkIcon,
+  ChevronLeftIcon, SidebarLeftIcon, SearchIcon, LinkIcon, ClockIcon, EraserIcon, BracesIcon,
 } from '../../icons';
 import { CopyGlyph, COPY_TICK_MS } from '../shared/CopyTick';
 import { copyText } from '../../utils/clipboard';
@@ -64,7 +64,7 @@ import {
   timeBuckets, ribbonTicks, COMPACT_RIBBON_PX, type DensityBucket, type RibbonTick,
   formatLogTime, selectionText, LEVEL_ORDER, foldStackTraces, bufferBytes,
   compactCount, grepTermFor, frameOrigin, type MatchedLine, type FieldFilter,
-  displayText, ownFramesFirst,
+  displayText, ownFramesFirst, buildMatcher, keepAround,
 } from './log-view';
 import {
   AnalyzeModal, planAnalyze, ANALYZE_HEAD, ANALYZE_TAIL, type AnalyzePlan,
@@ -710,8 +710,71 @@ function Sep() {
  * shape and hit target. `on` absent makes it a plain action, and the missing
  * aria-pressed is the point: Download is not a state.
  */
-function IconButton({ on, onClick, title, icon }: {
+/**
+ * The find bar — the editor's Ctrl+F, in the log view's own look: the term,
+ * where you are among its matches, case and regex, up, down, close.
+ */
+function FindBar({ inputRef, text, onText, matchCase, onMatchCase, regex, onRegex, at, total, onStep, onClose }: {
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  text: string; onText: (v: string) => void;
+  matchCase: boolean; onMatchCase: () => void;
+  regex: boolean; onRegex: () => void;
+  at: number; total: number;
+  onStep: (d: number) => void; onClose: () => void;
+}) {
+  const toggle = (on: boolean): React.CSSProperties => ({
+    width: 24, height: 22, borderRadius: 5, fontSize: 11, fontFamily: 'var(--font-mono, ui-monospace, monospace)',
+    border: `1px solid ${on ? `color-mix(in srgb, ${ACCENT} 45%, transparent)` : 'transparent'}`,
+    background: on ? `color-mix(in srgb, ${ACCENT} 16%, transparent)` : 'transparent',
+    color: on ? ACCENT : 'var(--color-text-secondary)',
+  });
+  const plain: React.CSSProperties = { width: 24, height: 22, borderRadius: 5, border: 'none', background: 'transparent', color: 'var(--color-text-secondary)' };
+  return (
+    <div role="search" className="absolute z-30 flex items-center"
+         style={{
+           top: 8, right: 28, gap: 2, padding: '4px 5px 4px 8px', borderRadius: 9,
+           background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)',
+           boxShadow: '0 10px 28px -12px rgba(0,0,0,.65)',
+         }}
+         onKeyDown={e => {
+           if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); }
+           else if (e.key === 'Enter') { e.preventDefault(); onStep(e.shiftKey ? -1 : 1); }
+         }}>
+      <SearchIcon size={12} color="var(--color-text-muted)" />
+      <input ref={inputRef} value={text} onChange={e => onText(e.target.value)} placeholder="Find in log" aria-label="Find in log"
+             spellCheck={false} className="outline-none"
+             style={{
+               width: 210, height: 24, padding: '0 8px', marginLeft: 4, borderRadius: 6, fontSize: 12,
+               fontFamily: 'var(--font-mono, ui-monospace, monospace)', color: 'var(--color-text-primary)',
+               background: 'var(--color-bg, var(--color-input-bg))',
+               border: `1px solid ${text && !total ? 'color-mix(in srgb, var(--color-error) 60%, transparent)' : 'var(--color-surface-border)'}`,
+             }} />
+      <span className="select-none" style={{ minWidth: 64, padding: '0 6px', textAlign: 'center', fontSize: 11, fontVariantNumeric: 'tabular-nums',
+                                            color: text && !total ? 'var(--color-error)' : 'var(--color-text-muted)' }}>
+        {!text ? '' : total ? `${at + 1} of ${total.toLocaleString()}` : 'No results'}
+      </span>
+      <button type="button" title="Match case" aria-pressed={matchCase} onClick={onMatchCase} className="cursor-pointer" style={toggle(matchCase)}>Aa</button>
+      <button type="button" title="Regular expression" aria-pressed={regex} onClick={onRegex} className="cursor-pointer" style={toggle(regex)}>.*</button>
+      <span style={{ width: 1, height: 16, margin: '0 3px', background: 'var(--color-surface-border)' }} />
+      <button type="button" title="Previous match (Shift+Enter)" disabled={!total} onClick={() => onStep(-1)}
+              className="flex items-center justify-center cursor-pointer disabled:opacity-40" style={plain}>
+        <span style={{ display: 'inline-flex', transform: 'rotate(180deg)' }}><ChevronDownIcon size={13} /></span>
+      </button>
+      <button type="button" title="Next match (Enter)" disabled={!total} onClick={() => onStep(1)}
+              className="flex items-center justify-center cursor-pointer disabled:opacity-40" style={plain}>
+        <ChevronDownIcon size={13} />
+      </button>
+      <button type="button" title="Close (Esc)" onClick={onClose} className="dk-row-close flex items-center justify-center cursor-pointer" style={plain}>
+        <CloseIcon size={12} />
+      </button>
+    </div>
+  );
+}
+
+function IconButton({ on, onClick, title, icon, tone = ACCENT }: {
   on?: boolean; onClick: () => void; title: string; icon: React.ReactNode;
+  /** The colour it lights in when on — amber for a read that is not the usual one. */
+  tone?: string;
 }) {
   return (
     <button
@@ -726,9 +789,9 @@ function IconButton({ on, onClick, title, icon }: {
         // eyeballed before and both were wrong — 30 tall and 6 round — which
         // is the kind of thing you see without being able to name.
         width: 28, height: 28, borderRadius: 4,
-        color: on ? ACCENT : 'var(--color-text-secondary)',
-        background: on ? `color-mix(in srgb, ${ACCENT} 14%, transparent)` : 'transparent',
-        border: `1px solid ${on ? `color-mix(in srgb, ${ACCENT} 38%, transparent)` : 'var(--color-surface-border)'}`,
+        color: on ? tone : 'var(--color-text-secondary)',
+        background: on ? `color-mix(in srgb, ${tone} 14%, transparent)` : 'transparent',
+        border: `1px solid ${on ? `color-mix(in srgb, ${tone} 38%, transparent)` : 'var(--color-surface-border)'}`,
       }}
     >
       {icon}
@@ -742,13 +805,21 @@ function IconButton({ on, onClick, title, icon }: {
 const RAIL_MIN = 208;
 const RAIL_MAX = RAIL_MIN * 2;
 
+/** Find-in-log's marking: yellow, apart from the level colours. */
+const FIND_TONE = 'var(--color-find, #e2b93d)';
+/** A search result's hits: a pale lavender, light enough to read through, used nowhere else in the log view. */
+const HIT_TONE = 'var(--color-hit, #b8adf6)';
+
+/** The log view Ctrl+F opens find in: the one last clicked or focused. */
+let activeViewer: { id: symbol; el: HTMLElement } | null = null;
+
 /** The filter's share of a one-row toolbar, and the least it may be. */
 const FILTER_SHARE = 0.4;
-const FILTER_MIN = 240;
+const FILTER_MIN = 180;
 
 export function LogViewer() {
   const {
-    logs, logStatus, logDetail, logDropped, logFilter, logLevels, logRequestedAt,
+    logs, logStatus, logDetail, logDropped, logReceived, logFilter, logLevels, logRequestedAt,
     logFieldFilters, addFieldFilter, removeFieldFilter,
     logFollow, logLive, logTail, logDirection, logSince, logWrap, logPrevious,
     logFrom, logTo, setLogWindow, logContainer,
@@ -760,7 +831,7 @@ export function LogViewer() {
        closes ITS view, and reaching past the source for either would act on
        whichever pod happened to be open behind it. */
     clearFieldFilters, closeDetail, isSnapshot, contextCap, sharedRange,
-    paging, focusSeq, onFindContext,
+    paging, focusSeq, onFindContext, isHit, highlightQuery, clearLogs,
     focusLabel, selectedSeq, onSelectLine, selectedLabel, podColumn, podColor, columns, railLead, footerNote,
     onGutterCompact,
   } = useLogSource();
@@ -1071,6 +1142,25 @@ export function LogViewer() {
   >(null);
 
   /*
+    The lines selected, as a range — not as the browser's selection.
+
+    The list draws only the rows on screen, so a selection dragged over
+    forty lines and then scrolled lost the rows it was anchored in: it
+    vanished, or jumped onto whatever text the reused rows held next. The
+    range is kept here instead and the rows draw it themselves, so it
+    survives any scroll; Shift+click a row extends it from where it began,
+    a line number selects that line, Esc lets go. Copy writes these lines
+    as they read — time, level, message — whatever is on screen.
+  */
+  const [lineRange, setLineRange] = useState<{ anchor: number; first: number; last: number } | null>(null);
+  const lineRangeRef = useRef(lineRange); lineRangeRef.current = lineRange;
+  const pointerDownRef = useRef(false);
+  const extendRange = (seq: number) => setLineRange(r => {
+    const anchor = r?.anchor ?? seq;
+    return { anchor, first: Math.min(anchor, seq), last: Math.max(anchor, seq) };
+  });
+
+  /*
     How much of a hit's surroundings the filter keeps.
 
     Searching a log is almost never about the matching line on its own: you
@@ -1098,16 +1188,52 @@ export function LogViewer() {
     return [...new Set([0, ...within, contextCap])].sort((a, b) => a - b);
   }, [lineSettings.contextLadder, contextCap]);
 
+  /*
+    The filter, a beat behind the box.
+
+    Twenty thousand lines filtered and redrawn on every keystroke froze the
+    page while somebody typed. The box keeps its own text and hands it on
+    when they pause; the view then filters at React's lower priority, so a
+    keystroke is never waiting on the last one's redraw.
+  */
+  const [filterDraft, setFilterDraft] = useState(logFilter);
+  const draftPending = useRef(false);
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => { if (!draftPending.current) setFilterDraft(logFilter); }, [logFilter]);
+  useEffect(() => () => clearTimeout(draftTimer.current), []);
+  const typeFilter = (v: string) => {
+    setFilterDraft(v);
+    draftPending.current = true;
+    clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(() => { draftPending.current = false; setLogFilter(v); }, 220);
+  };
+  const clearFilterNow = () => {
+    clearTimeout(draftTimer.current);
+    draftPending.current = false;
+    setFilterDraft('');
+    setLogFilter('');
+  };
+  const filterQuery = useDeferredValue(logFilter);
+
   const visible = useMemo(
     () => {
-      const shown = filterLines(logs, {
-        query: logFilter, levels: logLevels, fields: logFieldFilters,
+      const filtered = filterLines(logs, {
+        query: filterQuery, levels: logLevels, fields: logFieldFilters,
         contextLines: findContext,
       });
+      /* No term typed, but the page has hits of its own (a search result):
+         ±N works on those, so "no surrounding lines" means the hits alone. */
+      const shown = !filterQuery.trim() && isHit ? keepAround(filtered, isHit, findContext) : filtered;
       /* Only marked, or one hole's value from the rail: the marked lines and their frames. */
       return (onlyMarked || markField) && marks.length ? keepMarked(shown, markIdx.index, markField) : shown;
     },
-    [logs, logFilter, logLevels, logFieldFilters, findContext, onlyMarked, markField, marks.length, markIdx.index],
+    [logs, filterQuery, logLevels, logFieldFilters, findContext, onlyMarked, markField, marks.length, markIdx.index, isHit],
+  );
+
+  /* A term to mark in the text without filtering by it — a search result's own term. */
+  const highlightMatcher = useMemo(
+    () => (highlightQuery && !filterQuery.trim() ? buildMatcher(highlightQuery) : null),
+    [highlightQuery, filterQuery],
   );
 
   /* The hits themselves, for the counter and for stepping between them. */
@@ -1256,6 +1382,11 @@ export function LogViewer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [payloads, payloadOpts.shapes, payloadOpts.maxChars]);
 
+  /* Once a read shows payloads the picker stays for it — a filter that hides them should not move the toolbar. */
+  const payloadSeen = useRef(false);
+  const payloadRead = useRef(logRequestedAt);
+  if (payloadRead.current !== logRequestedAt) { payloadRead.current = logRequestedAt; payloadSeen.current = false; }
+
   /* Events, not lines: a folded trace or a YAML block is one, and its frames are none. */
   const eventStats = useMemo(() => {
     let events = 0;
@@ -1265,6 +1396,7 @@ export function LogViewer() {
       events++;
       if (row.yaml || payloadOf(row.line)) withPayload++;
     }
+    if (withPayload > 0) payloadSeen.current = true;
     return { events, withPayload };
   }, [rows, payloadOf]);
 
@@ -1299,6 +1431,96 @@ export function LogViewer() {
     setLogFollow(false);
     el.scrollTop = Math.max(0, offsets[rowIndex] - el.clientHeight / 3);
   }, [offsets, setLogFollow]);
+  /*
+    Find in this log — Ctrl+F.
+
+    Not the filter: every line stays where it is, and the ones that match
+    are marked down the gutter and across the row, the current one stronger,
+    Enter and Shift+Enter stepping between them. A filter answers "show me
+    only these"; find answers "where is it, and what is around it".
+  */
+  const [findOpen, setFindOpen] = useState(false);
+  const [findText, setFindText] = useState('');
+  const [findCase, setFindCase] = useState(false);
+  const [findRegex, setFindRegex] = useState(false);
+  const [findAt, setFindAt] = useState(0);
+  const findInputRef = useRef<HTMLInputElement>(null);
+  const findQuery = useDeferredValue(findText);
+  const findRows = useMemo(() => {
+    if (!findOpen || !findQuery) return [] as number[];
+    let test: (s: string) => boolean;
+    if (findRegex) {
+      try { const re = new RegExp(findQuery, findCase ? '' : 'i'); test = s => re.test(s); } catch { return []; }
+    } else if (findCase) {
+      test = s => s.includes(findQuery);
+    } else {
+      const q = findQuery.toLowerCase();
+      test = s => s.toLowerCase().includes(q);
+    }
+    const out: number[] = [];
+    rows.forEach((r, i) => {
+      if (test(r.line.text) || r.folded?.some(f => test(f.text))) out.push(i);
+    });
+    return out;
+  }, [findOpen, findQuery, findCase, findRegex, rows]);
+  const findSeqs = useMemo(() => new Set(findRows.map(i => rows[i]?.line.seq)), [findRows, rows]);
+  const findIdx = findRows.length ? Math.min(findAt, findRows.length - 1) : -1;
+  const findCurrentSeq = findIdx >= 0 ? rows[findRows[findIdx]]?.line.seq : undefined;
+  /* A new term starts at the first match from where the reader is looking. */
+  useEffect(() => {
+    if (!findRows.length) return;
+    const el = scrollRef.current;
+    const from = el ? rowAt(el.scrollTop) : 0;
+    const k = findRows.findIndex(i => i >= from);
+    setFindAt(k === -1 ? 0 : k);
+    jumpToRow(findRows[k === -1 ? 0 : k]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [findQuery, findCase, findRegex, findOpen]);
+  const stepFind = (d: number) => {
+    const n = findRows.length;
+    if (!n) return;
+    const next = ((findIdx < 0 ? 0 : findIdx) + d + n) % n;
+    setFindAt(next);
+    jumpToRow(findRows[next]);
+  };
+  const closeFind = () => { setFindOpen(false); };
+  const findId = useRef(Symbol('log-view'));
+  useEffect(() => {
+    const root = viewerRef.current;
+    if (!root) return;
+    const mark = () => { activeViewer = { id: findId.current, el: root }; };
+    root.addEventListener('mousedown', mark, true);
+    root.addEventListener('focusin', mark);
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'f') return;
+      if (root.offsetParent === null) return;
+      const other = activeViewer && activeViewer.id !== findId.current
+        && activeViewer.el.isConnected && activeViewer.el.offsetParent !== null;
+      if (other) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setFindOpen(true);
+      const picked = window.getSelection()?.toString().trim();
+      if (picked && !picked.includes('\n') && picked.length < 200) setFindText(picked);
+      setTimeout(() => { findInputRef.current?.focus(); findInputRef.current?.select(); }, 0);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      root.removeEventListener('mousedown', mark, true);
+      root.removeEventListener('focusin', mark);
+      window.removeEventListener('keydown', onKey, true);
+      if (activeViewer?.id === findId.current) activeViewer = null;
+    };
+  }, []);
+
+  /* As wide as the pod names are — a fixed 104px left a band of air after a five-letter tail. */
+  const podColWidth = useMemo(() => {
+    if (!podColumn) return 0;
+    let n = 4;
+    for (const l of logs) { const p = (l as { pod?: string }).pod; if (p) n = Math.max(n, podTail(p).length); }
+    return `calc(${Math.min(n, 24)}ch + 4px)`;
+  }, [podColumn, logs]);
+
   /* From the row a jump lands on — a third of the way down — so pressing it
      again moves on rather than finding the same line. */
   const jumpToNextMark = useCallback((markId?: string) => {
@@ -1315,7 +1537,19 @@ export function LogViewer() {
     "remember" is on.
   */
   const [payloadToggles, setPayloadToggles] = useState<Map<number, boolean>>(new Map());
-  const loggersOpen = useMemo(() => openLoggers(prefs), [prefs]);
+  /*
+    The loggers remembered open, as they stood when this read began.
+
+    Remembering is for the NEXT read — open a payload today and that logger's
+    payloads open when the pod is read again. Read live, it applied the moment
+    one was clicked: opening one "provider said" opened every other one on the
+    screen, and expanding a line looked like it expanded a different one. So
+    the set is taken once per read, and a click opens the line that was
+    clicked, nothing else.
+  */
+  const loggersAtRead = useRef<{ at: number; open: Set<string> }>({ at: -1, open: new Set() });
+  if (loggersAtRead.current.at !== logRequestedAt) loggersAtRead.current = { at: logRequestedAt, open: openLoggers(prefs) };
+  const loggersOpen = loggersAtRead.current.open;
   const isPayloadOpen = useCallback((line: MatchedLine): boolean => {
     const own = payloadToggles.get(line.seq);
     if (own !== undefined) return own;
@@ -1323,6 +1557,22 @@ export function LogViewer() {
     return payloadOpts.remember && !!line.logger && loggersOpen.has(line.logger);
   }, [payloadToggles, payloadOpts.collapsed, payloadOpts.remember, loggersOpen]);
   const [openFields, setOpenFields] = useState<Set<number>>(new Set());
+  /*
+    What was opened belongs to the read it was opened in.
+
+    Payloads, fields and folded traces are kept by line number, and every
+    read numbers its lines from the start again — so a payload opened on
+    line 7, then a Fetch or another pod, left whatever is line 7 now open.
+    A new read starts with everything closed (or as remembered, above).
+  */
+  const openedIn = useRef(logRequestedAt);
+  useEffect(() => {
+    if (openedIn.current === logRequestedAt) return;
+    openedIn.current = logRequestedAt;
+    setPayloadToggles(new Map());
+    setOpenFields(new Set());
+    setExpanded(new Set());
+  }, [logRequestedAt]);
 
   /*
     A link to one line, copied from its own row.
@@ -1375,7 +1625,7 @@ export function LogViewer() {
       title={lineCopiedSeq === line.seq ? 'Copied' : 'Copy this line'}
       aria-label="Copy this line"
       className={`dk-row-link flex items-center justify-center border-none bg-transparent cursor-pointer p-0${lineCopiedSeq === line.seq ? ' is-copied' : ''}`}
-      style={{ width: 16, height: 16 }}
+      style={{ width: 14, height: 16 }}
     >
       <CopyGlyph copied={lineCopiedSeq === line.seq} size={12} />
     </button>
@@ -1481,9 +1731,28 @@ export function LogViewer() {
 
   // Follow the tail, but only from the bottom. Yanking the view down while
   // someone is reading history is the worst thing a log viewer can do.
+  /*
+    Pinned until the rows have settled. One `scrollTop = scrollHeight` landed
+    short whenever the rows it revealed measured taller than estimated (an
+    open payload, a wrapped line) — the view sat a little above the newest
+    line, the scroll handler read that as the reader scrolling up, and
+    following quietly stopped following. So it re-pins for a few frames, and
+    the handler ignores scrolls this effect made.
+  */
+  const pinning = useRef(false);
   useEffect(() => {
     if (!logFollow || !scrollRef.current) return;
-    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    pinning.current = true;
+    let frames = 0;
+    let raf = 0;
+    const pin = () => {
+      const el = scrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+      if (++frames < 5) raf = requestAnimationFrame(pin);
+      else pinning.current = false;
+    };
+    pin();
+    return () => { cancelAnimationFrame(raf); pinning.current = false; };
   }, [total, logFollow]);
 
   /*
@@ -1498,6 +1767,10 @@ export function LogViewer() {
     const el = scrollRef.current;
     if (!el) return;
     setScrollTop(el.scrollTop);
+    if (lineRangeRef.current && !pointerDownRef.current) {
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed && el.contains(sel.anchorNode)) sel.removeAllRanges();
+    }
     if (paging) {
       const i = rowAtRef.current(el.scrollTop);
       const row = rowsRef.current[i];
@@ -1513,6 +1786,7 @@ export function LogViewer() {
     // the gesture. Feeding it back into the follow decision makes the two
     // fight each other, which is what the flicker was.
     if (draggingRef.current) return;
+    if (pinning.current) return;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
     if (atBottom !== logFollow) setLogFollow(atBottom);
   }, [logFollow, setLogFollow, paging, logs.length]);
@@ -1571,6 +1845,8 @@ export function LogViewer() {
       // `lastSelRef` deliberately survives this. Choosing a menu entry
       // collapses the selection before the handler runs, so the thing the user
       // picked the menu for is gone by the time we go to act on it.
+      /* A range of lines outlives the browser's selection — see `lineRange`. */
+      if (lineRangeRef.current) return null;
       selectionRef.current = null;
       setLogSelection(undefined);
       return null;
@@ -1590,6 +1866,9 @@ export function LogViewer() {
 
     const firstSeq = Math.min(a, b);
     const lastSeq = Math.max(a, b);
+    if (lineRangeRef.current?.first !== firstSeq || lineRangeRef.current?.last !== lastSeq) {
+      setLineRange({ anchor: a, first: firstSeq, last: lastSeq });
+    }
     // Rebuilt from the buffer, not from the DOM: the rendered text has no
     // timestamps and would drag the gutter along with it.
     const text = selectionText(logs, firstSeq, lastSeq);
@@ -1605,6 +1884,54 @@ export function LogViewer() {
     document.addEventListener('selectionchange', onChange);
     return () => document.removeEventListener('selectionchange', onChange);
   }, [captureSelection]);
+
+  /* The range is what the rest of the view reads as "the selection": Ask AI,
+     the menu, the footer's count. */
+  useEffect(() => {
+    if (!lineRange) return;
+    const text = selectionText(logs, lineRange.first, lineRange.last);
+    const count = logs.filter(l => l.seq >= lineRange.first && l.seq <= lineRange.last).length;
+    const prev = selectionRef.current;
+    selectionRef.current = { text, raw: prev?.raw ?? text, first: lineRange.first, last: lineRange.last, count };
+    lastSelRef.current = selectionRef.current;
+    setLogSelection({ text, firstSeq: lineRange.first, lastSeq: lineRange.last, lineCount: count });
+  }, [lineRange, logs, setLogSelection]);
+
+  /* Copy: the lines as they read. A word picked out of one line copies as itself. */
+  const logsRef = useRef(logs); logsRef.current = logs;
+  useEffect(() => {
+    const onCopy = (e: ClipboardEvent) => {
+      const r = lineRangeRef.current;
+      if (!r) return;
+      if ((document.activeElement as HTMLElement | null)?.closest('input, textarea, [contenteditable="true"]')) return;
+      const sel = window.getSelection();
+      const host = bodyRef.current;
+      if (sel && !sel.isCollapsed && host && !host.contains(sel.anchorNode)) return;
+      if (sel && !sel.isCollapsed && r.first === r.last) return;
+      e.clipboardData?.setData('text/plain', selectionText(logsRef.current, r.first, r.last));
+      e.preventDefault();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || !lineRangeRef.current) return;
+      /* An open menu takes Esc first; the next one lets go of the lines. */
+      if (document.querySelector('body > .fixed[class*="z-[9999]"]')) return;
+      /* Esc lets go of the lines — and only that, not the pod behind them. */
+      e.stopPropagation();
+      setLineRange(null);
+      selectionRef.current = null;
+      setLogSelection(undefined);
+      window.getSelection()?.removeAllRanges();
+    };
+    const up = () => { pointerDownRef.current = false; };
+    document.addEventListener('copy', onCopy);
+    window.addEventListener('keydown', onKey, true);
+    document.addEventListener('mouseup', up);
+    return () => {
+      document.removeEventListener('copy', onCopy);
+      window.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('mouseup', up);
+    };
+  }, [setLogSelection]);
 
   /**
    * Open the context menu on the selection that just ended.
@@ -1735,6 +2062,15 @@ export function LogViewer() {
     const onAction = (e: Event) => {
       const { action, text } = (e as CustomEvent<{ action: string; text: string }>).detail ?? {};
 
+      /* Copy from the menu: the selected lines as they read — see `lineRange`. */
+      if (action === 'copy') {
+        const r = lineRangeRef.current;
+        if (!r || r.first === r.last && (text ?? '').trim()) return;
+        e.preventDefault();
+        void copyText(selectionText(logsRef.current, r.first, r.last));
+        return;
+      }
+
       // The AI entries act on whole lines, so they run before the search term
       // is derived — `grepTermFor` rejects a multi-line selection as a search
       // term, and returning early on that would have taken these with it.
@@ -1804,7 +2140,9 @@ export function LogViewer() {
       {/* ── Controls: every strip lives up here ── */}
       <div className="flex flex-col shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-      <div ref={barRef} className="flex items-center gap-3 px-4 py-2.5 flex-wrap shrink-0">
+      {/* In one row nothing wraps and nothing shrinks but the filter, which
+          gives way down to its minimum — its own style overrides the rule. */}
+      <div ref={barRef} className={`flex items-center gap-3 px-4 py-2.5 shrink-0 ${stacked ? 'flex-wrap' : 'flex-nowrap [&>*]:shrink-0'}`}>
         {/* First, the field panel's switch: it governs the rail beside the lines
             rather than the rows, and a control that hides a whole column should
             not be buried at the end of a toolbar. */}
@@ -1851,8 +2189,8 @@ export function LogViewer() {
         <div ref={filterBoxRef} className={stacked ? 'flex-1' : undefined}
              style={stacked ? { minWidth: 220 } : { flex: `0 1 ${FILTER_SHARE * 100}%`, minWidth: FILTER_MIN }}>
           <FilterInputView
-            value={logFilter}
-            onChange={(v: string) => setLogFilter(v)}
+            value={filterDraft}
+            onChange={(v: string) => typeFilter(v)}
             placeholder="Filter — text, or /regex/"
             size="sm"
             width="100%"
@@ -1870,7 +2208,7 @@ export function LogViewer() {
             suffix={logFilter ? (
               <button
                 type="button"
-                onClick={() => setLogFilter('')}
+                onClick={clearFilterNow}
                 title="Clear filter"
                 aria-label="Clear filter"
                 className="flex items-center justify-center cursor-pointer border-none bg-transparent p-0"
@@ -1892,7 +2230,9 @@ export function LogViewer() {
           empty filter box is a control for a state that does not exist, and
           the count would read "0 matches" for a log nobody has searched.
         */}
-        {logFilter.trim() !== '' && (
+        {/* Always there, so typing in the filter never moves the toolbar; idle
+            and quiet with nothing to find. */}
+        {(
           <div
             className="flex items-center gap-1.5 shrink-0"
             title={contextCap !== undefined
@@ -1926,7 +2266,9 @@ export function LogViewer() {
                 ? `${hits.length} matching lines, with ${findContext} either side`
                 : `${hits.length} matching lines`}
             >
-              {hits.length.toLocaleString()} {hits.length === 1 ? 'match' : 'matches'}
+              <span style={{ visibility: logFilter.trim() || isHit ? 'visible' : 'hidden' }}>
+                {hits.length.toLocaleString()} {hits.length === 1 ? 'match' : 'matches'}
+              </span>
             </span>
           </div>
         )}
@@ -1960,8 +2302,10 @@ export function LogViewer() {
           pane — and then the filter takes the whole first row. Measured, not a
           breakpoint: a pane in a split is narrow on a wide screen.
         */}
-        <div ref={groupRef} className="flex items-center gap-2"
-             style={stacked ? { flexBasis: '100%', flexWrap: 'wrap' } : { flex: '1 1 auto', flexWrap: 'nowrap', minWidth: 0 }}>
+        {/* Tight gaps, and no control squeezed below its own width — so it reads
+            as one toolbar, and measures the same in either layout. */}
+        <div ref={groupRef} className="flex items-center gap-1.5 [&>*]:shrink-0"
+             style={stacked ? { flexBasis: '100%', flexWrap: 'wrap' } : { flex: '1 0 auto', flexWrap: 'nowrap' }}>
         {/* Modes, not actions, so they are icon toggles rather than labelled
             buttons — and they sit apart from the controls that fetch. */}
         <IconButton on={logWrap} onClick={() => chooseWrap(!logWrap)}
@@ -1976,22 +2320,23 @@ export function LogViewer() {
           switch. Only when there is a payload to draw: a control for lines that
           do not exist is noise on a log that is all sentences.
         */}
-        {payloadOpts.draw && eventStats.withPayload > 0 && (
+        {payloadOpts.draw && (eventStats.withPayload > 0 || payloadSeen.current) && (
           <>
             <Sep />
             {/* The toolbar's own height and corners, so it sits in the row rather than floating on it. */}
             <span title={`How payloads open — ${eventStats.withPayload.toLocaleString()} of these events carry one. Each line keeps its own switch.`}
                   className="dk8s-payload-mode inline-flex">
-            <SegmentedControlView
-              size="md"
-              variant="pointy"
-              borderRadius={4}
+            {/* A picker rather than three buttons: set once and left, so it
+                should not cost the filter the width of three. */}
+            <SelectInputView
+              size={CTL_SIZE}
               accentColor={ACCENT}
               value={payloadOpts.mode}
               onChange={v => setPayloadPref(PAYLOAD_MODE_PREF, v as PayloadMode)}
               options={[
-                { value: 'tree', label: 'Tree' }, { value: 'pretty', label: 'Pretty' },
-                ...(payloadOpts.keepRaw ? [{ value: 'raw', label: 'Raw' }] : []),
+                { value: 'tree', label: 'Tree', icon: <BracesIcon size={12} /> },
+                { value: 'pretty', label: 'Pretty', icon: <BracesIcon size={12} /> },
+                ...(payloadOpts.keepRaw ? [{ value: 'raw', label: 'Raw', icon: <BracesIcon size={12} /> }] : []),
               ]}
             />
             </span>
@@ -2008,7 +2353,27 @@ export function LogViewer() {
           feature. What is left — the filter, the levels, wrap, folding,
           download, Analyze — all works on lines, and works the same either way.
         */}
-        {!isSnapshot && (
+        {/* Find in this log — always here, not only behind Ctrl+F. */}
+        <IconButton on={findOpen} onClick={() => { setFindOpen(true); setTimeout(() => { findInputRef.current?.focus(); findInputRef.current?.select(); }, 0); }}
+                    title="Find in this log (Ctrl+F)" icon={<SearchIcon size={IconSize.item} />} />
+
+        {/*
+          While following, the controls that shape a read have nothing to
+          shape: there is no end, no line count and no window to a stream, and
+          Fetch would only stop it. So that whole group gives way to what a
+          stream does need — clearing what has piled up on screen.
+        */}
+        {!isSnapshot && logLive && (
+          <>
+            <Sep />
+            {clearLogs && (
+              <ButtonView label="Clear" size={CTL_SIZE} variant="secondary" accentColor={ACCENT}
+                          onClick={clearLogs} title="Clear the screen — Following carries on, from here"
+                          iconLeft={<EraserIcon size={IconSize.action} />} />
+            )}
+          </>
+        )}
+        {!isSnapshot && !logLive && (
           <>
         <Sep />
 
@@ -2017,9 +2382,11 @@ export function LogViewer() {
             behaviour this whole view exists to avoid. */}
         {/* Part of WHAT is fetched, so it belongs with the query controls
             rather than stranded past Analyze at the far right. */}
+        {/* An icon, lit amber while on, so the row fits beside the filter. */}
         {(detail?.restarts ?? 0) > 0 && (
-          <CheckboxView label="previous run" checked={logPrevious} onChange={setLogPrevious}
-                        size={CTL_SIZE} accentColor="var(--color-warning)" />
+          <IconButton on={logPrevious} onClick={() => setLogPrevious(!logPrevious)} tone="var(--color-warning)"
+                      title={logPrevious ? 'Reading the previous run — the container before its last restart' : 'Read the previous run — the container before its last restart'}
+                      icon={<ClockIcon size={IconSize.item} />} />
         )}
 
         {/* A third choice, because "last 15 minutes" cannot answer what
@@ -2113,7 +2480,10 @@ export function LogViewer() {
             fontWeight: 600,
           }}
         />
-
+          </>
+        )}
+        {!isSnapshot && (
+          <>
         {/* What to do with what came back sits at the right end of the row. */}
         <span className="flex-1" />
         <Sep />
@@ -2258,8 +2628,19 @@ export function LogViewer() {
             meant the loading state had one column and the loaded state had
             two, so the rail arrived from nowhere and pushed the lines you had
             started reading sideways. */}
-        {(settling || logStatus === 'loading') && logs.length === 0 ? (
-          <LogSkeleton railOpen={facetsOpen} rowHeight={ROW_HEIGHT} />
+        {findOpen && (
+          <FindBar
+            inputRef={findInputRef}
+            text={findText} onText={setFindText}
+            matchCase={findCase} onMatchCase={() => setFindCase(v => !v)}
+            regex={findRegex} onRegex={() => setFindRegex(v => !v)}
+            at={findIdx} total={findRows.length}
+            onStep={stepFind} onClose={closeFind}
+          />
+        )}
+        {/* A snapshot still arriving keeps the skeleton — it lands whole. */}
+        {(settling || logStatus === 'loading' || (logStatus === 'streaming' && !logLive && (logReceived ?? 0) > 0)) && logs.length === 0 ? (
+          <LogSkeleton railOpen={facetsOpen} rowHeight={ROW_HEIGHT} received={logReceived} />
         ) : (
         <>
         {/* The rail sits inside the body rather than above it, so it scrolls
@@ -2354,6 +2735,22 @@ export function LogViewer() {
           <div
             ref={attachScroll}
             onScroll={onScroll}
+            onMouseDown={e => {
+              if (e.button !== 0) return;
+              const t = e.target as HTMLElement;
+              if (t.closest('button, a, input, textarea, [contenteditable="true"]')) return;
+              const row = t.closest('[data-seq]') as HTMLElement | null;
+              /* Shift+click: the lines from where the selection began to this one. */
+              if (e.shiftKey && row && lineRangeRef.current) {
+                e.preventDefault();
+                window.getSelection()?.removeAllRanges();
+                extendRange(Number(row.dataset.seq));
+                return;
+              }
+              pointerDownRef.current = true;
+              /* A fresh press starts a fresh selection. */
+              if (lineRangeRef.current) setLineRange(null);
+            }}
             /* Once, here, rather than on every row: thirty rows carrying the
                same three strings is thirty copies of one fact. A snapshot is
                left out — a search result is not a place a link can point. */
@@ -2451,13 +2848,25 @@ export function LogViewer() {
                              somebody was sent looking like every other
                              warning on screen. */
                           cursor: onSelectLine && !row.isFrame ? 'pointer' : undefined,
-                          background: line.seq === linkedSeq
+                          /* A hit or a find match: a bar in the gutter, the whole line tinted. */
+                          boxShadow: findCurrentSeq === line.seq ? `inset 3px 0 0 ${FIND_TONE}`
+                            : findSeqs.has(line.seq) ? `inset 3px 0 0 color-mix(in srgb, ${FIND_TONE} 70%, transparent)`
+                              : isHit?.(line) ? `inset 2px 0 0 color-mix(in srgb, ${HIT_TONE} 70%, transparent)` : undefined,
+                          background: findCurrentSeq === line.seq
+                            ? `color-mix(in srgb, ${FIND_TONE} 26%, transparent)`
+                          : findSeqs.has(line.seq)
+                            ? `color-mix(in srgb, ${FIND_TONE} 11%, transparent)`
+                          : line.seq === linkedSeq
                             ? `color-mix(in srgb, ${ACCENT} 22%, transparent)`
+                            : lineRange && line.seq >= lineRange.first && line.seq <= lineRange.last
+                              ? 'color-mix(in srgb, var(--color-log-info, #3b82f6) 22%, transparent)'
                             : line.seq === selectedSeq
                               ? `color-mix(in srgb, ${ACCENT} 12%, transparent)`
                             /* A mark is drawn on the message it matched (below),
                                not across the row — so the row keeps its level
                                tint, and the time, level and logger stay plain. */
+                            : isHit?.(line) && !line.context
+                              ? `color-mix(in srgb, ${HIT_TONE} 9%, transparent)`
                             : line.level === 'error'
                               ? 'color-mix(in srgb, var(--color-error) 7%, transparent)'
                               : line.level === 'warn'
@@ -2477,7 +2886,8 @@ export function LogViewer() {
                         <div className="flex gap-2.5 items-start">
                         {/* With no line numbers, the link keeps a slot of its own first on the row. */}
                         {!logLineNumbers && (
-                          <span className="shrink-0 flex items-center justify-center" style={{ width: 16, height: ROW_HEIGHT - 4 }}>
+                          <span className="shrink-0 flex items-center justify-end" style={{ width: 34, gap: 2, height: ROW_HEIGHT - 4 }}>
+                            {!row.isFrame && rowCopy(line)}
                             {!row.isFrame && lineTarget(line) && rowLink(line)}
                           </span>
                         )}
@@ -2487,7 +2897,7 @@ export function LogViewer() {
                         {podColumn && !row.isFrame && (line as { pod?: string }).pod && (
                           <span className="shrink-0 select-none truncate"
                                 title={(line as { pod?: string }).pod}
-                                style={{ width: card ? 100 : 104, color: (podColor ?? podHue)((line as { pod?: string }).pod!) }}>
+                                style={{ width: podColWidth, color: (podColor ?? podHue)((line as { pod?: string }).pod!) }}>
                             {podTail((line as { pod?: string }).pod!)}
                           </span>
                         )}
@@ -2499,14 +2909,27 @@ export function LogViewer() {
                              nothing shifts when it appears. */
                           <span className="shrink-0 select-none flex items-center justify-end"
                                 style={{
-                                  width: gutterWidth + 18,
+                                  /* `gutterWidth` is a `ch` length — added to a number it was "5ch18", which is no width at all. */
+                                  width: `calc(${gutterWidth} + 36px)`,
                                   gap: 4,
                                   fontVariantNumeric: 'tabular-nums',
                                 }}>
-                            <span className="shrink-0 flex items-center justify-center" style={{ width: 14 }}>
+                            {/* Copy the line, then link to it — both on hover, in a slot the row keeps. */}
+                            <span className="shrink-0 flex items-center justify-end" style={{ width: 32, gap: 2 }}>
+                              {!row.isFrame && rowCopy(line)}
                               {!row.isFrame && lineTarget(line) && rowLink(line)}
                             </span>
-                            <span style={{ color: 'var(--color-text-muted)', opacity: 0.45 }}>{lineNo}</span>
+                            {/* Click: this line. Shift+click: every line from the one selected to here. */}
+                            <span className="cursor-pointer" title="Select this line — Shift+click another to take the lines between"
+                                  onMouseDown={e => { if (!e.shiftKey) e.preventDefault(); }}
+                                  onClick={e => {
+                                    if (e.shiftKey) return;
+                                    window.getSelection()?.removeAllRanges();
+                                    setLineRange({ anchor: line.seq, first: line.seq, last: line.seq });
+                                  }}
+                                  style={{ color: 'var(--color-text-muted)', opacity: lineRange && line.seq >= lineRange.first && line.seq <= lineRange.last ? 0.9 : 0.45 }}>
+                              {lineNo}
+                            </span>
                           </span>
                         )}
 
@@ -2561,7 +2984,7 @@ export function LogViewer() {
                           flex: logWrap ? 1 : undefined,
                           minWidth: 0,
                         }}>
-                          <Highlighted text={shownText} hits={line.hits} />
+                          <Highlighted text={shownText} hits={line.hits ?? highlightMatcher?.(shownText) ?? undefined} />
                           {/*
                             A cut line says it was cut.
 
@@ -2735,7 +3158,6 @@ export function LogViewer() {
                               {line.seq === focusSeq && focusLabel ? focusLabel : selectedLabel}
                             </span>
                           )}
-                          {!row.isFrame && rowCopy(line)}
                         </span>
                         </div>
                         </LineCard>

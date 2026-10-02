@@ -222,8 +222,12 @@ describe('selectionText', () => {
     expect(out).toContain('2026-01-01T12:00:00.400Z');
   });
 
-  it('leaves untimestamped lines bare', () => {
-    expect(selectionText(lines, 0, 0)).toBe('before');
+  it('says the level of each line, and leaves a stack frame bare under its error', () => {
+    expect(selectionText(lines, 0, 0)).toBe('INFO before');
+    expect(selectionText(lines, 1, 2).split('\n')).toEqual([
+      '2026-01-01T12:00:00.000Z ERROR boom',
+      '2026-01-01T12:00:00.400Z   at Foo.bar',
+    ]);
   });
 });
 

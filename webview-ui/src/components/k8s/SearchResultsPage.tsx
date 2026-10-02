@@ -867,21 +867,25 @@ export function SearchResultsPage() {
     shows every line that came back, neighbours included, which is the other
     thing people want here.
   */
+  /*
+    The term is marked, not filtered by.
+
+    It used to be put in the filter box on open, which hid the neighbours the
+    search fetched and made the box say something nobody typed. Now every hit
+    line carries a bar in the gutter and a tint, the term is highlighted in
+    it, and the filter box is the reader's own.
+  */
   const searchFilter = searchFilterOf(query, regex, caseSensitive);
-  useEffect(() => {
-    if (searchFilter) setFilter(searchFilter);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchFilter, at]);
 
   /* Everything the page and the view narrow by, back to how the search opened. */
-  const narrowed = shownPods.length > 0 || floors.length > 0 || levels.length > 0 || fields.length > 0 || filter !== searchFilter;
+  const narrowed = shownPods.length > 0 || floors.length > 0 || levels.length > 0 || fields.length > 0 || filter.trim() !== '';
   const resetAll = useCallback(() => {
     setPods([]);
     for (const f of floors) setFloor(f.field, undefined);
     setLevels([]);
     clearFields();
-    setFilter(searchFilter);
-  }, [setPods, floors, setFloor, setLevels, clearFields, setFilter, searchFilter]);
+    setFilter('');
+  }, [setPods, floors, setFloor, setLevels, clearFields, setFilter]);
 
   /*
     A pod-shaped stand-in for the thing these lines are about.
@@ -936,6 +940,8 @@ export function SearchResultsPage() {
     contextCap: contextLines,
     extra: {
       onFindContext: setShownContext,
+      isHit: (l) => !(l as ResultLine).context,
+      highlightQuery: searchFilter,
       selectedSeq: selected,
       onSelectLine: (l) => setSelected(l.seq === selected ? undefined : l.seq),
       selectedLabel: 'the line you clicked',
@@ -966,7 +972,7 @@ export function SearchResultsPage() {
     lines, railLines, filter, levels, fields, wrap, logLineNumbers, asPod, at, sums, query,
     addField, removeField, clearFields, setFilter, setLevels, setWrap, goBack, contextLines,
     selected, setSelected, podNames, columns, readers, toggleColumn, shownPods, setPods, selectedLine,
-    narrowed, resetAll,
+    narrowed, resetAll, searchFilter,
   ]);
 
   if (!groups.length && !searched.length) {

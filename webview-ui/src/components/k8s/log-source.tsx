@@ -48,6 +48,14 @@ export type LogSource = Pick<K8sStore,
   | 'toggleLogLevel' | 'clearFieldFilters' | 'logLineNumbers'
   | 'logContainer' | 'setLogContainer' | 'closeDetail'
 > & {
+  /** Empty the screen without stopping the read. Absent where there is nothing streaming to clear. */
+  clearLogs?: () => void;
+  /** Lines a snapshot read has brought in so far — see k8s-store `logReceived`. Absent where nothing streams. */
+  logReceived?: number;
+  /** A line the page counts as a hit — marked in the gutter and tinted, without filtering anything out. */
+  isHit?: (line: LogLine) => boolean;
+  /** A term to mark in the text without filtering by it — a search result's own term. */
+  highlightQuery?: string;
   /**
    * True when these lines are a result that already happened.
    *

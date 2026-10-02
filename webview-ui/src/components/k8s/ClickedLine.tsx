@@ -40,9 +40,15 @@ export type LineCardKind = 'clicked' | 'from';
  * marking — and the card's inset as padding the virtualiser can measure.
  */
 export function cardRowStyle(kind: LineCardKind): React.CSSProperties {
-  return kind === 'clicked'
-    ? { background: 'transparent', borderLeft: 'none', padding: '4px 8px 4px 0' }
-    : { background: 'transparent', borderLeft: 'none', padding: '3px 8px 3px 0' };
+  /* Longhands, never `padding`: the row sets `paddingLeft`, and when the card
+     went away React removed the shorthand and the row's left padding with it —
+     the line jumped six pixels left on every click and un-click. `borderLeft`
+     is the same property the row sets, so it can be swapped whole. */
+  const v = kind === 'clicked' ? 4 : 3;
+  return {
+    background: 'transparent', borderLeft: 'none',
+    paddingTop: v, paddingRight: 8, paddingBottom: v, paddingLeft: 0,
+  };
 }
 
 /** The card itself; with no `kind`, the row's content untouched. */

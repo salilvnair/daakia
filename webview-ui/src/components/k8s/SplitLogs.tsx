@@ -116,6 +116,7 @@ function Pane({ pane, focused, sharedRange }: {
     logStatus: pane.status,
     logDetail: pane.detail,
     logDropped: pane.dropped,
+    logReceived: pane.held?.length ?? 0,
     logFilter: pane.filter,
     logLevels: pane.levels,
     logRequestedAt: pane.requestedAt,
@@ -161,7 +162,8 @@ function Pane({ pane, focused, sharedRange }: {
     },
     setLogWrap: (wrap: boolean) => patch(pane.id, { wrap }),
     setLogFollow: (follow: boolean) => patch(pane.id, { follow }),
-    setLogLive: (live: boolean) => { patch(pane.id, { live }); refetch(pane.id); },
+    setLogLive: (live: boolean) => { patch(pane.id, live ? { live, follow: true } : { live }); refetch(pane.id); },
+    clearLogs: () => patch(pane.id, { logs: [], held: undefined, dropped: 0 }),
     setLogTail: (tail: number) => patch(pane.id, { tail }),
     setLogDirection: (direction: 'first' | 'last' | 'between') => patch(pane.id, direction === 'between' && !pane.from
       ? { direction, from: localTime(Date.now() - 3_600_000), to: localTime(Date.now()) }

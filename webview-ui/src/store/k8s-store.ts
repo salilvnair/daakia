@@ -13,6 +13,7 @@ import { useUiStateStore } from './ui-state-store';
 import type { MarkTarget } from '../components/k8s/mark-runtime';
 import { NO_POD_FILTER, type PodFilter } from '../components/k8s/pod-filter';
 import { findLinkedLine, type LogTarget } from '../components/k8s/pod-link';
+import { logLineSettings } from '../components/k8s/log-settings';
 
 /** What somebody said a pod's runtime is. Mirrors services/k8s/runtime-marks. */
 export interface RuntimeMark {
@@ -537,8 +538,11 @@ export function localTime(ms: number): string {
     + `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-/** How many lines a split pane's errors window keeps — the buffer's own ceiling. */
-export const ERRORS_TAIL = 20_000;
+/** A tail the Lines picker offers — the one asked for if it does, else the default from Settings. */
+function tailFor(tail: number): number {
+  const { tailLadder, tailDefault } = logLineSettings(useUiStateStore.getState().prefs);
+  return tailLadder.includes(tail) ? tail : tailDefault;
+}
 
 interface K8sState {
   stage: Dk8sStage;
@@ -746,6 +750,13 @@ interface K8sState {
   logDetail?: string;
   /** Lines discarded because the pod outran the reader. */
   logDropped: number;
+  /**
+   * Lines a snapshot read has brought in so far, held back until it ends.
+   * Drawn all at once: a read of twenty thousand lines arriving in sixty-ms
+   * batches redrew the whole view every batch, and the page flickered and
+   * froze for seconds. The skeleton says how far it has got instead.
+   */
+  logReceived: number;
   logFilter: string;
   logLevels: LogLevel[];
   /**
@@ -888,7 +899,7 @@ interface K8sState {
      */
     carry?: Partial<Pick<K8sState, 'logs' | 'logStatus' | 'logDetail' | 'logDropped' | 'logRequestedAt'
       | 'logFilter' | 'logLevels' | 'logFieldFilters' | 'logFollow' | 'logLive' | 'logTail' | 'logDirection'
-      | 'logPrevious' | 'logWrap' | 'logFrom' | 'logTo' | 'detailTab'>>;
+      | 'logPrevious' | 'logWrap' | 'logFrom' | 'logTo' | 'logOnlyErrors' | 'detailTab'>>;
   }) => void;
   /**
    * Open a pod somebody sent you a link to, and find the line they meant.
@@ -924,6 +935,8 @@ interface K8sState {
   toggleLogLevel: (level: LogLevel) => void;
   setLogFollow: (v: boolean) => void;
   setLogLive: (v: boolean) => void;
+  /** Empty the screen without stopping the read — Following's Clear. */
+  clearLogs: () => void;
   setLogTail: (n: number) => void;
   setLogDirection: (d: 'last' | 'first' | 'between') => void;
   setLogSince: (v: 'all' | 'restart' | '15m' | '1h' | '2h' | '6h') => void;
@@ -984,6 +997,9 @@ interface K8sState {
 */
 let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 
+/** A snapshot's lines while it is still arriving — see `logReceived`. */
+let held: LogLine[] = [];
+
 export const useK8sStore = create<K8sState>((set, get) => ({
   stage: 'probing',
   // Not persisted: you come back to dk8s to look at pods, so that is where it
@@ -1025,6 +1041,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   logStatus: 'idle',
   logRequestedAt: 0,
   logDropped: 0,
+  logReceived: 0,
   logFilter: '',
   logLevels: [],
   logFieldFilters: [],
@@ -1210,6 +1227,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         get().pushNav(cur ? { kind: 'pod', pod: cur, tab: get().detailTab } : { kind: 'pods' });
       }
     }
+    held = [];
     // Reset every per-pod field. Carrying the last pod's logs into this one's
     // panel for the moment before the first frame arrives is the kind of bug
     // that gets someone reading the wrong pod's stack trace.
@@ -1225,9 +1243,17 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       // for a pod is still readable by eye in the database.
       detailTab: (useUiStateStore.getState()
         .prefs[`${DETAIL_TAB_PREF}${pod.namespace}/${pod.name}`] as DetailTab | undefined) ?? 'logs',
-      logs: [], logStatus: 'loading', logDetail: undefined, logDropped: 0,
+      logs: [], logStatus: 'loading', logDetail: undefined, logDropped: 0, logReceived: 0,
       logRequestedAt: Date.now(),
       logFilter: '', logLevels: [], logFieldFilters: [], logFollow: true, logLive: false, logOnlyErrors: false,
+      /*
+        The tail carries from pod to pod — somebody reading 1000 lines wants the
+        next pod at 1000 too — but only a tail the Lines picker offers. A number
+        it does not (an errors window's, a link's) left every later pod reading
+        twenty thousand lines behind a picker that said 200: a few seconds of
+        the view redrawing batch after batch on every open.
+      */
+      logTail: tailFor(get().logTail),
       logDirection: 'last', logSince: 'all', logExportOpen: false,
       logPrevious: false, logContainer: undefined, logSelection: undefined,
       /* A mark belongs to the pod it was found in. */
@@ -1348,8 +1374,11 @@ export const useK8sStore = create<K8sState>((set, get) => ({
 
   setLogFollow: (logFollow) => set({ logFollow }),
 
+  clearLogs: () => { held = []; set({ logs: [], logDropped: 0, logReceived: 0, logSelection: undefined }); },
+
   setLogLive: (logLive) => {
-    set({ logLive });
+    /* Following starts at the newest line, wherever the reader had scrolled to. */
+    set(logLive ? { logLive, logFollow: true } : { logLive });
     // Going live re-opens the stream with --follow; leaving live stops the
     // process outright rather than letting it run unread in the background.
     if (logLive) get().reloadLogs();
@@ -1420,8 +1449,9 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       logFrom, logTo, logOnlyErrors,
     } = get();
     if (!detail) return;
+    held = [];
     set({
-      logs: [], logDropped: 0, logStatus: 'loading',
+      logs: [], logDropped: 0, logStatus: 'loading', logReceived: 0,
       logDetail: undefined, logSelection: undefined, logRequestedAt: Date.now(),
     });
 
@@ -2066,6 +2096,13 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         if (msg.context && open.context && msg.context !== open.context) break;
         const incoming = (msg.lines as LogLine[]) ?? [];
         if (!incoming.length) break;
+        /* A snapshot is held until it ends — see `logReceived`. Following draws as it goes. */
+        if (!get().logLive && get().logStatus !== 'ended') {
+          held.push(...incoming);
+          if (held.length > LOG_BUFFER_MAX * 1.2) held.splice(0, held.length - LOG_BUFFER_MAX);
+          set({ logReceived: held.length });
+          break;
+        }
         set(s => {
           const merged = s.logs.concat(incoming);
           const overflow = merged.length - LOG_BUFFER_MAX;
@@ -2092,6 +2129,17 @@ export const useK8sStore = create<K8sState>((set, get) => ({
 
       case 'dk8s:logStatus':
         if (msg.pod !== get().detail?.name) break;
+        /* The read is over: everything it held lands at once. */
+        if (msg.status === 'ended' || msg.status === 'error' || msg.status === 'idle') {
+          if (held.length) {
+            const all = get().logs.concat(held);
+            held = [];
+            const overflow = all.length - LOG_BUFFER_MAX;
+            set(s => (overflow > 0
+              ? { logs: all.slice(overflow), logDropped: s.logDropped + overflow, logReceived: 0 }
+              : { logs: all, logReceived: 0 }));
+          }
+        }
         set({ logStatus: msg.status as LogStatus, logDetail: msg.detail as string | undefined });
         /* The log is all here: a link still waiting takes the nearest line by time. */
         if (msg.status === 'ended' && get().pendingLink) {

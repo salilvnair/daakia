@@ -58,6 +58,8 @@ export interface SplitPane {
   status: LogStatus;
   detail?: string;
   dropped: number;
+  /** Lines a snapshot has brought in, held until it ends — see k8s-store `logReceived`. */
+  held?: LogLine[];
   formatId?: string;
   formatName?: string;
 
@@ -135,6 +137,7 @@ export function carryOf(pane: SplitPane) {
     logRequestedAt: pane.requestedAt, logFilter: pane.filter, logLevels: pane.levels, logFieldFilters: pane.fields,
     logFollow: pane.follow, logLive: pane.live, logTail: pane.tail, logDirection: pane.direction,
     logPrevious: pane.previous, logWrap: pane.wrap, logFrom: pane.from, logTo: pane.to,
+    logOnlyErrors: pane.onlyErrors,
   };
 }
 
@@ -310,7 +313,7 @@ export const useSplitStore = create<SplitState>((set, get) => ({
     if (!pane) return;
     set(s => ({
       panes: s.panes.map(p => (p.id === id
-        ? { ...p, logs: [], dropped: 0, status: 'loading', requestedAt: Date.now() }
+        ? { ...p, logs: [], held: undefined, dropped: 0, status: 'loading', requestedAt: Date.now() }
         : p)),
     }));
     postMsg({
@@ -347,18 +350,22 @@ export const useSplitStore = create<SplitState>((set, get) => ({
 
     switch (msg.type) {
       case 'dk8s:logLines':
-        on(p => ({
-          ...p,
-          logs: [...p.logs, ...((msg.lines as LogLine[]) ?? [])].slice(-MAX_LINES),
-        }));
+        on(p => (!p.live && p.status !== 'ended'
+          /* A snapshot pane is held until its read ends, then drawn once. */
+          ? { ...p, held: [...(p.held ?? []), ...((msg.lines as LogLine[]) ?? [])].slice(-MAX_LINES) }
+          : { ...p, logs: [...p.logs, ...((msg.lines as LogLine[]) ?? [])].slice(-MAX_LINES) }));
         break;
-      case 'dk8s:logStatus':
+      case 'dk8s:logStatus': {
+        const status = msg.status as LogStatus;
+        const done = status === 'ended' || status === 'error' || status === 'idle';
         on(p => ({
           ...p,
-          status: msg.status as LogStatus,
+          ...(done && p.held?.length ? { logs: [...p.logs, ...p.held].slice(-MAX_LINES), held: undefined } : {}),
+          status,
           detail: msg.detail as string | undefined,
         }));
         break;
+      }
       case 'dk8s:logDropped':
         on(p => ({ ...p, dropped: p.dropped + Number(msg.count ?? 0) }));
         break;

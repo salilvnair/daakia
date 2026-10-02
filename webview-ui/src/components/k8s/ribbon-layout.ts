@@ -25,7 +25,10 @@
  */
 import { ribbonBands } from './log-view';
 import type { LogLevel } from '../../store/k8s-store';
-import { GUTTER_INFO, GUTTER_WARN, RED } from './follow-tone';
+import { GUTTER_INFO, GUTTER_WARN, RED as LEVEL_RED } from './follow-tone';
+
+/* The ribbon's red, a touch softer than the level's on a light background. */
+const RED = `var(--color-ribbon-error, ${LEVEL_RED})`;
 
 /** The thinnest a band is ever drawn. Three pixels is the least that reads as a colour. */
 export const BAND_FLOOR_PX = 3;

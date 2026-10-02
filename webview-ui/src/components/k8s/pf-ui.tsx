@@ -29,7 +29,7 @@ const TONE: Record<Tone, React.CSSProperties> = {
   dk: { color: PF.dk, background: tint(PF.dk, 12), borderColor: tint(PF.dk, 45), fontWeight: 600 },
   stop: { color: PF.er, background: tint(PF.er, 10), borderColor: tint(PF.er, 40) },
   solid: { color: 'var(--color-dk8s-ink, #0b1a1e)', background: PF.dk, borderColor: 'transparent', fontWeight: 700 },
-  danger: { color: '#1b0b0a', background: PF.er, borderColor: 'transparent', fontWeight: 700 },
+  danger: { color: 'var(--color-on-error, #1b0b0a)', background: PF.er, borderColor: 'transparent', fontWeight: 700 },
 };
 
 export function PfButton({ tone = 'plain', icon, children, style, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & {
