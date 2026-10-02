@@ -78,6 +78,16 @@ describe('Following, paused', () => {
     expect(shown()).toEqual([1, 2]);
   });
 
+  it('a long pause counts what it had to let go', () => {
+    useK8sStore.setState({ logDropped: 0 });
+    useK8sStore.getState().setLogPaused(true);
+    const many = Array.from({ length: 25_000 }, (_, i) => i + 1);
+    arrive(...many);
+    const s = useK8sStore.getState();
+    expect(s.logDropped).toBeGreaterThan(0);
+    expect(s.logReceived + s.logDropped).toBe(25_000);
+  });
+
   it('stopping Following is not left paused', () => {
     useK8sStore.getState().setLogPaused(true);
     useK8sStore.getState().setLogLive(false);

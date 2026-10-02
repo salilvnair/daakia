@@ -1013,6 +1013,8 @@ let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 let held: LogLine[] = [];
 /** The read in flight replaces the screen when it lands, rather than adding to it. */
 let replaceOnLand = false;
+/** Lines trimmed from `held` since the read began — part of the drop count a replacing read lands with. */
+let heldDropped = 0;
 
 /**
  * From a read this view has moved past. Every read is asked with its
@@ -1494,6 +1496,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     } = get();
     if (!detail) return;
     held = [];
+    heldDropped = 0;
     replaceOnLand = !!opts?.keepScreen;
     set({
       ...(replaceOnLand ? {} : { logs: [], logDropped: 0 }),
@@ -2148,7 +2151,14 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         /* A snapshot is held until it ends — see `logReceived`. Following draws as it goes. */
         if ((!get().logLive && get().logStatus !== 'ended') || get().logPaused) {
           held.push(...incoming);
-          if (held.length > LOG_BUFFER_MAX * 1.2) held.splice(0, held.length - LOG_BUFFER_MAX);
+          /* Trimmed past the buffer like the screen is — and counted, the same
+             as the screen's own trim, so a long pause says what it let go. */
+          if (held.length > LOG_BUFFER_MAX * 1.2) {
+            const over = held.length - LOG_BUFFER_MAX;
+            held.splice(0, over);
+            heldDropped += over;
+            set(s => ({ logDropped: s.logDropped + over }));
+          }
           set({ logReceived: held.length });
           break;
         }
@@ -2185,7 +2195,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
             replaceOnLand = false;
             const all = held;
             held = [];
-            set({ logs: all.slice(-LOG_BUFFER_MAX), logDropped: Math.max(0, all.length - LOG_BUFFER_MAX), logReceived: 0 });
+            set({ logs: all.slice(-LOG_BUFFER_MAX), logDropped: heldDropped + Math.max(0, all.length - LOG_BUFFER_MAX), logReceived: 0 });
           } else if (held.length) {
             const all = get().logs.concat(held);
             held = [];

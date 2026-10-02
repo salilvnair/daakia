@@ -920,7 +920,7 @@ export function RightClickMenu() {
       .sort((a, b) => b.split(':').length - a.split(':').length)[0];
 
     if (filterId) {
-      const fm = getFilterMenu();
+      const fm = getFilterMenu(target);
       if (!fm) return;
       if (filterId === 'filter:clear') { fm.clear?.(); return; }
       if (filterId === 'filter:selection') { fm.selection?.apply(); return; }
@@ -1010,7 +1010,7 @@ export function RightClickMenu() {
   // Read once, when the menu opens. Calling the provider again at click time
   // would rebuild the facets from a buffer that has moved on, and the closure
   // chosen would belong to a different list than the one on screen.
-  const filterMenu = wantsFilter ? getFilterMenu() : null;
+  const filterMenu = wantsFilter ? getFilterMenu(menu.target) : null;
   // Trailing newline from a line-wise selection would otherwise count as a line.
   const lineCount = menu.selection.replace(/\n+$/, '').split('\n').length;
 

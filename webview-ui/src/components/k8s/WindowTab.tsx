@@ -32,6 +32,8 @@ import { ClockIcon, CloseIcon, PlusIcon, ShorterLinesIcon, RoundTripIcon } from 
 import type { RequestTab } from '../../store/tabs-store';
 import { useTabsStore } from '../../store/tabs-store';
 import { useTaggedSearchStore } from '../../store/dk8s-tagged-search-store';
+import { useResultTabStore } from '../../store/dk8s-result-tab-store';
+import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { useK8sStore } from '../../store/k8s-store';
 import { LogViewer } from './LogViewer';
 import { LogSourceProvider } from './log-source';
@@ -239,7 +241,30 @@ function ListCard({ s, index, onRow }: { s: Summary; index: number; onRow: (r: S
 }
 
 /** The tabs this window was reached through, as the board draws them above it. */
-function Trail({ query, at, onClose }: { query?: string; at: number; onClose: () => void }) {
+/**
+ * Back to the search a window came from.
+ *
+ * There is one results page, and it shows the newest search. It used to be
+ * opened and renamed to this window's query whatever it held — so a window from
+ * an earlier search led to a page titled for that search, showing another one.
+ * Now it goes to the page only while the page still shows this search, and
+ * otherwise opens the search with the query in it, ready to run again.
+ */
+export function backToSearch(query: string, searchAt?: number): void {
+  const tabs = useTabsStore.getState();
+  const page = useResultTabStore.getState();
+  const same = searchAt !== undefined ? page.at === searchAt : page.query === query;
+  if (same && page.at > 0) {
+    if (!tabs.focusDk8sResultsTab()) {
+      tabs.openDk8sResultsTab(`Search: ${query.length > 22 ? `${query.slice(0, 22)}…` : query}`);
+    }
+    return;
+  }
+  tabs.openDk8sTab();
+  useDk8sSearchStore.getState().searchEverywhere(query);
+}
+
+function Trail({ query, searchAt, at, onClose }: { query?: string; searchAt?: number; at: number; onClose: () => void }) {
   const item: React.CSSProperties = {
     display: 'inline-flex', alignItems: 'center', gap: 7, height: 32, padding: '0 12px', fontSize: 11.5,
     borderBottom: '2px solid var(--color-surface-border)', color: 'var(--color-text-muted)',
@@ -253,7 +278,7 @@ function Trail({ query, at, onClose }: { query?: string; at: number; onClose: ()
         Pods
       </button>
       {query && (
-        <button type="button" onClick={() => useTabsStore.getState().openDk8sResultsTab(query)}
+        <button type="button" onClick={() => backToSearch(query, searchAt)}
                 style={{ ...item, borderBottom: '2px solid var(--color-surface-border)' }}>
           Search &middot; {query}
         </button>
@@ -419,7 +444,7 @@ export function WindowTab({ tab }: { tab: RequestTab }) {
 
   return (
     <div className="flex-1 flex flex-col min-h-0" style={{ background: 'var(--color-panel, var(--color-surface))' }}>
-      <Trail query={spec.query} at={spec.anchor.ts} onClose={() => useTabsStore.getState().closeTab(tab.id)} />
+      <Trail query={spec.query} searchAt={spec.searchAt} at={spec.anchor.ts} onClose={() => useTabsStore.getState().closeTab(tab.id)} />
 
       {/* ── The window ── */}
       <div className="flex items-center shrink-0 flex-wrap"
