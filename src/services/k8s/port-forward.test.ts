@@ -176,6 +176,21 @@ describe('staying up', () => {
     m.dispose();
   });
 
+  it('restarts on the same local port when asked', async () => {
+    const { m, procs, fire } = rig({ pods: ['api-1'] });
+    m.start(spec);
+    await flush(); await flush();
+    procs[0].stdout.emit('data', 'Forwarding from 127.0.0.1:8080 -> 8080\n');
+    const id = m.list()[0].id;
+    m.restart(id);
+    expect(procs[0].killed).toBe(true);
+    expect(m.list()[0]).toMatchObject({ state: 'reconnecting', dropReason: 'Restarting the tunnel.' });
+    await fire();
+    procs[1].stdout.emit('data', 'Forwarding from 127.0.0.1:8080 -> 8080\n');
+    expect(m.list()[0]).toMatchObject({ id, state: 'forwarding', ports: [{ local: 8080 }] });
+    m.dispose();
+  });
+
   it('gives up after its tries, and says why', async () => {
     const { m, procs, fire } = rig({ pods: ['api-1', undefined, undefined] });
     m.start({ ...spec, reconnectTries: 2 });

@@ -25,7 +25,8 @@ import { PF, tint, PfButton, StatePill } from './pf-ui';
 import { copyText } from '../../utils/clipboard';
 import { openExternal } from '../dkgh/open-external';
 import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
-import { PortForwardIcon, StopSquareIcon, ExternalLinkIcon, PlayIcon, LockIcon } from '../../icons';
+import { PortForwardIcon, StopSquareIcon, ExternalLinkIcon, PlayIcon, LockIcon, StarIcon } from '../../icons';
+import { ForwardMenuButton } from './ForwardMenu';
 import { OK, BAD, MUTED } from './tone';
 
 const PROD_LIMIT_MS = 60 * 60_000;
@@ -257,10 +258,11 @@ function TunnelCard({ f, onOpenPod, twin }: { f: ForwardInfo; onOpenPod: () => v
           </PfButton>
         )}
         <PfButton onClick={onOpenPod} style={{ flex: 1, justifyContent: 'center' }} title={`${f.pod} — its Ports tab`}>Pod</PfButton>
-        <PfButton onClick={() => setSaving(true)} style={{ flex: 1, justifyContent: 'center' }} title="Save into a set">☆ Save</PfButton>
+        <PfButton icon={<StarIcon size={11} />} onClick={() => setSaving(true)} style={{ flex: 1, justifyContent: 'center' }} title="Save into a set">Save</PfButton>
         <PfButton tone="stop" icon={<StopSquareIcon size={11} />} onClick={() => usePortForwardStore.getState().stop(f.id)} style={{ flex: 1, justifyContent: 'center' }}>
           Stop
         </PfButton>
+        <ForwardMenuButton f={f} />
       </div>
       {saving && (
         <SaveToSetDialog onClose={() => setSaving(false)}

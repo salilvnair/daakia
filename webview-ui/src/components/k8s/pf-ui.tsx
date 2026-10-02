@@ -4,7 +4,7 @@
  * section heading with its rule, and the ticked line the dialogs use.
  * One file so the Ports tab, the dialogs and the Forwards panel cannot drift.
  */
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 import type { PortRole } from '../../store/dk8s-port-forward-store';
 
 export const PF = {
@@ -33,7 +33,7 @@ const TONE: Record<Tone, React.CSSProperties> = {
 };
 
 export function PfButton({ tone = 'plain', icon, children, style, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & {
-  tone?: Tone; icon?: ReactNode;
+  tone?: Tone; icon?: ReactNode; ref?: Ref<HTMLButtonElement>;
 }) {
   return (
     <button type="button" {...rest}

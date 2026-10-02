@@ -62,6 +62,7 @@ import { AddLoggersModal } from './AddLoggersModal';
 import { AddPatternsModal } from './AddPatternsModal';
 import { SummaryBuilder } from './SummaryBuilder';
 import { PatternTemplate as Template } from './PatternTemplate';
+import { useLiveLevels, LiveLevelsBar, LiveLevelCell, type Live } from './LiveLevels';
 
 /** The workload a pattern belongs to — never the pod, which a rollout renames. */
 export function scopeOf(pod: {
@@ -74,6 +75,8 @@ export function scopeOf(pod: {
 
 /** The table's columns, from the board: 330 · 74 · 92 · 110 · the rest · 96. */
 const GRID = 'minmax(200px, 330px) 74px 92px 110px minmax(0, 1fr) 96px';
+/* A live level is a picker, wider than the pill it replaces. */
+const GRID_LIVE = 'minmax(200px, 330px) 112px 92px 110px minmax(0, 1fr) 96px';
 /** An opened row's patterns: the message, then 88 · 96 · 120. */
 const PATTERN_GRID = 'minmax(0, 1fr) 88px 96px 120px';
 
@@ -104,6 +107,9 @@ export function LoggersTab() {
   const [open, setOpen] = useState<Set<string>>(() => new Set());
   const [adding, setAdding] = useState<'loggers' | 'patterns' | undefined>();
   const [into, setInto] = useState<string | undefined>();
+  const levelsLive = useLiveLevels(detail ? { name: detail.name, namespace: detail.namespace, context: detail.context } : undefined);
+  const live = levelsLive.live;
+  const grid = live ? GRID_LIVE : GRID;
 
   /* "2s ago" has to keep being true. A tick every fifteen seconds is often
      enough for a column read in minutes, and cheap enough to leave running. */
@@ -213,6 +219,7 @@ export function LoggersTab() {
   return (
     <div className="flex flex-col h-full min-h-0" data-context-menu="loggers" onContextMenu={menu.onContextMenu}>
       {menu.element}
+      {levelsLive.confirm}
       {/* ── Toolbar ── */}
       <div className="flex items-center shrink-0 flex-wrap"
            style={{ gap: 8, minHeight: 46, padding: '9px 14px', borderBottom: `1px solid ${EDGE}` }}>
@@ -288,6 +295,9 @@ export function LoggersTab() {
         </BoardButton>
       </div>
 
+      <LiveLevelsBar live={live} status={levelsLive.status} reason={levelsLive.reason} now={now}
+                     onPorts={() => useK8sStore.getState().setDetailTab('ports')} />
+
       <div className="flex flex-1 min-h-0">
         {/* ── Rail ── */}
         <div className="shrink-0 overflow-auto dk8s-no-scrollbar"
@@ -314,8 +324,8 @@ export function LoggersTab() {
         {/* ── Table ── */}
         <div className="flex-1 min-w-0 flex flex-col min-h-0">
           <div className="grid shrink-0"
-               style={{ ...HEAD_TYPE, gridTemplateColumns: GRID, gap: 12, padding: '8px 14px', borderBottom: `1px solid ${EDGE}` }}>
-            <div>LOGGER</div><div>LEVEL</div><div>SOURCE</div>
+               style={{ ...HEAD_TYPE, gridTemplateColumns: grid, gap: 12, padding: '8px 14px', borderBottom: `1px solid ${EDGE}` }}>
+            <div>LOGGER</div><div>{live ? 'LEVEL · LIVE' : 'LEVEL'}</div><div>SOURCE</div>
             <div style={{ textAlign: 'right' }}>EVENTS {WINDOW_SHORT[win]}</div>
             <div>PATTERNS</div><div style={{ textAlign: 'right' }}>LAST SEEN</div>
           </div>
@@ -337,6 +347,8 @@ export function LoggersTab() {
                 onToggle={() => toggleOpen(row.key || '__none')}
                 onAddPatterns={() => { setInto(row.key || undefined); setAdding('patterns'); }}
                 onMenu={menu.open}
+                live={live}
+                grid={grid}
               />
             ))}
           </div>
@@ -419,9 +431,9 @@ function RailRow({ label, count, on, onClick, swatch }: {
 
 type OpenMenu = (e: React.MouseEvent, items: ContextMenuItem[]) => void;
 
-function LoggerRow({ row, now, open, onToggle, onAddPatterns, onMenu }: {
+function LoggerRow({ row, now, open, onToggle, onAddPatterns, onMenu, live, grid = GRID }: {
   row: CatalogueRow; now: number; open: boolean; onToggle: () => void; onAddPatterns: () => void;
-  onMenu: OpenMenu;
+  onMenu: OpenMenu; live?: Live; grid?: string;
 }) {
   const silent = isSilent(row);
   const off = isOffAtLevel(row);
@@ -490,7 +502,7 @@ function LoggerRow({ row, now, open, onToggle, onAddPatterns, onMenu }: {
         aria-expanded={open}
         className="grid items-center cursor-pointer"
         style={{
-          gridTemplateColumns: GRID, gap: 12, padding: '9px 14px',
+          gridTemplateColumns: grid, gap: 12, padding: '9px 14px',
           borderBottom: `1px solid ${DIVIDER}`,
           background: open ? tint(LOGGERS, 8)
             : silent && !off ? tint(AMBER, 6) : 'transparent',
@@ -512,7 +524,7 @@ function LoggerRow({ row, now, open, onToggle, onAddPatterns, onMenu }: {
             {row.name || 'patterns with no logger'}
           </span>
         </div>
-        <div><LevelPill level={row.level} /></div>
+        <div>{live && row.key ? <LiveLevelCell live={live} name={row.name} fallback={row.level} /> : <LevelPill level={row.level} />}</div>
         <div className="truncate" title={row.origin ?? row.sources.map(s => SOURCE_LABEL[s]).join(', ')}
              style={{ fontSize: 11, color: SOURCE_COLOR[row.primary] }}>
           {row.primary === 'config' && row.origin ? row.origin.split(' · ')[0] : SOURCE_LABEL[row.primary]}

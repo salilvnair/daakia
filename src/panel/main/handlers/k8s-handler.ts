@@ -2108,7 +2108,7 @@ export const DK8S_AI_TAB = 'dk8s-ai';
  * where to put each one is friction at exactly the wrong moment. The folder is
  * shown in the UI and openable in one click.
  */
-function artifactDir(): string {
+export function artifactDir(): string {
   return join(dk8sStorageRoot(), 'artifacts');
 }
 

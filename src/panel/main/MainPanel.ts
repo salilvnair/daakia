@@ -17,8 +17,9 @@ import {
 } from './handlers/python-handler';
 import {
   handlePfList, handlePfPorts, handlePfCheck, handlePfStart, handlePfStop, handlePfStopAll, handlePfForget,
-  disposePortForwards, onForwardsChange,
+  disposePortForwards, onForwardsChange, handlePfRestart,
 } from './handlers/port-forward-handler';
+import { handlePfCall, handlePfAttach, handlePfDump, handlePfOpenApi } from './handlers/port-forward-use-handler';
 import * as path from 'path';
 import * as fs from 'fs';
 import { getSqliteStatus, getDbPath, getHistory, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt, getAiPromptTemplates, setAiPromptTemplates, saveAiConversation, loadAiConversation, clearAiConversation, type AiConversationMessage, getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries, insertUiAudit, getUiAuditEntries, clearUiAuditEntries, getDbTables, getDbTableRows, deleteDbRow, onDbReloaded, describeDbReload } from '../../storage/db';
@@ -856,6 +857,21 @@ export class MainPanel {
         break;
       case 'dk8s:pf:forget':
         handlePfForget(msg, this._post);
+        break;
+      case 'dk8s:pf:call':
+        void handlePfCall(msg, this._post);
+        break;
+      case 'dk8s:pf:attach':
+        void handlePfAttach(msg, this._post);
+        break;
+      case 'dk8s:pf:dump':
+        void handlePfDump(msg, this._post, this._extensionUri.fsPath);
+        break;
+      case 'dk8s:pf:openapi':
+        void handlePfOpenApi(msg, this._post);
+        break;
+      case 'dk8s:pf:restart':
+        handlePfRestart(msg, this._post);
         break;
       // ── Python in a pod: the pod tab and the Scripts screen ──
       case 'py:probe':

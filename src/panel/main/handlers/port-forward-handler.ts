@@ -190,3 +190,18 @@ export function handlePfForget(msg: Record<string, unknown>, post: PostMessage):
 export function disposePortForwards(): void {
   manager.stopAll('closed');
 }
+
+/**
+ * A forward that is up and holds `local` — the only ports the "use it" calls
+ * (actuator, heap dump, debugger) may reach, so they can never be pointed
+ * anywhere else.
+ */
+export function forwardHolding(id: string, local: number): ForwardInfo | undefined {
+  const f = manager.list().find(x => x.id === id);
+  return f && f.state === 'forwarding' && f.ports.some(p => p.local === local) ? f : undefined;
+}
+
+export function handlePfRestart(msg: Record<string, unknown>, post: PostMessage): void {
+  sink = post;
+  manager.restart(String(msg.id ?? ''));
+}

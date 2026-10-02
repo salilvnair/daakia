@@ -10,6 +10,7 @@ import { create } from 'zustand';
 import { postMsg } from '../vscode';
 import { useUiStateStore } from './ui-state-store';
 import { currentPfPrefs, PF_LAST_OPEN_PREF } from '../components/k8s/port-forward-prefs';
+import { syncBindings } from '../components/k8s/forward-bindings';
 
 export type PortRole =
   | 'http' | 'actuator' | 'debug' | 'grpc' | 'metrics'
@@ -63,6 +64,12 @@ export interface PodPorts {
 
 export interface PortCheck { port: number; free: boolean; suggestion?: number; holder?: { pid: number; name?: string } }
 
+/** An answer from a forwarded port, read by the host. `status` 0: nothing answered. */
+export interface CallResult { status: number; contentType?: string; body?: string; truncated?: boolean; ms?: number; error?: string; revertAt?: number }
+export interface DumpResult { file?: string; bytes?: number; error?: string }
+export interface OpenApiResult { ok?: boolean; port?: number; path?: string; name?: string; count?: number; pointed?: boolean; error?: string }
+export interface LoggerReverted { id: string; logger: string; level: string | null; error?: string; at: number }
+
 export interface ForwardRequest {
   context: string;
   namespace: string;
@@ -111,6 +118,16 @@ interface State {
   portsByPod: Record<string, PodPorts>;
   /** Forwards that were up when Daakia last closed, offered again. Never production. */
   restorable: ForwardRequest[];
+  /** Bytes of a heap dump written so far, by request. */
+  dumpBytes: Record<string, number>;
+  /** Logger levels the host put back on their timer, newest last. */
+  reverted: LoggerReverted[];
+  restart: (id: string) => void;
+  /** A request to a forwarded port — the actuator, mostly. */
+  call: (f: ForwardInfo, port: number, path: string, opts?: { method?: 'POST'; json?: unknown; accept?: string; confirmed?: boolean; revertMs?: number; previous?: string | null }) => Promise<CallResult>;
+  attach: (f: ForwardInfo, port: number, kind: 'java' | 'python') => Promise<{ ok?: boolean; name?: string; error?: string }>;
+  dump: (f: ForwardInfo, port: number, kind: 'threaddump' | 'heapdump', base: string, onReq?: (reqId: string) => void) => Promise<DumpResult>;
+  openApi: (f: ForwardInfo) => Promise<OpenApiResult>;
   dismissRestore: () => void;
   setPanelOpen: (open: boolean) => void;
   refresh: () => void;
@@ -132,11 +149,22 @@ function listen() {
   window.addEventListener('message', (event: MessageEvent) => {
     const msg = event.data as Record<string, unknown> | undefined;
     if (!msg || typeof msg.type !== 'string' || !msg.type.startsWith('dk8s:pf:')) return;
+    if (msg.type === 'dk8s:pf:dumpProgress') {
+      const reqId = String(msg.reqId ?? '');
+      usePortForwardStore.setState(s => ({ dumpBytes: { ...s.dumpBytes, [reqId]: Number(msg.bytes) || 0 } }));
+      return;
+    }
+    if (msg.type === 'dk8s:pf:loggerReverted') {
+      const r = { id: String(msg.id), logger: String(msg.logger), level: (msg.level as string | null) ?? null, error: msg.error as string | undefined, at: Date.now() };
+      usePortForwardStore.setState(s => ({ reverted: [...s.reverted.slice(-19), r] }));
+      return;
+    }
     if (msg.type === 'dk8s:pf:list') {
       const forwards = (msg.forwards as ForwardInfo[]) ?? [];
       const first = !usePortForwardStore.getState().loaded;
       usePortForwardStore.setState({ forwards, loaded: true });
       rememberOpen(forwards, first);
+      syncBindings(forwards);
       return;
     }
     const done = pending.get(String(msg.reqId ?? ''));
@@ -174,14 +202,15 @@ function parseRequests(raw: string | undefined): ForwardRequest[] {
   try { const v = JSON.parse(raw ?? '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
 }
 
-function ask(type: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+function ask(type: string, body: Record<string, unknown>, opts: { timeoutMs?: number; onReq?: (reqId: string) => void } = {}): Promise<Record<string, unknown>> {
   listen();
   const reqId = `pf${++seq}`;
+  opts.onReq?.(reqId);
   return new Promise(resolve => {
     pending.set(reqId, resolve);
     postMsg({ type, reqId, ...body });
     /* A host that never answers still lets the tab say so. */
-    setTimeout(() => { if (pending.delete(reqId)) resolve({ error: 'No answer from Daakia — try again.' }); }, 30_000);
+    setTimeout(() => { if (pending.delete(reqId)) resolve({ error: 'No answer from Daakia — try again.' }); }, opts.timeoutMs ?? 30_000);
   });
 }
 
@@ -191,6 +220,18 @@ export const usePortForwardStore = create<State>(set => ({
   panelOpen: false,
   portsByPod: {},
   restorable: [],
+  dumpBytes: {},
+  reverted: [],
+  restart: id => postMsg({ type: 'dk8s:pf:restart', id }),
+  call: async (f, port, path, opts = {}) => {
+    const r = await ask('dk8s:pf:call', { id: f.id, port, path, ...opts });
+    return { status: Number(r.status) || 0, ...r } as CallResult;
+  },
+  attach: async (f, port, kind) => (await ask('dk8s:pf:attach', { id: f.id, port, kind }, { timeoutMs: 60_000 })) as { ok?: boolean; error?: string },
+  /* A heap dump of a big JVM takes minutes to write and to copy. */
+  dump: async (f, port, kind, base, onReq) =>
+    (await ask('dk8s:pf:dump', { id: f.id, port, kind, base, confirmed: kind === 'heapdump' }, { timeoutMs: kind === 'heapdump' ? 30 * 60_000 : 90_000, onReq })) as DumpResult,
+  openApi: async f => (await ask('dk8s:pf:openapi', { id: f.id, ports: f.ports.map(p => p.local) }, { timeoutMs: 120_000 })) as OpenApiResult,
   dismissRestore: () => { set({ restorable: [] }); useUiStateStore.getState().setPref(PF_LAST_OPEN_PREF, '[]'); },
   setPanelOpen: panelOpen => set({ panelOpen }),
   refresh: () => { listen(); postMsg({ type: 'dk8s:pf:list' }); },

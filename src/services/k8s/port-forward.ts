@@ -256,6 +256,8 @@ export function forwardArgs(spec: ForwardSpec): string[] {
 }
 
 const RUNNING: ForwardState[] = ['connecting', 'forwarding', 'reconnecting'];
+const RESTART_PAUSE_MS = 500;
+
 export const isRunning = (f: { state: ForwardState }) => RUNNING.includes(f.state);
 
 export interface ForwardManager {
@@ -264,6 +266,8 @@ export interface ForwardManager {
   stopAll: (reason?: StopReason) => void;
   /** Drop a finished forward from the list. */
   forget: (id: string) => void;
+  /** A new kubectl for a running forward, on the same local ports. */
+  restart: (id: string) => void;
   list: () => ForwardInfo[];
   onChange: (fn: () => void) => () => void;
   /** Idle and time-limit checks; run on a timer, callable from tests. */
@@ -459,6 +463,16 @@ export function createForwardManager(deps: ForwardDeps): ForwardManager {
     stop: (id, reason = 'you') => finish(id, 'stopped', { stopReason: reason }),
     stopAll: (reason = 'you') => { for (const f of [...forwards.values()]) if (isRunning(f)) finish(f.id, 'stopped', { stopReason: reason }); },
     forget: id => { const f = forwards.get(id); if (f && !isRunning(f)) { forwards.delete(id); changed(); } },
+    restart: id => {
+      const f = forwards.get(id); if (!f || !isRunning(f)) return;
+      generation.set(id, (generation.get(id) ?? 0) + 1);
+      killProc(id);
+      const r = retries.get(id); if (r !== undefined) clearTimer(r);
+      /* Through the reconnect path — same ports, the workload's current pod — after a pause for the old kubectl to let go of them. */
+      Object.assign(f, { state: 'reconnecting', attempt: 1, retryAt: now() + RESTART_PAUSE_MS, dropReason: 'Restarting the tunnel.' });
+      retries.set(id, setTimer(() => { retries.delete(id); void launch(id); }, RESTART_PAUSE_MS));
+      changed();
+    },
     list: () => [...forwards.values()].map(f => ({ ...f, ports: f.ports.map(p => ({ ...p })) })),
     onChange: fn => { listeners.add(fn); return () => listeners.delete(fn); },
     tick,

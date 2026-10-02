@@ -11,9 +11,12 @@ import { usePortForwardStore, localAddress, isUp, type ForwardInfo, type Forward
 import { copyText } from '../../utils/clipboard';
 import { openExternal } from '../dkgh/open-external';
 import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
-import { ExternalLinkIcon, StopSquareIcon, PlayIcon } from '../../icons';
+import { ExternalLinkIcon, StopSquareIcon, PlayIcon, StarIcon } from '../../icons';
 import { PF, tint, PfButton, StatePill, ROLE } from './pf-ui';
 import { SaveToSetDialog } from './SaveToSet';
+import { ForwardMenuButton } from './ForwardMenu';
+import { useBindings, bindingMatches } from './forward-bindings';
+import { useEnvStore } from '../../store/env-store';
 
 /** Re-render on a slow clock, for "up 12 min" and "stops in 48 min". */
 export function useNow(ms: number): number {
@@ -54,6 +57,8 @@ export function ForwardStatePill({ f }: { f: ForwardInfo }): ReactNode {
  */
 export function ForwardNotes({ f, now }: { f: ForwardInfo; now: number }): ReactNode {
   const notes: ReactNode[] = [];
+  const bindings = useBindings();
+  const envs = useEnvStore(s => s.environments);
   if (f.state === 'reconnecting') {
     notes.push(<span key="r" style={{ color: PF.wa }}>{f.dropReason ?? 'The tunnel dropped.'} Trying again{f.retryAt ? ` in ${ago(Math.max(0, f.retryAt - now))}` : ''} — same local port.</span>);
   }
@@ -64,6 +69,9 @@ export function ForwardNotes({ f, now }: { f: ForwardInfo; now: number }): React
     notes.push(<span key="s">via <b style={{ color: PF.dk, fontWeight: 500, fontFamily: PF.mono }}>svc/{f.service}</b> · landed on <b style={{ color: PF.tx, fontWeight: 500, fontFamily: PF.mono }}>{f.pod.slice(-14)}</b></span>);
   }
   if (f.reconnects > 0 && f.state === 'forwarding') notes.push(<span key="n">came back {f.reconnects}×</span>);
+  for (const b of bindings.filter(b => f.ports.some(p => bindingMatches(b, f, p)))) {
+    notes.push(<span key={`b:${b.envId}:${b.key}`}>bound to <b style={{ color: PF.dk, fontWeight: 500, fontFamily: PF.mono }}>{`{{${b.key}}}`}</b> in <b style={{ color: PF.tx, fontWeight: 500 }}>{envs.find(e => e.id === b.envId)?.name ?? b.envId}</b></span>);
+  }
   return notes.length ? <>{notes}</> : null;
 }
 
@@ -109,7 +117,7 @@ export function ForwardCard({ f }: { f: ForwardInfo }) {
                       onClick={async () => { if (await copyText(f.ports.map(localAddress).join('\n'))) flash(); }}>
               Copy
             </PfButton>
-            <PfButton onClick={() => setSaving(true)} title="Save this forward into a set you can start in one click">☆ Save</PfButton>
+            <PfButton icon={<StarIcon size={11} />} onClick={() => setSaving(true)} title="Save this forward into a set you can start in one click">Save</PfButton>
             {opens && f.state === 'forwarding' && (
               <PfButton icon={<ExternalLinkIcon size={11} />} onClick={() => openExternal(`http://localhost:${first.local}`)} title="Open it in your browser">
                 Open
@@ -118,6 +126,7 @@ export function ForwardCard({ f }: { f: ForwardInfo }) {
             <PfButton tone="stop" icon={<StopSquareIcon size={11} />} onClick={() => stop(f.id)} title="Stop this forward and free the local port">
               Stop
             </PfButton>
+            <ForwardMenuButton f={f} />
           </span>
         ) : (
           <span className="flex items-center" style={{ gap: 6 }}>

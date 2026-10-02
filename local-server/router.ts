@@ -175,8 +175,9 @@ import {
   handlePyScriptsList, handlePyScriptsSave, handlePyScriptsDelete,
 } from '../src/panel/main/handlers/python-handler';
 import {
-  handlePfList, handlePfPorts, handlePfCheck, handlePfStart, handlePfStop, handlePfStopAll, handlePfForget,
+  handlePfList, handlePfPorts, handlePfCheck, handlePfStart, handlePfStop, handlePfStopAll, handlePfForget, handlePfRestart,
 } from '../src/panel/main/handlers/port-forward-handler';
+import { handlePfCall, handlePfAttach, handlePfDump, handlePfOpenApi } from '../src/panel/main/handlers/port-forward-use-handler';
 
 export type PostMessage = (msg: unknown) => void;
 import { historyCap } from '../src/services/history-cap';
@@ -686,6 +687,21 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dk8s:pf:forget':
       handlePfForget(msg, post);
+      break;
+    case 'dk8s:pf:call':
+      await handlePfCall(msg, post);
+      break;
+    case 'dk8s:pf:attach':
+      await handlePfAttach(msg, post);
+      break;
+    case 'dk8s:pf:dump':
+      await handlePfDump(msg, post, process.cwd());
+      break;
+    case 'dk8s:pf:openapi':
+      await handlePfOpenApi(msg, post);
+      break;
+    case 'dk8s:pf:restart':
+      handlePfRestart(msg, post);
       break;
     // ── Python in a pod — the same handlers the extension routes to ──
     case 'py:probe':
