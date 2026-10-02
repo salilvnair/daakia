@@ -1289,6 +1289,13 @@ export async function handleDk8sLogsOpen(
   */
   const key = streamKey(context, namespace, pod);
   if (msg.alongside) stopLogStreams(key); else stopLogStreams();
+  /*
+    Which read these lines belong to, echoed back as it was asked. A stream
+    that is stopped says nothing more, but what it said just before is already
+    on its way — and arrived into the read that replaced it, as forty stray
+    lines on top of "the last 200".
+  */
+  const read = msg.readId !== undefined ? { readId: msg.readId } : {};
 
   logStreams.set(key, streamLogs(context, namespace, pod, {
     format: pinned,
@@ -1330,12 +1337,12 @@ export async function handleDk8sLogsOpen(
     /* Namespace and cluster travel with every line. With two panes open the
        pod name alone is not an address — two namespaces can hold a pod called
        the same thing, and its lines would land in the other one's pane. */
-    onLines: (lines) => postMessage({ type: 'dk8s:logLines', pod, namespace, context, lines }),
+    onLines: (lines) => postMessage({ type: 'dk8s:logLines', pod, namespace, context, lines, ...read }),
     onStatus: (status, detail) => postMessage({
-      type: 'dk8s:logStatus', pod, namespace, context, status, detail,
+      type: 'dk8s:logStatus', pod, namespace, context, status, detail, ...read,
     }),
     onDropped: (count) => postMessage({
-      type: 'dk8s:logDropped', pod, namespace, context, count,
+      type: 'dk8s:logDropped', pod, namespace, context, count, ...read,
     }),
   }));
 }

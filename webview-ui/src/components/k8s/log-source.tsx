@@ -50,6 +50,9 @@ export type LogSource = Pick<K8sStore,
 > & {
   /** Empty the screen without stopping the read. Absent where there is nothing streaming to clear. */
   clearLogs?: () => void;
+  /** Following, held still to read — and letting in what arrived meanwhile. */
+  logPaused?: boolean;
+  setLogPaused?: (paused: boolean) => void;
   /** Lines a snapshot read has brought in so far — see k8s-store `logReceived`. Absent where nothing streams. */
   logReceived?: number;
   /** A line the page counts as a hit — marked in the gutter and tinted, without filtering anything out. */

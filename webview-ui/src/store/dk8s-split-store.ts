@@ -60,6 +60,10 @@ export interface SplitPane {
   dropped: number;
   /** Lines a snapshot has brought in, held until it ends — see k8s-store `logReceived`. */
   held?: LogLine[];
+  /** Following, held still to read — see k8s-store `logPaused`. */
+  paused?: boolean;
+  /** The read in flight replaces the pane when it lands — see k8s-store `reloadLogs`. */
+  replace?: boolean;
   formatId?: string;
   formatName?: string;
 
@@ -107,7 +111,9 @@ interface SplitState {
   focus: (id: string) => void;
   patch: (id: string, over: Partial<SplitPane>) => void;
   /** Ask the host for this pane's lines again, with whatever it now wants. */
-  refetch: (id: string) => void;
+  refetch: (id: string, opts?: { keepScreen?: boolean }) => void;
+  /** Stop a pane's Following and keep what it brought — see k8s-store `setLogLive`. */
+  stopFollowing: (id: string) => void;
   apply: (msg: Record<string, unknown>) => void;
 }
 
@@ -227,6 +233,7 @@ export const useSplitStore = create<SplitState>((set, get) => ({
       ...(pane.onlyErrors ? { levels: ['error'] } : {}),
       follow: false,
       alongside: i > 0,
+      readId: pane.requestedAt,
     }));
   },
 
@@ -308,12 +315,23 @@ export const useSplitStore = create<SplitState>((set, get) => ({
     panes: s.panes.map(p => (p.id === id ? { ...p, ...over } : p)),
   })),
 
-  refetch: (id) => {
+  stopFollowing: (id) => {
+    const pane = get().panes.find(p => p.id === id);
+    if (!pane) return;
+    /* Back to an ordinary read of the pane's tail, the stream's lines kept until it lands. */
+    set(s => ({ panes: s.panes.map(p => (p.id === id ? { ...p, live: false, paused: false } : p)) }));
+    get().refetch(id, { keepScreen: true });
+  },
+
+  refetch: (id, opts) => {
     const pane = get().panes.find(p => p.id === id);
     if (!pane) return;
     set(s => ({
       panes: s.panes.map(p => (p.id === id
-        ? { ...p, logs: [], held: undefined, dropped: 0, status: 'loading', requestedAt: Date.now() }
+        ? {
+          ...p, held: undefined, status: 'loading', requestedAt: Date.now(), replace: !!opts?.keepScreen,
+          ...(opts?.keepScreen ? {} : { logs: [], dropped: 0 }),
+        }
         : p)),
     }));
     postMsg({
@@ -330,6 +348,7 @@ export const useSplitStore = create<SplitState>((set, get) => ({
       previous: pane.previous,
       /* Always alongside: a refetch in one pane must not stop the others. */
       alongside: true,
+      readId: get().panes.find(p => p.id === id)?.requestedAt,
     });
   },
 
@@ -342,7 +361,10 @@ export const useSplitStore = create<SplitState>((set, get) => ({
       namespace: String(msg.namespace ?? ''),
       pod: String(msg.pod ?? ''),
     });
-    if (!panes.some(p => p.id === id)) return;
+    const target = panes.find(p => p.id === id);
+    if (!target) return;
+    /* From a read this pane has replaced — see k8s-store `staleRead`. */
+    if (msg.readId !== undefined && msg.readId !== target.requestedAt) return;
 
     const on = (fn: (p: SplitPane) => SplitPane) => set(s => ({
       panes: s.panes.map(p => (p.id === id ? fn(p) : p)),
@@ -350,7 +372,7 @@ export const useSplitStore = create<SplitState>((set, get) => ({
 
     switch (msg.type) {
       case 'dk8s:logLines':
-        on(p => (!p.live && p.status !== 'ended'
+        on(p => ((!p.live && p.status !== 'ended') || p.paused
           /* A snapshot pane is held until its read ends, then drawn once. */
           ? { ...p, held: [...(p.held ?? []), ...((msg.lines as LogLine[]) ?? [])].slice(-MAX_LINES) }
           : { ...p, logs: [...p.logs, ...((msg.lines as LogLine[]) ?? [])].slice(-MAX_LINES) }));
@@ -360,7 +382,8 @@ export const useSplitStore = create<SplitState>((set, get) => ({
         const done = status === 'ended' || status === 'error' || status === 'idle';
         on(p => ({
           ...p,
-          ...(done && p.held?.length ? { logs: [...p.logs, ...p.held].slice(-MAX_LINES), held: undefined } : {}),
+          ...(done && p.replace ? { logs: (p.held ?? []).slice(-MAX_LINES), held: undefined, replace: false }
+            : done && p.held?.length ? { logs: [...p.logs, ...p.held].slice(-MAX_LINES), held: undefined } : {}),
           status,
           detail: msg.detail as string | undefined,
         }));

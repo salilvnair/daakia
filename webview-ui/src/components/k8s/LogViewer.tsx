@@ -22,7 +22,7 @@ import {
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
   WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon, CloseIcon,
-  ChevronLeftIcon, SidebarLeftIcon, SearchIcon, LinkIcon, ClockIcon, EraserIcon, BracesIcon,
+  ChevronLeftIcon, SidebarLeftIcon, SearchIcon, LinkIcon, ClockIcon, EraserIcon, BracesIcon, PauseIcon, PlayIcon,
 } from '../../icons';
 import { CopyGlyph, COPY_TICK_MS } from '../shared/CopyTick';
 import { copyText } from '../../utils/clipboard';
@@ -606,12 +606,21 @@ function DensityRibbon({
 // ── Level chips ─────────────────────────────────────────────────────────────
 
 function LevelChips() {
-  const { logs, logLevels, toggleLogLevel } = useLogSource();
+  const { logs, logLevels, toggleLogLevel, detail } = useLogSource();
   const counts = useMemo(() => levelCounts(logs), [logs]);
+  /*
+    A level keeps its chip for the pod once it has been seen. Shown only while
+    its count was above 0, every chip went out on Clear and came back one by
+    one as lines arrived — the whole toolbar shifting left and right with them.
+  */
+  const podKey = `${detail?.context ?? ''}/${detail?.namespace ?? ''}/${detail?.name ?? ''}`;
+  const seen = useRef<{ pod: string; levels: Set<LogLevel> }>({ pod: podKey, levels: new Set() });
+  if (seen.current.pod !== podKey) seen.current = { pod: podKey, levels: new Set() };
+  for (const l of LEVEL_ORDER) if (counts[l] > 0) seen.current.levels.add(l);
 
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
-      {LEVEL_ORDER.filter(l => counts[l] > 0).map(level => {
+      {LEVEL_ORDER.filter(l => seen.current.levels.has(l) || logLevels.includes(l)).map(level => {
         const on = logLevels.includes(level);
         // Nothing selected means everything, so no chip is dimmed until the
         // user picks — all-chips-off with all-lines-showing is a lie.
@@ -831,7 +840,7 @@ export function LogViewer() {
        closes ITS view, and reaching past the source for either would act on
        whichever pod happened to be open behind it. */
     clearFieldFilters, closeDetail, isSnapshot, contextCap, sharedRange,
-    paging, focusSeq, onFindContext, isHit, highlightQuery, clearLogs,
+    paging, focusSeq, onFindContext, isHit, highlightQuery, clearLogs, logPaused, setLogPaused,
     focusLabel, selectedSeq, onSelectLine, selectedLabel, podColumn, podColor, columns, railLead, footerNote,
     onGutterCompact,
   } = useLogSource();
@@ -1384,8 +1393,9 @@ export function LogViewer() {
 
   /* Once a read shows payloads the picker stays for it — a filter that hides them should not move the toolbar. */
   const payloadSeen = useRef(false);
-  const payloadRead = useRef(logRequestedAt);
-  if (payloadRead.current !== logRequestedAt) { payloadRead.current = logRequestedAt; payloadSeen.current = false; }
+  const payloadFor = `${detail?.context ?? ''}/${detail?.namespace ?? ''}/${detail?.name ?? ''}`;
+  const payloadRead = useRef(payloadFor);
+  if (payloadRead.current !== payloadFor) { payloadRead.current = payloadFor; payloadSeen.current = false; }
 
   /* Events, not lines: a folded trace or a YAML block is one, and its frames are none. */
   const eventStats = useMemo(() => {
@@ -2366,10 +2376,27 @@ export function LogViewer() {
         {!isSnapshot && logLive && (
           <>
             <Sep />
+            {/* Hold the screen still to read; the stream carries on, and Resume lets it in. */}
+            {setLogPaused && (
+              <ButtonView
+                label={logPaused ? `Resume${(logReceived ?? 0) > 0 ? ` · ${compactCount(logReceived ?? 0)} new` : ''}` : 'Pause'}
+                size={CTL_SIZE} variant="secondary" accentColor={ACCENT}
+                onClick={() => setLogPaused(!logPaused)}
+                title={logPaused ? 'Add what arrived while paused, and follow the newest line again' : 'Hold the screen still to read — the stream keeps running'}
+                iconLeft={logPaused ? <PlayIcon size={IconSize.action} /> : <PauseIcon size={IconSize.action} />}
+                style={{
+                  minWidth: 118,
+                  ...(logPaused ? {
+                    color: 'var(--color-warning)',
+                    borderColor: 'color-mix(in srgb, var(--color-warning) 45%, transparent)',
+                    background: 'color-mix(in srgb, var(--color-warning) 10%, transparent)',
+                  } : {}),
+                }}
+              />
+            )}
             {clearLogs && (
-              <ButtonView label="Clear" size={CTL_SIZE} variant="secondary" accentColor={ACCENT}
-                          onClick={clearLogs} title="Clear the screen — Following carries on, from here"
-                          iconLeft={<EraserIcon size={IconSize.action} />} />
+              <IconButton onClick={clearLogs} title="Clear the screen — Following carries on, from here"
+                          icon={<EraserIcon size={IconSize.item} />} />
             )}
           </>
         )}
@@ -3276,8 +3303,11 @@ export function LogViewer() {
               /* Following starts empty, so there is no tail to be a fraction of either. */
               : logLive
                 ? `${logs.length.toLocaleString()} line${logs.length === 1 ? '' : 's'} since following began`
-                : `${logs.length.toLocaleString()} of the last ${logTail.toLocaleString()} lines`}
-          {!isSnapshot && !logLive && logs.length >= logTail && ' · at the limit'}
+                /* The screen kept while a read replaces it — not yet "of the last N". */
+                : logStatus === 'loading' || logStatus === 'streaming'
+                  ? `reading the last ${logTail.toLocaleString()} lines…`
+                  : `${logs.length.toLocaleString()} of the last ${logTail.toLocaleString()} lines`}
+          {!isSnapshot && !logLive && logStatus !== 'loading' && logStatus !== 'streaming' && logs.length >= logTail && ' · at the limit'}
           {logs.length > 0 && ` · ${(bufferBytes(logs) / 1024 / 1024).toFixed(1)} MB`}
           {oldest !== undefined && ` · oldest ${formatLogTime(oldest)}`}
           {marks.length > 0 && <MarkedCount inView={markedInView} />}
@@ -3298,6 +3328,8 @@ export function LogViewer() {
         <div className="flex-1" />
         <span>
           {isSnapshot ? (logDetail ?? 'a search result')
+            : logLive && logPaused
+              ? `paused — ${(logReceived ?? 0).toLocaleString()} new line${logReceived === 1 ? '' : 's'} waiting`
             : logLive
               ? 'following — new lines append as they arrive'
               : `snapshot of the last ${logTail} lines`}

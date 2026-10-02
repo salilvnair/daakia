@@ -757,6 +757,11 @@ interface K8sState {
    * froze for seconds. The skeleton says how far it has got instead.
    */
   logReceived: number;
+  /**
+   * Following, but held still to read. The stream keeps running and what it
+   * brings is held (counted in `logReceived`) until Resume adds it.
+   */
+  logPaused: boolean;
   logFilter: string;
   logLevels: LogLevel[];
   /**
@@ -937,6 +942,8 @@ interface K8sState {
   setLogLive: (v: boolean) => void;
   /** Empty the screen without stopping the read — Following's Clear. */
   clearLogs: () => void;
+  /** Hold the screen still while following, or let what arrived meanwhile in. */
+  setLogPaused: (paused: boolean) => void;
   setLogTail: (n: number) => void;
   setLogDirection: (d: 'last' | 'first' | 'between') => void;
   setLogSince: (v: 'all' | 'restart' | '15m' | '1h' | '2h' | '6h') => void;
@@ -946,7 +953,12 @@ interface K8sState {
   setLogWrap: (v: boolean) => void;
   setLogPrevious: (v: boolean) => void;
   setLogContainer: (c?: string) => void;
-  reloadLogs: () => void;
+  /**
+   * Read again with the current settings. `keepScreen` leaves what is shown
+   * in place until the new read lands, then swaps it whole — no skeleton in
+   * between, for a read the reader did not ask to start from blank.
+   */
+  reloadLogs: (opts?: { keepScreen?: boolean }) => void;
   setLogSelection: (sel?: LogSelection) => void;
   openShell: () => void;
   openVsCodeShell: () => void;
@@ -999,6 +1011,18 @@ let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 
 /** A snapshot's lines while it is still arriving — see `logReceived`. */
 let held: LogLine[] = [];
+/** The read in flight replaces the screen when it lands, rather than adding to it. */
+let replaceOnLand = false;
+
+/**
+ * From a read this view has moved past. Every read is asked with its
+ * `logRequestedAt` as `readId` and the host echoes it; a stopped stream's
+ * last lines, already in flight, carry the old one. No id — an older host —
+ * is taken as current.
+ */
+function staleRead(msg: Record<string, unknown>): boolean {
+  return msg.readId !== undefined && msg.readId !== useK8sStore.getState().logRequestedAt;
+}
 
 export const useK8sStore = create<K8sState>((set, get) => ({
   stage: 'probing',
@@ -1042,6 +1066,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   logRequestedAt: 0,
   logDropped: 0,
   logReceived: 0,
+  logPaused: false,
   logFilter: '',
   logLevels: [],
   logFieldFilters: [],
@@ -1243,7 +1268,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       // for a pod is still readable by eye in the database.
       detailTab: (useUiStateStore.getState()
         .prefs[`${DETAIL_TAB_PREF}${pod.namespace}/${pod.name}`] as DetailTab | undefined) ?? 'logs',
-      logs: [], logStatus: 'loading', logDetail: undefined, logDropped: 0, logReceived: 0,
+      logs: [], logStatus: 'loading', logDetail: undefined, logDropped: 0, logReceived: 0, logPaused: false,
       logRequestedAt: Date.now(),
       logFilter: '', logLevels: [], logFieldFilters: [], logFollow: true, logLive: false, logOnlyErrors: false,
       /*
@@ -1271,7 +1296,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       // Snapshot, not a stream. See logLive.
       postMsg({
         type: 'dk8s:openLogs', ...base,
-        follow: false, direction: 'last', tailLines: get().logTail,
+        follow: false, direction: 'last', tailLines: get().logTail, readId: get().logRequestedAt,
       });
     }
     postMsg({ type: 'dk8s:describe', ...base });
@@ -1374,15 +1399,34 @@ export const useK8sStore = create<K8sState>((set, get) => ({
 
   setLogFollow: (logFollow) => set({ logFollow }),
 
-  clearLogs: () => { held = []; set({ logs: [], logDropped: 0, logReceived: 0, logSelection: undefined }); },
+  clearLogs: () => { held = []; replaceOnLand = false; set({ logs: [], logDropped: 0, logReceived: 0, logSelection: undefined }); },
+
+  setLogPaused: (paused) => {
+    if (paused) { set({ logPaused: true, logFollow: false }); return; }
+    const all = get().logs.concat(held);
+    held = [];
+    const overflow = all.length - LOG_BUFFER_MAX;
+    set(s => ({
+      logPaused: false, logFollow: true, logReceived: 0,
+      ...(overflow > 0 ? { logs: all.slice(overflow), logDropped: s.logDropped + overflow } : { logs: all }),
+    }));
+  },
 
   setLogLive: (logLive) => {
     /* Following starts at the newest line, wherever the reader had scrolled to. */
-    set(logLive ? { logLive, logFollow: true } : { logLive });
-    // Going live re-opens the stream with --follow; leaving live stops the
-    // process outright rather than letting it run unread in the background.
-    if (logLive) get().reloadLogs();
-    else postMsg({ type: 'dk8s:closeLogs' });
+    if (logLive) {
+      set({ logLive, logFollow: true, logPaused: false });
+      get().reloadLogs();
+      return;
+    }
+    /*
+      Leaving live is back to reading the pod the ordinary way — the last 200
+      lines, or whatever the read controls say. The new read replaces the
+      stream (the host stops it before opening another), and what Following
+      showed stays on screen until that read lands, so there is no blank.
+    */
+    set({ logLive, logPaused: false });
+    get().reloadLogs({ keepScreen: true });
   },
 
   // These only change what the NEXT fetch will ask for. Nothing reloads until
@@ -1443,15 +1487,17 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   setLogPrevious: (logPrevious) => { set({ logPrevious }); get().reloadLogs(); },
   setLogContainer: (logContainer) => { set({ logContainer }); get().reloadLogs(); },
 
-  reloadLogs: () => {
+  reloadLogs: (opts) => {
     const {
       detail, logPrevious, logContainer, logLive, logTail, logDirection, logSince,
       logFrom, logTo, logOnlyErrors,
     } = get();
     if (!detail) return;
     held = [];
+    replaceOnLand = !!opts?.keepScreen;
     set({
-      logs: [], logDropped: 0, logStatus: 'loading', logReceived: 0,
+      ...(replaceOnLand ? {} : { logs: [], logDropped: 0 }),
+      logStatus: 'loading', logReceived: 0, logPaused: false,
       logDetail: undefined, logSelection: undefined, logRequestedAt: Date.now(),
     });
 
@@ -1482,6 +1528,8 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       type: 'dk8s:openLogs',
       context: detail.context, namespace: detail.namespace, pod: detail.name,
       previous: logPrevious, container: logContainer,
+      /* Lines from the read this one replaced are dropped by it — see `staleRead`. */
+      readId: get().logRequestedAt,
       // Following always tails: a head slice cannot grow.
       follow: logLive,
       /*
@@ -2092,12 +2140,13 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         */
         const open = get().detail;
         if (!open || msg.pod !== open.name) break;
+        if (staleRead(msg)) break;
         if (msg.namespace && open.namespace && msg.namespace !== open.namespace) break;
         if (msg.context && open.context && msg.context !== open.context) break;
         const incoming = (msg.lines as LogLine[]) ?? [];
         if (!incoming.length) break;
         /* A snapshot is held until it ends — see `logReceived`. Following draws as it goes. */
-        if (!get().logLive && get().logStatus !== 'ended') {
+        if ((!get().logLive && get().logStatus !== 'ended') || get().logPaused) {
           held.push(...incoming);
           if (held.length > LOG_BUFFER_MAX * 1.2) held.splice(0, held.length - LOG_BUFFER_MAX);
           set({ logReceived: held.length });
@@ -2129,9 +2178,15 @@ export const useK8sStore = create<K8sState>((set, get) => ({
 
       case 'dk8s:logStatus':
         if (msg.pod !== get().detail?.name) break;
+        if (staleRead(msg)) break;
         /* The read is over: everything it held lands at once. */
         if (msg.status === 'ended' || msg.status === 'error' || msg.status === 'idle') {
-          if (held.length) {
+          if (replaceOnLand) {
+            replaceOnLand = false;
+            const all = held;
+            held = [];
+            set({ logs: all.slice(-LOG_BUFFER_MAX), logDropped: Math.max(0, all.length - LOG_BUFFER_MAX), logReceived: 0 });
+          } else if (held.length) {
             const all = get().logs.concat(held);
             held = [];
             const overflow = all.length - LOG_BUFFER_MAX;
@@ -2150,6 +2205,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
 
       case 'dk8s:logDropped':
         if (msg.pod !== get().detail?.name) break;
+        if (staleRead(msg)) break;
         set(s => ({ logDropped: s.logDropped + (msg.count as number) }));
         break;
 

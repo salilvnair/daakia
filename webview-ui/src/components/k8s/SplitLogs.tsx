@@ -72,7 +72,7 @@ function Pane({ pane, focused, sharedRange }: {
   /** Set when the split shares one clock — see `timeBuckets`. */
   sharedRange?: { from: number; to: number };
 }) {
-  const { patch, refetch, closePane, focus, panes } = useSplitStore();
+  const { patch, refetch, stopFollowing, closePane, focus, panes } = useSplitStore();
   const logLineNumbers = useK8sStore(s => s.logLineNumbers);
   const pod = useK8sStore(s => s.pods.find(
     p => p.name === pane.pod && p.namespace === pane.namespace,
@@ -162,7 +162,15 @@ function Pane({ pane, focused, sharedRange }: {
     },
     setLogWrap: (wrap: boolean) => patch(pane.id, { wrap }),
     setLogFollow: (follow: boolean) => patch(pane.id, { follow }),
-    setLogLive: (live: boolean) => { patch(pane.id, live ? { live, follow: true } : { live }); refetch(pane.id); },
+    setLogLive: (live: boolean) => {
+      if (!live) { stopFollowing(pane.id); return; }
+      patch(pane.id, { live, follow: true, paused: false });
+      refetch(pane.id);
+    },
+    logPaused: !!pane.paused,
+    setLogPaused: (paused: boolean) => patch(pane.id, paused
+      ? { paused: true, follow: false }
+      : { paused: false, follow: true, logs: [...pane.logs, ...(pane.held ?? [])].slice(-20_000), held: undefined }),
     clearLogs: () => patch(pane.id, { logs: [], held: undefined, dropped: 0 }),
     setLogTail: (tail: number) => patch(pane.id, { tail }),
     setLogDirection: (direction: 'first' | 'last' | 'between') => patch(pane.id, direction === 'between' && !pane.from
@@ -179,7 +187,7 @@ function Pane({ pane, focused, sharedRange }: {
     /* The view's own "back" closes this pane rather than the whole split. */
     closeDetail: () => closePane(pane.id),
     onGutterCompact: setCompact,
-  } as unknown as LogSource), [pane, asPod, logLineNumbers, patch, refetch, closePane, sharedRange]);
+  } as unknown as LogSource), [pane, asPod, logLineNumbers, patch, refetch, stopFollowing, closePane, sharedRange]);
 
   return (
     <div
