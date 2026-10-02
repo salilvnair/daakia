@@ -1269,9 +1269,23 @@ export function LogViewer() {
   }, [visible, foldTraces, expanded, yamlOn, payloadOpts.appFirst, payloadOpts.homePackages]);
 
   const total = rows.length;
+  /*
+    A row's number is its line in the read, not its place on screen.
+
+    Numbered by place, a folded stack trace counted once for its ten lines,
+    so a read of the last 200 ended at 165 and looked short. Numbered by line,
+    the last one is 200 and a fold skips numbers the way an editor's does —
+    and a filtered view keeps each line's own number, like `grep -n`.
+  */
+  const lineOffset = paging?.first ?? 0;
+  const lineIndex = useMemo(() => {
+    const m = new Map<number, number>();
+    logs.forEach((l, i) => m.set(l.seq, i));
+    return m;
+  }, [logs]);
   // Sized from the largest number it will hold, so the column does not shift
   // as you scroll from line 99 to line 100.
-  const gutterWidth = `${Math.max(2, String(rows.length).length)}ch`;
+  const gutterWidth = `${Math.max(2, String(lineOffset + logs.length).length)}ch`;
 
   /**
    * Real heights for the rows that have been on screen.
@@ -2792,10 +2806,8 @@ export function LogViewer() {
                     const card: LineCardKind | undefined = row.isFrame ? undefined
                       : line.seq === selectedSeq && selectedLabel ? 'clicked'
                       : line.seq === focusSeq && focusLabel ? 'from' : undefined;
-                    // Position in what is on screen, so it reads 1..N and the
-                    // last number is the count — the same thing an editor's
-                    // gutter tells you at a glance.
-                    const lineNo = first + i + 1;
+                    // Its line in the read — see `lineIndex`.
+                    const lineNo = lineOffset + (lineIndex.get(line.seq) ?? first + i) + 1;
                     return (
                       <div
                         key={`${line.seq}-${i}`}
