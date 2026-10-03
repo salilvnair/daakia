@@ -44,8 +44,12 @@ import type { Condition } from '../components/k8s/follow';
  */
 export interface FollowState {
   conds: Condition[];
-  /** The line it was followed from: its pod, its instant, its text. */
-  anchor: { pod: string; ts?: number; text: string };
+  /**
+   * The line it was followed from: its pod, its instant, its text — and
+   * whether it came from an archived file, which is where the rest of its
+   * thread is too.
+   */
+  anchor: { pod: string; ts?: number; text: string; source?: 'live' | 'archive' };
   /** Seconds either side of the anchor. */
   width: number;
   /** Merge the pods into one timeline, or keep each pod whole. */

@@ -285,9 +285,15 @@ export function HitFieldsRail({
           const charted = charts.includes(f.key);
           const isColumn = columns.includes(f.key);
           const column = (
+            /* A column is the field's, not this value's: once `thread` is a
+               column, every line's thread shows in it — so another line's
+               thread says Remove too. The label names the field to say so. */
             <LineButton tone={isColumn ? FOLLOW : undefined} onClick={() => onToggleColumn(f.key)}
+                        title={isColumn
+                          ? `Take the ${f.key} column off the lines`
+                          : `Show every line's ${f.key} in a column of its own, beside the level`}
                         style={{ padding: '0 9px' }}>
-              {isColumn ? 'Remove column' : 'Add as column'}
+              {isColumn ? `Remove ${f.key} column` : `Add ${f.key} column`}
             </LineButton>
           );
           return (

@@ -35,7 +35,7 @@ import {
 import type { LogLevel } from './k8s-log-stream';
 import { parseLogTime } from './log-time';
 import { mountsOf, mountApplies, type PvLogConfig, type PodRef } from './pv-logs';
-import { cleanPath, searchInPod, type PvMatch as GrepLine } from './pv-in-pod';
+import { cleanPath, searchInPod, zoneStamp, type PvMatch as GrepLine } from './pv-in-pod';
 import type { PvPodResult, PvFileResult, PvMatch } from './pv-search';
 
 /** The lower edge of the window, however it was asked for. */
@@ -182,6 +182,13 @@ export async function searchPvInPod(
           : opts.maxMatchesPerPod * (1 + 2 * Math.max(0, opts.contextLines)),
         /* Skip files that ended before the window began — see PvSearchOptions.sinceMs. */
         ...(cutoffMs !== undefined ? { sinceMs: cutoffMs } : {}),
+        /* And read the rest from the window's start, in the log's own zone — see PvSearchOptions.window. */
+        ...(cutoffMs !== undefined ? {
+          window: {
+            from: zoneStamp(Math.floor(cutoffMs / 1000) * 1000, logZone),
+            ...(untilMs !== undefined ? { to: zoneStamp(Math.ceil(untilMs / 1000) * 1000, logZone) } : {}),
+          },
+        } : {}),
       },
     );
 

@@ -183,3 +183,19 @@ describe('custom fields', () => {
     expect(parseCustomFields(JSON.stringify([{ id: 'a', name: 'n', kind: 'regex', source: 'x', added: 0 }]))).toHaveLength(1);
   });
 });
+
+describe('fieldValues', () => {
+  it('lists the fields the lines carry, each with its values and how many lines carry them', async () => {
+    const { fieldValues } = await import('./follow');
+    const lines = [
+      { text: 'a', thread: 'scheduling-2', logger: 'Api', pod: 'p1', fields: { requestDataId: '42' } },
+      { text: 'b', thread: 'scheduling-2', logger: 'Api', pod: 'p1' },
+      { text: 'c', thread: 'nio-1', logger: 'Job', pod: 'p1' },
+    ];
+    const out = fieldValues(lines);
+    expect(out.find(f => f.field === 'thread')).toEqual({ field: 'thread', n: 3, values: [{ value: 'scheduling-2', n: 2 }, { value: 'nio-1', n: 1 }] });
+    expect(out.find(f => f.field === 'requestDataId')).toEqual({ field: 'requestDataId', n: 1, values: [{ value: '42', n: 1 }] });
+    /* Only what a condition can be checked against: no level. */
+    expect(out.some(f => f.field === 'level')).toBe(false);
+  });
+});

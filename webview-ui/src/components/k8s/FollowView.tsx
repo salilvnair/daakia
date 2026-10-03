@@ -32,11 +32,12 @@ import { useCatalogue } from '../../store/dk8s-logger-store';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { LogViewer } from './LogViewer';
 import { LogSourceProvider } from './log-source';
-import { resultLines, type ResultLine } from './search-results';
+import { resultLines, sourceSummary, type ResultLine } from './search-results';
+import { sourceTagFor } from './source-tag';
 import { formatLogTime } from './log-view';
 import { logLineSettings } from './log-settings';
 import {
-  follows, followQuery, podCounts, touched, arrange, cameFrom, nextWidth, widthLabel, type Condition,
+  follows, followQuery, podCounts, touched, fieldValues, arrange, cameFrom, nextWidth, widthLabel, type Condition,
 } from './follow';
 import { readFields } from './field-readers';
 import { useFieldReaders, saveView } from './follow-prefs';
@@ -44,7 +45,7 @@ import { replicaHue, podTail } from './pod-hue';
 import { snapshotSource, standIn, useSnapshotView } from './snapshot-source';
 import { asPodSummaries } from './searched-pods';
 import { openWith } from '../ai/ai-chat-actions';
-import { FOLLOW, CHECK, FIELD_VALUE, AMBER, tint } from './follow-tone';
+import { FOLLOW, FOLLOW_INK, CHECK, FIELD_KEY, FIELD_VALUE, AMBER, tint } from './follow-tone';
 import { LineButton, FillButton, CheckLabel, railLabel, mono } from './follow-ui';
 import { templateParts } from './logger-pattern';
 
@@ -120,14 +121,17 @@ function ConditionChip({ c, onToggle, onDrop }: { c: Condition; onToggle: () => 
   );
 }
 
-function AddCondition({ suggestions, onAdd }: {
+function AddCondition({ suggestions, available, onAdd }: {
   suggestions: { field: string; value: string; n: number }[];
+  /** Every field the lines carry, and its values — the two pickers' lists. */
+  available: { field: string; n: number; values: { value: string; n: number }[] }[];
   onAdd: (c: { field: string; value: string }) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [field, setField] = useState('');
   const [value, setValue] = useState('');
   const anchor = useRef<HTMLSpanElement>(null);
+  const chosen = available.find(f => f.field === field.trim());
   const add = (c: { field: string; value: string }) => { onAdd(c); setOpen(false); setField(''); setValue(''); };
   return (
     <span ref={anchor} className="shrink-0">
@@ -136,7 +140,7 @@ function AddCondition({ suggestions, onAdd }: {
         + condition
       </LineButton>
       <PopoverView open={open} onClose={() => setOpen(false)} anchorEl={anchor.current} placement="bottom" borderRadius={10}>
-        <div className="flex flex-col gap-2 p-3" style={{ width: 320 }}>
+        <div className="flex flex-col gap-2 p-3" style={{ width: 380 }}>
           {suggestions.length > 0 && (
             <>
               <div style={railLabel}>carried by these lines</div>
@@ -147,12 +151,83 @@ function AddCondition({ suggestions, onAdd }: {
               </div>
             </>
           )}
-          <div style={railLabel}>or name one</div>
+          {/*
+            Picked from what the lines carry, or typed: a field from another
+            pod's format, or a value not on screen yet, is still a condition.
+            The choices are drawn inside the popover — a dropdown drawn on the
+            body is a click outside it, and closes it on the first pick.
+          */}
+          <div style={railLabel}>{available.length ? 'or pick a field' : 'or name one'}</div>
           <div className="flex items-center gap-1.5">
-            <TextInputView value={field} placeholder="field" onChange={e => setField(e.target.value)} size="sm" />
-            <span style={{ color: 'var(--color-text-muted)' }}>=</span>
-            <TextInputView value={value} placeholder="value" onChange={e => setValue(e.target.value)} size="sm" />
+            <TextInputView value={field} placeholder="field" size="sm" autoComplete="off" aria-label="Field"
+                           onChange={e => { setField(e.target.value); setValue(''); }} />
+            <span style={{ color: FOLLOW, fontWeight: 600 }}>=</span>
+            <TextInputView value={value} placeholder="value" size="sm" autoComplete="off" aria-label="Value"
+                           onChange={e => setValue(e.target.value)} />
           </div>
+
+          {available.length > 0 && (
+            <div className="flex flex-wrap" style={{ gap: 5 }}>
+              {available
+                .filter(f => !field.trim() || chosen || f.field.toLowerCase().includes(field.trim().toLowerCase()))
+                .map(f => {
+                  const on = f.field === field.trim();
+                  return (
+                    <button key={f.field} type="button" onClick={() => { setField(on ? '' : f.field); setValue(''); }}
+                            title={`${f.n} line${f.n === 1 ? '' : 's'} carry ${f.field}, in ${f.values.length} value${f.values.length === 1 ? '' : 's'}`}
+                            className="inline-flex items-center cursor-pointer"
+                            style={{
+                              gap: 6, height: 24, padding: '0 4px 0 10px', borderRadius: 999, fontSize: 11.5, ...mono,
+                              color: on ? FOLLOW_INK : FIELD_KEY,
+                              background: on ? FOLLOW : tint(FIELD_KEY, 10),
+                              border: `1px solid ${on ? FOLLOW : tint(FIELD_KEY, 35)}`,
+                            }}>
+                      {f.field}
+                      <span style={{
+                        minWidth: 18, height: 16, padding: '0 5px', borderRadius: 999, fontSize: 10, lineHeight: '16px', textAlign: 'center',
+                        fontVariantNumeric: 'tabular-nums',
+                        background: on ? tint(FOLLOW_INK, 18) : tint(FIELD_KEY, 18),
+                        color: on ? FOLLOW_INK : FIELD_KEY,
+                      }}>{f.values.length}</span>
+                    </button>
+                  );
+                })}
+            </div>
+          )}
+
+          {chosen && (
+            <div className="flex flex-col" style={{ gap: 3, maxHeight: 190, overflowY: 'auto', paddingRight: 2 }}>
+              {chosen.values
+                .filter(v => !value.trim() || v.value.toLowerCase().includes(value.trim().toLowerCase()))
+                .map(v => {
+                  const on = v.value === value.trim();
+                  const share = Math.max(4, Math.round((v.n / chosen.values[0].n) * 100));
+                  return (
+                    <button key={v.value} type="button" onClick={() => setValue(v.value)}
+                            onDoubleClick={() => add({ field: chosen.field, value: v.value })}
+                            title={`${v.n} line${v.n === 1 ? '' : 's'} carry ${chosen.field} = ${v.value} — double-click to add it`}
+                            className="relative flex items-center text-left cursor-pointer overflow-hidden"
+                            style={{
+                              gap: 8, padding: '5px 9px', borderRadius: 7, fontSize: 11.5,
+                              border: `1px solid ${on ? FOLLOW : 'var(--color-surface-border)'}`,
+                              background: on ? tint(FOLLOW, 14) : 'transparent',
+                            }}>
+                      {/* How much of the lines carry it, as a bar behind the row. */}
+                      <span aria-hidden className="absolute left-0 top-0 bottom-0"
+                            style={{ width: `${share}%`, background: tint(FIELD_VALUE, on ? 16 : 9) }} />
+                      <span className="relative flex-1 min-w-0 truncate" style={{ ...mono, color: FIELD_VALUE }}>{v.value}</span>
+                      <span className="relative shrink-0" style={{ color: on ? FOLLOW : 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>{v.n}</span>
+                    </button>
+                  );
+                })}
+            </div>
+          )}
+
+          {field.trim() && !chosen && (
+            <div className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+              No line here carries <span style={{ ...mono, color: FIELD_KEY }}>{field.trim()}</span> — it can still be a condition, checked against what the search reads.
+            </div>
+          )}
           <div className="flex justify-end">
             <FillButton h={24} disabled={!field.trim() || !value.trim()}
                         onClick={() => add({ field: field.trim(), value: value.trim() })}>
@@ -240,7 +315,13 @@ export function FollowView() {
     not the one searched for changes nothing here — the lines are on hand, and
     only the exact check below runs again.
   */
-  const runKey = follow ? `${q}|${follow.width}|${follow.onlyPod}|${follow.anchor.ts}` : '';
+  /*
+    A line from an archived file is followed through the archive. The live log
+    only goes back as far as the container's own, and a thread from last night
+    is not in it — every width came back with no lines at all.
+  */
+  const fromArchive = follow?.anchor.source === 'archive';
+  const runKey = follow ? `${q}|${follow.width}|${follow.onlyPod}|${follow.anchor.ts}|${fromArchive}` : '';
   const ran = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (!follow || !q) return;
@@ -256,7 +337,7 @@ export function FollowView() {
       toMs: ts !== undefined ? ts + follow.width * 1000 : undefined,
       /* No instant to centre on — a line without a timestamp — reads the tail. */
       tailLines: ts !== undefined ? -1 : 5000,
-    });
+    }, { archive: fromArchive });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runKey]);
 
@@ -273,11 +354,18 @@ export function FollowView() {
   }, [search, follow, readers]);
 
   const counts = useMemo(() => podCounts(lines, podNames), [lines, podNames]);
+  const origin = useMemo(() => sourceSummary(lines), [lines]);
   /* A pod that could not be read is not a pod with nothing on it — said apart, with kubectl's reason. */
   const errors = useMemo(() => new Map((search?.groups ?? []).filter(g => g.result.error).map(g => [g.result.pod, g.result.error!])),
     [search]);
   const from = useMemo(() => (follow ? cameFrom(lines, follow.anchor) : -1), [lines, follow]);
   const also = useMemo(() => (follow ? touched(lines, follow.conds, l => readFields(l, readers)) : []), [lines, follow, readers]);
+  /* What the pickers offer: the lines on screen, or — when the conditions match
+     nothing — every line the search read, so there is still something to pick. */
+  const available = useMemo(() => {
+    const from = lines.length ? lines : (search ? resultLines(search.groups).filter(l => !l.context) : []);
+    return fieldValues(from, l => readFields(l, readers));
+  }, [lines, search, readers]);
 
   /* A pattern whose holes turn up in these lines, to show how a message value is followed. */
   const example = useMemo(() => {
@@ -353,6 +441,7 @@ export function FollowView() {
       podColor: (pod: string) => replicaHue(pod, podNames),
       focusSeq,
       focusLabel: 'you came from here',
+      sourceTag: sourceTagFor(lines),
     },
   });
 
@@ -378,7 +467,7 @@ export function FollowView() {
             />
           </span>
         ))}
-        <AddCondition suggestions={also} onAdd={t => swapOrAdd(t, true)} />
+        <AddCondition suggestions={also} available={available} onAdd={t => swapOrAdd(t, true)} />
         <div className="flex-1" />
         {anchorTime && (
           <span className="inline-flex items-center shrink-0"
@@ -410,6 +499,13 @@ export function FollowView() {
             <span style={{ color: 'var(--color-text-primary)' }}>
               {running && !lines.length ? 'Reading…' : `${lines.length.toLocaleString()} line${lines.length === 1 ? '' : 's'}`}
             </span>
+            {/* Where they came from — the archive, when the line followed was in it. */}
+            {lines.length > 0 && origin.files > 0 && (
+              <span style={{ color: 'var(--color-warning)' }}
+                    title="Lines from archived log files on the pod's volume, not the running container's own log">
+                from {origin.label}
+              </span>
+            )}
             {counts.map(c => {
               const err = errors.get(c.pod);
               return (

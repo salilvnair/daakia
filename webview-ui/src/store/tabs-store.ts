@@ -73,6 +73,8 @@ export interface WindowView {
     pod: string; ts: number; text: string; level?: string;
     /** What the hit's format read — so the window can offer to narrow by it before a line is back. */
     message?: string; thread?: string; fields?: Record<string, string>;
+    /** An archived file's line: the minutes around it are in the archive, not the live log. */
+    source?: 'live' | 'archive';
   };
   pods: { pod: string; namespace: string; context: string; containers: string[] }[];
   /** Seconds either side of the anchor, or an explicit range. */

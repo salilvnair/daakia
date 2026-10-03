@@ -38,6 +38,7 @@ import { useK8sStore } from '../../store/k8s-store';
 import { LogViewer } from './LogViewer';
 import { LogSourceProvider } from './log-source';
 import { resultLines, type ResultLine } from './search-results';
+import { sourceTagFor } from './source-tag';
 import { formatLogTime } from './log-view';
 import { summarise, determinantName, showOf, type Summary, type SummaryRow } from './determinants';
 import { useDeterminantsFor } from './use-determinants';
@@ -337,7 +338,9 @@ export function WindowTab({ tab }: { tab: RequestTab }) {
   const podNames = useMemo(() => spec.pods.map(p => p.pod), [spec.pods]);
 
   /* One read per window and set of pods; the tag is this tab's, so a second Window tab reads on its own. */
-  const runKey = `${range.from}|${range.to}|${pods.map(p => p.pod).join(',')}`;
+  /* A window around an archived line is read from the archive — see FollowView. */
+  const fromArchive = spec.anchor.source === 'archive';
+  const runKey = `${range.from}|${range.to}|${pods.map(p => p.pod).join(',')}|${fromArchive}`;
   const [tag, setTag] = useState('');
   useEffect(() => {
     if (!pods.length) return;
@@ -347,7 +350,7 @@ export function WindowTab({ tab }: { tab: RequestTab }) {
     run(next, pods.map(p => ({ context: p.context, namespace: p.namespace, pod: p.pod, containers: p.containers })), {
       query: '.', regex: true, everyLine: true, fromMs: range.from, toMs: range.to,
       maxMatchesPerPod: 40000, maxMatchesTotal: 120000,
-    });
+    }, { archive: fromArchive });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runKey]);
   const tagNow = useRef(tag);
@@ -430,6 +433,7 @@ export function WindowTab({ tab }: { tab: RequestTab }) {
       podColor: (pod: string) => replicaHue(pod, podNames),
       focusSeq: anchorLine && shownLines.includes(anchorLine) ? anchorLine.seq : undefined,
       focusLabel: 'the hit this window is around',
+      sourceTag: sourceTagFor(shownLines),
     },
   });
 
