@@ -221,6 +221,19 @@ export function prodForwardOnUrl(url: string): ForwardInfo | undefined {
     && f.ports.some(p => p.local === port));
 }
 
+/**
+ * Why a URL must not be sent without the reader's say-so — it reaches a
+ * production pod through a forward — or nothing. One sentence, for every
+ * runner that refuses on it: the Load Tester, the Bulk URL Tester, the
+ * collection runner.
+ */
+export function prodForwardRefusal(url: string, where: string): string | undefined {
+  const f = prodForwardOnUrl(url);
+  if (!f) return undefined;
+  const who = f.service ? `svc/${f.service}` : f.pod;
+  return `Not sent: ${url} reaches ${who} on ${f.context} — production, through a dk8s forward. ${where}`;
+}
+
 export function handlePfRestart(msg: Record<string, unknown>, post: PostMessage): void {
   sink = post;
   manager.restart(String(msg.id ?? ''));

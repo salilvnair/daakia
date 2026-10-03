@@ -27,6 +27,7 @@ import { installSMRestWorkflow } from '../../../../components/mock/samples/sm-re
 import { useSMWorkspaceStore, useSMTabsStore } from '@salilvnair/state-machine';
 import { useDk8sSearchStore } from '../../../../store/dk8s-search-store';
 import { useK8sStore } from '../../../../store/k8s-store';
+import { usePortForwardStore } from '../../../../store/dk8s-port-forward-store';
 import { useWorkspaceStore } from '../../../../store/workspace-store';
 import { getVsCodeApi } from '../../../../vscode';
 
@@ -104,6 +105,12 @@ export interface CaptureDirective {
    * from a real watch.
    */
   dk8sPatch?: Record<string, unknown>;
+  /**
+   * Merged into the port-forward store by the same `seedDk8sState` — the
+   * Ports tab draws a pod's ports and its forwards from there, and both come
+   * from the host, which a capture run has no cluster behind.
+   */
+  pfPatch?: Record<string, unknown>;
   /**
    * seedDkgh — the answers the host would have given, posted as messages.
    *
@@ -343,6 +350,7 @@ async function runDirective(d: CaptureDirective): Promise<void> {
        state and every view renders from it as it would from a real watch. */
     case 'seedDk8sState': {
       if (d.dk8sPatch) useK8sStore.setState(d.dk8sPatch as never);
+      if (d.pfPatch) usePortForwardStore.setState(d.pfPatch as never);
       return;
     }
     /* The search is a second store — see `searchPatch`. */

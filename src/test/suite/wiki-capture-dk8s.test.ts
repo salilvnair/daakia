@@ -257,6 +257,31 @@ const CONNECTED = {
  * row in the grid, so setting it alone leaves the grid on screen and every
  * detail capture looks identical to the pod list.
  */
+/* The Ports tab's two answers from the host: what the pod declares, and the forward that is up. */
+const PORTS_FIXTURE = {
+  loaded: true,
+  forwards: [{
+    id: 'pf-ledger', context: 'docker-desktop', namespace: 'payments', pod: 'ledger-api-7d9c4b8f6-x2mzq',
+    workload: { kind: 'Deployment', name: 'ledger-api' },
+    ports: [{ local: 8080, remote: 8080, name: 'http', role: 'http' }],
+    address: '127.0.0.1', state: 'forwarding', prod: false, follow: true,
+    startedAt: Date.now() - 42 * 60_000, upAt: Date.now() - 42 * 60_000,
+    connections: 318, lastActivity: Date.now() - 4_000, reconnects: 0,
+    command: 'kubectl --context docker-desktop -n payments port-forward pod/ledger-api-7d9c4b8f6-x2mzq 8080:8080 --address 127.0.0.1',
+  }],
+  portsByPod: {
+    'docker-desktop/payments/ledger-api-7d9c4b8f6-x2mzq': {
+      phase: 'Running',
+      ports: [
+        { container: 'ledger-api', name: 'http', port: 8080, protocol: 'TCP', role: 'http' },
+        { container: 'ledger-api', name: 'management', port: 8081, protocol: 'TCP', role: 'actuator' },
+        { container: 'ledger-api', name: 'jdwp', port: 5005, protocol: 'TCP', role: 'debug' },
+      ],
+      services: [{ service: 'ledger-api', type: 'ClusterIP', port: 80, name: 'http', targetPort: 8080, containerPort: 8080 }],
+    },
+  },
+};
+
 const WITH_POD = {
   ...CONNECTED,
   view: 'cards',
@@ -460,6 +485,24 @@ const SCREENS: ScreenSpec[] = [
          capture sees. */
       { action: 'wait', ms: 1200 },
       { action: 'seedDk8sState', dk8sPatch: { ...WITH_POD, detailTab: 'doctor' } },
+      { action: 'wait', ms: 1800 },
+    ],
+  },
+  {
+    id: 'dk8s-ports',
+    label: 'dk8s — Ports',
+    explanation:
+      'A pod\'s Ports tab: the ports it declares, each with the role dk8s reads from its name and number, the Services that route to it, and the forward running now — its local address, how long it has been up and what went through it.',
+    directives: [
+      { action: 'closeAllTabs' },
+      { action: 'openDk8sTab' },
+      { action: 'wait', ms: 1500 },
+      { action: 'seedDk8sState', dk8sPatch: { ...WITH_POD, detailTab: 'ports' }, pfPatch: PORTS_FIXTURE },
+      /* The tab asks the host for the pod's ports and the forward list when it
+         mounts; with no cluster behind it the list comes back empty. So the
+         fixture goes in again once those replies have landed. */
+      { action: 'wait', ms: 1200 },
+      { action: 'seedDk8sState', dk8sPatch: { ...WITH_POD, detailTab: 'ports' }, pfPatch: PORTS_FIXTURE },
       { action: 'wait', ms: 1800 },
     ],
   },

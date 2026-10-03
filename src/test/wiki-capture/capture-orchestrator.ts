@@ -66,6 +66,8 @@ export interface CaptureDirective {
   sampleId?: string;
   /** seedDk8sState — a partial of the dk8s store; see CaptureBridge. */
   dk8sPatch?: Record<string, unknown>;
+  /** seedDk8sState — a partial of the port-forward store, merged in too; see CaptureBridge. */
+  pfPatch?: Record<string, unknown>;
   /** seedDkgh — the messages the host would have posted; see CaptureBridge. */
   dkghMessages?: Record<string, unknown>[];
   /** seedDk8sSearch — a partial of the Quick Search store; see CaptureBridge. */

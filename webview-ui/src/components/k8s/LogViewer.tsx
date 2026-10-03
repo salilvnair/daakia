@@ -1791,6 +1791,8 @@ export function LogViewer() {
   */
   const intentAt = useRef(0);
   const lastTopRef = useRef(0);
+  /* When the reader last let go — see `letGo`. */
+  const releasedAt = useRef(0);
   const followRef = useRef({ on: logFollow, set: setLogFollow });
   followRef.current = { on: logFollow, set: setLogFollow };
   useEffect(() => {
@@ -1804,6 +1806,7 @@ export function LogViewer() {
     */
     const letGo = () => {
       mark();
+      releasedAt.current = performance.now();
       pinning.current = false;
       if (followRef.current.on) followRef.current.set(false);
     };
@@ -1865,7 +1868,10 @@ export function LogViewer() {
        growing, the browser holding its place — none of them move it up. */
     const wentUp = el.scrollTop < lastTopRef.current - 4;
     lastTopRef.current = el.scrollTop;
-    if (atBottom && !logFollow) setLogFollow(true);
+    /* Back at the bottom follows again — but not on the first frames of a
+       smooth scroll up, which are still within reach of the bottom and read
+       as "arrived" there: Following came straight back on and pinned. */
+    if (atBottom && !logFollow && !wentUp && performance.now() - releasedAt.current > 400) setLogFollow(true);
     else if (!atBottom && logFollow && wentUp && performance.now() - intentAt.current < 800) setLogFollow(false);
   }, [logFollow, setLogFollow, paging, logs.length]);
 
