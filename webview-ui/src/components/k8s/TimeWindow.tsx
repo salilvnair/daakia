@@ -99,26 +99,36 @@ export function describeWindow(w: TimeWindow): string {
     ?? 'Only lines timestamped inside this window, at either end of it inclusive.';
 }
 
-export function TimeWindowPicker({ value, onChange, size = 'md', accent }: {
+export function TimeWindowPicker({ value, onChange, size = 'md', accent, onScreen }: {
   value: TimeWindow;
   onChange: (w: TimeWindow) => void;
   size?: 'sm' | 'md';
   accent: string;
+  /**
+   * "On screen" as the first choice, for a dialog that can write what the page
+   * already holds — the pod log's Download has it, and so does a search's.
+   * While it is chosen no window applies, so none is shown as picked.
+   */
+  onScreen?: { active: boolean; onPick: () => void };
 }) {
+  const screenOn = !!onScreen?.active;
   return (
     // One row: the two dates are part of the same choice as the preset beside
     // them, and stacking them read as a separate setting that had appeared.
     <div className="flex items-center gap-2 flex-wrap">
       <SegmentedControlView
-        value={value.kind}
-        onChange={k => onChange({ ...value, kind: k as WindowKind })}
-        options={(Object.keys(LABEL) as WindowKind[]).map(k => ({ value: k, label: LABEL[k] }))}
+        value={screenOn ? 'screen' : value.kind}
+        onChange={k => (k === 'screen' ? onScreen?.onPick() : onChange({ ...value, kind: k as WindowKind }))}
+        options={[
+          ...(onScreen ? [{ value: 'screen', label: 'On screen' }] : []),
+          ...(Object.keys(LABEL) as WindowKind[]).map(k => ({ value: k, label: LABEL[k] })),
+        ]}
         size={size} density="compact" accentColor={accent}
       />
       {/* Shown only when it applies. Two date fields greyed out beside a preset
           are noise, and greyed-out controls read as broken rather than as
           inapplicable. */}
-      {value.kind === 'between' && (
+      {!screenOn && value.kind === 'between' && (
         <div className="dk8s-window-dates flex items-center gap-2 flex-wrap">
           {/* The two controls stand side by side and have to end level.
               A compact segmented control settles at 26px whatever size it is

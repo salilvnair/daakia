@@ -50,7 +50,7 @@ import { useTabsStore } from '../../store/tabs-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { AiSplit } from './AiAnswerPanel';
-import { resultLines, podsLabel, podsIn, timings, totals, searchFilterOf, sourceKey, type ResultLine } from './search-results';
+import { resultLines, podsLabel, podsIn, timings, totals, searchFilterOf, sourceKey, sourceSummary, type ResultLine } from './search-results';
 import { HitsByPodRail, HitFieldsRail } from './HitRails';
 import { FollowView } from './FollowView';
 import { useFieldReaders, useFollowPrefs, type SavedFollow } from './follow-prefs';
@@ -293,12 +293,16 @@ function DownloadModal({ lines, name, onClose }: {
     ? { kind: 'between', from: localInput(span.from), to: localInput(span.to) }
     : { kind: 'all', from: '', to: '' }));
 
-  const problem = windowError(window_);
-  /* Untouched, and no extra context: the page already holds the answer. */
-  const asShown = contextLines === 0 && span !== undefined
-    && window_.kind === 'between'
-    && window_.from === localInput(span.from)
-    && window_.to === localInput(span.to);
+  /*
+    "On screen" is a choice of its own, first and picked by default, the way the
+    pod log's Download has it: the lines the page holds, written as they are,
+    nothing read again. It used to be implied — the window left exactly on the
+    hits and no extra lines — and there was no way to see or pick it.
+  */
+  const [onScreen, setOnScreen] = useState(true);
+  const problem = onScreen ? undefined : windowError(window_);
+  const asShown = onScreen;
+  const pickWindow = (w: TimeWindow) => { setWindow(w); setOnScreen(false); };
 
   const body = useMemo(() => lines.map(l => (
     keepTimestamps && l.ts !== undefined
@@ -360,16 +364,20 @@ function DownloadModal({ lines, name, onClose }: {
                 style={{ color: 'var(--color-text-muted)' }}>
             when
           </span>
-          <TimeWindowPicker value={window_} onChange={setWindow} accent={ACCENT} />
+          <TimeWindowPicker value={window_} onChange={pickWindow} accent={ACCENT}
+                            onScreen={{ active: onScreen, onPick: () => setOnScreen(true) }} />
           <span className="text-[10.5px]"
                 style={{ color: problem ? 'var(--color-error)' : 'var(--color-text-muted)' }}>
-            {problem ?? (span
+            {onScreen
+              ? `The ${lines.length.toLocaleString()} line${lines.length === 1 ? '' : 's'} on the page, exactly as they are. Nothing is read again.`
+              : problem ?? (span
               ? `The hits run from ${new Date(span.from).toLocaleTimeString()} to `
                 + `${new Date(span.to).toLocaleTimeString()}. Change it and the pods are read again.`
               : 'These lines carry no timestamps, so there is no window to open on.')}
           </span>
         </div>
 
+        {!onScreen && (
         <div className="flex flex-col gap-1.5">
           <span className="text-[9.5px] uppercase tracking-wider"
                 style={{ color: 'var(--color-text-muted)' }}>
@@ -392,11 +400,12 @@ function DownloadModal({ lines, name, onClose }: {
                   fontWeight: contextLines === n ? 600 : 400,
                 }}
               >
-                {n === 0 ? 'as shown' : `±${n.toLocaleString()}`}
+                {n === 0 ? 'none' : `±${n.toLocaleString()}`}
               </button>
             ))}
           </div>
         </div>
+        )}
 
         <CheckboxView
           label="Keep timestamps"
@@ -799,6 +808,7 @@ export function SearchResultsPage() {
   const { order, askAbove, views } = useFollowPrefs();
 
   const allLines = useMemo(() => resultLines(groups), [groups]);
+  const from = useMemo(() => sourceSummary(allLines), [allLines]);
   const podNames = useMemo(
     () => [...new Set([...podsIn(groups), ...searched.map(s => s.pod)])],
     [groups, searched],
@@ -947,6 +957,15 @@ export function SearchResultsPage() {
       onSelectLine: (l) => setSelected(l.seq === selected ? undefined : l.seq),
       selectedLabel: 'the line you clicked',
       podColumn: podNames.length > 1,
+      /* Only when archived files are in the result: then every row says which it is. */
+      sourceTag: from.files > 0
+        ? (l) => {
+          const r = l as ResultLine;
+          return r.source === 'archive'
+            ? { label: 'archive', title: `Archived file: ${r.rel ?? r.file ?? ''}`, tone: 'var(--color-warning)' }
+            : { label: 'live', title: 'The running pod’s log', tone: ACCENT };
+        }
+        : undefined,
       columns: columns.map(key => ({
         key,
         value: (l) => valueOf(l, key, readers),
@@ -973,7 +992,7 @@ export function SearchResultsPage() {
     lines, railLines, filter, levels, fields, wrap, logLineNumbers, asPod, at, sums, query,
     addField, removeField, clearFields, setFilter, setLevels, setWrap, goBack, contextLines,
     selected, setSelected, podNames, columns, readers, toggleColumn, shownPods, setPods, selectedLine,
-    narrowed, resetAll, searchFilter,
+    narrowed, resetAll, searchFilter, from,
   ]);
 
   if (!groups.length && !searched.length) {
@@ -1026,6 +1045,7 @@ export function SearchResultsPage() {
           <Stat label="matches" value={sums.matches.toLocaleString()}
                 color={sums.matches ? ACCENT : undefined} />
           <Stat label="pods" value={`${sums.podsWithHits}/${sums.pods}`} />
+          <Stat label="from" value={from.label} color={from.files ? 'var(--color-warning)' : undefined} />
           <Stat label="read" value={scanned ? `${scanned.toLocaleString()} lines` : '—'} />
           <Stat label="ran" value={new Date(at).toLocaleTimeString()} />
         </div>

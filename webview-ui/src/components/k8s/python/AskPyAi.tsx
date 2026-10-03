@@ -52,14 +52,45 @@ export function describeRun(run: PyRun | undefined): string {
   return `${how}${tail ? `\n${tail}` : ''}`;
 }
 
-/** The answer, read leniently: a fenced or bare JSON object, else the text as the answer. */
-export function readAnswer(text: string): { answer: string; code: string } {
+/**
+ * One string field out of JSON that may have been cut off — the value up to
+ * where it stops, and whether its closing quote ever came.
+ */
+function jsonStringField(body: string, key: string): { value: string; closed: boolean } | undefined {
+  const m = new RegExp(`"${key}"\\s*:\\s*"`).exec(body);
+  if (!m) return undefined;
+  let i = m.index + m[0].length;
+  let raw = '';
+  while (i < body.length) {
+    const c = body[i];
+    if (c === '\\') { raw += body.slice(i, i + 2); i += 2; continue; }
+    if (c === '"') return { value: decodeJsonString(raw), closed: true };
+    raw += c; i++;
+  }
+  /* Cut mid-escape: drop the half of it that arrived. */
+  return { value: decodeJsonString(raw.replace(/\\(u[0-9a-fA-F]{0,3})?$/, '')), closed: false };
+}
+
+function decodeJsonString(raw: string): string {
+  try { return JSON.parse(`"${raw}"`) as string; } catch { return raw.replace(/\\n/g, '\n').replace(/\\"/g, '"'); }
+}
+
+/**
+ * The answer, read leniently: a fenced or bare JSON object, else the text as
+ * the answer. A reply cut off by its length limit is still JSON up to where it
+ * stopped — the answer and as much of the script as came, marked `cut`, rather
+ * than the raw object on screen.
+ */
+export function readAnswer(text: string): { answer: string; code: string; cut?: true } {
   const body = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
   try {
     const v = JSON.parse(body) as { answer?: unknown; code?: unknown };
     return { answer: String(v.answer ?? ''), code: typeof v.code === 'string' ? v.code : '' };
   } catch {
-    return { answer: text.trim(), code: '' };
+    const answer = body.startsWith('{') ? jsonStringField(body, 'answer') : undefined;
+    if (!answer) return { answer: text.trim(), code: '' };
+    const code = jsonStringField(body, 'code');
+    return { answer: answer.value, code: code?.value ?? '', cut: true };
   }
 }
 
@@ -77,12 +108,15 @@ export function lineChange(before: string, after: string): { added: number; remo
   return { added, removed };
 }
 
-/** The popover's width; its hidden anchor is as wide, so it opens leftward from the button. */
-const POP_W = 520;
+/** The popover's width; its hidden anchor is as wide, so it opens leftward from the button.
+    Wide enough for a script to read without wrapping every other line. */
+const POP_W = 'min(780px, 92vw)';
 
-export function AskPyAi({ scriptId, target, pythonVersion, lastRun, size = 'md', dock }: {
+export function AskPyAi({ scriptId, target, pythonVersion, lastRun, size = 'md', dock, hideButton }: {
   /** The button's height — see `PyToolbarSize`. */
   size?: 'sm' | 'md';
+  /** No button of its own: opened from a menu, through `askPyAi`. */
+  hideButton?: boolean;
   /**
    * A side panel to answer in instead of a popover — the Scripts screen's.
    * The button opens and closes it, lit while it is open.
@@ -109,7 +143,7 @@ export function AskPyAi({ scriptId, target, pythonVersion, lastRun, size = 'md',
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState<{ answer: string; code: string; asked: string } | undefined>();
+  const [result, setResult] = useState<{ answer: string; code: string; asked: string; cut?: true } | undefined>();
   const { copied, flash } = useCopyTick();
   const pending = useRef<AiOnce | null>(null);
   const anchor = useRef<HTMLSpanElement>(null);
@@ -154,7 +188,9 @@ export function AskPyAi({ scriptId, target, pythonVersion, lastRun, size = 'md',
         lastRun: describeRun(lastRun),
         problems: problems.length ? problems.join('\n') : 'none',
       }),
-      settings: { temperature: 0.2, maxTokens: 2400, responseFormat: 'json_object' },
+      /* A whole script comes back inside the JSON, so it needs the room: at 2,400 a
+         longer one was cut off mid-line. */
+      settings: { temperature: 0.2, maxTokens: 8000, responseFormat: 'json_object' },
     }, 60_000);
     pending.current = call;
     call.text.then(
@@ -170,7 +206,8 @@ export function AskPyAi({ scriptId, target, pythonVersion, lastRun, size = 'md',
     const onAsk = (e: Event) => {
       const q = String((e as CustomEvent).detail?.question ?? '');
       setOpenRef.current(true);
-      setQuestion(q);
+      /* Opened from a menu with nothing to ask: keep what was typed. */
+      if (q) setQuestion(q);
       if (q && (e as CustomEvent).detail?.send) askRef.current(q);
     };
     window.addEventListener(PY_ASK_EVENT, onAsk);
@@ -184,7 +221,7 @@ export function AskPyAi({ scriptId, target, pythonVersion, lastRun, size = 'md',
         <div className="flex flex-col"
              style={docked
                ? { width: '100%', height: '100%', minHeight: 0, background: 'var(--color-surface-secondary, var(--color-surface))' }
-               : { width: POP_W, maxHeight: 620, overflow: 'hidden', borderRadius: 'inherit' }}>
+               : { width: POP_W, maxHeight: 'min(860px, 88vh)', overflow: 'hidden', borderRadius: 'inherit' }}>
           <div className="flex items-center gap-2 px-3.5 py-2.5 flex-shrink-0"
                style={{
                  borderBottom: '1px solid var(--color-surface-border)',
@@ -241,7 +278,7 @@ export function AskPyAi({ scriptId, target, pythonVersion, lastRun, size = 'md',
           </div>
 
           {(busy || error || result) && (
-            <div className="flex flex-col gap-2 px-3.5 pb-3.5 overflow-auto min-h-0"
+            <div className="flex flex-col gap-2 px-3.5 pb-3.5 overflow-y-auto overflow-x-hidden min-h-0"
                  style={{ borderTop: '1px solid var(--color-surface-border)', ...(docked ? { flex: 1 } : {}) }}>
               <div className="pt-2.5" style={label}>answer</div>
               {busy && <span className="text-[12px]" style={{ color: MUTED }}>Thinking about {name}…</span>}
@@ -251,6 +288,14 @@ export function AskPyAi({ scriptId, target, pythonVersion, lastRun, size = 'md',
                   {result.answer && (
                     <div className="text-[12.5px]" style={{ color: 'var(--color-text-primary)' }}>
                       <MarkdownView content={result.answer} />
+                    </div>
+                  )}
+                  {result.cut && (
+                    <div role="alert" className="text-[11.5px] px-2.5 py-1.5 rounded-md"
+                         style={{ color: 'var(--color-warning)', background: 'color-mix(in srgb, var(--color-warning) 10%, transparent)',
+                           border: '1px solid color-mix(in srgb, var(--color-warning) 35%, transparent)' }}>
+                      The answer stopped before it was finished{result.code ? ', so the script below is only part of one and cannot be applied' : ''}.
+                      Ask again, or ask for something shorter.
                     </div>
                   )}
                   {result.code && change && (
@@ -274,14 +319,14 @@ export function AskPyAi({ scriptId, target, pythonVersion, lastRun, size = 'md',
                                     onClick={async () => { if (await copyText(result.code)) flash(); }}>
                           Copy code
                         </ButtonView>
-                        {(change.added > 0 || change.removed > 0) && (
+                        {!result.cut && (change.added > 0 || change.removed > 0) && (
                           <ButtonView size="xs" variant="secondary" accentColor="var(--color-success)" color="var(--color-success)"
                                       onClick={() => { if (scriptId) editSource(scriptId, result.code); if (!docked) setOpen(false); }}>
                             Apply to script
                           </ButtonView>
                         )}
                       </div>
-                      <ColoredCode code={result.code} maxHeight={docked ? 520 : 240} />
+                      <ColoredCode code={result.code} maxHeight={docked ? 620 : 480} />
                     </div>
                   )}
                 </>
@@ -299,7 +344,7 @@ export function AskPyAi({ scriptId, target, pythonVersion, lastRun, size = 'md',
 
   return (
     <span ref={anchor} className="inline-flex relative">
-      <ButtonView size={size} variant="secondary" accentColor={AI_ACCENT} color={AI_ACCENT}
+      {!hideButton && <ButtonView size={size} variant="secondary" accentColor={AI_ACCENT} color={AI_ACCENT}
                   aria-pressed={docked ? open : undefined}
                   iconLeft={<SparkleIcon size={IconSize.action} color={AI_ACCENT} />}
                   disabled={!scriptId}
@@ -311,7 +356,7 @@ export function AskPyAi({ scriptId, target, pythonVersion, lastRun, size = 'md',
                     ? { background: `color-mix(in srgb, ${AI_ACCENT} 18%, transparent)`, borderColor: `color-mix(in srgb, ${AI_ACCENT} 50%, transparent)` }
                     : undefined}>
         Ask AI
-      </ButtonView>
+      </ButtonView>}
       {/* The popover opens at its anchor's left edge; an invisible anchor as
           wide as the popover and flush with the button's right edge makes it
           open leftward, under the button, instead of off the window's edge. */}

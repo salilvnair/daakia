@@ -50,3 +50,12 @@ describe('±N around the hits a page marks', () => {
     expect(keepAround(lines, isHit, 1).map(x => x.seq)).toEqual([2, 3, 4, 5, 6]);
   });
 });
+
+describe('where the hits came from', () => {
+  it('says live, archive with its file count, or both', async () => {
+    const { sourceSummary } = await import('./search-results');
+    expect(sourceSummary([{ source: 'live' }]).label).toBe('live log');
+    expect(sourceSummary([{ source: 'archive', file: '/logs/a.log' }, { source: 'archive', file: '/logs/b.log' }]).label).toBe('archive · 2 files');
+    expect(sourceSummary([{ source: 'live' }, { source: 'archive', rel: 'a.log' }])).toEqual({ live: true, files: 1, label: 'live + archive · 1 file' });
+  });
+});

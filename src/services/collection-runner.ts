@@ -45,6 +45,14 @@ export interface RunConfig {
    * collection and an environment and ran each request exactly once.
    */
   dataRows?: Record<string, string>[];
+  /**
+   * Why a request, once its URL is resolved, must not be sent — a local port
+   * that is really production through a dk8s forward — or nothing. Asked
+   * after variables are filled in: `{{zp_backend}}` is a forward's address
+   * only once it has been resolved. Given by the caller, so this file does
+   * not reach into the forwards.
+   */
+  refuseUrl?: (url: string) => string | undefined;
 }
 
 export interface RequestResult {
@@ -418,6 +426,20 @@ async function runIteration(
       },
     );
     const resolvedUrl = finish.str(scriptCtx.request.url);
+    const refused = config.refuseUrl?.(resolvedUrl);
+    if (refused) {
+      const reqResult: RequestResult = {
+        id: request.id, name: request.name, method: request.method, url: resolvedUrl,
+        status: 0, statusText: 'Not sent', time: 0, size: 0, passed: false,
+        testResults: [], scriptLogs, scriptErrors, error: refused,
+      };
+      results.push(reqResult);
+      onProgress?.({ ...reqResult, iteration }, offset + i, grandTotal);
+      if (stopOnError) break;
+      i = advanceIndex(i, nextRequestTarget, requestByName);
+      nextRequestTarget = undefined;
+      continue;
+    }
     try {
       const params: ExecuteRequestParams = {
         tabId: `runner-${request.id}`,

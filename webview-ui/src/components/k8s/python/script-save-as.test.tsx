@@ -24,7 +24,7 @@ describe('the script ⋯ menu', () => {
     const root = createRoot(host);
     act(() => root.render(<ScriptMenu scriptId="s1" />));
 
-    click(host.querySelector('[aria-label="Script actions"]'));
+    click(host.querySelector('[aria-label="More actions"]'));
     const item = byText('Save as');
     click(item);
 

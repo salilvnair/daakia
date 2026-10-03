@@ -19,6 +19,9 @@ const OVERLAY = [
   '.dui_popover',
   '.dui_drawer__backdrop',
   '.dui_select__menu',
+  // dui's context menu (the Python tab's ⋯ and others): its container carries
+  // no class or role of its own, only its items do.
+  '.dui_ctx-menu__item',
   // The app's own right-click and context menus. Not the toast stack, which
   // sits at the same height and is no reason to keep the reader in place.
   '.fixed[class*="z-[9999]"]:not(.bottom-4)',

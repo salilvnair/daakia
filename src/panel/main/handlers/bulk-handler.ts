@@ -15,6 +15,7 @@
 import * as https from 'https';
 import * as http from 'http';
 import { probe, parseUrlLine, type ProbeResult } from './http-probe';
+import { prodForwardRefusal } from './port-forward-handler';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -84,6 +85,15 @@ export async function handleBulkRun(
       const row = rows[i];
 
       postMessage({ type: 'bulk:running', runId, index: row.index });
+
+      /* A local URL that is really production through a dk8s forward: not sent unless the run said so. */
+      const refused = msg.prodConfirmed === true ? undefined
+        : prodForwardRefusal(row.url, 'Tick "Send them anyway" in the Bulk URL Tester to send it.');
+      if (refused) {
+        completed++;
+        postMessage({ type: 'bulk:result', runId, index: row.index, method: row.method, url: row.url, status: 0, statusText: 'Not sent', ms: 0, bytes: 0, redirects: 0, error: refused, completed, total: rows.length });
+        continue;
+      }
 
       const result: ProbeResult = await probe({
         method: row.method,

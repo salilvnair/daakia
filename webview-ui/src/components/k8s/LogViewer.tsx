@@ -118,7 +118,7 @@ const OVERSCAN = 25;
  *
  * A single log pane gets the full ribbon — 38px with 20px blocks, a picture
  * you can read the trouble off at a glance. The narrow gutter (`ribbon-layout`,
- * 16px with 8px blocks) is for a split, where three panes side by side cannot
+ * 26px with 14px blocks) is for a split, where three panes side by side cannot
  * each give up a word of every line to it.
  */
 const RIBBON_W = 38;
@@ -751,17 +751,23 @@ function FindBar({ inputRef, text, onText, matchCase, onMatchCase, regex, onRege
            else if (e.key === 'Enter') { e.preventDefault(); onStep(e.shiftKey ? -1 : 1); }
          }}>
       <SearchIcon size={12} color="var(--color-text-muted)" />
-      <input ref={inputRef} value={text} onChange={e => onText(e.target.value)} placeholder="Find in log" aria-label="Find in log"
-             spellCheck={false} className="outline-none"
-             style={{
-               width: 210, height: 24, padding: '0 8px', marginLeft: 4, borderRadius: 6, fontSize: 12,
-               fontFamily: 'var(--font-mono, ui-monospace, monospace)', color: 'var(--color-text-primary)',
-               background: 'var(--color-bg, var(--color-input-bg))',
-               border: `1px solid ${text && !total ? 'color-mix(in srgb, var(--color-error) 60%, transparent)' : 'var(--color-surface-border)'}`,
-             }} />
-      <span className="select-none" style={{ minWidth: 64, padding: '0 6px', textAlign: 'center', fontSize: 11, fontVariantNumeric: 'tabular-nums',
-                                            color: text && !total ? 'var(--color-error)' : 'var(--color-text-muted)' }}>
-        {!text ? '' : total ? `${at + 1} of ${total.toLocaleString()}` : 'No results'}
+      {/* The count sits inside the box, at its right edge — beside it, it held
+          an empty 64px gap before Aa whenever nothing was typed. */}
+      <span className="relative" style={{ marginLeft: 4, marginRight: 4 }}>
+        <input ref={inputRef} value={text} onChange={e => onText(e.target.value)} placeholder="Find in log" aria-label="Find in log"
+               spellCheck={false} className="outline-none"
+               style={{
+                 width: 300, height: 24, padding: '0 82px 0 8px', borderRadius: 6, fontSize: 12,
+                 fontFamily: 'var(--font-mono, ui-monospace, monospace)', color: 'var(--color-text-primary)',
+                 background: 'var(--color-bg, var(--color-input-bg))',
+                 border: `1px solid ${text && !total ? 'color-mix(in srgb, var(--color-error) 60%, transparent)' : 'var(--color-surface-border)'}`,
+               }} />
+        <span className="select-none absolute pointer-events-none" style={{
+          right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+          color: text && !total ? 'var(--color-error)' : 'var(--color-text-muted)',
+        }}>
+          {!text ? '' : total ? `${at + 1} of ${total.toLocaleString()}` : 'No results'}
+        </span>
       </span>
       <button type="button" title="Match case" aria-pressed={matchCase} onClick={onMatchCase} className="cursor-pointer" style={toggle(matchCase)}>Aa</button>
       <button type="button" title="Regular expression" aria-pressed={regex} onClick={onRegex} className="cursor-pointer" style={toggle(regex)}>.*</button>
@@ -841,7 +847,7 @@ export function LogViewer() {
        whichever pod happened to be open behind it. */
     clearFieldFilters, closeDetail, isSnapshot, contextCap, sharedRange,
     paging, focusSeq, onFindContext, isHit, highlightQuery, clearLogs, logPaused, setLogPaused,
-    focusLabel, selectedSeq, onSelectLine, selectedLabel, podColumn, podColor, columns, railLead, footerNote,
+    focusLabel, selectedSeq, onSelectLine, selectedLabel, podColumn, podColor, columns, railLead, footerNote, sourceTag,
     onGutterCompact,
   } = useLogSource();
 
@@ -1784,20 +1790,43 @@ export function LogViewer() {
     Now only a wheel, a touch, a key or a grab of the scrollbar stops it.
   */
   const intentAt = useRef(0);
+  const lastTopRef = useRef(0);
+  /* When the reader last let go — see `letGo`. */
+  const releasedAt = useRef(0);
+  const followRef = useRef({ on: logFollow, set: setLogFollow });
+  followRef.current = { on: logFollow, set: setLogFollow };
   useEffect(() => {
     const el = scrollEl;
     if (!el) return;
     const mark = () => { intentAt.current = performance.now(); };
-    const NAV = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ']);
-    const onKey = (e: KeyboardEvent) => { if (NAV.has(e.key)) mark(); };
-    el.addEventListener('wheel', mark, { passive: true });
+    /*
+      Reaching up lets go at once. On a busy log the pinning above runs on
+      nearly every batch, and a scroll it is running through is not read — so
+      waiting for the scroll event pulled the reader straight back down.
+    */
+    const letGo = () => {
+      mark();
+      releasedAt.current = performance.now();
+      pinning.current = false;
+      if (followRef.current.on) followRef.current.set(false);
+    };
+    const onWheel = (e: WheelEvent) => { if (e.deltaY < 0) letGo(); else mark(); };
+    const UP = new Set(['ArrowUp', 'PageUp', 'Home']);
+    const NAV = new Set(['ArrowDown', 'PageDown', 'End', ' ']);
+    const onKey = (e: KeyboardEvent) => { if (UP.has(e.key)) letGo(); else if (NAV.has(e.key)) mark(); };
+    /* A press on the scrollbar, not on a row: clicking a row to open its
+       payload grows the list, the browser shifts the view to hold its place,
+       and that scroll read as the reader's own. Dragging back to the bottom
+       follows again, through the scroll handler. */
+    const onPress = (e: PointerEvent) => { if (e.offsetX >= el.clientWidth) letGo(); };
+    el.addEventListener('wheel', onWheel, { passive: true });
     el.addEventListener('touchmove', mark, { passive: true });
-    el.addEventListener('pointerdown', mark);
+    el.addEventListener('pointerdown', onPress);
     el.addEventListener('keydown', onKey);
     return () => {
-      el.removeEventListener('wheel', mark);
+      el.removeEventListener('wheel', onWheel);
       el.removeEventListener('touchmove', mark);
-      el.removeEventListener('pointerdown', mark);
+      el.removeEventListener('pointerdown', onPress);
       el.removeEventListener('keydown', onKey);
     };
   }, [scrollEl]);
@@ -1835,8 +1864,15 @@ export function LogViewer() {
     if (draggingRef.current) return;
     if (pinning.current) return;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-    if (atBottom && !logFollow) setLogFollow(true);
-    else if (!atBottom && logFollow && performance.now() - intentAt.current < 800) setLogFollow(false);
+    /* Let go only when the reader moved the view UP. Lines arriving, a row
+       growing, the browser holding its place — none of them move it up. */
+    const wentUp = el.scrollTop < lastTopRef.current - 4;
+    lastTopRef.current = el.scrollTop;
+    /* Back at the bottom follows again — but not on the first frames of a
+       smooth scroll up, which are still within reach of the bottom and read
+       as "arrived" there: Following came straight back on and pinned. */
+    if (atBottom && !logFollow && !wentUp && performance.now() - releasedAt.current > 400) setLogFollow(true);
+    else if (!atBottom && logFollow && wentUp && performance.now() - intentAt.current < 800) setLogFollow(false);
   }, [logFollow, setLogFollow, paging, logs.length]);
 
   /* After the window moves, put the anchored line back where it was. */
@@ -2401,7 +2437,9 @@ export function LogViewer() {
                   minWidth: 118,
                   ...(logPaused ? {
                     color: 'var(--color-warning)',
-                    borderColor: 'color-mix(in srgb, var(--color-warning) 45%, transparent)',
+                    /* The whole border, not its colour alone: the button sets the
+                       shorthand, and React warns when the two are mixed. */
+                    border: '1px solid color-mix(in srgb, var(--color-warning) 45%, transparent)',
                     background: 'color-mix(in srgb, var(--color-warning) 10%, transparent)',
                   } : {}),
                 }}
@@ -2939,6 +2977,22 @@ export function LogViewer() {
                             {podTail((line as { pod?: string }).pod!)}
                           </span>
                         )}
+                        {/* Live log or an archived file — only where a result
+                            holds both kinds, so the column is never noise. */}
+                        {sourceTag && !row.isFrame && (() => {
+                          const tag = sourceTag(line);
+                          return (
+                            <span className="shrink-0 select-none" style={{ width: 52 }} title={tag?.title}>
+                              {tag && (
+                                <span style={{
+                                  display: 'inline-block', padding: '0 5px', borderRadius: 4, fontSize: 10, lineHeight: '15px',
+                                  color: tag.tone ?? 'var(--color-text-muted)',
+                                  background: `color-mix(in srgb, ${tag.tone ?? 'var(--color-text-muted)'} 13%, transparent)`,
+                                }}>{tag.label}</span>
+                              )}
+                            </span>
+                          );
+                        })()}
                         {/* Off is a real preference: on a narrow panel the
                             gutter is width a long line needs more. */}
                         {logLineNumbers && (

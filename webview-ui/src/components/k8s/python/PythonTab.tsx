@@ -23,7 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ButtonView, IconButtonView, SelectInputView, TextInputView, SplitPanelView, EmptyStateView, BadgeChipView, IconSize,
 } from '@salilvnair/dui';
-import { PlayIcon, BugIcon, PythonIcon, StopSquareIcon, CloseIcon } from '../../../icons';
+import { PlayIcon, BugIcon, PythonIcon, StopSquareIcon, CloseIcon, SparkleIcon, WifiIcon } from '../../../icons';
 import { useK8sStore } from '../../../store/k8s-store';
 import {
   usePyStore, ensurePyListener, targetKey, type PyTarget,
@@ -33,6 +33,8 @@ import { ScriptTitle, ScriptSave, ScriptMenu } from './ScriptHeader';
 import { RunSetup } from './RunSetup';
 import { AskPyAi } from './AskPyAi';
 import { GhostToggle } from './ghost-toggle';
+import { ConnTestDialog } from './ConnTest';
+import { askPyAi } from './AskPyAi';
 import { usePythonMenu } from './py-menu';
 import { PyEditor } from './PyEditor';
 import { PyBottomPanel, type BottomTab } from './PyBottomPanel';
@@ -40,7 +42,7 @@ import { PyDebugPanes, DebugToolbar } from './PyDebugPanes';
 import { ThisPodPanel } from './ThisPodPanel';
 import { NoPython, PythonChecking } from './NoPython';
 import { newId, PY_HEADER_HEIGHT } from './py-view';
-import { ACCENT, WARN, MUTED, BAD } from '../tone';
+import { ACCENT, WARN, MUTED, BAD, AI as AI_ACCENT } from '../tone';
 
 /** Run's colour: the same green as Send and Run elsewhere in Daakia. */
 const RUN = 'var(--color-success)';
@@ -111,6 +113,7 @@ export function PythonTab() {
   const myDebug = debug && debug.sessionId === sessionId ? debug : undefined;
   const debugLive = !!myDebug && !myDebug.ended;
   const [tab, setTab] = useState<BottomTab>('output');
+  const [connOpen, setConnOpen] = useState(false);
   const [reveal, setReveal] = useState<{ line: number; n: number }>();
 
   const verdict = pyProbe?.verdict;
@@ -203,6 +206,8 @@ export function PythonTab() {
               {script
                 ? <><ScriptTitle scriptId={script.id} /><ScriptSave scriptId={script.id} /></>
                 : <span className="text-[12px] px-2" style={{ color: MUTED }}>No script open</span>}
+              {/* AI suggest is about the editor, so it sits with the script, not with Run. */}
+              <GhostToggle />
               <span className="flex-1" />
               {myDebug?.ended && (
                 <span className="flex items-center gap-1 shrink-0" title={myDebug.ended}>
@@ -227,9 +232,6 @@ export function PythonTab() {
                   streamed={!path && !!pyProbe?.verdict?.ok}
                 />
               )}
-              <AskPyAi scriptId={script?.id} target={blocked ? undefined : target}
-                       pythonVersion={verdict?.version?.text} lastRun={shown} />
-              <GhostToggle />
               <ButtonView
                 size="md" variant="secondary"
                 iconLeft={<BugIcon size={IconSize.action} color={WARN} />}
@@ -259,7 +261,29 @@ export function PythonTab() {
                   Run
                 </ButtonView>
               )}
-              {script && <ScriptMenu scriptId={script.id} />}
+              {/*
+                Debug and Run are the toolbar's buttons; Ask AI and the
+                connectivity test are a ⋯ away. Ask AI keeps its popover,
+                opened from the menu, anchored here.
+              */}
+              <AskPyAi hideButton scriptId={script?.id} target={blocked ? undefined : target}
+                       pythonVersion={verdict?.version?.text} lastRun={shown} />
+              <ScriptMenu
+                scriptId={script?.id}
+                extra={[
+                  {
+                    id: 'ask-ai', label: 'Ask AI about this script…', disabled: !script,
+                    icon: <SparkleIcon size={IconSize.action} />, iconColor: AI_ACCENT,
+                    onClick: () => askPyAi(''),
+                  },
+                  {
+                    id: 'conn', label: 'Connectivity test…', disabled: blocked || !target,
+                    icon: <WifiIcon size={IconSize.action} />, iconColor: 'var(--color-dk8s)',
+                    onClick: () => setConnOpen(true),
+                  },
+                ]}
+              />
+              {connOpen && target && <ConnTestDialog target={target} onClose={() => setConnOpen(false)} />}
             </>
           )}
         </div>

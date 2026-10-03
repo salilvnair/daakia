@@ -13,7 +13,7 @@
  */
 import { useRef, useState } from 'react';
 import {
-  ButtonView, IconButtonView, TextInputView, PopoverView, ContextMenuView, IconSize,
+  ButtonView, IconButtonView, TextInputView, PopoverView, ContextMenuView, IconSize, type ContextMenuItem,
 } from '@salilvnair/dui';
 import {
   TrashIcon, PythonFileIcon, MoreHorizontalIcon, SaveIcon, SaveCheckIcon, CopyIcon,
@@ -114,10 +114,10 @@ const SAVE = 'var(--color-info)';
 const SAVED = 'var(--color-success)';
 
 /** Save, Save as, Delete — behind one ⋯, since each is done once in a while. */
-export function ScriptMenu({ scriptId, size = 'md' }: { scriptId: string; size?: PyToolbarSize }) {
+export function ScriptMenu({ scriptId, size = 'md', extra = [] }: { scriptId?: string; size?: PyToolbarSize; extra?: ContextMenuItem[] }) {
   const script = usePyStore(s => s.scripts.find(x => x.id === scriptId));
-  const draft = usePyStore(s => s.drafts[scriptId]);
-  const dirty = usePyStore(s => s.isDirty(scriptId));
+  const draft = usePyStore(s => (scriptId ? s.drafts[scriptId] : undefined));
+  const dirty = usePyStore(s => (scriptId ? s.isDirty(scriptId) : false));
   const save = usePyStore(s => s.save);
   const saveAs = usePyStore(s => s.saveAs);
   const remove = usePyStore(s => s.remove);
@@ -126,13 +126,14 @@ export function ScriptMenu({ scriptId, size = 'md' }: { scriptId: string; size?:
   const [confirm, setConfirm] = useState(false);
   const anchor = useRef<HTMLSpanElement>(null);
 
-  if (!script) return null;
-  const name = draft?.name ?? script.name;
+  if (!script && !extra.length) return null;
+  const name = draft?.name ?? script?.name ?? '';
+  const id = scriptId ?? '';
 
   return (
     <span ref={anchor} className="inline-flex">
       <IconButtonView size={size} icon={<MoreHorizontalIcon size={IconSize.action} />}
-                      tooltip="Save, save as, delete" aria-label="Script actions"
+                      tooltip={script ? 'Ask AI, connectivity test, save, delete' : 'Ask AI, connectivity test'} aria-label="More actions"
                       onClick={() => { setAsName(undefined); setOpen(o => !o); }} />
       {/* dui's own menu — the same one as every other ⋯ and right-click in
           Daakia — rather than a hand-made list in a popover. */}
@@ -143,10 +144,12 @@ export function ScriptMenu({ scriptId, size = 'md' }: { scriptId: string; size?:
         align="right"
         width="md"
         items={[
-          {
+          ...extra.map(it => ({ ...it, onClick: () => { setOpen(false); it.onClick?.(); } })),
+          ...(extra.length && script ? [{ id: 'sep-extra', label: '', separator: true }] : []),
+          ...(script ? [{
             id: 'save', label: 'Save', shortcut: 'Ctrl+S', disabled: !dirty,
             icon: <SaveIcon size={IconSize.action} />, iconColor: 'var(--color-info)',
-            onClick: () => { save(scriptId); setOpen(false); },
+            onClick: () => { save(id); setOpen(false); },
           },
           {
             id: 'save-as', label: 'Save as…',
@@ -160,8 +163,8 @@ export function ScriptMenu({ scriptId, size = 'md' }: { scriptId: string; size?:
             id: 'delete', label: 'Delete', danger: true,
             icon: <TrashIcon size={IconSize.action} />,
             onClick: () => { setOpen(false); setConfirm(true); },
-          },
-        ]}
+          }] : []),
+        ] as ContextMenuItem[]}
       />
       {/* Save as needs a name, so it is a small form of its own. */}
       <PopoverView open={asName !== undefined} onClose={() => setAsName(undefined)}
@@ -173,14 +176,14 @@ export function ScriptMenu({ scriptId, size = 'md' }: { scriptId: string; size?:
               <TextInputView autoFocus size="md" value={asName} aria-label="New script name"
                              onChange={(e) => setAsName(e.target.value)}
                              onKeyDown={(e) => {
-                               if (e.key === 'Enter' && asName.trim()) { saveAs(scriptId, asName); setAsName(undefined); }
+                               if (e.key === 'Enter' && asName.trim()) { saveAs(id, asName); setAsName(undefined); }
                              }}
                              inputStyle={{ fontFamily: 'var(--font-mono, ui-monospace, monospace)' }} />
               <div className="flex justify-end gap-1.5">
                 <ButtonView size="sm" variant="secondary" onClick={() => { setAsName(undefined); setOpen(true); }}>Back</ButtonView>
                 <ButtonView size="sm" variant="secondary" accentColor="var(--color-success)" color="var(--color-success)"
                             disabled={!asName.trim()}
-                            onClick={() => { saveAs(scriptId, asName); setAsName(undefined); }}>
+                            onClick={() => { saveAs(id, asName); setAsName(undefined); }}>
                   Save copy
                 </ButtonView>
               </div>
@@ -189,12 +192,12 @@ export function ScriptMenu({ scriptId, size = 'md' }: { scriptId: string; size?:
         </div>
       </PopoverView>
 
-      {confirm && (
+      {confirm && script && (
         <ConfirmDialog
           title={`Delete ${script.name}?`}
           message="It is removed from this workspace's library — and, through Git Sync, from your other machines."
           confirmLabel="Delete" danger
-          onConfirm={() => { remove(scriptId); setConfirm(false); }}
+          onConfirm={() => { remove(id); setConfirm(false); }}
           onCancel={() => setConfirm(false)}
         />
       )}

@@ -7,7 +7,8 @@
  * builders — on whatever command is typed into it. It starts nothing.
  */
 import { useMemo, useState } from 'react';
-import { WikiScrollPage } from '../capture/CaptureScrollView';
+import { WikiScrollPage, CaptureCard } from '../capture/CaptureScrollView';
+import { DK8S_CAPTURES } from './captures';
 import {
   WikiHero, SectionTitle, SubTitle, WikiTable, Callout, Divider, Code, CodeBlock,
   chips, TocBar, type TocItem,
@@ -26,6 +27,7 @@ const TOC_ITEMS: TocItem[] = [
 ];
 
 export function Dk8sPortForwardView() {
+  const shot = DK8S_CAPTURES.find(c => c.id === 'dk8s-ports');
   return (
     <WikiScrollPage
       hero={
@@ -63,6 +65,7 @@ export function Dk8sPortForwardView() {
 
       <div>
         <SectionTitle id="pf-start" icon="play">Starting one</SectionTitle>
+        {shot && <CaptureCard entry={shot} />}
         <p className="dw-p">
           A pod's <b>Ports</b> tab lists the ports it declares, each with a guessed role (HTTP API,
           actuator, JVM debug, Postgres…), the Services that route to it, and a local port that

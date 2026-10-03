@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { postMsg } from '../../../vscode';
 import { METHOD_COLORS } from '../../../colors';
 import { PlayIcon, StopSquareIcon } from '../../../icons';
 import { ModalView, ButtonView, CodeBlockView, AIButtonView, TextInputView, CheckboxView } from '@salilvnair/dui';
 import { AiPerformanceInsightsModal } from '../../ai/AiPerformanceInsightsModal';
+import { usePortForwardStore, isUp } from '../../../store/dk8s-port-forward-store';
 
 interface RunCollectionModalProps {
   open: boolean;
@@ -28,6 +29,16 @@ export function RunCollectionModal({ open, collectionId, collectionName, onClose
   const [activeTab, setActiveTab] = useState<'runner' | 'cli'>('runner');
   const [delay, setDelay] = useState(500);
   const [stopOnError, setStopOnError] = useState(false);
+  /*
+    A request whose URL resolves to a production forward's local port is not
+    sent unless this is ticked — checked on the host after variables are
+    filled in, since {{zp_backend}} is a forward's address only then. The box
+    shows only while such a forward is up.
+  */
+  const [allowProdForwards, setAllowProdForwards] = useState(false);
+  const forwards = usePortForwardStore(s => s.forwards);
+  const prodForwards = useMemo(() => forwards.filter(f => f.prod && isUp(f)), [forwards]);
+  useEffect(() => { usePortForwardStore.getState().refresh(); }, []);
   const [persistResponses, setPersistResponses] = useState(true);
   const [keepVariables, setKeepVariables] = useState(true);
   const [iterations, setIterations] = useState(1);
@@ -85,6 +96,7 @@ export function RunCollectionModal({ open, collectionId, collectionName, onClose
       // The rows decide the count when there are rows; `iterations` only
       // applies without a file, so the two can never disagree.
       iterations, dataRows: data?.rows,
+      allowProdForwards,
     });
   };
 
@@ -197,6 +209,10 @@ export function RunCollectionModal({ open, collectionId, collectionName, onClose
                 <CheckboxView checked={stopOnError} onChange={setStopOnError} label="Stop run if an error occurs" size="sm" />
                 <CheckboxView checked={persistResponses} onChange={setPersistResponses} label="Persist responses" size="sm" />
                 <CheckboxView checked={keepVariables} onChange={setKeepVariables} label="Keep variable values" size="sm" />
+                {prodForwards.length > 0 && (
+                  <CheckboxView checked={allowProdForwards} onChange={setAllowProdForwards} size="sm"
+                                label={`Allow production forwards — ${[...new Set(prodForwards.map(f => f.context))].join(', ')} is forwarded to localhost; requests there are not sent unless this is ticked`} />
+                )}
               </div>
 
               {(results.length > 0 || running) && (

@@ -17,6 +17,8 @@ import { ModalView, ButtonView, TextInputView, MultilineInputView } from '@salil
 import { logUiEvent } from '../../store/ui-audit-store';
 import { PlayIcon, SearchIcon } from '../../icons';
 import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
+import { usePortForwardStore } from '../../store/dk8s-port-forward-store';
+import { prodForwardFor } from '../k8s/prod-forward-guard';
 
 type RowState = 'queued' | 'running' | 'done';
 
@@ -172,6 +174,20 @@ export function BulkUrlTester({ onClose }: Props) {
     [input],
   );
 
+  /*
+    URLs that are production through a dk8s forward. They are listed, and not
+    sent unless "Send them anyway" is ticked — the host refuses them too, row
+    by row, so the rest of the run still goes.
+  */
+  const forwards = usePortForwardStore(s => s.forwards);
+  useEffect(() => { usePortForwardStore.getState().refresh(); }, []);
+  const prodHits = useMemo(() => input.split('\n')
+    .map(l => l.trim()).filter(l => l && !l.startsWith('#') && !l.startsWith('//'))
+    .map(l => l.match(/^[A-Za-z]+\s+(\S+)$/)?.[1] ?? l)
+    .map(url => ({ url, hit: prodForwardFor(url, forwards) }))
+    .filter(x => x.hit), [input, forwards]);
+  const [sendProd, setSendProd] = useState(false);
+
   const run = useCallback(() => {
     if (lineCount === 0) return;
     const runId = Date.now();
@@ -182,8 +198,9 @@ export function BulkUrlTester({ onClose }: Props) {
     postMsg({
       type: 'bulk:run',
       runId, urls: input, method, headers, concurrency, timeoutMs, followRedirects,
+      ...(prodHits.length ? { prodConfirmed: sendProd } : {}),
     });
-  }, [input, method, headers, concurrency, timeoutMs, followRedirects, lineCount]);
+  }, [input, method, headers, concurrency, timeoutMs, followRedirects, lineCount, prodHits.length, sendProd]);
 
   const stop = useCallback(() => {
     postMsg({ type: 'bulk:stop', runId: runIdRef.current });
@@ -281,6 +298,25 @@ export function BulkUrlTester({ onClose }: Props) {
               style={{ width: '100%', fontFamily: 'var(--font-mono, monospace)', fontSize: 11 }}
             />
           </Field>
+
+          {prodHits.length > 0 && (
+            <div role="alert" style={{
+              display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 10px', borderRadius: 8, fontSize: 11.5, lineHeight: 1.5,
+              color: 'var(--color-text-primary)',
+              background: `color-mix(in srgb, ${BAD} 10%, transparent)`,
+              border: `1px solid color-mix(in srgb, ${BAD} 40%, transparent)`,
+            }}>
+              <span>
+                {prodHits.length === 1 ? 'One URL reaches' : `${prodHits.length} URLs reach`} production through a dk8s forward
+                {' '}(<b style={{ color: BAD }}>{[...new Set(prodHits.map(x => x.hit!.forward.context))].join(', ')}</b>).
+                {sendProd ? ' They will be sent.' : ' They are listed but not sent.'}
+              </span>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}>
+                <input type="checkbox" checked={sendProd} onChange={e => setSendProd(e.target.checked)} style={{ accentColor: BAD }} />
+                Send them anyway
+              </label>
+            </div>
+          )}
 
           <Field label="DEFAULT METHOD">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>

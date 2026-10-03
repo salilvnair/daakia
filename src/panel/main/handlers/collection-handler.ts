@@ -16,6 +16,7 @@ import {
   upsertCollectionRequest, renameCollectionRequest,
 } from '../../../storage/db';
 import { runCollection as runCollectionService, type RunConfig } from '../../../services/collection-runner';
+import { prodForwardRefusal } from './port-forward-handler';
 import { archiveCollection, archiveCollectionRequest } from '../../../services/bin';
 import { searchTree, type SearchNode } from '../../../services/collection-search';
 import { importAnyCollection } from '../../../services/import-any';
@@ -258,6 +259,10 @@ export async function handleRunCollection(msg: Record<string, unknown>, postMess
     stopOnError: (msg.stopOnError as boolean) || false,
     iterations: (msg.iterations as number) || 1,
     dataRows: Array.isArray(msg.dataRows) ? msg.dataRows as Record<string, string>[] : undefined,
+    /* A request that resolves to a production forward's port is not sent, unless this run allows it. */
+    refuseUrl: msg.allowProdForwards === true
+      ? undefined
+      : url => prodForwardRefusal(url, 'Tick "Allow production forwards" in Run Collection to send it.'),
   };
 
   runAbortSignal = { aborted: false };

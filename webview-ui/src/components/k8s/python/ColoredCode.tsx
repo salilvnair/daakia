@@ -25,11 +25,12 @@ export function ColoredCode({ code, language = 'python', maxHeight = 260 }: {
     return () => { live = false; };
   }, [code, language]);
 
+  /* Long lines wrap: a script in a popover scrolls one way, down, never sideways. */
   const style: React.CSSProperties = {
-    margin: 0, padding: '10px 12px', maxHeight, overflow: 'auto',
+    margin: 0, padding: '10px 12px', maxHeight, overflowY: 'auto', overflowX: 'hidden',
     fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 12, lineHeight: '19px',
     background: 'var(--color-editor-bg, var(--color-bg, var(--color-surface)))',
-    color: 'var(--color-text-primary)', whiteSpace: 'pre',
+    color: 'var(--color-text-primary)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
   };
 
   return html
