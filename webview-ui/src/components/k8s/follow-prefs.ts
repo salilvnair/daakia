@@ -74,7 +74,7 @@ export interface SavedFollow {
   id: string;
   name: string;
   conds: Condition[];
-  anchor: { pod: string; ts?: number; text: string };
+  anchor: { pod: string; ts?: number; text: string; source?: 'live' | 'archive' };
   width: number;
   oneTimeline: boolean;
   onlyPod: boolean;

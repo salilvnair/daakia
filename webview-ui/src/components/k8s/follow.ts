@@ -103,6 +103,48 @@ export function touched(
 }
 
 /**
+ * Every field these lines carry and the values each takes, with how many
+ * lines carry it — what "+ condition" offers to pick from, before anything is
+ * typed. Only fields a condition can be checked against (see `valueOf`):
+ * thread, logger, app, pod, the MDC, and what the readers name.
+ */
+export function fieldValues(
+  lines: (Parameters<typeof valueOf>[0] & { pod?: string })[],
+  readFields?: (line: Parameters<typeof valueOf>[0]) => { key: string; value: string }[],
+  perField = 50,
+): { field: string; n: number; values: { value: string; n: number }[] }[] {
+  const byField = new Map<string, { n: number; values: Map<string, number> }>();
+  const bump = (field: string, value: string | undefined) => {
+    if (!value) return;
+    let f = byField.get(field);
+    if (!f) { f = { n: 0, values: new Map() }; byField.set(field, f); }
+    f.n++;
+    f.values.set(value, (f.values.get(value) ?? 0) + 1);
+  };
+  for (const line of lines) {
+    const seen = new Set<string>();
+    const once = (field: string, value: string | undefined) => {
+      if (!value || seen.has(field)) return;
+      seen.add(field);
+      bump(field, value);
+    };
+    once('thread', line.thread);
+    once('logger', line.logger);
+    once('app', line.app);
+    once('pod', line.pod);
+    for (const [k, v] of Object.entries(line.fields ?? {})) once(k, String(v));
+    for (const f of readFields?.(line) ?? []) once(f.key, f.value);
+  }
+  return [...byField.entries()]
+    .map(([field, f]) => ({
+      field, n: f.n,
+      values: [...f.values.entries()].map(([value, n]) => ({ value, n }))
+        .sort((a, b) => b.n - a.n || a.value.localeCompare(b.value)).slice(0, perField),
+    }))
+    .sort((a, b) => b.n - a.n || a.field.localeCompare(b.field));
+}
+
+/**
  * How widely a value is spread through lines on hand: "312 lines · 3 pods".
  *
  * What a field card says before Follow is pressed, so the reader knows whether

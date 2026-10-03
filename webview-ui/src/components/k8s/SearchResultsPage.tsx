@@ -50,6 +50,7 @@ import { useTabsStore } from '../../store/tabs-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { AiSplit } from './AiAnswerPanel';
+import { sourceTagFor } from './source-tag';
 import { resultLines, podsLabel, podsIn, timings, totals, searchFilterOf, sourceKey, sourceSummary, type ResultLine } from './search-results';
 import { HitsByPodRail, HitFieldsRail } from './HitRails';
 import { FollowView } from './FollowView';
@@ -729,7 +730,7 @@ function OpenWindow({ line, searched, query }: { line?: ResultLine; searched: Se
         open({
           anchor: {
             pod: line.pod, ts: line.ts, text: line.text, level: line.level,
-            message: line.message, thread: line.thread, fields: line.fields,
+            message: line.message, thread: line.thread, fields: line.fields, source: line.source,
           },
           pods: searched, half: 300, query,
           searchAt: useResultTabStore.getState().at,
@@ -920,7 +921,7 @@ export function SearchResultsPage() {
     logUiEvent('dk8s.results_follow', { field, pods: searched.length });
     setFollow({
       conds: [{ field, value, on: true }],
-      anchor: { pod: selectedLine.pod, ts: selectedLine.ts, text: selectedLine.text },
+      anchor: { pod: selectedLine.pod, ts: selectedLine.ts, text: selectedLine.text, source: selectedLine.source },
       width: 90,
       oneTimeline: true,
       onlyPod: false,
@@ -958,14 +959,7 @@ export function SearchResultsPage() {
       selectedLabel: 'the line you clicked',
       podColumn: podNames.length > 1,
       /* Only when archived files are in the result: then every row says which it is. */
-      sourceTag: from.files > 0
-        ? (l) => {
-          const r = l as ResultLine;
-          return r.source === 'archive'
-            ? { label: 'archive', title: `Archived file: ${r.rel ?? r.file ?? ''}`, tone: 'var(--color-warning)' }
-            : { label: 'live', title: 'The running pod’s log', tone: ACCENT };
-        }
-        : undefined,
+      sourceTag: sourceTagFor(allLines),
       columns: columns.map(key => ({
         key,
         value: (l) => valueOf(l, key, readers),

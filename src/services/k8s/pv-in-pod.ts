@@ -57,6 +57,12 @@ export interface PvInPodListing {
 export const MAX_FILES = 2000;
 /** And a search has to return something a panel can hold. */
 export const MAX_MATCH_LINES = 5000;
+/**
+ * A windowed read's cap: the window bounds it, so it can hold what ten busy
+ * minutes write — what the Window tab asks for — well inside the 32MB a run
+ * buffers. At 5,000 a busy pod's ten minutes lost their last few.
+ */
+export const MAX_WINDOW_LINES = 40000;
 
 /** Names worth treating as a log by default. */
 export const DEFAULT_GLOBS = ['*.log', '*.log.*', '*.txt'];
@@ -236,6 +242,58 @@ export interface PvSearchOptions {
    * cannot hold a line from it, so it is not read at all.
    */
   sinceMs?: number;
+  /**
+   * The window as the log writes its times — `YYYY-MM-DDTHH:MM:SS` in the
+   * log's own zone. Given, the search reads each file from the window's start
+   * and stops past its end, inside the pod, so the line cap is spent on the
+   * window. Without it, a file is read from its first line and the cap filled
+   * before the window began: a moment ten minutes into a busy file came back
+   * with a handful of lines, or none.
+   */
+  window?: { from: string; to?: string };
+}
+
+/**
+ * `ms` as `YYYY-MM-DDTHH:MM:SS` in `timeZone` — how an ISO-ish log line spells
+ * that moment, for comparing as text inside the pod. UTC when the zone is not
+ * one this runtime knows.
+ */
+export function zoneStamp(ms: number, timeZone = 'UTC'): string {
+  const fmt = (tz: string) => {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+    }).formatToParts(new Date(ms)).map(x => [x.type, x.value]));
+    return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}`;
+  };
+  try { return fmt(timeZone); } catch { return fmt('UTC'); }
+}
+
+/**
+ * The windowed read of one file, in awk: `N:text` for a hit and `N-text` for
+ * a context line — grep's own shape, so the output parses the same.
+ *
+ * A line with an ISO-style time (`2026-10-03T04:57:03`, or with a space for
+ * the T) decides whether what follows is in the window; a line without one —
+ * a stack frame, a JSON body — goes with the line above it. Before the window
+ * nothing is printed, and the first line past it ends the file. A file whose
+ * lines carry no such time is read whole, as grep would. The pattern comes in
+ * through the environment, not `-v`, which would read its backslashes as
+ * escapes and turn `a\.b` into `a.b`.
+ */
+function awkWindow(caseSensitive: boolean | undefined, ctx: number): string {
+  const prog = [
+    'BEGIN{p=ENVIRON["DK_PAT"]; if(!CS) p=tolower(p); w=1; a=0; n=0}',
+    '{ if (match($0, /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9][T ][0-9][0-9]:[0-9][0-9]:[0-9][0-9]/)) {',
+    '    t=substr($0, RSTART, 19); sub(/ /, "T", t);',
+    '    if (t < F) w=0; else if (T != "" && t > T) exit; else w=1 }',
+    '  if (!w) next;',
+    '  s = CS ? $0 : tolower($0);',
+    '  if (s ~ p) { for (i=0; i<n; i++) print bn[i] "-" bt[i]; n=0; print NR ":" $0; a=C; next }',
+    '  if (a > 0) { print NR "-" $0; a--; next }',
+    '  if (C > 0) { if (n == C) { for (i=1; i<n; i++) { bn[i-1]=bn[i]; bt[i-1]=bt[i] } n-- } bn[n]=NR; bt[n]=$0; n++ } }',
+  ].join(' ');
+  return ['awk', '-v', `CS=${caseSensitive ? 1 : 0}`, '-v', `C=${ctx}`, '-v', 'F="$DK_FROM"', '-v', 'T="$DK_TO"', shellQuote(prog), '"$f"'].join(' ');
 }
 
 /**
@@ -252,7 +310,8 @@ export function grepScript(
   root: string, pattern: string, o: PvSearchOptions,
 ): string {
   const ctx = Math.max(0, Math.round(o.contextLines ?? 0));
-  const limit = Math.max(1, Math.min(o.maxLines ?? MAX_MATCH_LINES, MAX_MATCH_LINES));
+  const cap = o.window ? MAX_WINDOW_LINES : MAX_MATCH_LINES;
+  const limit = Math.max(1, Math.min(o.maxLines ?? cap, cap));
   if (o.sinceMs !== undefined) {
     /*
       Oldest file first, so the output runs in time order and the cap cuts
@@ -263,6 +322,27 @@ export function grepScript(
       output parses the same.
     */
     const minutes = Math.max(1, Math.ceil((Date.now() - o.sinceMs) / 60_000) + 1);
+    const grepFile = [
+      'grep', '-n',
+      o.caseSensitive ? '-E' : '-Ei',
+      ...(ctx > 0 ? ['-C', String(ctx)] : []),
+      '-e', shellQuote(o.regex ? pattern : escapeRegex(pattern)),
+      '"$f"',
+    ].join(' ');
+    /* With a window, awk reads each file from the window's start — see
+       `window` — where the image has awk; grep, as before, where it has not. */
+    const readFile = o.window
+      ? `$(if [ -n "$DK_AWK" ]; then ${awkWindow(o.caseSensitive, ctx)}; else ${grepFile}; fi)`
+      : `$(${grepFile})`;
+    const env = o.window
+      ? [
+        `DK_PAT=${shellQuote(o.regex ? pattern : escapeRegex(pattern))}`,
+        `DK_FROM=${shellQuote(o.window.from)}`,
+        `DK_TO=${shellQuote(o.window.to ?? '')}`,
+        'DK_AWK=$(command -v awk 2>/dev/null);',
+        'export DK_PAT DK_FROM DK_TO;',
+      ]
+      : [];
     /*
       Each file's lines come under a line naming it, and grep prints only
       `N:text` and `N-text`. With the name in front of every line, a context
@@ -271,14 +351,11 @@ export function grepScript(
       off before its hit, nothing was left to tell the two apart.
     */
     return [
+      ...env,
       'find', shellQuote(root), '-type', 'f', '-mmin', `-${minutes}`,
       '-exec', 'ls', '-1tr', '{}', '+', '2>/dev/null',
       '|', 'while', 'IFS=', 'read', '-r', 'f;', 'do',
-      'o=$(grep', '-n',
-      o.caseSensitive ? '-E' : '-Ei',
-      ...(ctx > 0 ? ['-C', String(ctx)] : []),
-      '-e', shellQuote(o.regex ? pattern : escapeRegex(pattern)),
-      '"$f");',
+      `o=${readFile};`,
       '[', '-n', '"$o"', ']', '&&', 'printf', `'${FILE_MARK}%s\\n%s\\n'`, '"$f"', '"$o";', 'done',
       '2>/dev/null',
       '|', 'head', '-n', String(limit),
@@ -447,7 +524,8 @@ export async function searchInPod(
     return { root: cleanRoot, matches: [], commands: [command], files: 0, error: explain(r.stderr, cleanRoot) };
   }
 
-  const limit = Math.max(1, Math.min(o.maxLines ?? MAX_MATCH_LINES, MAX_MATCH_LINES));
+  const cap = o.window ? MAX_WINDOW_LINES : MAX_MATCH_LINES;
+  const limit = Math.max(1, Math.min(o.maxLines ?? cap, cap));
   return {
     root: cleanRoot,
     matches,
