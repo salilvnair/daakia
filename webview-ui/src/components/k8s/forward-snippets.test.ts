@@ -43,3 +43,14 @@ describe('forward snippets', () => {
     expect(snippetsFor(backend).map(s => s.id)).toEqual(['url', 'env', 'yml']);
   });
 });
+
+describe('two ports of one kind', () => {
+  it('get a key each in application-local.yml, as they do in .env', () => {
+    const t = { pod: 'zp-backend-1', workload: { kind: 'Deployment', name: 'zp-backend' }, ports: [
+      { local: 8080, remote: 8080, role: 'http' as const }, { local: 18081, remote: 8081, role: 'http' as const },
+    ] };
+    const yml = applicationYml([t]);
+    expect(yml).toContain('zp.backend.8080.base-url: http://localhost:8080');
+    expect(yml).toContain('zp.backend.8081.base-url: http://localhost:18081');
+  });
+});

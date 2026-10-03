@@ -49,6 +49,7 @@ import { SummaryPanel } from './SummaryPanel';
 import { usePatternsFor, MARK_COLORS, clearMarks } from '../../store/dk8s-logger-store';
 import { scopeOf } from './LoggersTab';
 import { payloadPrefs, openLoggers, setOpenLogger } from './log-payload-prefs';
+import { escapeIsTaken } from './escape-owner';
 import { LogPayloadView } from './LogPayloadView';
 import { FacetRail } from './FacetRail';
 import { podHue, podTail } from './pod-hue';
@@ -1037,7 +1038,7 @@ export function LogViewer() {
       };
     };
 
-    setFilterProvider(provide);
+    setFilterProvider(provide, viewerRef.current);
     return () => clearFilterProvider(provide);
   }, [logs, logFilter, logFieldFilters, addFieldFilter, setLogFilter]);
 
@@ -1769,7 +1770,37 @@ export function LogViewer() {
     };
     pin();
     return () => { cancelAnimationFrame(raf); pinning.current = false; };
-  }, [total, logFollow]);
+    /* Re-pinned when rows are measured too: a row drawn taller than its
+       estimate grows the list without adding to it, and left the view short. */
+  }, [total, logFollow, measuredAt]);
+
+  /*
+    When the reader last moved the view themselves.
+
+    Following stopped whenever a scroll event found the view short of the
+    bottom — and not every scroll event is the reader's. The last of the
+    pinning frames scrolls too, and its event arrives after rows have been
+    measured taller; it read as "scrolled up" and Following quietly let go.
+    Now only a wheel, a touch, a key or a grab of the scrollbar stops it.
+  */
+  const intentAt = useRef(0);
+  useEffect(() => {
+    const el = scrollEl;
+    if (!el) return;
+    const mark = () => { intentAt.current = performance.now(); };
+    const NAV = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ']);
+    const onKey = (e: KeyboardEvent) => { if (NAV.has(e.key)) mark(); };
+    el.addEventListener('wheel', mark, { passive: true });
+    el.addEventListener('touchmove', mark, { passive: true });
+    el.addEventListener('pointerdown', mark);
+    el.addEventListener('keydown', onKey);
+    return () => {
+      el.removeEventListener('wheel', mark);
+      el.removeEventListener('touchmove', mark);
+      el.removeEventListener('pointerdown', mark);
+      el.removeEventListener('keydown', onKey);
+    };
+  }, [scrollEl]);
 
   /*
     A paged source: where the top of the screen is, as a line and an offset
@@ -1804,7 +1835,8 @@ export function LogViewer() {
     if (draggingRef.current) return;
     if (pinning.current) return;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-    if (atBottom !== logFollow) setLogFollow(atBottom);
+    if (atBottom && !logFollow) setLogFollow(true);
+    else if (!atBottom && logFollow && performance.now() - intentAt.current < 800) setLogFollow(false);
   }, [logFollow, setLogFollow, paging, logs.length]);
 
   /* After the window moves, put the anchored line back where it was. */
@@ -1930,9 +1962,9 @@ export function LogViewer() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || !lineRangeRef.current) return;
       /* An open menu takes Esc first; the next one lets go of the lines. */
-      if (document.querySelector('body > .fixed[class*="z-[9999]"]')) return;
+      if (escapeIsTaken(e)) return;
       /* Esc lets go of the lines — and only that, not the pod behind them. */
-      e.stopPropagation();
+      e.stopImmediatePropagation();
       setLineRange(null);
       selectionRef.current = null;
       setLogSelection(undefined);
@@ -3296,11 +3328,15 @@ export function LogViewer() {
             {visible.length.toLocaleString()} shown
           </span>
         )}
-        {payloadOpts.draw && eventStats.events > 0 && (
+        {/*
+          Payloads only. An events count beside the line count ("200 lines …
+          165 events") read as two answers to one question; a folded trace now
+          shows itself in the gutter, whose numbers skip over it.
+        */}
+        {payloadOpts.draw && eventStats.withPayload > 0 && (
           <span style={{ fontVariantNumeric: 'tabular-nums' }}
-                title="Events, not lines: a folded stack trace or a YAML block is one event.">
-            {eventStats.events.toLocaleString()} event{eventStats.events === 1 ? '' : 's'}
-            {` · ${eventStats.withPayload.toLocaleString()} carry a payload`} · parsed on this machine, never sent anywhere
+                title={`${eventStats.withPayload.toLocaleString()} of the ${eventStats.events.toLocaleString()} events shown carry a JSON, XML, YAML or key=value payload, drawn as a tree. A folded stack trace is one event.`}>
+            {eventStats.withPayload.toLocaleString()} payload{eventStats.withPayload === 1 ? '' : 's'} · parsed on this machine, never sent anywhere
           </span>
         )}
         {footerNote && <span>{footerNote}</span>}

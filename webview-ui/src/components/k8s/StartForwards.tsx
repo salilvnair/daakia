@@ -6,6 +6,10 @@
  * taken or any of them reaches production, shows the dialog first: which
  * process holds the port and a replacement for it; or what forwarding into
  * production means. Otherwise they start at once.
+ *
+ * Except when someone other than the reader proposed them. A forward Daakia AI
+ * suggested opens the dialog every time (`review`), with who suggested it: the
+ * reader starts it, never the chat.
  */
 import { useState, type ReactNode } from 'react';
 import { ModalView } from '@salilvnair/dui';
@@ -18,13 +22,17 @@ interface Pending {
   /** One check per port, in the order the requests list them. */
   checks: PortCheck[];
   prod: string[];
+  /** Shown before anything starts, whatever the checks say — and who proposed it. */
+  review?: { by: string };
 }
 
-export function useStartForwards(): { begin: (reqs: ForwardRequest[]) => Promise<void>; busy: boolean; dialog: ReactNode } {
+export interface BeginOptions { review?: { by: string } }
+
+export function useStartForwards(): { begin: (reqs: ForwardRequest[], opts?: BeginOptions) => Promise<void>; busy: boolean; dialog: ReactNode } {
   const [pending, setPending] = useState<Pending>();
   const [busy, setBusy] = useState(false);
 
-  async function begin(reqs: ForwardRequest[]) {
+  async function begin(reqs: ForwardRequest[], opts?: BeginOptions) {
     if (!reqs.length || busy) return;
     setBusy(true);
     try {
@@ -39,8 +47,8 @@ export function useStartForwards(): { begin: (reqs: ForwardRequest[]) => Promise
         }),
       }));
       const prod = [...new Set(reqs.filter(r => isProdContext(r.context)).map(r => r.context))];
-      if (!checks.some(c => !c.free) && !prod.length) { adjusted.forEach(r => usePortForwardStore.getState().start(r)); return; }
-      setPending({ reqs: adjusted, checks, prod });
+      if (!opts?.review && !checks.some(c => !c.free) && !prod.length) { adjusted.forEach(r => usePortForwardStore.getState().start(r)); return; }
+      setPending({ reqs: adjusted, checks, prod, review: opts?.review });
     } finally {
       setBusy(false);
     }
@@ -84,6 +92,19 @@ function StartDialog({ pending, onCancel, onGo }: { pending: Pending; onCancel: 
                  </div>
                }>
       <div className="flex flex-col" style={{ gap: 10, fontSize: 12.5, color: PF.mu }}>
+        {pending.review && (
+          <>
+            <p style={{ margin: 0 }}>
+              Suggested by <b style={{ color: PF.tx }}>{pending.review.by}</b>. Nothing is forwarded until you start it here.
+            </p>
+            {reqs.map((r, ri) => (
+              <p key={ri} style={{ margin: 0, fontFamily: PF.mono, fontSize: 12, color: PF.tx }}>
+                {who(r)} {r.ports.map(p => `:${p.remote} → localhost:${p.local || '…'}`).join(', ')}
+                <span style={{ color: PF.mu }}> · {r.context} / {r.namespace} · 127.0.0.1 only</span>
+              </p>
+            ))}
+          </>
+        )}
         {pending.prod.length > 0 && (
           <>
             <PfBar tone="er"><b>{pending.prod.join(', ')}</b> {pending.prod.length === 1 ? 'is' : 'are'} marked as production.</PfBar>

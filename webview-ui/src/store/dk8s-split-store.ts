@@ -374,7 +374,11 @@ export const useSplitStore = create<SplitState>((set, get) => ({
       case 'dk8s:logLines':
         on(p => ((!p.live && p.status !== 'ended') || p.paused
           /* A snapshot pane is held until its read ends, then drawn once. */
-          ? { ...p, held: [...(p.held ?? []), ...((msg.lines as LogLine[]) ?? [])].slice(-MAX_LINES) }
+          ? (() => {
+            const all = [...(p.held ?? []), ...((msg.lines as LogLine[]) ?? [])];
+            const over = Math.max(0, all.length - MAX_LINES);
+            return { ...p, held: all.slice(over), dropped: p.dropped + over };
+          })()
           : { ...p, logs: [...p.logs, ...((msg.lines as LogLine[]) ?? [])].slice(-MAX_LINES) }));
         break;
       case 'dk8s:logStatus': {

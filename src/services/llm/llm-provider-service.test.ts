@@ -7,7 +7,7 @@
  * asked DeepSeek for whatever model had been requested of a provider that had
  * no key.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const keychain: Record<string, string | undefined> = {};
 
@@ -20,10 +20,27 @@ vi.mock('../secret-store', () => ({
 
 import { keyFor, autoResolveProvider } from './llm-provider-service';
 
+/*
+  Every provider's variables, not just DeepSeek's, are set aside for each test.
+  A machine with OPENAI_API_KEY in its shell gave OpenAI a key, so "a provider
+  with no key" had one and the fallback was never reached.
+*/
+const PROVIDER_VAR = /^(DEEPSEEK|OPENAI|ANTHROPIC|GEMINI|GROQ|MISTRAL|TOGETHER|XAI)_(API_KEY|API_URL|MODEL)$/;
+let setAside: Record<string, string | undefined> = {};
+
 beforeEach(() => {
   for (const k of Object.keys(keychain)) delete keychain[k];
-  delete process.env.DEEPSEEK_API_KEY;
-  delete process.env.DEEPSEEK_MODEL;
+  setAside = {};
+  for (const name of Object.keys(process.env)) {
+    if (!PROVIDER_VAR.test(name)) continue;
+    setAside[name] = process.env[name];
+    delete process.env[name];
+  }
+});
+
+afterEach(() => {
+  for (const name of Object.keys(process.env)) if (PROVIDER_VAR.test(name)) delete process.env[name];
+  for (const [name, value] of Object.entries(setAside)) if (value !== undefined) process.env[name] = value;
 });
 
 describe('keyFor', () => {

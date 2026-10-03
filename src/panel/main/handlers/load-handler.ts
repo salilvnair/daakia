@@ -35,6 +35,7 @@ import * as https from 'https';
 import * as http from 'http';
 import { URL } from 'url';
 import { probe } from './http-probe';
+import { prodForwardOnUrl } from './port-forward-handler';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -311,6 +312,15 @@ export async function handleLoadStart(
   }
   try { new URL(cfg.url); } catch {
     postMessage({ type: 'load:error', runId, message: `"${cfg.url}" is not a URL this can request.` });
+    return;
+  }
+  /* A local port that is a production pod: only when the reader said so for this run. */
+  const prod = prodForwardOnUrl(cfg.url);
+  if (prod && msg.prodConfirmed !== true) {
+    postMessage({
+      type: 'load:error', runId,
+      message: `${cfg.url} reaches ${prod.service ? `svc/${prod.service}` : prod.pod} on ${prod.context} — production, through a dk8s forward. Confirm it in the Load Tester to run against it.`,
+    });
     return;
   }
 

@@ -22,6 +22,8 @@ import { postMsg } from '../../vscode';
 import { ModalView, ButtonView, TextInputView, MultilineInputView } from '@salilvnair/dui';
 import { logUiEvent } from '../../store/ui-audit-store';
 import { ChevronRightIcon, PlayIcon } from '../../icons';
+import { usePortForwardStore } from '../../store/dk8s-port-forward-store';
+import { prodForwardFor } from '../k8s/prod-forward-guard';
 
 // ── Shapes shared with the host ──────────────────────────────────────────────
 
@@ -314,6 +316,19 @@ const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'];
 export function LoadTester({ initialUrl = '', initialMethod = 'GET', onClose }: Props) {
   const [url, setUrl] = useState(initialUrl);
   const [method, setMethod] = useState(initialMethod);
+
+  /*
+    A local URL that is a production pod, through a dk8s forward.
+
+    Run stays off until the reader says, for this URL, that production is what
+    they mean. The host checks the same thing and refuses without that answer,
+    so the guard holds even where this list has not loaded.
+  */
+  const forwards = usePortForwardStore(s => s.forwards);
+  useEffect(() => { usePortForwardStore.getState().refresh(); }, []);
+  const prodHit = useMemo(() => prodForwardFor(url, forwards), [url, forwards]);
+  const [prodOkFor, setProdOkFor] = useState<string>();
+  const prodBlocked = !!prodHit && prodOkFor !== url;
   const [profile, setProfile] = useState<Profile>('constant-vus');
 
   const [vus, setVus] = useState(10);
@@ -413,7 +428,7 @@ export function LoadTester({ initialUrl = '', initialMethod = 'GET', onClose }: 
     setProgressPct(0);
     setWarming(warmupSeconds > 0);
 
-    logUiEvent('settings.load_start', { url, profile, vus, targetRps, durationSeconds });
+    logUiEvent('settings.load_start', { url, profile, vus, targetRps, durationSeconds, prodForward: !!prodHit });
 
     postMsg({
       type: 'load:start',
@@ -430,8 +445,9 @@ export function LoadTester({ initialUrl = '', initialMethod = 'GET', onClose }: 
         ...(minRps > 0 ? { minRps } : {}),
       },
       abortOnThresholdBreach: abortOnBreach,
+      ...(prodHit ? { prodConfirmed: prodOkFor === url } : {}),
     });
-  }, [url, method, body, parsedHeaders, profile, vus, totalRequests, durationSeconds, stages,
+  }, [prodHit, prodOkFor, url, method, body, parsedHeaders, profile, vus, totalRequests, durationSeconds, stages,
       targetRps, maxVus, warmupSeconds, thinkMin, thinkMax, timeoutMs, followRedirects,
       keepAlive, gzip, insecureTls, p95Ms, p99Ms, errorRatePct, minRps, abortOnBreach]);
 
@@ -480,7 +496,7 @@ export function LoadTester({ initialUrl = '', initialMethod = 'GET', onClose }: 
             size="md"
             variant="primary"
             accentColor={ACCENT}
-            disabled={running || !url.trim()}
+            disabled={running || !url.trim() || prodBlocked}
             onClick={start}
             iconLeft={<PlayIcon size={12} />}
           >
@@ -508,6 +524,26 @@ export function LoadTester({ initialUrl = '', initialMethod = 'GET', onClose }: 
               </Field>
             </div>
           </div>
+
+          {prodHit && (
+            <div role="alert" style={{
+              display: 'flex', flexDirection: 'column', gap: 8, padding: '9px 11px', borderRadius: 8, fontSize: 11.5, lineHeight: 1.5,
+              color: 'var(--color-text-primary)',
+              background: `color-mix(in srgb, ${BAD} 10%, transparent)`,
+              border: `1px solid color-mix(in srgb, ${BAD} 40%, transparent)`,
+            }}>
+              <span>
+                <b>localhost:{prodHit.port}</b> is a dk8s forward to <b>{prodHit.forward.service ? `svc/${prodHit.forward.service}` : prodHit.forward.pod}</b> on{' '}
+                <b style={{ color: BAD }}>{prodHit.forward.context}</b>, which is production. This test would put its load on that pod.
+              </span>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}>
+                <input type="checkbox" checked={prodOkFor === url}
+                       onChange={e => setProdOkFor(e.target.checked ? url : undefined)}
+                       style={{ accentColor: BAD }} />
+                Run it against production anyway
+              </label>
+            </div>
+          )}
 
           <Field label="METHOD">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>

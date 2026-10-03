@@ -45,6 +45,7 @@ import { AI as AI_ACCENT } from './tone';
   nobody checked.
 */
 import { ACCESS_RULE, type AccessKey } from '@daakia/access-checks';
+import { escapeIsTaken } from './escape-owner';
 
 /**
  * `needs` is the permission the tab cannot work without.
@@ -297,6 +298,8 @@ export function PodDetail() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      /* A menu, dropdown or dialog on top takes the key — see `escapeIsTaken`. */
+      if (escapeIsTaken(e)) return;
       const sel = window.getSelection();
       if (sel && !sel.isCollapsed) return;
       goBack();

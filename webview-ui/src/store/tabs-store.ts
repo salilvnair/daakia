@@ -81,6 +81,8 @@ export interface WindowView {
   to?: number;
   /** The search it was opened from, for the header. */
   query?: string;
+  /** When that search ran — the results page's `at` — so its link can tell whether the page still shows it. */
+  searchAt?: number;
 }
 
 /** A pod whose whole log a `dk8s-logfile` tab downloads and shows. */

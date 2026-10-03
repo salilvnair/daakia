@@ -201,6 +201,26 @@ export function forwardHolding(id: string, local: number): ForwardInfo | undefin
   return f && f.state === 'forwarding' && f.ports.some(p => p.local === local) ? f : undefined;
 }
 
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1', '0.0.0.0']);
+
+/**
+ * The production forward a URL on this machine would reach, if any.
+ *
+ * `http://localhost:18081` is local only in name when a forward to a
+ * production pod holds 18081. The Load Tester refuses such a URL unless the
+ * reader confirmed it for production — checked here, on the host, so it holds
+ * whatever the webview knew.
+ */
+export function prodForwardOnUrl(url: string): ForwardInfo | undefined {
+  let u: URL;
+  try { u = new URL(url.trim()); } catch { return undefined; }
+  if (!LOCAL_HOSTS.has(u.hostname.toLowerCase())) return undefined;
+  const port = u.port ? Number(u.port) : u.protocol === 'https:' ? 443 : 80;
+  return manager.list().find(f =>
+    f.prod && (f.state === 'connecting' || f.state === 'forwarding' || f.state === 'reconnecting')
+    && f.ports.some(p => p.local === port));
+}
+
 export function handlePfRestart(msg: Record<string, unknown>, post: PostMessage): void {
   sink = post;
   manager.restart(String(msg.id ?? ''));

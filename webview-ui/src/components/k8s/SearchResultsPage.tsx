@@ -723,6 +723,7 @@ function OpenWindow({ line, searched, query }: { line?: ResultLine; searched: Se
             message: line.message, thread: line.thread, fields: line.fields,
           },
           pods: searched, half: 300, query,
+          searchAt: useResultTabStore.getState().at,
         });
       }}
     >

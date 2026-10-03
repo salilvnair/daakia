@@ -77,7 +77,10 @@ export function envLines(targets: Target[]): string {
 
 /** The Spring Boot properties a port maps to, as `key: value` pairs. */
 function springProps(t: Target, p: ForwardPort): [string, string][] {
-  const n = propName(targetName(t));
+  /* Two ports of one kind on one target — 8080 and 8081, both HTTP — each get
+     their own key, the way `envLines` does; one key twice is a YAML file
+     Spring reads as the last one only. */
+  const n = propName(targetName(t)) + (t.ports.filter(o => o.role === p.role).length > 1 ? `.${p.remote}` : '');
   switch (p.role) {
     case 'postgres':
     case 'mysql':

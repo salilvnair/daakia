@@ -59,10 +59,19 @@ export interface FilterMenu {
 
 type Provider = () => FilterMenu | null;
 
-let provider: Provider | null = null;
+/*
+  One per mounted view, each with the element it covers.
 
-export function setFilterProvider(fn: Provider): void {
-  provider = fn;
+  It was a single slot, and the last view to mount took it — so with logs split
+  side by side, Filter By in the left pane listed the right pane's threads and
+  filtered the right pane. The menu now asks the view that holds what was
+  right-clicked; the newest view stands in only when none of them does.
+*/
+let providers: { fn: Provider; el?: Element | null }[] = [];
+
+export function setFilterProvider(fn: Provider, el?: Element | null): void {
+  providers = providers.filter(p => p.fn !== fn);
+  providers.push({ fn, el });
 }
 
 /**
@@ -74,9 +83,15 @@ export function setFilterProvider(fn: Provider): void {
  * filters at all.
  */
 export function clearFilterProvider(fn: Provider): void {
-  if (provider === fn) provider = null;
+  providers = providers.filter(p => p.fn !== fn);
 }
 
-export function getFilterMenu(): FilterMenu | null {
-  return provider?.() ?? null;
+/** The filters of the view holding `target` — the innermost, if views nest. */
+export function getFilterMenu(target?: Node | null): FilterMenu | null {
+  const holding = target
+    ? providers.filter(p => p.el?.contains(target))
+    : [];
+  const innermost = holding.find(p => !holding.some(q => q !== p && p.el!.contains(q.el!)));
+  const chosen = innermost ?? providers[providers.length - 1];
+  return chosen?.fn() ?? null;
 }

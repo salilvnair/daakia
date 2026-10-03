@@ -27,6 +27,7 @@ import { AiSplit } from './AiAnswerPanel';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 
 import { AI as AI_ACCENT } from './tone';
+import { escapeIsTaken } from './escape-owner';
 
 /** A colour per analyzer, kept even when its tab is not the active one. */
 const TABS: { id: AnalyzerId; label: string; icon: React.ReactNode; color: string; tagline: string }[] = [
@@ -146,6 +147,7 @@ export function ArtifactDetail() {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      if (escapeIsTaken(e)) return;
       const sel = window.getSelection();
       if (sel && !sel.isCollapsed) return;
       close();

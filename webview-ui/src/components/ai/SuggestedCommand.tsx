@@ -12,6 +12,11 @@
  * cluster is shown as that, with Copy and no Run.
  *
  * The output lands under it in the same card the AI's own runs use.
+ *
+ * A `kubectl port-forward` is the exception: it is not run, and not left to a
+ * terminal either. It is read into a forward and offered with Forward…, which
+ * opens dk8s's own forward dialog — the reader starts it there. See
+ * `forward-proposal`.
  */
 import { useEffect, useId, useState } from 'react';
 import { ButtonView, IconButtonView } from '@salilvnair/dui';
@@ -20,6 +25,10 @@ import { postMsg } from '../../vscode';
 import { copyText } from '../../utils/clipboard';
 import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 import { KubectlRunCard, type KubectlRunResult } from './KubectlRunCard';
+import { useK8sStore } from '../../store/k8s-store';
+import { useStartForwards } from '../k8s/StartForwards';
+import { parsePortForward, resolveForward, type ParsedForward } from '../k8s/forward-proposal';
+import { PortForwardIcon } from '../../icons';
 
 const ACCENT = 'var(--color-ai-accent, #D97757)';
 const MONO = 'ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace';
@@ -85,7 +94,12 @@ export function AnswerMd({ text }: { text: string }) {
     <div className="flex flex-col" style={{ gap: 10 }}>
       {parts.map((p, i) => p.kind === 'md'
         ? <MdViewer key={i} content={p.text} />
-        : <SuggestedCommand key={i} command={p.command} />)}
+        : (() => {
+          const forward = parsePortForward(p.command);
+          return forward
+            ? <SuggestedForward key={i} command={p.command} parsed={forward} />
+            : <SuggestedCommand key={i} command={p.command} />;
+        })())}
     </div>
   );
 }
@@ -172,6 +186,69 @@ export function SuggestedCommand({ command }: { command: string }) {
           onClick={async () => { if (await copyText(shown)) flash(); }}
         />
       </div>
+    </div>
+  );
+}
+
+// ── A port-forward ─────────────────────────────────────────────────────────
+
+const DK = 'var(--color-dk8s, #22d3ee)';
+
+/**
+ * A suggested forward: what it would reach, and Forward… to review it in the
+ * dialog. Nothing starts from here.
+ */
+export function SuggestedForward({ command, parsed }: { command: string; parsed: ParsedForward }) {
+  const pods = useK8sStore(s => s.pods);
+  const context = useK8sStore(s => s.context);
+  const namespace = useK8sStore(s => s.namespace);
+  const resolved = resolveForward(parsed, pods, { context, namespace });
+  const { begin, busy, dialog } = useStartForwards();
+  const { copied, flash } = useCopyTick();
+
+  const note = resolved.ok
+    ? `${resolved.who} on ${resolved.req.context} / ${resolved.req.namespace} → ${resolved.req.ports.map(p => `localhost:${p.local}`).join(', ')}. Opens the forward dialog; nothing starts until you do.`
+    : resolved.reason;
+
+  return (
+    <div className="dk-embed flex items-start" style={{
+      gap: 12, padding: '10px 12px 10px 14px', borderRadius: 12, border: `1px solid ${BORDER}`,
+      background: 'color-mix(in srgb, var(--color-ai-accent, #D97757) 2%, var(--color-panel))',
+    }}>
+      <span className="shrink-0" style={{
+        marginTop: 1, padding: '1px 7px', borderRadius: 4, fontSize: 10, fontWeight: 600, letterSpacing: '.02em',
+        background: `color-mix(in srgb, ${DK} 14%, transparent)`, color: DK,
+      }}>
+        FORWARD
+      </span>
+      <div className="flex-1 min-w-0">
+        <div style={{ fontFamily: MONO, fontSize: 12, lineHeight: '18px', color: 'var(--color-text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+          <span style={{ color: 'var(--color-text-muted)', userSelect: 'none' }}>$ </span>{command}
+        </div>
+        <div style={{ marginTop: 3, fontSize: 11, lineHeight: 1.45, color: resolved.ok ? 'var(--color-text-muted)' : 'var(--color-warning)' }}>
+          {note}
+        </div>
+      </div>
+      <div className="shrink-0 flex items-center" style={{ gap: 6 }}>
+        {resolved.ok && (
+          <ButtonView variant="primary" size="sm" accentColor={DK} disabled={busy}
+                      iconLeft={<PortForwardIcon size={12} />}
+                      onClick={() => begin([resolved.req], { review: { by: 'Daakia AI' } })}
+                      title="Review this forward in the dialog, then start it there">
+            Forward…
+          </ButtonView>
+        )}
+        <IconButtonView
+          size="sm"
+          tooltip={copied ? 'Copied' : 'Copy command'}
+          aria-label="Copy command"
+          active={copied}
+          activeColor="var(--color-success)"
+          icon={<CopyGlyph copied={copied} size={12} />}
+          onClick={async () => { if (await copyText(command)) flash(); }}
+        />
+      </div>
+      {dialog}
     </div>
   );
 }
