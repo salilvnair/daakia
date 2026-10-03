@@ -290,6 +290,7 @@ const BASE_AUDIT_EVENT_DEFS: AuditEventDef[] = [
   // an argument is a password as often as not.
   { id: 'dk8s.python_run',       module: 'dk8s', button: 'Run script',    action: 'click',  description: 'Run a Python script inside one or more pods', color: 'var(--color-dk8s)', defaultEnabled: true },
   { id: 'dk8s.python_debug',     module: 'dk8s', button: 'Debug script',  action: 'click',  description: 'Start pdb on a Python script inside a pod',  color: 'var(--color-dk8s)', defaultEnabled: true },
+  { id: 'dk8s.python_conn_test', module: 'dk8s', button: 'Connectivity test', action: 'click', description: 'Test from inside a pod whether a URL can be reached, directly or through a proxy', color: 'var(--color-dk8s)', defaultEnabled: true },
   // Through a port forward, on the running app: a logger level it changes,
   // and a dump that pauses it. On by default, like exec.
   { id: 'dk8s.logger_level_set', module: 'dk8s', button: 'Set level',     action: 'update', description: 'Change a logger level on the running app through a port forward', color: 'var(--color-dk8s)', defaultEnabled: true },

@@ -24,3 +24,14 @@ describe('what Ask AI is told, and what it makes of the answer', () => {
     expect(lineChange('a\nb\nc', 'a\nB\nc\nd')).toEqual({ added: 2, removed: 1 });
   });
 });
+
+describe('an answer cut off by its length', () => {
+  it('still reads as the answer and as much of the script as came, marked cut', () => {
+    const cut = String.raw`{"answer": "Wrote a connectivity test.", "code": "import socket\nprint(\"hi\")\nscheme = (parts.scheme or "`;
+    expect(readAnswer(cut)).toEqual({ answer: 'Wrote a connectivity test.', code: 'import socket\nprint("hi")\nscheme = (parts.scheme or ', cut: true });
+  });
+
+  it('a cut before the script began is the answer alone', () => {
+    expect(readAnswer('{"answer": "Partly writ')).toEqual({ answer: 'Partly writ', code: '', cut: true });
+  });
+});

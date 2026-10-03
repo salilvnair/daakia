@@ -21,7 +21,7 @@ describe('escapeIsTaken', () => {
   });
 
   it('gives it to a dropdown, a dialog or a modal', () => {
-    for (const html of ['<div class="dui_select__menu"></div>', '<div role="dialog"></div>', '<div class="dui_modal__body"></div>']) {
+    for (const html of ['<div><div><div class="dui_ctx-menu__item">Save</div></div></div>', '<div class="dui_select__menu"></div>', '<div role="dialog"></div>', '<div class="dui_modal__body"></div>']) {
       document.body.innerHTML = html;
       expect(escapeIsTaken(esc())).toBe(true);
     }

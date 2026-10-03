@@ -171,7 +171,7 @@ import {
 import {
   handlePyProbe, handlePyPods, handlePyRun, handlePyStop, handlePyEndSession,
   handlePyDebugStart, handlePyDebugCmd, handlePyDebugConsole, handlePyDebugBreakpoints,
-  handlePyDebugWatches, handlePyDebugStop, handlePyDebugEval, handlePyIntel,
+  handlePyDebugWatches, handlePyDebugStop, handlePyDebugEval, handlePyIntel, handlePyConn,
   handlePyScriptsList, handlePyScriptsSave, handlePyScriptsDelete,
 } from '../src/panel/main/handlers/python-handler';
 import {
@@ -741,6 +741,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'py:intel':
       void handlePyIntel(msg, post);
+      break;
+    case 'py:conn':
+      void handlePyConn(msg, post);
       break;
     case 'py:debug:stop':
       handlePyDebugStop(msg, post);

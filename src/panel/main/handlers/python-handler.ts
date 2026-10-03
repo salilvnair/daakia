@@ -37,6 +37,7 @@ import {
 import type { PodTarget } from '../../../services/k8s/pod-files';
 import { configFor } from './terminal-handler';
 import { intelArgs, parseIntel } from '../../../services/k8s/pod-pyintel';
+import { checkConnRequest, connArgs, parseConn } from '../../../services/k8s/pod-conn';
 import { listScripts, saveScript, deleteScript } from '../../../services/py-scripts';
 import { getActiveWorkspaceId } from '../../../storage/workspaces';
 
@@ -385,6 +386,28 @@ export async function handlePyIntel(msg: Record<string, unknown>, post: PostMess
   });
   const parsed = parseIntel(r.stdout, r.failure ?? r.stderr);
   reply({ ...parsed, key: keyOf(t) });
+}
+
+/**
+ * A connectivity test from inside the pod — see pod-conn. Answered by `reqId`,
+ * always, with the steps or the reason there are none.
+ */
+export async function handlePyConn(msg: Record<string, unknown>, post: PostMessage): Promise<void> {
+  const reqId = String(msg.reqId ?? '');
+  const reply = (r: Record<string, unknown>) => post({ type: 'py:conn', reqId, ...r });
+  const t = targetOf(msg);
+  if (!t) { reply({ error: 'Not a valid pod.' }); return; }
+  const req = checkConnRequest(msg);
+  if ('error' in req) { reply({ error: req.error }); return; }
+  const probe = await probePython(t);
+  if (!probe.verdict.ok || !probe.verdict.interpreter) { reply({ error: probe.verdict.reason ?? 'No python in this container.' }); return; }
+  const r = await run(connArgs(t, probe.verdict.interpreter), {
+    stdin: JSON.stringify(req),
+    /* The check's own steps time out first; this is for a pod that never answers. */
+    timeoutMs: (req.timeoutSeconds * 3 + 15) * 1000,
+  });
+  const parsed = parseConn(r.stdout, r.failure ?? r.stderr);
+  reply('error' in parsed ? { error: parsed.error } : { result: parsed });
 }
 
 export function handlePyDebugStop(msg: Record<string, unknown>, post: PostMessage): void {

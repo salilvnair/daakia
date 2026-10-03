@@ -42,14 +42,14 @@ export const MARKER_MIN_PX = 6;
 /**
  * The gutter's width, hairline included, and its blocks'.
  *
- * Sixteen pixels down the pane's right edge with an 8px column of blocks in
- * it: a gutter, not a second pane. It was 38px with 20px bands, which in a
- * three-way split is most of a word of every line, in every pane, for a
- * picture the eye reads at a glance.
+ * Twenty-six pixels down a split pane's right edge with a 14px column of
+ * blocks: a gutter, not a second pane. The single pane's 38px with 20px bands
+ * is most of a word of every line in a three-way split; the 16px with 8px
+ * blocks it once was here was too thin to read the trouble off, or to grab.
  */
-export const GUTTER_W = 16;
-export const GUTTER_BLOCK_W = 8;
-/** How far the you-are-here box stands out past the blocks on each side: 12px over 8. */
+export const GUTTER_W = 26;
+export const GUTTER_BLOCK_W = 14;
+/** How far the you-are-here box stands out past the blocks on each side: 18px over 14. */
 export const MARKER_EDGE = 2;
 
 /**

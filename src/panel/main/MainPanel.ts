@@ -12,7 +12,7 @@ import {
 import {
   handlePyProbe, handlePyPods, handlePyRun, handlePyStop, handlePyEndSession,
   handlePyDebugStart, handlePyDebugCmd, handlePyDebugConsole, handlePyDebugBreakpoints,
-  handlePyDebugWatches, handlePyDebugStop, handlePyDebugEval, handlePyIntel,
+  handlePyDebugWatches, handlePyDebugStop, handlePyDebugEval, handlePyIntel, handlePyConn,
   handlePyScriptsList, handlePyScriptsSave, handlePyScriptsDelete, disposePython,
 } from './handlers/python-handler';
 import {
@@ -909,6 +909,9 @@ export class MainPanel {
         break;
       case 'py:intel':
         void handlePyIntel(msg, this._post);
+        break;
+      case 'py:conn':
+        void handlePyConn(msg, this._post);
         break;
       case 'py:debug:stop':
         handlePyDebugStop(msg, this._post);

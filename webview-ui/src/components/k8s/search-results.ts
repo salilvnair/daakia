@@ -276,6 +276,23 @@ export function searchFilterOf(query: string, regex: boolean, caseSensitive: boo
   return query;
 }
 
+/**
+ * Where a result's lines came from — the running pod's log, archived files on
+ * a volume, or both — said once in the header. A hit in last week's rotated
+ * file reads like one from a minute ago unless something says otherwise.
+ */
+export function sourceSummary(lines: Pick<ResultLine, 'source' | 'file' | 'rel'>[]): { live: boolean; files: number; label: string } {
+  let live = false;
+  const files = new Set<string>();
+  for (const l of lines) {
+    if (l.source === 'archive') files.add(l.rel ?? l.file ?? '');
+    else live = true;
+  }
+  const n = files.size;
+  const archive = n ? `archive · ${n} file${n === 1 ? '' : 's'}` : '';
+  return { live, files: n, label: live && n ? `live + ${archive}` : n ? archive : 'live log' };
+}
+
 /** Where a line sits in its own source: one pod's live log, or one archived file. */
 export function sourceKey(l: Pick<ResultLine, 'pod' | 'source' | 'file' | 'rel'>, line: number): string {
   return `${l.pod}\u0000${l.source}\u0000${l.rel ?? l.file ?? ''}\u0000${line}`;

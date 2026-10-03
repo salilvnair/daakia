@@ -129,6 +129,8 @@ export type LogSource = Pick<K8sStore,
   selectedLabel?: string;
   /** Which pod said each line, as a column — for lines that came from several. */
   podColumn?: boolean;
+  /** A short tag before a line saying where it came from — "archive" and its file. */
+  sourceTag?: (line: LogLine) => { label: string; title?: string; tone?: string } | undefined;
   /** The pod column's colour — by replica where replicas must be told apart. */
   podColor?: (pod: string) => string;
   /** Fields drawn as columns after the level: "Add as column". */
