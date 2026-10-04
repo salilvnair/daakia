@@ -20,6 +20,8 @@ import { Dk8sTerminalView } from './dk8s/Dk8sTerminalView';
 import { Dk8sSearchView } from './dk8s/Dk8sSearchView';
 import { Dk8sDoctorView } from './dk8s/Dk8sDoctorView';
 import { Dk8sPortForwardView } from './dk8s/Dk8sPortForwardView';
+import { Dk8sLoggersView } from './dk8s/Dk8sLoggersView';
+import { Dk8sReadingView } from './dk8s/Dk8sReadingView';
 import { Dk8sArchiveView } from './dk8s/Dk8sArchiveView';
 import { Dk8sCommandsView } from './dk8s/Dk8sCommandsView';
 import { Dk8sViewsView } from './dk8s/Dk8sViewsView';
@@ -30,11 +32,12 @@ import { CompassIcon, LayoutGridIcon,
   ProtocolGrpcBadge, ProtocolSoapBadge, ServerIcon, CollectionsFolderIcon,
   GeneralAssistantIcon, SettingsIcon, Dk8sIcon, SearchIcon, StethoscopeIcon,
   FolderOpenIcon, TerminalIcon, LayersIcon, IssueOpenedIcon, PencilIcon, BracesIcon, PortForwardIcon,
+  BookOpenIcon, FileTextIcon,
 } from '../../../icons';
 
 // ─── Wiki tabs ──────────────────────────────────────────────────────────────
 
-export type TabId = 'daakia-tour' | 'quick-start' | 'workspaces' | 'rest' | 'gql' | 'websocket' | 'grpc' | 'soap' | 'mock-server' | 'collections-env' | 'dynamic-values' | 'ai-assistant' | 'settings' | 'dk8s' | 'dk8s-pod' | 'dk8s-terminal' | 'dk8s-search' | 'dk8s-doctor' | 'dk8s-ports' | 'dk8s-archive' | 'dk8s-commands' | 'dk8s-views' | 'dkgh' | 'dkgh-compose';
+export type TabId = 'daakia-tour' | 'quick-start' | 'workspaces' | 'rest' | 'gql' | 'websocket' | 'grpc' | 'soap' | 'mock-server' | 'collections-env' | 'dynamic-values' | 'ai-assistant' | 'settings' | 'dk8s' | 'dk8s-pod' | 'dk8s-terminal' | 'dk8s-search' | 'dk8s-doctor' | 'dk8s-ports' | 'dk8s-loggers' | 'dk8s-reading' | 'dk8s-archive' | 'dk8s-commands' | 'dk8s-views' | 'dkgh' | 'dkgh-compose';
 
 interface Tab {
   id: TabId;
@@ -60,6 +63,8 @@ const TABS: Tab[] = [
   { id: 'dk8s',              label: 'Overview',          color: 'var(--color-dk8s)',               icon: <Dk8sIcon size={15} /> },
   { id: 'dk8s-pod',          label: 'Pod Detail',        color: 'var(--color-dk8s)',               icon: <LayersIcon size={15} /> },
   { id: 'dk8s-terminal',   label: 'Terminal & Files',  color: 'var(--color-dk8s)',               icon: <TerminalIcon size={15} /> },
+  { id: 'dk8s-reading',      label: 'Reading a Log',     color: 'var(--color-dk8s)',               icon: <FileTextIcon size={15} /> },
+  { id: 'dk8s-loggers',      label: 'Loggers & Fields',  color: 'var(--color-dk8s)',               icon: <BookOpenIcon size={15} /> },
   { id: 'dk8s-search',       label: 'Log Search',        color: 'var(--color-dk8s)',               icon: <SearchIcon size={15} /> },
   { id: 'dk8s-doctor',       label: 'Doctor & Artifacts', color: 'var(--color-doctor)',            icon: <StethoscopeIcon size={15} /> },
   { id: 'dk8s-ports',        label: 'Port Forwarding',   color: 'var(--color-dk8s)',               icon: <PortForwardIcon size={15} /> },
@@ -111,6 +116,8 @@ const NAV_ITEMS: SideNavItem[] = [
     { id: 'dk8s', label: TAB_BY_ID['dk8s'].label, icon: TAB_BY_ID['dk8s'].icon },
     { id: 'dk8s-pod', label: TAB_BY_ID['dk8s-pod'].label, icon: TAB_BY_ID['dk8s-pod'].icon },
     { id: 'dk8s-terminal', label: TAB_BY_ID['dk8s-terminal'].label, icon: TAB_BY_ID['dk8s-terminal'].icon },
+    { id: 'dk8s-reading', label: TAB_BY_ID['dk8s-reading'].label, icon: TAB_BY_ID['dk8s-reading'].icon },
+    { id: 'dk8s-loggers', label: TAB_BY_ID['dk8s-loggers'].label, icon: TAB_BY_ID['dk8s-loggers'].icon },
     { id: 'dk8s-search', label: TAB_BY_ID['dk8s-search'].label, icon: TAB_BY_ID['dk8s-search'].icon },
     { id: 'dk8s-doctor', label: TAB_BY_ID['dk8s-doctor'].label, icon: TAB_BY_ID['dk8s-doctor'].icon },
     { id: 'dk8s-ports', label: TAB_BY_ID['dk8s-ports'].label, icon: TAB_BY_ID['dk8s-ports'].icon },
@@ -199,6 +206,8 @@ export function DaakiaViewPage({ hideNav, activeId: activeIdProp, onSelect: onSe
         {activeId === 'dk8s'           && <Dk8sOverviewView />}
         {activeId === 'dk8s-pod'       && <Dk8sPodView />}
         {activeId === 'dk8s-terminal'  && <Dk8sTerminalView />}
+        {activeId === 'dk8s-reading'   && <Dk8sReadingView />}
+        {activeId === 'dk8s-loggers'   && <Dk8sLoggersView />}
         {activeId === 'dk8s-search'    && <Dk8sSearchView />}
         {activeId === 'dk8s-doctor'    && <Dk8sDoctorView />}
         {activeId === 'dk8s-ports'     && <Dk8sPortForwardView />}
