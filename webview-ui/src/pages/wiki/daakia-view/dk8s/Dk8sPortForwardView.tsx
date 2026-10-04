@@ -22,7 +22,8 @@ const TOC_ITEMS: TocItem[] = [
   { id: 'pf-start', icon: 'play', label: 'Starting one' },
   { id: 'pf-use', icon: 'link', label: 'Using it' },
   { id: 'pf-ai', icon: 'ai', label: 'From Daakia AI' },
-  { id: 'pf-guard', icon: 'shield', label: 'Production' },
+  { id: 'pf-states', icon: 'refresh', label: 'When it breaks' },
+  { id: 'pf-guard', icon: 'shield', label: 'Safety' },
   { id: 'pf-try', icon: 'code', label: 'Try it' },
 ];
 
@@ -127,17 +128,39 @@ export function Dk8sPortForwardView() {
       <Divider />
 
       <div>
-        <SectionTitle id="pf-guard" icon="shield">Production</SectionTitle>
-        <p className="dw-p">
-          A context is production when it matches <Code>*prod*</Code> or a pattern added in Settings.
-          Forwarding into one asks first and stops after an hour. And because{' '}
-          <Code>localhost:18081</Code> stops being local the moment it is a production pod, the
-          <b> Load Tester</b> refuses a URL that reaches a production forward until you tick “Run it
-          against production anyway” for that URL. The host checks again before it sends a single
-          request, so the guard holds even when the screen did not know about the forward.
-        </p>
-        <SubTitle>What the refusal says</SubTitle>
-        <CodeBlock label="load:error" lang="text">{`http://localhost:18081/actuator/health reaches zp-backend-6f5zb on com-eastus-zp-prod
+        <SectionTitle id="pf-states" icon="refresh">When it breaks — every state a forward can be in</SectionTitle>
+        <WikiTable
+          headers={['State', 'How dk8s knows', 'What it does']}
+          rows={[
+            ['connecting', 'The process started; no "Forwarding from" yet.', 'Gives up after 20 seconds, with what kubectl said.'],
+            ['forwarding', <><Code>Forwarding from 127.0.0.1:8080</Code></>, 'Shows the URL and uptime, and counts each connection.'],
+            ['reconnecting', 'Lost connection to the pod, or the process exited.', 'Starts again after 1, 2, 5, 10 and 30 seconds — 5 tries by default.'],
+            ['following', 'The watch sees the pod deleted and the workload has a new one.', 'Forwards the same ports to the new pod, on the same local port.'],
+            ['port taken', 'Checked before it starts.', 'Names the process holding it and offers the next free port.'],
+            ['not allowed', <>The Access probe, or <Code>forbidden</Code>.</>, <>Names the missing rule — <Code>create pods/portforward</Code> — and never retries.</>],
+            ['stopped (idle)', 'No connection for the idle limit (30 minutes by default).', 'Frees the port; Start again is one click.'],
+            ['stopped', 'You, Stop all, or closing Daakia.', 'Kills the process tree; the row stays in history.'],
+          ]}
+        />
+      </div>
+
+      <Divider />
+
+      <div>
+        <SectionTitle id="pf-guard" icon="shield">Safety — a tunnel into production should feel like one</SectionTitle>
+        <WikiTable
+          headers={['Guard', 'What it does']}
+          rows={[
+            ['Production asks first', <>A context matching <Code>*prod*</Code>, or a pattern added in Settings, gets a confirmation, a red PROD tag wherever the forward shows, and a hard stop after 60 minutes.</>],
+            ['This machine only', <>Every forward binds <Code>127.0.0.1</Code>; nothing on your network can reach it.</>],
+            ['Nothing outlives Daakia', 'Each kubectl process is killed when you stop it, when it goes idle, and when Daakia closes — the extension and the browser build alike.'],
+            ['Written down', 'Each start, reconnect and stop goes in the Commands audit with the exact command.'],
+            ['Runners look twice', 'The Load Tester, the Bulk URL Tester and the collection runner refuse a localhost URL that is a production forward until you say so for that run — and the host checks again before it sends a single request.'],
+            ['AI proposes, you open', 'A port-forward Daakia AI suggests opens this dialog for you to review and start; the chat never starts one.'],
+          ]}
+        />
+        <SubTitle>What a refusal says</SubTitle>
+        <CodeBlock label="load:error" lang="text">{`Not sent: http://localhost:18081/actuator/health reaches zp-backend-6f5zb on com-eastus-zp-prod
 — production, through a dk8s forward. Confirm it in the Load Tester to run against it.`}</CodeBlock>
       </div>
 
