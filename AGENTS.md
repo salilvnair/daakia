@@ -84,9 +84,21 @@ sidebar left sixty rows indented past an empty 16px gutter.
 
 ## Reusable UI belongs to dui
 
-`@salilvnair/dui` is a `file:` symlink to `../../dui`. After changing dui, run
-`npm run build:lib` **there** and restart Vite — it pre-bundles the package and
-serves the old copy until it re-optimises. If a component is being written for
-the second time in the webview, it belongs in dui instead: the app carried its
-own `StyledDropdown` beside dui's `SelectInputView` for months, and the two
-drifted apart in exactly the ways you would expect.
+`webview-ui` installs `@salilvnair/dui` **from npm** (`^1.0.x` in its
+`package.json`), not from the `../../dui` checkout beside this repo. A change
+made in that checkout does nothing here until dui is published and the version
+here is bumped — building it with `npm run build:lib` does not reach the app.
+Publishing dui is the owner's to do; leave the change committed in dui and say
+so. When it does land, clear `webview-ui/node_modules/.vite` and restart Vite,
+which otherwise keeps serving its pre-bundled copy of the old version.
+
+So a fix that needs a dui change cannot be shipped through dui in the same
+change. Work with the published API — and know its edges: a dui dropdown
+(`SelectInputView`, `ComboBoxView`) draws its menu on `document.body`, and
+inside a `PopoverView` a pick from it counts as a click outside and closes the
+popover. Draw the choices inside the popover instead.
+
+If a component is being written for the second time in the webview, it belongs
+in dui instead: the app carried its own `StyledDropdown` beside dui's
+`SelectInputView` for months, and the two drifted apart in exactly the ways you
+would expect.
