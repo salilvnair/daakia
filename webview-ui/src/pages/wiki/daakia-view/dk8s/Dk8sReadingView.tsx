@@ -153,6 +153,19 @@ export function Dk8sReadingView() {
           are in the result each row is tagged <Code>live</Code> or <Code>archive</Code>, the file named on hover.
         </p>
         <WikiTable
+          headers={['In the left rail', 'What a click does']}
+          rows={[
+            [<>Source — <Code>live</Code> · <Code>archive</Code></>, 'Shows only the running log’s hits, or only the archived files’; a second click shows both. Each says how many hits it holds, and archive how many files. There only when some hit came from an archive.'],
+            ['Hits by pod', 'Narrows to that pod; click others to add them, so two replicas can be compared.'],
+            ['Loggers that matched', 'Only lines from that logger; click it again for every logger.'],
+            ['Reset filters', 'Appears once anything narrows the page, and puts it all back: every pod, both sources, every level, no field filters.'],
+          ]}
+        />
+        <p className="dw-p">
+          The counts beside each choice follow every other filter but their own — pick <Code>archive</Code> and the pod
+          counts become archive counts, while <Code>live</Code> still says how many it would show.
+        </p>
+        <WikiTable
           headers={['On a clicked line’s field', 'What it does']}
           rows={[
             ['Follow', 'Opens Follow on that value. The first card is the one your Correlate by order picks; a value on more than 500 lines asks first.'],
