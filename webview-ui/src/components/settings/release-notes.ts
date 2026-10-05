@@ -49,6 +49,52 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '3.3.0',
+    date: '2026-10-05',
+    headline: 'dk8s learns to read a log: what a line names, which logger wrote it, what ran around it, and how to reach the pod — with a Daakia AI that can ask the cluster itself.',
+    lines: [
+      // ── Reading a log ──
+      { kind: 'feature', area: 'dk8s', text: 'Open logs downloads a pod\'s whole log — live and its rotated archive files, in time order — into a tab that pages from disk. Every Logs-tab feature works on it, and the file is deleted when the tab closes.' },
+      { kind: 'feature', area: 'dk8s', text: 'A line with a JSON, XML, key-value or YAML payload reads as its sentence, with the payload a click away as a tree, pretty or raw. Folded stack traces put your own frames first.' },
+      { kind: 'feature', area: 'dk8s', text: 'Ctrl+F finds in the log without filtering anything away; lines can be selected by number and copied with their time and level; every row offers Copy line and a link to itself.' },
+      { kind: 'feature', area: 'dk8s', text: 'Following pauses: the screen holds still while the stream keeps running, and Resume lets in what arrived. It lets go only when you scroll up.' },
+      { kind: 'feature', area: 'dk8s', text: 'Errors… on a pod\'s right-click menu shows the last 10, 30 or 60 minutes of ERROR — several pods open as a split.' },
+
+      // ── Search ──
+      { kind: 'feature', area: 'dk8s', text: 'A search hit knows its thread, logger and MDC. Click one and the rail lists what it names: Follow a value across every searched pod, add it as a column, or chart a timing.' },
+      { kind: 'feature', area: 'dk8s', text: 'Window reads every line from every searched pod in the minutes around a hit and counts what ran, using your determinants — on your machine, no AI.' },
+      { kind: 'feature', area: 'dk8s', text: 'Live or archive: the results page tags each row with where it came from, and the left rail filters by source with a count for each. Follow and Window opened from an archived line read the archive too.' },
+      { kind: 'feature', area: 'dk8s', text: 'The results page narrows like a log — several pods at once, a logger that toggles, counts that follow the filters, Reset filters — and Download offers On screen first.' },
+
+      // ── Loggers ──
+      { kind: 'feature', area: 'Loggers', text: 'The Loggers tab is a catalogue of every logger with its level, events and patterns. Add loggers from a project, the pod or Actuator; add patterns by pasting the logger call or scanning the repository.' },
+      { kind: 'feature', area: 'Loggers', text: 'Marked patterns tint their lines in the Logs tab and split the log by the values in them. Determinants turn a pattern into an answer to "what ran", with a builder in Settings → DK8S → Determinants.' },
+      { kind: 'feature', area: 'Loggers', text: 'Loggers, determinants and custom fields travel with a shared workspace. While a forward reaches Actuator, a logger\'s level can be changed on the running app and is put back on its own.' },
+
+      // ── Ask the log ──
+      { kind: 'feature', area: 'Ask the log', text: 'A question over the log, answered with the lines behind it — each a click from the Logs tab. The scope comes from the question ("since 09:30", "since the last restart"), and at most 2,000 lines go to the AI unless you allow more.' },
+
+      // ── Port forwarding ──
+      { kind: 'feature', area: 'Port forwarding', text: 'A pod\'s port on this machine, bound to 127.0.0.1: forwards that reconnect, follow a rollout, reach a Service, and are saved in sets with the workspace.' },
+      { kind: 'feature', area: 'Port forwarding', text: 'Use the forward from Daakia: a new request on it, an environment variable that follows the port, its OpenAPI imported, Actuator, a debugger, or copied as a .env line or JDBC URL.' },
+      { kind: 'feature', area: 'Port forwarding', text: 'Production asks first, and the Load Tester, Bulk URL Tester and collection runner refuse a production forward unless you allow it for that run.' },
+
+      // ── Python ──
+      { kind: 'feature', area: 'Python', text: 'A Python tab in the pod: a synced script library, Run with the container\'s own python3, and Debug through pdb with breakpoints, variables and a call stack. The container checks the script and offers completion from what is really installed.' },
+      { kind: 'feature', area: 'Python', text: 'A Scripts screen runs one script on several pods and compares the outputs; a connectivity test reports DNS, TCP and HTTP from inside the container.' },
+
+      // ── Daakia AI ──
+      { kind: 'feature', area: 'Daakia AI', text: 'The AI tab, rebuilt: saved conversations in a History-style rail, a model per tab, a / prompt palette, Stop and Retry, and conversations in tabs of their own.' },
+      { kind: 'feature', area: 'Daakia AI', text: 'It can ask the cluster — search the watched pods\' logs and archives and run read-only kubectl — and shows every step it took. A command that would change the cluster is only ever proposed.' },
+
+      // ── Everywhere ──
+      { kind: 'change', area: 'dk8s', text: 'Back walks the way you came; the pod grid has All | Pod | CronJob; Settings → DK8S → Logs is a branch of its own pages.' },
+      { kind: 'change', area: 'UI', text: 'Every copy shows a green tick that draws itself. dui 1.0.15 → 1.0.17.' },
+      { kind: 'fix', area: 'dk8s', text: 'Archive search no longer reads a timestamp as a file name; Escape goes to the menu it was pressed in, not the pod behind it; light theme has every dk8s colour.' },
+      { kind: 'change', area: 'Wiki', text: 'New dk8s pages: Port Forwarding, Loggers & Fields, and Reading a Log.' },
+    ],
+  },
+  {
     version: '3.2.0',
     date: '2026-09-22',
     headline: 'Working with other people: a Git Sync that cannot conflict, workspaces you can share, a proxy that holds inside VS Code, and a database two Daakias can open at once.',

@@ -4,6 +4,190 @@ All notable changes to the Daakia API Client extension are documented here.
 
 ---
 
+## [3.3.0] — 2026-10-05
+
+dk8s learns to read a log: what a line names, which logger wrote it, what ran
+around it, and how to reach the pod — with a Daakia AI that can ask the cluster
+itself.
+
+Most of this release is about the step after finding a line. A search hit now
+knows its thread, logger and MDC, and every one of those is something to
+follow across pods, chart, or count. A pod's port can be on this machine in a
+click, a Python script can run inside the container, and the AI tab can search
+the logs and run read-only kubectl on its own.
+
+### Added — Reading a log
+
+- **Open logs** downloads a pod's whole log — the live log and, where an
+  archive path covers the pod, its rotated files, stitched in time order — into
+  a tab that pages from disk. Every Logs-tab feature works on it; filters run
+  over the whole file, and the pane says "Searching" until the first matches
+  arrive. The file is deleted when the tab closes. Size cap in Settings → DK8S →
+  Logs → Downloads, 1 GB by default.
+- **Payloads read as their sentence.** A line carrying JSON, XML, key-value or
+  YAML shows its message with a chip for the payload; each opens as a tree, pretty
+  or raw, with Expand all, Copy and Open in a tab. A config dump printed across
+  continuation lines is joined back into one event. Secrets are masked.
+- **Stack traces put your frames first.** With your packages stated, a folded
+  trace says "24 frames · 3 of yours" and lists yours first when opened.
+- **Ctrl+F** finds in the log without filtering anything away — n of N, case,
+  regex, matches marked in the gutter.
+- **Select lines** by their numbers (Shift+click to extend) and copy them with
+  their time and level. Every row offers Copy line and a link to itself.
+- **Following pauses.** Pause holds the screen still while the stream keeps
+  running; Resume lets in what arrived ("Resume · 311 new"). Following lets go
+  only when you scroll up, and turning it off reads the last N lines without
+  blanking the screen.
+- **Errors…** on a pod's right-click menu: the last 10, 30 or 60 minutes, or a
+  range, filtered to ERROR. Several pods open as a split.
+- **The ribbon is honest.** Each block shows the share its levels have, counted
+  by events, so a mostly-INFO log no longer draws solid red. Its hover card stays
+  inside its own pane.
+
+### Added — Search
+
+- **Hits know their thread, logger and MDC**, read with each pod's own log
+  format. Click a hit and the rail lists what it names, each with how many lines
+  and pods carry it: Follow, Add as column, Copy; a timing gets Chart it and
+  Only when ≥ N.
+- **Follow** turns a value into a condition and reads every searched pod again
+  around the line you came from. Conditions stack, switch off and drop; "+
+  condition" offers the fields the lines carry and their values with counts.
+- **Window** reads every line from every searched pod in the minutes around a
+  hit and counts what ran, using your determinants. No AI — counting, on your
+  machine.
+- **Live or archive.** The results page says where the hits came from, each row
+  is tagged `live` or `archive` (the file on hover), and the left rail filters by
+  source with a count for each. Follow and Window opened from an archived line
+  read the archive too.
+- **The results page narrows like a log**: several pods at once, a logger that
+  toggles, rail counts that follow the filters, and Reset filters. A regex or
+  case-sensitive search carries into the filter. Download offers "On screen"
+  first.
+- **Searches run side by side** — a Follow or a Window no longer throws away the
+  result it came from.
+
+### Added — Loggers, patterns and determinants
+
+- **The Loggers tab is a catalogue**: every logger with its level, source,
+  events in the last two hours, patterns and when it was last seen — including
+  the ones that never fired here.
+- **Add loggers** from a project folder (logback, log4j2, application-<profile>
+  logging.level, classes with a logger), from the pod (logback.xml and
+  Actuator), or pasted.
+- **Add patterns** by pasting the logger call, scanning the repository,
+  learning from the log or writing one by hand — tested against the last two
+  hours before it is added.
+- **Marked patterns** tint their lines in the Logs tab, with a map down the
+  right edge, Only marked, and a facet per hole: split the log by orderId without
+  a log format.
+- **Determinants** — a named pattern with a summary, a scope and an off switch —
+  answer "what ran" in the Summary panel and in Window. Settings → DK8S →
+  Determinants has the list and a builder.
+- **Settings → DK8S → Fields** shows how a line becomes fields, sets the order
+  Follow correlates by, and adds a field the readers did not find.
+- Loggers, determinants and custom fields **travel with a shared workspace**.
+  A teammate's are listed as theirs: answered like yours, switched off for you
+  alone, or copied.
+- **Change a logger's level** on the running app while a forward reaches its
+  Actuator — put back on its own after a set time, and confirmed first on
+  production.
+
+### Added — Ask the log
+
+- **A question over the log, answered with its lines.** The answer cites the
+  lines it used, in order, each a click from the Logs tab. The scope comes from
+  the question — "last 100 lines", "since 09:30", "since the last restart" — and
+  what the buffer does not hold is fetched first.
+- At most 2,000 lines go to the AI unless you allow more; a bigger scope keeps
+  the lines that name what you asked about, and a bar says what was sent.
+- A question you keep asking can be saved as a check.
+
+### Added — Port forwarding
+
+- **A pod's port on this machine.** The pod's Ports tab lists its declared ports
+  and the Services that route to it; Forward starts `kubectl port-forward`, bound
+  to 127.0.0.1.
+- **Forwards that stay up**: reconnect with backoff on the same local port,
+  follow the workload across rollouts, forward a Service, every replica on its
+  own port, saved sets shared with the workspace.
+- **Use the forward from Daakia**: a new REST, GraphQL, WebSocket or gRPC request
+  on it, bind it to an environment variable that follows the port, import its
+  OpenAPI, call Actuator, attach a debugger, or copy it as a .env line, a JDBC URL
+  or a psql/redis-cli command.
+- **Production asks first** — a confirmation, a PROD tag and a one-hour stop —
+  and the Load Tester, the Bulk URL Tester and the collection runner refuse a
+  production forward unless you allow it for that run.
+- A port-forward Daakia AI suggests opens the forward dialog for you to review;
+  the chat never starts one.
+
+### Added — Python in a pod
+
+- **A Python tab** beside Terminal and Doctor: a script library synced with Git
+  Sync, Run with the container's own python3, and Debug through pdb with
+  breakpoints, stepping, variables, watches and a call stack.
+- **The container checks the script** — syntax errors, imports it cannot
+  satisfy, attributes a module lacks — and offers completion and hover docs from
+  what is really installed. AI ghost text as you type, and Ask AI for a change.
+- **A Scripts screen** runs one script on several pods and compares the
+  outputs.
+- **A connectivity test** from inside the container: DNS, TCP and HTTP reported
+  separately, so a failure says where.
+
+### Added — Daakia AI
+
+- **The AI tab, rebuilt**: conversations saved and reopened from a History-style
+  rail, a model per tab, a "/" prompt palette, Stop and Retry, and each
+  conversation in its own tab if you like.
+- **It can ask the cluster**: search the watched pods' logs and archives, run
+  read-only kubectl pinned to the watched context, and answer from Daakia's own
+  manual. Anything that would change the cluster comes back as a proposal and
+  never runs.
+- **Pick which pods a question searches**, and every step an answer took — a
+  command, a search, a look in the manual — shows as a row with its reason.
+- **Run a suggested kubectl** from the answer, through the same read-only guard.
+
+### Added — Wiki
+
+- dk8s pages for Port Forwarding (with every state a forward can be in and its
+  safety guards), Loggers & Fields, and Reading a Log.
+
+### Changed
+
+- **Settings → DK8S → Logs is a branch**: General, Downloads, Log Formats,
+  Archive, Fields and Determinants.
+- **The Logs toolbar** is one row when it fits; the filter takes the free width
+  and holds its match count.
+- **Back walks the way you came** — a pod's tab, another pod, the search results,
+  a conversation — instead of always returning to the pod grid.
+- **The pod grid** has All | Pod | CronJob, Pod by default and remembered. A
+  refresh draws each card as its own skeleton.
+- **Every copy** shows a green tick that draws itself, in place of "Copied!".
+- **Log rows are numbered by their line in the read**, so a read of the last 200
+  ends at 200 even with a folded stack trace.
+- **Every Prompt Library entry** has a system prompt, a user prompt and where it
+  is used.
+- **dui 1.0.15 → 1.0.17**: nested side-nav menus, and dropdowns that stay inside
+  a popover.
+
+### Fixed
+
+- **Archive search read every timestamp as a file name.** A context line with a
+  colon in it showed unrelated lines as hits and counted thousands of files.
+- **Escape closed the pod behind a menu.** It now goes to the menu, dialog or
+  field it was pressed in.
+- **Filter By in split panes** asked whichever pane mounted last.
+- **Removing a field chip** on the results page and in split panes did nothing.
+- **A long Daakia AI conversation froze the page**; one listener per app now.
+- **Light theme**: every dk8s colour has a light value, and text on warning and
+  error fills is readable.
+- **Big reads** land whole instead of redrawing batch by batch, and typing a
+  filter over a big buffer no longer freezes.
+- **Ctrl+V pasted twice** in the pod search; copy buttons claimed success when the
+  write failed.
+
+---
+
 ## [3.2.0] — 2026-09-22
 
 Working with other people: a Git Sync that cannot conflict, workspaces you can
