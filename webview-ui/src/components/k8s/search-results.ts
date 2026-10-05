@@ -293,6 +293,20 @@ export function sourceSummary(lines: Pick<ResultLine, 'source' | 'file' | 'rel'>
   return { live, files: n, label: live && n ? `live + ${archive}` : n ? archive : 'live log' };
 }
 
+/**
+ * Hits per source, for the rail's live / archive filter: lines that matched,
+ * not the context around them, and how many archived files they came out of.
+ */
+export function sourceCounts(lines: Pick<ResultLine, 'source' | 'file' | 'rel' | 'context'>[]): { live: number; archive: number; files: number } {
+  let live = 0, archive = 0;
+  const files = new Set<string>();
+  for (const l of lines) {
+    if (l.context) continue;
+    if (l.source === 'archive') { archive++; files.add(l.rel ?? l.file ?? ''); } else live++;
+  }
+  return { live, archive, files: files.size };
+}
+
 /** Where a line sits in its own source: one pod's live log, or one archived file. */
 export function sourceKey(l: Pick<ResultLine, 'pod' | 'source' | 'file' | 'rel'>, line: number): string {
   return `${l.pod}\u0000${l.source}\u0000${l.rel ?? l.file ?? ''}\u0000${line}`;

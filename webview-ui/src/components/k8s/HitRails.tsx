@@ -4,7 +4,9 @@
  *
  * ── Left: where the hits are ──
  *
- * Hits by pod first, because the first thing a result over three pods is
+ * Where the hits were read from first, when some came out of archived files —
+ * live or archive, the same split and the same colours as the tag on each
+ * row. Then hits by pod, because the first thing a result over three pods is
  * asked is whether it is one pod's problem or all of theirs. Then the loggers
  * that matched — a search for `LedgerClient` that also caught `LedgerRetry`
  * is two stories, and a click narrows to one.
@@ -44,13 +46,14 @@ import { readFields, valueOf, type FieldReader } from './field-readers';
 import { spread, numberOf, series, isMeasure } from './follow';
 import { correlateFor, removeView, type CorrelateKey, type SavedFollow } from './follow-prefs';
 import { replicaHue, podTail } from './pod-hue';
+import { ACCENT } from './tone';
 import { FOLLOW, FIELD_KEY, FIELD_VALUE, FIELD_NUMBER, AMBER, GOOD, tint } from './follow-tone';
 import { LineButton, FillButton, railLabel, mono } from './follow-ui';
 import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 /* ── Left ── */
 
-export function HitsByPodRail({ lines, pods, shown, current, onTogglePod, onLogger, activeLoggers = [], onReset }: {
+export function HitsByPodRail({ lines, pods, shown, current, onTogglePod, onLogger, activeLoggers = [], onReset, sources, source, onSource }: {
   lines: ResultLine[];
   /** Every pod searched, so a pod with nothing is listed as nothing. */
   pods: string[];
@@ -67,6 +70,11 @@ export function HitsByPodRail({ lines, pods, shown, current, onTogglePod, onLogg
   activeLoggers?: string[];
   /** Set while anything narrows the page: puts every filter back. */
   onReset?: () => void;
+  /** Hits per source — absent when every line is live, and then no group shows. */
+  sources?: { live: number; archive: number; files: number };
+  /** The source narrowed to; clicked again, it lets go. */
+  source?: 'live' | 'archive';
+  onSource?: (s: 'live' | 'archive') => void;
 }) {
   const { byPod, loggers } = useMemo(() => {
     const p = new Map<string, number>(pods.map(x => [x, 0]));
@@ -82,17 +90,52 @@ export function HitsByPodRail({ lines, pods, shown, current, onTogglePod, onLogg
     };
   }, [lines, pods]);
 
-  if (byPod.length < 2 && !loggers.length && !onReset) return null;
+  if (byPod.length < 2 && !loggers.length && !onReset && !sources) return null;
 
   return (
     <div className="flex flex-col shrink-0"
          style={{ padding: '10px 0', borderBottom: '1px solid var(--color-surface-border)' }}>
       {onReset && (
-        <button type="button" onClick={onReset} title="Every pod, every level, no field filters, the search term back in the box"
+        <button type="button" onClick={onReset} title="Every pod, both sources, every level, no field filters, the search term back in the box"
                 className="self-start cursor-pointer border-none bg-transparent hover:underline"
                 style={{ margin: '0 12px 8px', padding: 0, fontSize: 11.5, color: FOLLOW }}>
           Reset filters
         </button>
+      )}
+      {sources && onSource && (
+        <>
+          <div style={{ ...railLabel, padding: '0 12px 8px' }}>source</div>
+          {([
+            { key: 'live' as const, n: sources.live, tone: ACCENT, note: 'running pod', title: 'The running pod’s log' },
+            { key: 'archive' as const, n: sources.archive, tone: 'var(--color-warning)',
+              note: `${sources.files} file${sources.files === 1 ? '' : 's'}`, title: 'Archived files on the pod’s volumes' },
+          ]).map(({ key, n, tone, note, title }) => {
+            const on = source === key;
+            return (
+              <button key={key} type="button" onClick={() => onSource(key)}
+                      title={on ? 'Both sources again' : `Only ${key} — ${title}`}
+                      aria-pressed={on}
+                      className="flex items-center w-full text-left cursor-pointer border-none"
+                      style={{
+                        gap: 9, padding: '7px 12px', fontSize: 12,
+                        background: on ? tint(tone, 10) : 'transparent',
+                        borderLeft: on ? `2px solid ${tone}` : 'none',
+                        color: on ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                        opacity: n ? 1 : 0.55,
+                      }}>
+                <span style={{
+                  ...mono, fontSize: 10.5, padding: '0 6px', borderRadius: 4, lineHeight: '16px',
+                  color: tone, background: tint(tone, 14), border: `1px solid ${tint(tone, 34)}`,
+                }}>{key}</span>
+                <span className="flex-1 min-w-0 truncate" style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{note}</span>
+                <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>{n}</span>
+              </button>
+            );
+          })}
+          {(byPod.length > 1 || loggers.length > 0) && (
+            <div style={{ height: 1, margin: '10px 12px', background: 'var(--color-surface-border)' }} />
+          )}
+        </>
       )}
       {byPod.length > 1 && (
         <>

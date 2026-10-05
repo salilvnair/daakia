@@ -252,3 +252,17 @@ describe('pods that matched nothing', () => {
     expect(rows[0].scannedKnown).toBe(false);
   });
 });
+
+describe('sourceCounts', () => {
+  it('counts hits per source for the rail, not the context around them', async () => {
+    const { sourceCounts } = await import('./search-results');
+    expect(sourceCounts([
+      { source: 'live' },
+      { source: 'live', context: true },
+      { source: 'archive', rel: 'logs/app.1.log' },
+      { source: 'archive', rel: 'logs/app.1.log' },
+      { source: 'archive', rel: 'logs/app.2.log' },
+      { source: 'archive', rel: 'logs/app.3.log', context: true },
+    ])).toEqual({ live: 1, archive: 3, files: 2 });
+  });
+});
