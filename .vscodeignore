@@ -38,3 +38,7 @@ test
 AGENTS.md
 vitest.config.ts
 .scratch
+
+# Local secrets — DEEPSEEK_API_KEY and the like. Never ship.
+.env
+.env.*
