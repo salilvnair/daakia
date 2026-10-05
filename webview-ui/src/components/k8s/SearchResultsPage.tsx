@@ -51,7 +51,7 @@ import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { AiSplit } from './AiAnswerPanel';
 import { sourceTagFor } from './source-tag';
-import { resultLines, podsLabel, podsIn, timings, totals, searchFilterOf, sourceKey, sourceSummary, type ResultLine } from './search-results';
+import { resultLines, podsLabel, podsIn, timings, totals, searchFilterOf, sourceKey, sourceSummary, sourceCounts, type ResultLine } from './search-results';
 import { HitsByPodRail, HitFieldsRail } from './HitRails';
 import { FollowView } from './FollowView';
 import { useFieldReaders, useFollowPrefs, type SavedFollow } from './follow-prefs';
@@ -777,7 +777,7 @@ export function SearchResultsPage() {
     query, regex, caseSensitive, groups, at, scanned, searched,
     tab, setTab, filter, setFilter, levels, setLevels, contextLines,
     fields, addField, removeField, clearFields, wrap, setWrap,
-    pods: shownPods, setPods, selected, setSelected, columns, toggleColumn,
+    pods: shownPods, setPods, source: sourceOn, setSource, selected, setSelected, columns, toggleColumn,
     floors, setFloor, charts, toggleChart, follow, setFollow,
   } = useResultTabStore();
   const openDk8sTab = useTabsStore(s => s.openDk8sTab);
@@ -838,16 +838,28 @@ export function SearchResultsPage() {
       return false;
     });
   }, [allLines, floors, readers, contextLines]);
+  /* Live or archive, picked in the rail — the same split the row tags show. */
+  const sourced = useMemo(
+    () => (sourceOn ? floored.filter(l => l.source === sourceOn) : floored),
+    [floored, sourceOn],
+  );
   const lines = useMemo(
-    () => (shownPods.length ? floored.filter(l => shownPods.includes(l.pod)) : floored),
-    [floored, shownPods],
+    () => (shownPods.length ? sourced.filter(l => shownPods.includes(l.pod)) : sourced),
+    [sourced, shownPods],
   );
   /* What the pods rail counts: the view's own filters applied, the pod pick not
      — or picking one pod would zero every other pod's count. */
   const railLines = useMemo(
-    () => filterLines(floored, { query: filter, levels, fields, contextLines: 0 }) as ResultLine[],
-    [floored, filter, levels, fields],
+    () => filterLines(sourced, { query: filter, levels, fields, contextLines: 0 }) as ResultLine[],
+    [sourced, filter, levels, fields],
   );
+  /* What the source filter counts: everything else applied, its own pick not —
+     the same rule as the pods. Nothing when every line is live. */
+  const sources = useMemo(() => {
+    if (!allLines.some(l => l.source === 'archive')) return undefined;
+    const viewed = filterLines(floored, { query: filter, levels, fields, contextLines: 0 }) as ResultLine[];
+    return sourceCounts(shownPods.length ? viewed.filter(l => shownPods.includes(l.pod)) : viewed);
+  }, [allLines, floored, filter, levels, fields, shownPods]);
 
   /* A line the reader clicked, while it is still on screen. */
   const selectedLine = useMemo(() => lines.find(l => l.seq === selected), [lines, selected]);
@@ -890,14 +902,15 @@ export function SearchResultsPage() {
   const searchFilter = searchFilterOf(query, regex, caseSensitive);
 
   /* Everything the page and the view narrow by, back to how the search opened. */
-  const narrowed = shownPods.length > 0 || floors.length > 0 || levels.length > 0 || fields.length > 0 || filter.trim() !== '';
+  const narrowed = shownPods.length > 0 || sourceOn !== undefined || floors.length > 0 || levels.length > 0 || fields.length > 0 || filter.trim() !== '';
   const resetAll = useCallback(() => {
     setPods([]);
+    setSource(undefined);
     for (const f of floors) setFloor(f.field, undefined);
     setLevels([]);
     clearFields();
     setFilter('');
-  }, [setPods, floors, setFloor, setLevels, clearFields, setFilter]);
+  }, [setPods, setSource, floors, setFloor, setLevels, clearFields, setFilter]);
 
   /*
     A pod-shaped stand-in for the thing these lines are about.
@@ -973,6 +986,9 @@ export function SearchResultsPage() {
           current={selectedLine?.pod}
           /* Several pods at once — comparing two replicas is the usual reason to pick. */
           onTogglePod={pod => setPods(shownPods.includes(pod) ? shownPods.filter(p => p !== pod) : [...shownPods, pod])}
+          sources={sources}
+          source={sourceOn}
+          onSource={s => setSource(sourceOn === s ? undefined : s)}
           activeLoggers={fields.filter(f => f.field === 'logger' && f.mode === 'include').map(f => f.value)}
           onLogger={logger => (fields.some(f => f.field === 'logger' && f.value === logger && f.mode === 'include')
             ? removeField('logger', logger)
@@ -986,7 +1002,7 @@ export function SearchResultsPage() {
     lines, railLines, filter, levels, fields, wrap, logLineNumbers, asPod, at, sums, query,
     addField, removeField, clearFields, setFilter, setLevels, setWrap, goBack, contextLines,
     selected, setSelected, podNames, columns, readers, toggleColumn, shownPods, setPods, selectedLine,
-    narrowed, resetAll, searchFilter, from,
+    narrowed, resetAll, searchFilter, from, sources, sourceOn, setSource,
   ]);
 
   if (!groups.length && !searched.length) {

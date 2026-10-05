@@ -106,6 +106,9 @@ export interface ResultTabState {
   /** Which pods are shown. Empty means all of them. */
   pods: string[];
   setPods: (p: string[]) => void;
+  /** Only the running log's lines, or only the archived files'. Unset is both. */
+  source?: 'live' | 'archive';
+  setSource: (s: 'live' | 'archive' | undefined) => void;
   fields: FieldFilter[];
   /** Adding one that is there flips it — the same as the pod view's field menu. */
   addField: (f: FieldFilter) => void;
@@ -157,6 +160,8 @@ export const useResultTabStore = create<ResultTabState>((set, get) => ({
   setLevels: (levels) => set({ levels }),
   pods: [],
   setPods: (pods) => set({ pods }),
+  source: undefined,
+  setSource: (source) => set({ source }),
   fields: [],
   /*
     The pod view's rule: a chip that is already there flips between "only
@@ -216,6 +221,7 @@ export const useResultTabStore = create<ResultTabState>((set, get) => ({
     filter: '',
     levels: [],
     pods: [],
+    source: undefined,
     fields: [],
     wrap: get().wrap,
     selected: undefined,
