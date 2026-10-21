@@ -25,7 +25,7 @@
  */
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
-import { useK8sStore } from './k8s-store';
+import { useK8sStore, provideSplitPaneKeys } from './k8s-store';
 import type { LogLine, LogLevel, LogStatus, PodSummary } from './k8s-store';
 import type { FieldFilter } from '../components/k8s/log-view';
 
@@ -408,3 +408,6 @@ export const useSplitStore = create<SplitState>((set, get) => ({
     }
   },
 }));
+
+/* So the detail view knows which streams are the panes' — see k8s-store. */
+provideSplitPaneKeys(() => useSplitStore.getState().panes.map(p => p.id));

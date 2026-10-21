@@ -12,10 +12,10 @@
  * different message from "that directory is empty". The host translates those;
  * this renders what it says.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   PathBreadcrumbView, FileBrowserView, SearchFieldView, SegmentedControlView,
-  EmptyStateView, SelectInputView, ContextMenuView, ModalView, ButtonView, BadgeChipView,
+  EmptyStateView, SelectInputView, ContextMenuView, ModalView, ButtonView, BadgeChipView, CheckboxView,
   type ContextMenuItem,
   type FileBrowserEntry, type FileBrowserAction, IconSize, SkeletonView, LoadingStateView } from '@salilvnair/dui';
 import {
@@ -26,6 +26,7 @@ import {
 } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useK8sStore } from '../../store/k8s-store';
+import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { FileViewer } from './FileViewer';
 import { DownloadsPanel } from './DownloadsPanel';
 import { CapabilityPanel, capabilitiesFrom } from './CapabilityPanel';
@@ -84,7 +85,7 @@ export function mountFor(mounts: PodMount[], path: string): PodMount | undefined
 }
 
 interface Hits {
-  hits: { path: string; name: string; size?: number; modified?: string }[];
+  hits: { path: string; name: string; kind?: string; size?: number; modified?: string }[];
   capped: boolean;
   command: string;
   error?: string;
@@ -94,8 +95,14 @@ import { ACCENT, AI, INFO } from './tone';
 import { literalOf } from './search-pattern';
 
 
-/** Mirrors the host's `maxDepth` default in pod-files.ts — shown, not guessed. */
-const SEARCH_DEPTH = 8;
+/**
+ * No limit, as `find / -name x` in a terminal has none.
+ *
+ * It was 8, mirroring the host's default, and with the walk now streamed and
+ * stoppable the cap stopped earning its place as the default: a file nine
+ * levels down was simply not there. The picker still offers a bound.
+ */
+const SEARCH_DEPTH = 0;
 
 const MOUNT_TONE: Record<PodMount['kind'], string> = {
   pvc: 'var(--color-success)',
@@ -131,7 +138,7 @@ function DepthPicker({ value, onChange }: { value: number; onChange: (v: number)
       <SelectInputView
         value={String(value)}
         onChange={v => onChange(Number(v))}
-        options={[2, 4, 6, 8, 12].map(d => ({ value: String(d), label: `depth ${d}` }))}
+        options={[0, 2, 4, 6, 8, 12].map(d => ({ value: String(d), label: d ? `depth ${d}` : 'any depth' }))}
         /*
           The same size token as the field beside it.
 
@@ -146,6 +153,85 @@ function DepthPicker({ value, onChange }: { value: number; onChange: (v: number)
       />
     </span>
   );
+}
+
+/**
+ * One pod's `find`, read as it prints.
+ *
+ * Hits arrive as `files:search:hits` while the walk goes on, and the whole
+ * answer as `files:search` when it ends. There is no timer: it waited 30
+ * seconds and then said "the pod did not answer in time" — on an Azure pod a
+ * walk of `/` takes longer than that even when the file turns up in the first
+ * second, which the terminal shows and this did not. Stop ends it instead, and
+ * keeps what was found.
+ */
+function usePodFileSearch() {
+  const [hits, setHits] = useState<Hits | null>(null);
+  const [busy, setBusy] = useState(false);
+  const active = useRef<string | null>(null);
+
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      const m = e.data;
+      if (!m?.requestId || m.requestId !== active.current) return;
+      if (m.type === 'files:search:hits') {
+        setHits(h => ({ hits: [...(h?.hits ?? []), ...(m.hits ?? [])], capped: false, command: h?.command ?? '' }));
+      } else if (m.type === 'files:search') {
+        setHits(m as Hits);
+        setBusy(false);
+        active.current = null;
+      }
+    };
+    window.addEventListener('message', onMsg);
+    return () => {
+      window.removeEventListener('message', onMsg);
+      // A walk nobody is waiting for any more is a process nobody can see.
+      if (active.current) postMsg({ type: 'dk8s:cancel', requestId: active.current });
+    };
+  }, []);
+
+  const run = useCallback((target: ExplorerTarget, root: string, pattern: string, maxDepth: number, caseSensitive: boolean,
+    kind: 'file' | 'dir' | 'any' = 'file') => {
+    if (active.current) postMsg({ type: 'dk8s:cancel', requestId: active.current });
+    const requestId = `fs-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    active.current = requestId;
+    setHits({ hits: [], capped: false, command: '' });
+    setBusy(true);
+    postMsg({ type: 'files:search', requestId, ...target, root, pattern, maxDepth, caseSensitive, kind });
+  }, []);
+
+  /* The answer still lands — with everything found up to the Stop. */
+  const stop = useCallback(() => {
+    if (active.current) postMsg({ type: 'dk8s:cancel', requestId: active.current });
+    setBusy(false);
+  }, []);
+
+  const clear = useCallback(() => {
+    if (active.current) postMsg({ type: 'dk8s:cancel', requestId: active.current });
+    active.current = null;
+    setBusy(false);
+    setHits(null);
+  }, []);
+
+  return { hits, busy, run, stop, clear };
+}
+
+/**
+ * The search box's memory — the one Quick Search's Files box keeps.
+ *
+ * A file name you looked for in one pod is the one you look for in the next,
+ * so the Explorer and Quick Search share the list rather than each keeping half.
+ */
+function useFileSearchHistory() {
+  const history = useDk8sSearchStore(st => st.history);
+  const remember = useDk8sSearchStore(st => st.remember);
+  const forget = useDk8sSearchStore(st => st.forget);
+  const clearHistory = useDk8sSearchStore(st => st.clearHistory);
+  const suggestions = useMemo(
+    () => history.filter(h => h.where === 'files').map(h => ({ value: h.query })),
+    [history],
+  );
+  return { suggestions, remember, forget: (q: string) => forget(q, 'files'), clearAll: () => clearHistory('files') };
 }
 
 /** One of the query's bounds, worn beside the box that sets the rest of it. */
@@ -237,8 +323,21 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
   const [info, setInfo] = useState<FileBrowserEntry | null>(null);
   const [path, setPath] = useState<string>('');
   const [listing, setListing] = useState<Listing | null>(null);
-  const [hits, setHits] = useState<Hits | null>(null);
   const [pattern, setPattern] = useState('');
+  /*
+    Where the walk starts: the whole pod, or the folder above.
+
+    It only ever started at the folder above, which the tab opens at /var/lib
+    or /data — so `application.properties` under /app was "Nothing matched"
+    for a search the reader thought ran from /. The whole pod is the default,
+    as `find /` is; the folder is a click away.
+  */
+  const [searchFrom, setSearchFrom] = useState<'pod' | 'here'>('pod');
+  const [matchCase, setMatchCase] = useState(false);
+  /* Folders too: hunting a mount or a config directory is a search for a folder. */
+  const [searchKind, setSearchKind] = useState<'file' | 'dir' | 'any'>('file');
+  const { hits, busy: searching, run: runFind, stop: stopFind, clear: clearFind } = usePodFileSearch();
+  const fileHistory = useFileSearchHistory();
   const [busy, setBusy] = useState(false);
 
   /*
@@ -412,13 +511,12 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
     return () => { cancelled = true; };
   }, [request, initialPath]);
 
-  const runSearch = useCallback(async () => {
-    if (!pattern.trim()) { setHits(null); return; }
-    setBusy(true);
-    const r = await request<Hits>('files:search', { root: path || '/', pattern, maxDepth: depth });
-    setHits(r);
-    setBusy(false);
-  }, [request, pattern, path]);
+  const searchRoot = searchFrom === 'pod' ? '/' : (path || '/');
+  const runSearch = useCallback((q: string = pattern) => {
+    if (!q.trim()) { clearFind(); return; }
+    fileHistory.remember(q, [{ name: pod, namespace, context }], 'files');
+    runFind({ context, namespace, pod, container }, searchRoot, q, depth, matchCase, searchKind);
+  }, [pattern, clearFind, fileHistory, runFind, context, namespace, pod, container, searchRoot, depth, matchCase, searchKind]);
 
   const actions: FileBrowserAction[] = [
     {
@@ -626,11 +724,12 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
   });
 
   const hitRows: FileBrowserEntry[] = (hits?.hits ?? []).map(h => {
-    const k = kindBadge({ name: h.name, kind: 'file', size: h.size });
+    const kind = h.kind === 'dir' ? 'dir' : 'file';
+    const k = kindBadge({ name: h.name, kind, size: h.size });
     return {
       id: h.path,
       name: h.path,
-      kind: 'file',
+      kind,
       size: h.size,
       badge: k.badge,
       badgeTone: k.tone,
@@ -865,7 +964,7 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
               <SearchFieldView
                 value={pattern}
                 onChange={setPattern}
-                onSearch={runSearch}
+                onSearch={() => runSearch()}
                 /*
                   Clearing drops the results too.
 
@@ -873,12 +972,39 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
                   a search whose terms are no longer on it — and the next
                   question is always "what did I search for".
                 */
-                onClear={() => { setPattern(''); setHits(null); }}
-                placeholder="Name, glob or regex — *invoice*, \.ya?ml$ — Enter to search"
+                onClear={() => { setPattern(''); clearFind(); }}
+                /* What you looked for before, as the log search box offers it. */
+                suggestions={fileHistory.suggestions}
+                suggestionsLabel="Recent file searches"
+                onPick={(q: string) => { setPattern(q); runSearch(q); }}
+                onForget={fileHistory.forget}
+                onClearAll={fileHistory.clearAll}
+                placeholder="File name, glob or regex — application.properties, *.yml, \.ya?ml$ — Enter to search"
                 size="sm"
                 accentColor={ACCENT}
               />
             </span>
+            <SegmentedControlView
+              options={[
+                { value: 'pod', label: 'Whole pod' },
+                { value: 'here', label: 'This folder' },
+              ]}
+              value={searchFrom}
+              onChange={v => setSearchFrom(v as 'pod' | 'here')}
+              size="xs" density="compact" accentColor={ACCENT}
+            />
+            <SegmentedControlView
+              options={[
+                { value: 'file', label: 'Files' },
+                { value: 'dir', label: 'Folders' },
+                { value: 'any', label: 'Both' },
+              ]}
+              value={searchKind}
+              onChange={v => setSearchKind(v as 'file' | 'dir' | 'any')}
+              size="xs" density="compact" accentColor={ACCENT}
+            />
+            <CheckboxView label="match case" checked={matchCase} size="sm" accentColor={ACCENT}
+                          onChange={setMatchCase} />
             {/*
               The caps are part of the query, so they are shown next to it.
 
@@ -888,7 +1014,9 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
               type as one line is how you tell a real answer from a narrow one.
             */}
             <DepthPicker value={depth} onChange={setDepth} />
-            <Cap>files only</Cap>
+            {searching && (
+              <ButtonView label="Stop" size="sm" variant="secondary" onClick={stopFind} />
+            )}
           </span>
         )}
       </div>
@@ -1014,9 +1142,10 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
           className="dk-fb-actions flex-1 min-h-0"
           dense
           entries={hitRows}
-          actions={actions.filter(a => a.id !== 'saveDir')}
+          actions={actions}
           onAction={onAction}
-          onOpen={e => onAction('open', e)}
+          /* A folder hit opens the folder, in the file list. */
+          onOpen={e => (e.kind === 'dir' ? (setMode('files'), go(fullOf(e))) : onAction('open', e))}
           onSelect={e => setSelected(e.id)}
           onContextMenu={(e, ev) => setMenu({ entry: e, x: ev.clientX, y: ev.clientY })}
           onEmptyContextMenu={ev => setMenu({ entry: null, x: ev.clientX, y: ev.clientY })}
@@ -1037,7 +1166,7 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
           accentColor={ACCENT}
           size="sm"
           emptyText={
-            busy ? 'searching…'
+            searching ? `searching ${searchRoot}…`
               /*
                 Keyed on a search having RUN, not on the box having text.
 
@@ -1052,15 +1181,16 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
                     variant="medallion"
                     icon={<FileSearchIcon size={IconSize.medallion} />}
                     title="Nothing matched"
-                    message={`No file under ${path || '/'} matched that name.`}
+                    message={`No file under ${searchRoot} matched that name.`}
                     accentColor="var(--color-warning)"
                     hints={[
                       { key: <LayersIcon size={IconSize.action} />,
                         text: 'the walk stops at the depth beside the box — raise it to look deeper' },
                       { key: <FolderIcon size={IconSize.action} />,
-                        text: 'the search starts at the path above, not at /' },
+                        text: searchFrom === 'pod' ? 'the whole pod was searched, except /proc, /sys and /dev'
+                          : 'only the folder above was searched — Whole pod starts at /' },
                       { key: <CodeBracketsIcon size={IconSize.action} />,
-                        text: 'a bare word matches anywhere in the path; *name* matches the filename' },
+                        text: 'a name matches part of the filename, as find -name does; a regex matches the path' },
                     ]}
                   />
                 </div>
@@ -1078,7 +1208,7 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
                       variant="medallion"
                       icon={<SearchIcon size={IconSize.medallion} />}
                       title="Find a file in this pod"
-                      message="One `find`, starting at the path above. Enter runs it."
+                      message="One `find`, from / or from the folder above. Hits show as they are found; Enter runs it."
                       accentColor={ACCENT}
                       /*
                         Plain words as keys, not chips.
@@ -1089,12 +1219,11 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
                       */
                       hints={[
                         { key: <CodeBracketsIcon size={IconSize.action} />,
-                          text: '*invoice*, *.pdf — matched against the filename' },
+                          text: 'application.properties, *invoice*, *.pdf — matched against the filename' },
                         { key: <CodeIcon size={IconSize.action} />,
-                          text: 'anything else: \.ya?ml$, inv[0-9]+ — matched against the path' },
+                          text: String.raw`a regex: \.ya?ml$, inv[0-9]+ — matched against the path` },
                         { key: <LayersIcon size={IconSize.action} />,
-                          text: 'the depth beside the box, and a result cap — a large volume '
-                            + 'cannot be walked forever' },
+                          text: 'any depth by default, and Stop once you see your file' },
                       ]}
                     />
                   </div>
@@ -1103,6 +1232,7 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
           footer={hits && (
             <>
               {hits.hits.length} {hits.hits.length === 1 ? 'match' : 'matches'}
+              {searching && <span style={{ color: ACCENT }}>{' '}· still searching {searchRoot}</span>}
               {hits.capped && (
                 <span style={{ color: 'var(--color-warning)' }}>
                   {' '}· capped — narrow the pattern or the start path to see the rest
@@ -1218,22 +1348,11 @@ function ScopedSearch({
 }) {
   const [pattern, setPattern] = useState('');
   const [depth, setDepth] = useState(SEARCH_DEPTH);
-  const [hits, setHits] = useState<Hits | null>(null);
-  const [busy, setBusy] = useState(false);
-  const seq = useRef(0);
+  const { hits, busy, run: runFind, stop, clear } = usePodFileSearch();
 
   const run = () => {
     if (!pattern.trim()) return;
-    const requestId = `sx-${++seq.current}`;
-    setBusy(true);
-    const onMsg = (e: MessageEvent) => {
-      if (e.data?.type !== 'files:search' || e.data?.requestId !== requestId) return;
-      window.removeEventListener('message', onMsg);
-      setHits(e.data as Hits);
-      setBusy(false);
-    };
-    window.addEventListener('message', onMsg);
-    postMsg({ type: 'files:search', requestId, ...target, root, pattern, maxDepth: depth });
+    runFind(target, root, pattern, depth, false);
   };
 
   const rows: FileBrowserEntry[] = (hits?.hits ?? []).map(h => {
@@ -1268,8 +1387,10 @@ function ScopedSearch({
             <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
               {hits.hits.length} {hits.hits.length === 1 ? 'match' : 'matches'}
               {hits.capped && ' · capped'}
+              {busy && ' · still searching'}
             </span>
           )}
+          {busy && <ButtonView label="Stop" size="sm" variant="secondary" onClick={stop} />}
           <ButtonView label="Close" size="sm" variant="secondary" onClick={onClose} />
         </div>
       }
@@ -1284,8 +1405,8 @@ function ScopedSearch({
               value={pattern}
               onChange={setPattern}
               onSearch={run}
-              onClear={() => { setPattern(''); setHits(null); }}
-              placeholder="Name, glob or regex — Enter to search"
+              onClear={() => { setPattern(''); clear(); }}
+              placeholder="File name, glob or regex — Enter to search"
               size="sm"
               accentColor={ACCENT}
             />
@@ -1314,8 +1435,8 @@ function ScopedSearch({
             onSelect={onSelect}
             selectedId={selectedId}
             onContextMenu={onContextMenu}
-            loading={busy}
-            emptyText={hits ? (
+            loading={busy && !rows.length}
+            emptyText={hits && !busy ? (
               <div className="px-6 py-4">
                 <EmptyStateView
                   variant="medallion"
@@ -1341,9 +1462,9 @@ function ScopedSearch({
                   accentColor={ACCENT}
                   hints={[
                     { key: <CodeBracketsIcon size={IconSize.action} />,
-                      text: '*invoice*, *.pdf — matched against the filename' },
+                      text: 'application.properties, *.pdf — matched against the filename' },
                     { key: <CodeIcon size={IconSize.action} />,
-                      text: 'anything else — matched against the path' },
+                      text: 'a regex — matched against the path' },
                     { key: <LayersIcon size={IconSize.action} />,
                       text: 'every directory under this one, to the depth beside the box' },
                   ]}

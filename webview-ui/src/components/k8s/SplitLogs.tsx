@@ -182,7 +182,10 @@ function Pane({ pane, focused, sharedRange }: {
     setLogSelection: () => {},
     setLogContainer: () => {},
     fetchLogs: () => refetch(pane.id),
-    openLogExport: () => {},
+    /* Download writes the lines this pane holds to a file. It was drawn here and
+       wired to nothing; the bulk export dialog only knows the detail view's pod. */
+    openLogExport: () => useK8sStore.getState().exportLines(pane.pod, pane.namespace,
+      pane.logs.map(l => (l.ts !== undefined ? `${new Date(l.ts).toISOString()} ${l.text}` : l.text))),
     closeLogExport: () => {},
     /* The view's own "back" closes this pane rather than the whole split. */
     closeDetail: () => closePane(pane.id),

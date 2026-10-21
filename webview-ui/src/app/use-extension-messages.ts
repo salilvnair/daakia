@@ -171,6 +171,9 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
               requestHeaders: msg.requestHeaders || undefined,
               requestBody: msg.requestBody || undefined,
               scriptSubRequests: msg.scriptSubRequests || undefined,
+              /* What was actually sent, variables resolved — the Timeline shows this. */
+              requestUrl: msg.requestUrl || undefined,
+              requestMethod: msg.requestMethod || undefined,
             },
             loading: false,
             requestProgress: undefined,

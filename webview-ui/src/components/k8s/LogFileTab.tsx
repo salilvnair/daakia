@@ -19,6 +19,7 @@ import { LogSourceProvider, type LogSource } from './log-source';
 import { useLogFiles, type LogFileView } from '../../store/dk8s-logfile-store';
 import type { RequestTab } from '../../store/tabs-store';
 import type { PodSummary } from '../../store/k8s-store';
+import { postMsg } from '../../vscode';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -186,7 +187,9 @@ function Body({ id, view }: { id: string; view: LogFileView }) {
     setLogSelection: () => {},
     setLogContainer: () => {},
     fetchLogs: () => {},
-    openLogExport: () => {},
+    /* Download saves a copy of the whole downloaded file — see handleDk8sCaptureSave.
+       It was drawn here and wired to nothing. */
+    openLogExport: () => postMsg({ type: 'dk8s:captureSave', id }),
     closeLogExport: () => {},
     closeDetail: () => {},
     isSnapshot: true,

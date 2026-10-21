@@ -356,6 +356,9 @@ export interface ResponseData {
   // Request metadata (actual headers/body sent by HTTP client)
   requestHeaders?: Record<string, string>;
   requestBody?: string;
+  /** The URL and method actually sent — variables resolved, after scripts. */
+  requestUrl?: string;
+  requestMethod?: string;
   // Sub-requests from dk.sendRequest() in scripts
   scriptSubRequests?: { method: string; url: string; status: number; statusText: string; duration: number; timestamp: number; phase: string; requestHeaders?: Record<string, string>; requestBody?: string; responseHeaders?: Record<string, string>; responseBody?: string }[];
   // Raw error detail for DevTools — always shows actual error code/message/cause

@@ -115,8 +115,10 @@ export function CodeIcon(props: IconProps) {
 export function RefreshIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>
-      <polyline points="1 4 1 10 7 10" />
-      <path d="M3.51 15a9 9 0 102.13-9.36L1 10" />
+      {/* Clockwise, the way it turns while refreshing. It was Undo's arrow,
+          which turns the other way and read as going backwards. */}
+      <polyline points="23 4 23 10 17 10" />
+      <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" />
     </svg>
   );
 }

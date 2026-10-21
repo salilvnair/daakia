@@ -12,7 +12,7 @@
  * applies almost never — the volume is usually only inside the cluster. This
  * one goes through the pod, and the two share nothing but the subject.
  */
-import { run } from './kubectl';
+import { run, spawnKubectl } from './kubectl';
 
 export interface PodTarget {
   context: string;
@@ -441,8 +441,9 @@ export function explainExecFailure(stderr: string, path: string): string {
 export interface SearchOptions {
   /** Where to start. Absolute. */
   root: string;
-  /** A glob as `find -name` understands it. `*` is added when absent. */
+  /** A name, a glob or a regex — see `searchScript` for how each is read. */
   pattern: string;
+  /** How deep the walk goes. 0 is no limit, as `find` with no -maxdepth. */
   maxDepth?: number;
   limit?: number;
   /** Directories are worth finding too when someone is hunting a mount. */
@@ -455,6 +456,8 @@ export interface SearchOptions {
 export interface SearchHit {
   path: string;
   name: string;
+  /** What `ls -lLd` saw at the path — a folder search returns folders. */
+  kind?: FileEntry['kind'];
   /** From the stat pass; absent when `ls` could not reach the file. */
   size?: number;
   modified?: string;
@@ -469,14 +472,6 @@ export interface SearchResult {
 }
 
 /**
- * `find`, capped three ways, and every cap is load-bearing.
- *
- * A PersistentVolume can hold millions of files and an uncapped `find /` on a
- * pod that is already struggling is a real way to make an incident worse.
- * `2>/dev/null` is not tidiness either: on any volume with mixed ownership the
- * permission-denied lines outnumber the hits.
- */
-/**
  * Characters that only ever mean something in a regex.
  *
  * `?` alone cannot decide: it is a glob wildcard AND the commonest regex
@@ -488,87 +483,170 @@ export interface SearchResult {
  */
 export const REGEX_ONLY = /[\\\[\]()+^$|{}]/;
 
-export async function searchFiles(t: PodTarget, o: SearchOptions): Promise<SearchResult> {
+/**
+ * Kernel views, not files anybody keeps.
+ *
+ * `/proc` alone is thousands of entries per process, and none of it is a
+ * config file or a log. `find / -name x` in a terminal walks it too, which is
+ * part of why a search from `/` costs what it does. Left out unless the walk
+ * starts inside one of them — then that is what was asked for.
+ */
+const PSEUDO_FS = ['/proc', '/sys', '/dev'];
+
+/** How a pattern is handed to `find`, decided by the pattern itself. */
+export function searchMode(pattern: string): { mode: 'name' | 'glob' | 'regex'; glob?: string } {
+  if (REGEX_ONLY.test(pattern)) return { mode: 'regex' };
+  if (/[*?]/.test(pattern)) return { mode: 'glob', glob: pattern };
+  return { mode: 'name', glob: `*${pattern}*` };
+}
+
+/**
+ * The `sh -c` script a search runs. Pure, so its shape is tested.
+ *
+ * ── Names and globs filter inside `find` ──
+ *
+ * `application.properties` is a name, and `find -iname '*application.properties*'`
+ * is what a person would have typed. It used to go through `grep` instead: find
+ * printed EVERY file under the root and ran `-type f` on each, and on a network
+ * volume — Azure Files, blobfuse — that is a round trip per file. The terminal's
+ * `find / -name` only ever looks at names, which is why it was fast. Now the name
+ * test comes first and `-type` runs on the names that matched.
+ *
+ * ── A regex goes through `grep -E` ──
+ *
+ * `inv[0-9]+\.pdf`, `\.ya?ml$`, `^/etc` — matched against the whole path, so
+ * the anchors are worth having. The type test moves after the grep, so it runs
+ * on the matches rather than on everything.
+ *
+ * ── Then each hit is stat'ed ──
+ *
+ * `find -printf` is GNU-only and would break on the Alpine and busybox images
+ * this mostly meets, so the paths go back through `ls -lLd` and return as
+ * listing lines the parser already understands. A `while read` loop rather
+ * than `xargs`, because xargs splits on spaces unless given flags busybox does
+ * not have. `head` last, so the walk ends by SIGPIPE once the cap is reached.
+ */
+export function searchScript(o: SearchOptions): string {
   const limit = o.limit ?? 500;
   const depth = o.maxDepth ?? 8;
-  const typeArgs = o.kind === 'dir' ? ['-type', 'd']
-    : o.kind === 'any' ? []
-      : ['-type', 'f'];
-
-  /*
-    Glob or regex, decided by the pattern rather than by a checkbox.
-
-    `*` and `?` are glob metacharacters and almost never what someone means in
-    a regex typed into a file-search box, so a pattern containing either goes
-    to `find -iname` exactly as it always did — `*.pdf` and `*invoice*` keep
-    working, and nothing anyone has already typed changes meaning.
-
-    Everything else goes through `grep -E`, which makes the box a regex box by
-    default: `inv[0-9]+\.pdf`, `\.ya?ml$`, `^/etc` all work, and a bare word
-    still behaves as the substring search it was, because a word is its own
-    regex. The trade is that grep matches the whole PATH where `-iname`
-    matched the basename, which is why the anchors are worth having.
-  */
-  const isGlob = /[*?]/.test(o.pattern) && !REGEX_ONLY.test(o.pattern);
+  const kind = o.kind ?? 'file';
+  const { mode, glob } = searchMode(o.pattern);
   const nameFlag = o.caseSensitive ? '-name' : '-iname';
+  const findType = kind === 'dir' ? ['-type', 'd'] : kind === 'any' ? [] : ['-type', 'f'];
+  const testType = kind === 'dir' ? '[ -d "$f" ] && ' : kind === 'any' ? '' : '[ -f "$f" ] && ';
+  const prune = PSEUDO_FS.filter(p => !(o.root === p || o.root.startsWith(`${p}/`)));
 
-  /*
-    Run through `sh -c` so the redirect and the pipe are the shell's, not
-    arguments handed to `find`. Without it `2>/dev/null` is a path to search.
-  */
-  const script = [
-    'find', shellQuote(o.root), '-maxdepth', String(depth),
-    ...(isGlob ? [nameFlag, shellQuote(o.pattern)] : []),
-    ...typeArgs,
-    '2>/dev/null',
-    ...(isGlob ? [] : ['|', 'grep', o.caseSensitive ? '-E' : '-Ei', '--', shellQuote(o.pattern)]),
-    '|', 'head', '-n', String(limit + 1),
-    /*
-      Then stat what survived the cap, so a hit can show its size.
+  const find = [
+    'find', shellQuote(o.root),
+    ...(depth > 0 ? ['-maxdepth', String(depth)] : []),
+    ...(prune.length
+      ? ['\\(', prune.map(p => `-path ${shellQuote(p)}`).join(' -o '), '\\)', '-prune', '-o']
+      : []),
+    ...(mode === 'regex' ? [] : [nameFlag, shellQuote(glob!), ...findType]),
+    '-print', '2>/dev/null',
+  ];
+  const filter = mode === 'regex'
+    ? ['|', 'grep', o.caseSensitive ? '-E' : '-Ei', '--', shellQuote(o.pattern)]
+    : [];
+  const stat = [
+    '|', 'while', 'IFS=', 'read', '-r', 'f;', 'do',
+    `${mode === 'regex' ? testType : ''}ls -lLd "$f" 2>/dev/null;`, 'done',
+  ];
+  return [...find, ...filter, ...stat, '|', 'head', '-n', String(limit + 1)].join(' ');
+}
 
-      `find` cannot print a size portably — `-printf` is GNU-only and would
-      break on the Alpine and busybox images this mostly meets — so the paths
-      go back through `ls -lLd` and return as listing lines the parser already
-      understands and is tested against. `-L` so a symlinked hit reports what
-      it points at.
-
-      The cap comes FIRST, deliberately. `-exec ls {} +` batches more neatly
-      but would stat everything `find` turned up before anything was capped,
-      which on a large volume is exactly the runaway the caps exist to stop.
-      A `while read` loop rather than `xargs`, because xargs splits on spaces
-      unless given flags busybox does not have, and a path with a space in it
-      is not an edge case.
-    */
-    '|', 'while', 'IFS=', 'read', '-r', 'f;', 'do', 'ls', '-lLd', '"$f"', '2>/dev/null;', 'done',
-  ].join(' ');
-
-  const args = execArgs(t, ['sh', '-c', script]);
+/**
+ * `find` in a pod, read as it prints — the way the terminal shows it.
+ *
+ * It used to wait for the whole walk and then answer. A search from `/` on a
+ * pod with big volumes takes minutes even when the file is found in the first
+ * second, so the screen showed nothing, the 60-second kill landed, and the
+ * reader got no answer to a question the terminal answered at once. Now each
+ * hit reaches `onHits` as it arrives, the cap ends the walk, and Stop (the
+ * signal) ends it whenever the reader has what they came for.
+ */
+export async function searchFiles(
+  t: PodTarget, o: SearchOptions, onHits?: (hits: SearchHit[]) => void,
+): Promise<SearchResult> {
+  const limit = o.limit ?? 500;
+  const args = execArgs(t, ['sh', '-c', searchScript(o)]);
   const command = showCommand(args);
-  const r = await run(args, { signal: o.signal });
-
-  if (r.code !== 0 && !r.stdout.trim()) {
-    return { hits: [], capped: false, command, error: explainExecFailure(r.stderr, o.root) };
-  }
-
-  const lines = r.stdout.split('\n').map(l => l.replace(/\r$/, '')).filter(Boolean);
-  const capped = lines.length > limit;
-
-  /*
-    Every line is now an `ls -l` line whose name field is the full path, so
-    there is no directory to join on — the parser is given an empty one.
-  */
   const hits: SearchHit[] = [];
-  for (const line of lines.slice(0, limit)) {
-    const e = parseLsLine(line, '');
-    if (!e) continue;
-    hits.push({
-      path: e.name,
-      name: e.name.slice(e.name.lastIndexOf('/') + 1),
-      size: e.size,
-      modified: e.modified,
-    });
+  let capped = false;
+  let stderr = '';
+  let pending: SearchHit[] = [];
+  let flushTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const flush = () => {
+    if (flushTimer) { clearTimeout(flushTimer); flushTimer = undefined; }
+    if (!pending.length) return;
+    const batch = pending;
+    pending = [];
+    onHits?.(batch);
+  };
+
+  let child: Awaited<ReturnType<typeof spawnKubectl>>;
+  try {
+    child = await spawnKubectl(args);
+  } catch (err) {
+    return { hits: [], capped: false, command, error: err instanceof Error ? err.message : String(err) };
   }
-  return { hits, capped, command };
+
+  return new Promise<SearchResult>(resolve => {
+    let buf = '';
+    let done = false;
+    const stop = () => { try { child.kill(); } catch { /* already gone */ } };
+    const onAbort = () => stop();
+    o.signal?.addEventListener('abort', onAbort);
+    if (o.signal?.aborted) stop();
+
+    const take = (line: string) => {
+      if (!line || capped) return;
+      const e = parseLsLine(line, '');
+      if (!e) return;
+      if (hits.length >= limit) { capped = true; stop(); return; }
+      const hit: SearchHit = {
+        path: e.name,
+        name: e.name.slice(e.name.lastIndexOf('/') + 1),
+        kind: e.kind,
+        size: e.kind === 'dir' ? undefined : e.size,
+        modified: e.modified,
+      };
+      hits.push(hit);
+      pending.push(hit);
+      // A few at a time, not one message per line and not one at the end.
+      if (!flushTimer) flushTimer = setTimeout(flush, 150);
+    };
+
+    child.stdout?.setEncoding('utf8');
+    child.stdout?.on('data', (chunk: string) => {
+      buf += chunk;
+      let nl: number;
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        take(buf.slice(0, nl).replace(/\r$/, ''));
+        buf = buf.slice(nl + 1);
+      }
+    });
+    child.stderr?.setEncoding('utf8');
+    child.stderr?.on('data', (chunk: string) => {
+      if (stderr.length < 8_000) stderr += chunk;
+    });
+
+    const finish = (code: number | null, failure?: string) => {
+      if (done) return;
+      done = true;
+      take(buf.replace(/\r$/, ''));
+      flush();
+      o.signal?.removeEventListener('abort', onAbort);
+      if (!hits.length && !capped && !o.signal?.aborted && (code !== 0 || failure)) {
+        resolve({ hits, capped, command, error: explainExecFailure(stderr || failure || '', o.root) });
+        return;
+      }
+      resolve({ hits, capped, command });
+    };
+    child.on('error', err => finish(null, err.message));
+    child.on('close', code => finish(code));
+  });
 }
 
 /** Single-quote for `sh -c`, the only form with no escapes inside it. */

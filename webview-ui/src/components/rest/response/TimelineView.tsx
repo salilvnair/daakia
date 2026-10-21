@@ -32,7 +32,7 @@ function TimelineCopyButton({ text, size = 12 }: { text: string; size?: number }
 
 function getTimelineTabContent(tab: RequestTab, response: ResponseData, subTab: TimelineSubTab, requestHeaders: Record<string, string>, requestBody?: string): string {
   if (subTab === 'request') {
-    let content = `${tab.method.toUpperCase()} ${tab.url}\n\n`;
+    let content = `${(response.requestMethod || tab.method).toUpperCase()} ${(response.requestUrl || tab.url)}\n\n`;
     content += Object.entries(requestHeaders).map(([k, v]) => `${k}: ${v}`).join('\n');
     if (requestBody) content += `\n\n${requestBody}`;
     return content;
@@ -42,7 +42,7 @@ function getTimelineTabContent(tab: RequestTab, response: ResponseData, subTab: 
     content += Object.entries(response.headers).map(([k, v]) => `${k}: ${v}`).join('\n');
     return content;
   }
-  let content = `[Request] ${tab.method.toUpperCase()} ${tab.url}\n`;
+  let content = `[Request] ${(response.requestMethod || tab.method).toUpperCase()} ${(response.requestUrl || tab.url)}\n`;
   content += Object.entries(requestHeaders).map(([k, v]) => `${k}: ${v}`).join('\n');
   if (requestBody) content += `\n\n${requestBody}`;
   content += `\n\n[Response] ${response.status} ${response.statusText}\n`;
@@ -229,11 +229,11 @@ export function TimelineView({ tab, response }: { tab: RequestTab; response: Res
         </span>
         <span
           className="px-1.5 py-[1px] rounded text-[10px] font-bold font-mono flex-shrink-0"
-          style={{ color: METHOD_COLORS[tab.method.toUpperCase()] || 'var(--color-text-primary)', backgroundColor: `color-mix(in srgb, ${METHOD_COLORS[tab.method.toUpperCase()] || 'var(--color-text-primary)'} 12%, transparent)` }}
+          style={{ color: METHOD_COLORS[(response.requestMethod || tab.method).toUpperCase()] || 'var(--color-text-primary)', backgroundColor: `color-mix(in srgb, ${METHOD_COLORS[(response.requestMethod || tab.method).toUpperCase()] || 'var(--color-text-primary)'} 12%, transparent)` }}
         >
-          {tab.method.toUpperCase()}
+          {(response.requestMethod || tab.method).toUpperCase()}
         </span>
-        <span className="text-[11px] text-[var(--color-text-muted)] truncate flex-1 font-mono">{tab.url}</span>
+        <span className="text-[11px] text-[var(--color-text-muted)] truncate flex-1 font-mono">{(response.requestUrl || tab.url)}</span>
         <span className="px-1.5 py-[1px] rounded text-[9px] font-mono bg-[color-mix(in_srgb,var(--color-success)_12%,transparent)] text-[var(--color-success)] font-semibold flex-shrink-0">{response.time}ms</span>
       </div>
 
@@ -261,11 +261,11 @@ export function TimelineView({ tab, response }: { tab: RequestTab; response: Res
             <div className="flex items-center gap-2 px-1 py-[3px]">
               <span
                 className="px-1.5 py-[1px] rounded text-[9px] font-bold font-mono flex-shrink-0"
-                style={{ color: METHOD_COLORS[tab.method.toUpperCase()] || 'var(--color-text-primary)', backgroundColor: `color-mix(in srgb, ${METHOD_COLORS[tab.method.toUpperCase()] || 'var(--color-text-primary)'} 12%, transparent)` }}
+                style={{ color: METHOD_COLORS[(response.requestMethod || tab.method).toUpperCase()] || 'var(--color-text-primary)', backgroundColor: `color-mix(in srgb, ${METHOD_COLORS[(response.requestMethod || tab.method).toUpperCase()] || 'var(--color-text-primary)'} 12%, transparent)` }}
               >
-                {tab.method.toUpperCase()}
+                {(response.requestMethod || tab.method).toUpperCase()}
               </span>
-              <span className="text-[11px] text-[var(--color-text-primary)] font-mono break-all leading-[16px] select-all">{tab.url}</span>
+              <span className="text-[11px] text-[var(--color-text-primary)] font-mono break-all leading-[16px] select-all">{(response.requestUrl || tab.url)}</span>
             </div>
 
             {/* Headers */}
@@ -337,8 +337,8 @@ export function TimelineView({ tab, response }: { tab: RequestTab; response: Res
         {subTab === 'network-logs' && (
           <div className="flex flex-col">
             <TimelineNetworkLogs
-              method={tab.method}
-              url={tab.url}
+              method={(response.requestMethod || tab.method)}
+              url={(response.requestUrl || tab.url)}
               requestHeaders={requestHeaders}
               requestBody={requestBody}
               status={response.status}

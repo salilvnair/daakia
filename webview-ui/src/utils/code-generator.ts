@@ -7,6 +7,8 @@ export interface CodeGenInput {
   params: { key: string; value: string }[];
   bodyMode: string;
   bodyRaw: string;
+  /** The body picker's MIME type — what Daakia sends as Content-Type when no header says. */
+  bodyContentType?: string;
   bodyFormData: { key: string; value: string; type: string }[];
   bodyUrlEncoded: { key: string; value: string }[];
   authType: string;
@@ -69,8 +71,13 @@ function getAuthHeaders(authType: string, authData: Record<string, string>): { k
   return [];
 }
 
+/*
+  JSON is its own body mode — picking application/json sets `bodyMode: 'json'`
+  — and only `raw` was read here, so the commonest body of all came out of
+  Show code as no body. GraphQL keeps its query in the same field.
+*/
 function getBodyString(input: CodeGenInput): string | null {
-  if (input.bodyMode === 'raw' && input.bodyRaw) return input.bodyRaw;
+  if ((input.bodyMode === 'raw' || input.bodyMode === 'json' || input.bodyMode === 'graphql') && input.bodyRaw) return input.bodyRaw;
   if (input.bodyMode === 'x-www-form-urlencoded' && input.bodyUrlEncoded.length) {
     return input.bodyUrlEncoded.map(p => `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`).join('&');
   }
@@ -81,6 +88,13 @@ export function generateCode(input: CodeGenInput, language: string): string {
   const fullUrl = buildFullUrl(input.url, input.params);
   const allHeaders = [...input.headers, ...getAuthHeaders(input.authType, input.authData)];
   const body = getBodyString(input);
+  /* The header the request really goes out with: request-executor.ts adds it
+     from the body type when none is set, so the snippet says so too. */
+  if (body && !allHeaders.some(h => h.key.toLowerCase() === 'content-type')) {
+    const type = input.bodyMode === 'x-www-form-urlencoded' ? 'application/x-www-form-urlencoded'
+      : input.bodyContentType || (input.bodyMode === 'raw' ? 'text/plain' : 'application/json');
+    allHeaders.push({ key: 'Content-Type', value: type });
+  }
 
   switch (language) {
     case 'shell-curl': return genCurl(input.method, fullUrl, allHeaders, body, input);

@@ -15,6 +15,27 @@ import { NO_POD_FILTER, type PodFilter } from '../components/k8s/pod-filter';
 import { findLinkedLine, type LogTarget } from '../components/k8s/pod-link';
 import { logLineSettings } from '../components/k8s/log-settings';
 
+/*
+  The split panes' streams, which the detail view must leave alone.
+
+  Leaving a pod — Escape, Back, the grid — sent `dk8s:closeLogs` with no pod,
+  which the host reads as "close everything", and opening another pod sent a
+  read without `alongside`, which also stops everything. Both took every split
+  pane's stream with them, Following included, and the panes went on saying
+  they were live. The detail view now closes its own pod and nothing else.
+
+  The split store registers its keys here rather than being imported: it
+  already imports this store.
+*/
+let splitPaneKeys: () => string[] = () => [];
+export function provideSplitPaneKeys(fn: () => string[]): void { splitPaneKeys = fn; }
+function closeDetailStream(pod: { context?: string; namespace: string; name: string } | undefined): void {
+  if (!pod) return;
+  // A pane on the same pod shares its stream — it is still being read.
+  if (splitPaneKeys().includes(`${pod.context ?? ''}/${pod.namespace}/${pod.name}`)) return;
+  postMsg({ type: 'dk8s:closeLogs', context: pod.context, namespace: pod.namespace, pod: pod.name });
+}
+
 /** What somebody said a pod's runtime is. Mirrors services/k8s/runtime-marks. */
 export interface RuntimeMark {
   runtime: string;
@@ -1247,6 +1268,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   },
 
   openDetail: (pod, opts) => {
+    const previous = get().detail;
     if (!opts?.noHistory) {
       const cur = get().detail;
       if (opts?.from) get().pushNav(opts.from);
@@ -1295,9 +1317,10 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       /* Its stream, if it had one, is still open and addressed to this pod — its lines keep arriving here. */
       set(opts.carry);
     } else {
-      // Snapshot, not a stream. See logLive.
+      if (previous && !samePod(previous, pod)) closeDetailStream(previous);
+      // Snapshot, not a stream. See logLive. Alongside, so split panes keep theirs.
       postMsg({
-        type: 'dk8s:openLogs', ...base,
+        type: 'dk8s:openLogs', ...base, alongside: true,
         follow: false, direction: 'last', tailLines: get().logTail, readId: get().logRequestedAt,
       });
     }
@@ -1323,7 +1346,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   },
 
   closeDetail: () => {
-    postMsg({ type: 'dk8s:closeLogs' });
+    closeDetailStream(get().detail);
     set({ detail: undefined, logs: [], logStatus: 'idle', logSelection: undefined });
   },
 
@@ -1530,6 +1553,8 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     postMsg({
       type: 'dk8s:openLogs',
       context: detail.context, namespace: detail.namespace, pod: detail.name,
+      /* Replaces this pod's read only — split panes keep streaming. */
+      alongside: true,
       previous: logPrevious, container: logContainer,
       /* Lines from the read this one replaced are dropped by it — see `staleRead`. */
       readId: get().logRequestedAt,

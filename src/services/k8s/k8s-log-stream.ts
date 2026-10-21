@@ -586,14 +586,28 @@ export function streamLogs(
     same way as the rest — a log whose first two hundred lines rendered without
     levels and whose next line had them would be worse than no format at all.
   */
-  let releasing = false;
-  const release = async (): Promise<void> => {
-    if (!held || releasing) return;
-    releasing = true;
+  /*
+    Lines keep being held while the format is worked out.
+
+    It let go of them before the lookup — which can run kubectl — so lines
+    arriving meanwhile were parsed and flushed first, and the first two
+    hundred landed after them, without the format. And a kubectl that exited
+    during the lookup found nothing held, said "ended", and the opening lines
+    arrived after the end. Now arrivals join the held lines, all of them go
+    out in order once the format is known, and a second caller — the exit
+    handler — waits for that same release.
+  */
+  let releasing: Promise<void> | undefined;
+  const release = (): Promise<void> => {
+    if (releasing) return releasing;
+    if (!held) return Promise.resolve();
+    releasing = releaseHeld();
+    return releasing;
+  };
+  const releaseHeld = async (): Promise<void> => {
     if (deadline) { clearTimeout(deadline); deadline = undefined; }
 
-    const sample = held;
-    held = undefined;
+    const sample = (held ?? []).slice();
 
     try {
       /* The sample is what the application printed, without kubectl's own
@@ -617,7 +631,9 @@ export function streamLogs(
       cb.onFormat?.(undefined);
     }
 
-    for (const raw of sample) {
+    const all = held ?? sample;
+    held = undefined;
+    for (const raw of all) {
       if (stopped) return;
       take(raw);
     }

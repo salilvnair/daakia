@@ -19,7 +19,7 @@ import { type PvMatch } from '../../../services/k8s/pv-search';
 import { withParse, sampleOf } from '../../../services/k8s/search-parse';
 import { searchPvInPod, rootsFor } from '../../../services/k8s/pv-search-in-pod';
 import {
-  startCapture, readPage as readCapturePage, filterCapture, locate as locateInCapture, closeCapture,
+  startCapture, readPage as readCapturePage, filterCapture, locate as locateInCapture, closeCapture, captureFile,
 } from '../../../services/k8s/log-capture';
 import type { HostFilterSpec } from '../../../services/k8s/log-filter';
 import { fetchFromPod } from '../../../services/k8s/pv-in-pod';
@@ -44,7 +44,7 @@ import * as os from 'os';
 import { join, basename } from 'path';
 // `recursive: true` at every call site: plain mkdir throws EEXIST on a
 // directory that is already there, which is every call after the first.
-import { mkdir as mkdirp } from 'fs/promises';
+import { mkdir as mkdirp, copyFile } from 'fs/promises';
 import {
   collectArtifact, listArtifacts, analyzerFor,
   type ArtifactKind, type CollectTarget,
@@ -1087,7 +1087,16 @@ export async function handleDk8sExportSearch(
   postMessage: PostMessage,
 ): Promise<void> {
   const targets = (Array.isArray(msg.targets) ? msg.targets : []) as SearchTarget[];
-  const options = msg.options as SearchExportOptions | undefined;
+  /*
+    With the search's defaults under it, as the live search has.
+
+    The results page sends only what it changes — query, window, context — and
+    without `tailLines` underneath, kubectl was handed `--tail=undefined` and
+    every pod failed: the Download dialog worked for "On screen" and for
+    nothing else.
+  */
+  const sent = msg.options as Partial<SearchExportOptions> | undefined;
+  const options = sent ? { ...DEFAULT_SEARCH, combine: true, ...sent } as SearchExportOptions : undefined;
   if (!targets.length || !options?.query?.trim()) return;
 
   let destDir: string;
@@ -2802,6 +2811,36 @@ export function handleDk8sCaptureLocate(msg: Record<string, unknown>, postMessag
     text: typeof msg.text === 'string' ? msg.text : undefined,
   });
   postMessage({ type: 'dk8s:captureLocated', id, reqId: msg.reqId, index });
+}
+
+/*
+  Download, in a downloaded-log tab: a copy of the whole file it already holds.
+
+  The button was drawn there and wired to nothing. The log is on this machine
+  in full — re-reading the pod would fetch what is already here, and writing
+  the lines on screen would be a few hundred of a million. The temp file goes
+  when the tab closes; the copy is the reader's.
+*/
+export async function handleDk8sCaptureSave(msg: Record<string, unknown>, postMessage: PostMessage): Promise<void> {
+  const id = String(msg.id ?? '');
+  const cap = captureFile(id);
+  if (!cap) {
+    postMessage({ type: 'dk8s:captureSaved', id, error: 'This log is no longer downloaded — open it again.' });
+    return;
+  }
+  try {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
+    const picked = await vscode.window.showSaveDialog({
+      defaultUri: vscode.Uri.file(path.join(os.homedir(), `${cap.pod}__${stamp}.log`)),
+      saveLabel: 'Save log',
+      title: `Save ${cap.pod}'s downloaded log`,
+    });
+    if (!picked) { postMessage({ type: 'dk8s:captureSaved', id, cancelled: true }); return; }
+    await copyFile(cap.file, picked.fsPath);
+    postMessage({ type: 'dk8s:captureSaved', id, path: picked.fsPath, partial: !cap.ready });
+  } catch (err) {
+    postMessage({ type: 'dk8s:captureSaved', id, error: (err as Error).message });
+  }
 }
 
 export function handleDk8sCaptureClose(msg: Record<string, unknown>): void {

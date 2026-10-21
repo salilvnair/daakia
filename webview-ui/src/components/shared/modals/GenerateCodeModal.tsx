@@ -74,6 +74,7 @@ export function GenerateCodeModal({ open, tab, onClose }: GenerateCodeModalProps
       params: (tab.params || []).filter(p => p.enabled && p.key).map(p => ({ key: rv(p.key), value: rv(p.value) })),
       bodyMode: tab.bodyMode || 'none',
       bodyRaw: rv(tab.bodyRaw || ''),
+      bodyContentType: tab.bodyContentType,
       bodyFormData: (tab.bodyFormData || []).filter(f => f.enabled && f.key).map(f => ({ key: rv(f.key), value: rv(f.value), type: f.type || 'text' })),
       bodyUrlEncoded: (tab.bodyUrlEncoded || []).filter(u => u.enabled && u.key).map(u => ({ key: rv(u.key), value: rv(u.value) })),
       authType: tab.authType || 'none',

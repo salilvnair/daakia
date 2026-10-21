@@ -428,6 +428,12 @@ export async function startCapture(req: CaptureRequest, cb: CaptureCallbacks): P
   }
 }
 
+/** The file a capture is written to, while it is open — for Save a copy. */
+export function captureFile(id: string): { file: string; pod: string; ready: boolean } | undefined {
+  const c = captures.get(id);
+  return c ? { file: c.file, pod: c.target.pod, ready: c.status === 'ready' } : undefined;
+}
+
 export function closeCapture(id: string): void {
   const c = captures.get(id);
   if (!c) return;

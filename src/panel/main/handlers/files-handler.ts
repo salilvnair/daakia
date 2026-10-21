@@ -76,21 +76,36 @@ export async function handleFilesList(msg: Record<string, unknown>, post: PostMe
   }
 }
 
+/*
+  One pod's search, streamed.
+
+  Hits go out as `files:search:hits` while `find` is still walking, and the
+  whole answer as `files:search` when it ends — by itself, at the cap, or by
+  `dk8s:cancel` on this request id. A search from `/` on a pod with big volumes
+  can walk for minutes after the file is found; the reader sees it when the
+  terminal would have.
+*/
 export async function handleFilesSearch(msg: Record<string, unknown>, post: PostMessage) {
   const requestId = msg.requestId as string;
+  const op = begin(requestId, 'files:search');
   try {
     const r = await searchFiles(targetOf(msg), {
       root: String(msg.root ?? '/'),
       pattern: String(msg.pattern ?? ''),
       maxDepth: typeof msg.maxDepth === 'number' ? msg.maxDepth : undefined,
       limit: typeof msg.limit === 'number' ? msg.limit : undefined,
-    });
-    post({ type: 'files:search', requestId, ...r });
+      caseSensitive: !!msg.caseSensitive,
+      kind: msg.kind === 'dir' || msg.kind === 'any' ? msg.kind : 'file',
+      signal: op.signal,
+    }, hits => post({ type: 'files:search:hits', requestId, hits }));
+    post({ type: 'files:search', requestId, ...r, stopped: op.cancelled() });
   } catch (err) {
     post({
       type: 'files:search', requestId, hits: [], capped: false, command: '',
       error: err instanceof Error ? err.message : String(err),
     });
+  } finally {
+    end(requestId);
   }
 }
 
@@ -340,6 +355,9 @@ export async function handleFilesSearchMany(msg: Record<string, unknown>, post: 
         maxDepth: typeof msg.maxDepth === 'number' ? msg.maxDepth : undefined,
         caseSensitive: !!msg.caseSensitive,
         signal: op.signal,
+      }, hits => {
+        /* As they are found, so a slow pod shows its file before its walk ends. */
+        if (!op.cancelled()) post({ type: 'files:searchMany:hits', requestId, pod: t.pod, namespace: t.namespace, context: t.context, hits });
       });
       /*
         A pod killed by Stop is not a pod that failed.

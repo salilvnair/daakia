@@ -429,7 +429,7 @@ function DownloadModal({ lines, name, onClose }: {
               </>
             ) : (
               <>
-                One file per pod. The search runs again against {searched.length}{' '}
+                One file holding every pod&rsquo;s matches. The search runs again against {searched.length}{' '}
                 pod{searched.length === 1 ? '' : 's'} for this, because the page
                 holds only the lines the first search brought back &mdash; so it
                 reads from the cluster and takes as long as a search does.
