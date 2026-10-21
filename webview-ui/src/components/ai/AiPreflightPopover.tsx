@@ -14,7 +14,7 @@ import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 
 type Severity = 'error' | 'warning' | 'info';
 
-interface Issue {
+export interface Issue {
   severity: Severity;
   code: string;
   message: string;
@@ -63,6 +63,39 @@ function isJwtExpiringSoon(token: string, withinSeconds = 300): boolean {
   }
 }
 
+/**
+ * The URL's own checks, with variables read as variables.
+ *
+ * Each of these used to look at the URL as typed, `{{…}}` and all, which made
+ * them wrong in the common case: `{{baseUrl}}/users` was "missing a protocol"
+ * (an error, turning the menu red), `/users/{{id}}` "contains { }", and a
+ * callback in the query — `?next=https://b.com` — a double slash in the path.
+ * Variables are taken out first, a URL that starts with one is trusted to
+ * supply its own scheme, and only the path is looked at for `//`.
+ */
+export function urlIssues(url: string): Issue[] {
+  const issues: Issue[] = [];
+  const bare = url.replace(/\{\{[^{}]*\}\}|\$\{[^{}]*\}/g, 'x');
+  const startsWithVar = /^(\{\{[^{}]*\}\}|\$\{[^{}]*\})/.test(url);
+  if (!startsWithVar && !/^https?:\/\//i.test(url)) {
+    issues.push({ severity: 'error', code: 'missing-protocol', message: 'URL is missing a protocol', hint: 'Prefix the URL with http:// or https://' });
+  }
+  if (/^https:\/\/localhost/i.test(url)) {
+    issues.push({ severity: 'warning', code: 'https-localhost', message: 'Using https:// for localhost', hint: 'localhost typically uses http:// unless TLS is configured locally.' });
+  }
+  const path = bare.replace(/^https?:\/\//i, '').split(/[?#]/)[0];
+  if (path.includes('//')) {
+    issues.push({ severity: 'warning', code: 'double-slash', message: 'URL path contains a double slash', hint: 'Check for accidental double slashes like /api//users.' });
+  }
+  if (/\s/.test(url)) {
+    issues.push({ severity: 'error', code: 'url-has-spaces', message: 'URL contains unencoded spaces', hint: 'Encode spaces as %20 or use URL variables.' });
+  }
+  if (/[{}]/.test(bare)) {
+    issues.push({ severity: 'info', code: 'url-curly-brace', message: 'URL contains { } that is not a variable', hint: 'Use {{variableName}} for environment variables, or encode the brace.' });
+  }
+  return issues;
+}
+
 function runDeterministicChecks(tab: TabSnapshot): Issue[] {
   const issues: Issue[] = [];
   const method = tab.method.toUpperCase();
@@ -74,21 +107,7 @@ function runDeterministicChecks(tab: TabSnapshot): Issue[] {
   if (!url) {
     issues.push({ severity: 'error', code: 'empty-url', message: 'URL is empty', hint: 'Enter a URL before sending.' });
   } else {
-    if (!/^https?:\/\//i.test(url)) {
-      issues.push({ severity: 'error', code: 'missing-protocol', message: 'URL is missing a protocol', hint: 'Prefix the URL with http:// or https://' });
-    }
-    if (/^https:\/\/localhost/i.test(url)) {
-      issues.push({ severity: 'warning', code: 'https-localhost', message: 'Using https:// for localhost', hint: 'localhost typically uses http:// unless TLS is configured locally.' });
-    }
-    if (/\/\/[^/]/.test(url.replace(/^https?:\/\//, ''))) {
-      issues.push({ severity: 'warning', code: 'double-slash', message: 'URL path contains a double slash', hint: 'Check for accidental double slashes like /api//users.' });
-    }
-    if (/\s/.test(url)) {
-      issues.push({ severity: 'error', code: 'url-has-spaces', message: 'URL contains unencoded spaces', hint: 'Encode spaces as %20 or use URL variables.' });
-    }
-    if (/\{[^{}]+\}/.test(url) && !/^\{\{/.test(url.match(/\{[^{}]+\}/)![0])) {
-      issues.push({ severity: 'info', code: 'url-curly-brace', message: 'URL contains { } — did you mean a variable?', hint: 'Use {{variableName}} for environment variables.' });
-    }
+    issues.push(...urlIssues(url));
   }
 
   // 2. Body / method checks
@@ -102,7 +121,10 @@ function runDeterministicChecks(tab: TabSnapshot): Issue[] {
   // 3. Content-Type check
   const enabledHeaders = tab.headers.filter(h => h.enabled && h.key.trim());
   const hasContentType = enabledHeaders.some(h => h.key.toLowerCase() === 'content-type');
-  if (bodyMethods.includes(method) && hasBody && !hasContentType) {
+  /* Daakia sends a Content-Type from the body picker for these, so a request
+     without the header is not missing one — request-executor.ts adds it. */
+  const suppliedForYou = ['json', 'raw', 'binary', 'form-data', 'x-www-form-urlencoded'].includes(tab.bodyMode);
+  if (bodyMethods.includes(method) && hasBody && !hasContentType && !suppliedForYou) {
     issues.push({ severity: 'warning', code: 'missing-content-type', message: 'Missing Content-Type header', hint: 'Add Content-Type: application/json (or multipart/form-data, etc.)' });
   }
 

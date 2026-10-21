@@ -38,6 +38,8 @@ interface PodResult {
   capped: boolean;
   command: string;
   error?: string;
+  /** Hits are arriving and this pod's walk has not ended. */
+  walking?: boolean;
 }
 
 export interface FileSearchState {
@@ -82,6 +84,7 @@ export function useFileSearch(): FileSearchState & {
   const state = useDk8sSearchStore(s => s.fileSearch);
   const setFileSearch = useDk8sSearchStore(s => s.setFileSearch);
   const addPod = useDk8sSearchStore(s => s.addFileSearchPod);
+  const addHits = useDk8sSearchStore(s => s.addFileSearchHits);
   const active = useRef<string | null>(null);
 
   useEffect(() => {
@@ -91,6 +94,8 @@ export function useFileSearch(): FileSearchState & {
 
       if (m.type === 'files:searchMany:start') {
         setFileSearch({ running: true, total: m.total ?? 0, ran: true });
+      } else if (m.type === 'files:searchMany:hits') {
+        addHits({ pod: m.pod, namespace: m.namespace, context: m.context, hits: m.hits ?? [] });
       } else if (m.type === 'files:searchMany:pod') {
         addPod({
           pod: m.pod, namespace: m.namespace, context: m.context,
@@ -108,7 +113,7 @@ export function useFileSearch(): FileSearchState & {
     };
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
-  }, [setFileSearch, addPod]);
+  }, [setFileSearch, addPod, addHits]);
 
   return {
     ...state,
@@ -380,6 +385,9 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload, m
                     }}>
                 {r.hits.length}{r.capped ? '+' : ''} {r.hits.length === 1 ? 'file' : 'files'}
               </span>
+              {r.walking && (
+                <span className="text-[9px]" style={{ color: 'var(--color-text-muted)' }}>still searching…</span>
+              )}
               <span className="flex-1" />
               <button
                 type="button"

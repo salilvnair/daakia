@@ -81,7 +81,7 @@ import {
   handleDk8sCollect, handleDk8sAnalyze, handleDk8sRevealArtifacts,
   handleDk8sLoadPv, handleDk8sSavePv, handleDk8sOpenLogFile, handleDk8sSetLogLineNumbers,
   handleDk8sScanLoggers,
-  handleDk8sCaptureStart, handleDk8sCaptureRead, handleDk8sCaptureFilter, handleDk8sCaptureLocate, handleDk8sCaptureClose,
+  handleDk8sCaptureStart, handleDk8sCaptureRead, handleDk8sCaptureFilter, handleDk8sCaptureLocate, handleDk8sCaptureClose, handleDk8sCaptureSave,
 } from '../src/panel/main/handlers/k8s-handler';
 import {
   handleDk8sReadProject, handleDk8sReadPodLoggers, handleDk8sAskLog, handleDk8sExportCatalogue,
@@ -569,6 +569,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dk8s:captureClose':
       handleDk8sCaptureClose(msg);
+      break;
+    case 'dk8s:captureSave':
+      void handleDk8sCaptureSave(msg, post);
       break;
     case 'dk8s:deleteArtifact':
       handleDk8sDeleteArtifact(msg, post);

@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useTabsStore, type HttpMethod } from '../../../store/tabs-store';
 import { useUrlSuggestionsStore } from '../../../store/url-suggestions-store';
 import { useDebugStore } from '../../../store/debug-store';
@@ -19,6 +20,7 @@ import { AiAdaptiveLoadTesterModal } from '../../ai/AiAdaptiveLoadTesterModal';
 import { AiSchemaDriftModal } from '../../ai/AiSchemaDriftModal';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
 import { isValidProtocolUrl, urlValidationHint } from '../../../services/url-validation';
+import { createResolver } from '../../../services/resolve/resolve-service';
 
 const METHOD_OPTIONS = [
   { value: 'GET', label: 'GET', color: METHOD_COLORS.GET },
@@ -46,6 +48,36 @@ export function UrlBar() {
   const [overflowDir, setOverflowDir] = useState<'down' | 'up'>('down');
   const overflowRef = useRef<HTMLDivElement>(null);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
+  /*
+    The history list stays shut after a send until the URL is edited.
+
+    Send leaves focus in the bar, and the list of past URLs opened again over
+    the request and its answer — on every run, for a URL nobody was changing.
+    Typing is what asks for it back.
+  */
+  const [quietSuggestions, setQuietSuggestions] = useState(false);
+  /*
+    What the URL really is, for a moment.
+
+    `{{baseUrl}}/users/{{id}}` says which variables, not where the request
+    goes. Hovering the bar, or clicking into it, shows the resolved URL under
+    it for a second and a half — then gets out of the way.
+  */
+  /* Where to draw it — on <body>, because the bar's own row clips anything
+     below it (it scrolls sideways rather than squeeze). */
+  const [peek, setPeek] = useState<{ left: number; top: number; width: number } | null>(null);
+  const peekTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (peekTimer.current) clearTimeout(peekTimer.current); }, []);
+  const showPeek = (el: HTMLElement) => {
+    if (peekTimer.current) clearTimeout(peekTimer.current);
+    const r = el.getBoundingClientRect();
+    setPeek({ left: r.left, top: r.bottom + 4, width: r.width });
+    peekTimer.current = setTimeout(() => setPeek(null), 1500);
+  };
+  const resolvedUrl = useMemo(() => {
+    if (!tab || !/\{\{|\$\{/.test(tab.url)) return '';
+    try { return createResolver(tab)(tab.url); } catch { return ''; }
+  }, [tab]);
 
   const preflightCounts = useMemo(() => tab ? countPreflightIssues(tab) : { errors: 0, warnings: 0 }, [tab]);
 
@@ -75,6 +107,7 @@ export function UrlBar() {
     // well produced two rows per request, the click-time one nearly empty.
     sendRequest(tab);
     updateTab(tab.id, { loading: true });
+    setQuietSuggestions(true);
   };
 
   const handleSendAndDownload = () => {
@@ -158,22 +191,38 @@ export function UrlBar() {
       {menu.node}
       {/* Method + URL — unified DUI component. Shrinks down to minWidth; past that the
           bar scrolls horizontally rather than squeezing this illegibly small. */}
-      <div className="flex-[2] min-w-0" style={{ minWidth: 160 }} data-menu="url">
+      <div className="flex-[2] min-w-0" style={{ minWidth: 160, position: 'relative' }} data-menu="url"
+           onMouseEnter={e => { if (resolvedUrl && resolvedUrl !== tab.url) showPeek(e.currentTarget); }}
+           onMouseDown={e => { if (resolvedUrl && resolvedUrl !== tab.url) showPeek(e.currentTarget); }}>
         <SelectTextInputView
           testId="url-bar"
           selectOptions={METHOD_OPTIONS}
           selectValue={tab.method}
           onSelectChange={(v) => updateTab(tab.id, { method: v as HttpMethod })}
           inputValue={tab.url}
-          onInputChange={(v) => updateTab(tab.id, { url: v })}
+          onInputChange={(v) => { setQuietSuggestions(false); updateTab(tab.id, { url: v }); }}
           onKeyDown={(e) => { if (e.key === 'Enter') handleSend(); }}
           placeholder="Enter a URL or paste a cURL command"
-          suggestions={urlSuggestions}
-          mockServers={mockSuggestions}
+          suggestions={quietSuggestions ? [] : urlSuggestions}
+          mockServers={quietSuggestions ? [] : mockSuggestions}
           accentColor={METHOD_COLORS[tab.method] || 'var(--color-primary)'}
           size="lg"
           width="fullWidth"
         />
+        {peek && resolvedUrl && resolvedUrl !== tab.url && createPortal(
+          <div role="status" title={resolvedUrl}
+               style={{
+                 position: 'fixed', left: peek.left, top: peek.top, width: peek.width, zIndex: 9999, boxSizing: 'border-box',
+                 padding: '4px 10px', borderRadius: 6, fontSize: 11.5,
+                 fontFamily: 'var(--font-mono, monospace)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                 color: 'var(--color-text-primary)', background: 'var(--color-panel)',
+                 border: '1px solid var(--color-surface-border)', boxShadow: '0 4px 14px rgba(0,0,0,.25)',
+                 pointerEvents: 'none',
+               }}>
+            {resolvedUrl}
+          </div>,
+          document.body,
+        )}
       </div>
 
       {/* Send / Cancel */}

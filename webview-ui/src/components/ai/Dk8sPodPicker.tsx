@@ -102,11 +102,14 @@ export function Dk8sPodPicker({ pods }: { pods: PodSummary[] }) {
               autoFocus
             />
             <div className="dai-pp-all" title={needle ? `Select all ${shown.length} shown` : 'Select all'}>
+              {/* Labelled and at the size Quick Search uses. Alone and small, a
+                  filled box next to 9px names read as a checkbox emoji, not a control. */}
               <CheckboxView
                 checked={shownAll}
                 indeterminate={shownOn > 0 && !shownAll}
-                size="sm"
+                size="md"
                 accentColor={DK8S}
+                label={needle ? 'All shown' : 'All apps'}
                 onChange={setShown}
               />
               <span className="dai-pp-count">{shownOn}/{shown.length}</span>
@@ -117,7 +120,7 @@ export function Dk8sPodPicker({ pods }: { pods: PodSummary[] }) {
             {shown.length === 0 && <div className="dai-pp-none">No app or pod matches “{q}”.</div>}
             {shown.map(g => (
               <div key={g.key} className={`dai-pp-row${isOn(g) ? ' on' : ''}`} title={g.pods.map(p => p.name).join('\n')}>
-                <CheckboxView checked={isOn(g)} size="sm" accentColor={DK8S} label={g.key} onChange={() => toggle(g)} />
+                <CheckboxView checked={isOn(g)} size="md" accentColor={DK8S} label={g.key} onChange={() => toggle(g)} />
                 {g.pods.length > 1 && <span className="dai-pp-count">{g.pods.length} pods</span>}
               </div>
             ))}

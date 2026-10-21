@@ -206,7 +206,8 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
     filesystem in the namespace. Announcing the cap and not offering it was the
     worst of both: you could see why a result was short and do nothing about it.
   */
-  const [fileDepth, setFileDepth] = useState(8);
+  /* Any depth, as `find /` — the walk streams and Stop ends it. */
+  const [fileDepth, setFileDepth] = useState(0);
 
   /*
     Logs or files, over the same pod selection.
@@ -771,7 +772,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
               <SelectInputView
                 value={String(fileDepth)}
                 onChange={v => setFileDepth(Number(v))}
-                options={[2, 4, 6, 8, 12].map(d => ({ value: String(d), label: `depth ${d}` }))}
+                options={[0, 2, 4, 6, 8, 12].map(d => ({ value: String(d), label: d ? `depth ${d}` : 'any depth' }))}
                 size="md" width={112} accentColor={ACCENT}
               />
             </span>

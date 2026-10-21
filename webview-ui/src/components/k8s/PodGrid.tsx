@@ -55,6 +55,7 @@ import { ACCENT, OK, MUTED, MATCH } from './tone';
 import { isTypingTarget } from '../../utils/typing-target';
 import { RunningCommand } from './RunningCommand';
 import { ForwardsChip, ForwardsPanel, PodForwardBadge } from './ForwardsPanel';
+import { sortPodRows, parsePodSort, nextPodSort } from './pod-table-sort';
 /* Amber, not the dk8s accent: a star is a personal mark, not a status, and
    reusing the accent made starred rows look selected. */
 /* Scheduled work reads as its own thing — not an error, not a service. */
@@ -691,12 +692,16 @@ const SELECT_CELL: React.CSSProperties = {
   width: 30, minWidth: 30, paddingLeft: 10, paddingRight: 0,
 };
 
-function PodTable({ pods, onOpen, onMenu }: {
+function PodTable({ pods: unsorted, onOpen, onMenu }: {
   pods: PodSummary[];
   onOpen: (p: PodSummary) => void;
   onMenu: (pod: PodSummary, at: { x: number; y: number }) => void;
 }) {
   const usage = useK8sStore(s => s.usage);
+  /* One sort for every namespace's table, remembered — see pod-table-sort.ts. */
+  const [sortPref, setSortPref] = usePersistedPref<string>('dk8s.pods.tableSort', '');
+  const sort = parsePodSort(sortPref);
+  const pods = useMemo(() => sortPodRows(unsorted, sort, usage), [unsorted, sortPref, usage]);
   const metrics = useK8sStore(s => s.metricsAvailable);
   const selectMode = useK8sStore(s => s.selectMode);
   const selected = useK8sStore(s => s.selected);
@@ -736,6 +741,11 @@ function PodTable({ pods, onOpen, onMenu }: {
           <tr>
             {cols.map(h => (
               <th key={h}
+                  onClick={h === SELECT_COL ? undefined : () => setSortPref(nextPodSort(sort, h))}
+                  title={h === SELECT_COL ? undefined
+                    : sort?.col === h ? (sort.dir === 'asc' ? `Sorted by ${h}, ascending — click for descending` : `Sorted by ${h}, descending — click for the usual order`)
+                      : `Sort by ${h}`}
+                  aria-sort={sort?.col === h ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
                   className="text-[9.5px] uppercase tracking-wider text-left font-bold px-3 py-2"
                   style={{
                     /*
@@ -750,8 +760,12 @@ function PodTable({ pods, onOpen, onMenu }: {
                     background: 'var(--color-surface)',
                     borderBottom: `1px solid color-mix(in srgb, ${ACCENT} 30%, var(--color-surface-border))`,
                     whiteSpace: 'nowrap', position: 'sticky', top: 0, zIndex: 1,
+                    cursor: h === SELECT_COL ? undefined : 'pointer', userSelect: 'none',
                   }}>
                 {h}
+                {sort?.col === h && (
+                  <span aria-hidden style={{ marginLeft: 4, fontSize: 8 }}>{sort.dir === 'asc' ? '▲' : '▼'}</span>
+                )}
               </th>
             ))}
           </tr>

@@ -141,9 +141,22 @@ export function installPasteBridge(): () => void {
     void paste(e);
   };
 
-  /* Every real paste, wherever it came from — the browser's own, the host's,
-     or the context menu's — is what tells the bridge to stand down. */
-  const onPaste = () => { lastNativePaste = Date.now(); };
+  /*
+    Every real paste, wherever it came from — the browser's own, the host's,
+    or the context menu's — is what tells the bridge to stand down.
+
+    A real one carries something. Inside VS Code the webview can raise a
+    `paste` whose clipboardData is empty, because clipboard-read is denied —
+    and dui's URL bar and header-value editors cancel every paste and insert
+    what it carried, which was nothing. Counting that as "the browser did the
+    job" left those fields with no paste at all, so an empty one no longer
+    counts.
+  */
+  const onPaste = (e: Event) => {
+    const data = (e as ClipboardEvent).clipboardData;
+    if (data && !data.getData('text/plain') && !data.files?.length) return;
+    lastNativePaste = Date.now();
+  };
 
   /*
     Capture, for the same reason the context menu listens that way: Monaco

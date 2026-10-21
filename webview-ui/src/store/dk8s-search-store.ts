@@ -150,6 +150,8 @@ interface SearchState {
       pod: string; namespace: string; context: string;
       hits: { path: string; name: string }[];
       capped: boolean; command: string; error?: string;
+      /** Hits are arriving and the pod's walk has not ended. */
+      walking?: boolean;
     }[];
     scanned: number;
     total: number;
@@ -166,6 +168,8 @@ interface SearchState {
   };
   setFileSearch: (patch: Partial<SearchState['fileSearch']>) => void;
   addFileSearchPod: (r: SearchState['fileSearch']['results'][number]) => void;
+  /** Hits a pod found so far, while its `find` is still walking. */
+  addFileSearchHits: (r: { pod: string; namespace: string; context: string; hits: { path: string; name: string }[] }) => void;
   summary?: {
     pods: number; matched: number; scanned: number; stopped: boolean;
     /**
@@ -408,13 +412,21 @@ export const useDk8sSearchStore = create<SearchState>((set, get) => ({
   setSearchIn: (searchIn) => set({ searchIn }),
   fileSearch: { ...NO_FILE_SEARCH },
   setFileSearch: (patch) => set(s => ({ fileSearch: { ...s.fileSearch, ...patch } })),
-  addFileSearchPod: (r) => set(s => ({
-    fileSearch: {
-      ...s.fileSearch,
-      scanned: s.fileSearch.scanned + 1,
-      results: [...s.fileSearch.results, r],
-    },
-  })),
+  /* The pod's whole answer replaces what streamed in for it. */
+  addFileSearchPod: (r) => set(s => {
+    const same = (x: typeof r) => x.pod === r.pod && x.namespace === r.namespace && x.context === r.context;
+    const results = s.fileSearch.results.some(same)
+      ? s.fileSearch.results.map(x => (same(x) ? { ...r, walking: false } : x))
+      : [...s.fileSearch.results, r];
+    return { fileSearch: { ...s.fileSearch, scanned: s.fileSearch.scanned + 1, results } };
+  }),
+  addFileSearchHits: (r) => set(s => {
+    const same = (x: typeof s.fileSearch.results[number]) => x.pod === r.pod && x.namespace === r.namespace && x.context === r.context;
+    const results = s.fileSearch.results.some(same)
+      ? s.fileSearch.results.map(x => (same(x) ? { ...x, hits: [...x.hits, ...r.hits] } : x))
+      : [...s.fileSearch.results, { ...r, capped: false, command: '', walking: true }];
+    return { fileSearch: { ...s.fileSearch, results } };
+  }),
   collapsed: [],
 
   // Opened from the pod grid, so the grid's selection is what you meant —

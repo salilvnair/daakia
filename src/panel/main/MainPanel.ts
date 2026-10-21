@@ -121,7 +121,7 @@ import {
   handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat,
   handleDk8sListArtifacts, handleDk8sImportArtifact, handleDk8sDeleteArtifact,
   handleDk8sScanLoggers,
-  handleDk8sCaptureStart, handleDk8sCaptureRead, handleDk8sCaptureFilter, handleDk8sCaptureLocate, handleDk8sCaptureClose,
+  handleDk8sCaptureStart, handleDk8sCaptureRead, handleDk8sCaptureFilter, handleDk8sCaptureLocate, handleDk8sCaptureClose, handleDk8sCaptureSave,
   handleDk8sOpenArtifact, handleDk8sSetKubectlPath, handleDk8sSetCache,
   handleDk8sWatchPods, handleDk8sMetricsActive, handleDk8sPodUsageOnce, handleDk8sRefreshPods, handleDk8sStopWatch, disposeDk8s,
   handleDk8sPinNamespace, handleDk8sUnpinNamespace,
@@ -726,6 +726,9 @@ export class MainPanel {
         break;
       case 'dk8s:captureClose':
         handleDk8sCaptureClose(msg);
+        break;
+      case 'dk8s:captureSave':
+        void handleDk8sCaptureSave(msg, this._post);
         break;
       case 'dk8s:deleteArtifact':
         handleDk8sDeleteArtifact(msg, this._post);

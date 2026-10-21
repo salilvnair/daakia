@@ -8,7 +8,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseLsLine, joinPath, parentOf, kindOf, looksBinary,
-  shellQuote, explainExecFailure, VIEW_LIMIT_BYTES, REGEX_ONLY, parseId, readableBy
+  shellQuote, explainExecFailure, VIEW_LIMIT_BYTES, REGEX_ONLY, parseId, readableBy,
+  searchMode, searchScript
 } from './pod-files';
 
 describe('parseLsLine — busybox / Alpine', () => {
@@ -263,7 +264,7 @@ describe('glob or regex, decided by the pattern', () => {
     expect(isGlob('(a|b)*')).toBe(false);
   });
 
-  it('treats anything without a wildcard as a regex, which a bare word also is', () => {
+  it('does not call a bare word a glob — it is a name, see searchMode', () => {
     expect(isGlob('application')).toBe(false);
     expect(isGlob('inv[0-9]+')).toBe(false);
     expect(isGlob('a+b')).toBe(false);
@@ -316,5 +317,49 @@ describe('who can read what', () => {
 
   it('claims nothing without an identity to compare against', () => {
     expect(readableBy({ mode: '-rw-------', owner: '0', group: '0' }, null)).toBe(true);
+  });
+});
+
+describe('how a file search reaches find', () => {
+  it('reads a plain name as a name, the way find -name does', () => {
+    expect(searchMode('application.properties')).toEqual({ mode: 'name', glob: '*application.properties*' });
+    expect(searchMode('*.yml')).toEqual({ mode: 'glob', glob: '*.yml' });
+    expect(searchMode(String.raw`\.ya?ml$`).mode).toBe('regex');
+  });
+
+  /*
+    The Azure case. A name went through grep, so find printed every file under
+    `/` and ran -type on each — a stat per file on a network volume — where the
+    terminal's `find / -name` only looks at names.
+  */
+  it('filters a name inside find, before any type test', () => {
+    const sh = searchScript({ root: '/', pattern: 'application.properties' });
+    expect(sh).toContain(`-iname '*application.properties*' -type f -print`);
+    expect(sh).not.toContain('grep');
+  });
+
+  it('keeps the kernel views out of a walk from /, unless the walk starts in one', () => {
+    expect(searchScript({ root: '/', pattern: 'x' })).toContain(`\\( -path '/proc' -o -path '/sys' -o -path '/dev' \\) -prune -o`);
+    const inProc = searchScript({ root: '/proc/1', pattern: 'x' });
+    expect(inProc).not.toContain(`-path '/proc'`);
+    expect(inProc).toContain(`-path '/sys'`);
+  });
+
+  it('goes as deep as the filesystem when the depth is 0', () => {
+    expect(searchScript({ root: '/', pattern: 'x', maxDepth: 0 })).not.toContain('-maxdepth');
+    expect(searchScript({ root: '/', pattern: 'x', maxDepth: 4 })).toContain('-maxdepth 4');
+  });
+
+  it('greps a regex over the path and type-tests only what matched', () => {
+    const sh = searchScript({ root: '/app', pattern: String.raw`\.ya?ml$` });
+    expect(sh).toContain(String.raw`| grep -Ei -- '\.ya?ml$' |`);
+    expect(sh).toContain('[ -f "$f" ] && ls -lLd "$f"');
+    expect(sh.indexOf('-type f')).toBe(-1);
+  });
+
+  it('honours match case and ends at the cap', () => {
+    const sh = searchScript({ root: '/', pattern: 'App.java', caseSensitive: true, limit: 50 });
+    expect(sh).toContain(`-name '*App.java*'`);
+    expect(sh.endsWith('| head -n 51')).toBe(true);
   });
 });

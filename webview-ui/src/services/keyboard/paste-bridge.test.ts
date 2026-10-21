@@ -143,6 +143,35 @@ describe('one insert, never two', () => {
     field.remove();
   });
 
+  /*
+    VS Code's webview raises a paste with nothing in it when clipboard-read is
+    denied, and dui's URL bar cancels it and inserts that nothing. Standing
+    down for it left the URL bar and header values with no paste at all.
+  */
+  it('still inserts when the paste that fired carried nothing', async () => {
+    const field = armed();
+    ctrlV(field);
+    const empty = new Event('paste', { bubbles: true });
+    Object.defineProperty(empty, 'clipboardData', { value: { getData: () => '', files: [] } });
+    field.dispatchEvent(empty);
+    await settle();
+
+    expect(inserts).toEqual(['ledger-svc']);
+    field.remove();
+  });
+
+  it('stands down for a paste that carried text', async () => {
+    const field = armed();
+    ctrlV(field);
+    const full = new Event('paste', { bubbles: true });
+    Object.defineProperty(full, 'clipboardData', { value: { getData: () => 'ledger-svc', files: [] } });
+    field.dispatchEvent(full);
+    await settle();
+
+    expect(inserts).toEqual([]);
+    field.remove();
+  });
+
   it('leaves a keystroke that lands nowhere editable alone', async () => {
     armed();
     const plain = document.createElement('div');
