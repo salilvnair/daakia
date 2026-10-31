@@ -30,8 +30,12 @@
  * neither adds a thing that can be on for one screen and off for another.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { CloseIcon, SaveIcon, SparkleIcon, ChevronLeftIcon, ChevronRightIcon, ExternalLinkIcon } from '../../../icons';
+import {
+  CloseIcon, SaveIcon, SparkleIcon, ChevronLeftIcon, ChevronRightIcon, ExternalLinkIcon,
+  EyeOffIcon, RestartIcon, SunIcon, ClockIcon,
+} from '../../../icons';
 import { SaveRequestModal } from '../../shared';
+import { ContextMenuView } from '@salilvnair/dui';
 import { isAiFeatureOn } from '../../../store/ai-features-store';
 import { logUiEvent } from '../../../store/ui-audit-store';
 import { useEnvStore } from '../../../store/env-store';
@@ -45,7 +49,10 @@ import {
 } from '../../../services/history-filter/first-failure';
 import type { SavedIndex, CollectionNodeLike, Resolver } from '../../../services/history-filter/saved-index';
 import type { HistoryRowLike } from '../../../services/history-filter/history-facts';
-import { loadDismissed, rememberDismissed, type DismissKind } from './history-dismissals';
+import {
+  loadDismissed, rememberDismissed, insightsSnoozed, snoozeInsights,
+  type DismissKind, type InsightSnooze,
+} from './history-dismissals';
 
 /** How many rows the sweep reads. It is a check on recent work, not an audit. */
 const SWEEP_DEPTH = 600;
@@ -57,14 +64,17 @@ type Card =
 
 // ── Shell ───────────────────────────────────────────────────────────────────
 
-function Shell({ tone, title, onDismiss, dismissTitle, children, footer }: {
+function Shell({ tone, title, onDismiss, dismissTitle, onSnooze, children, footer }: {
   tone: string;
   title: React.ReactNode;
   onDismiss: () => void;
   dismissTitle: string;
+  /** When given, the ✕ opens a menu: this one never again, or all of them for a while. */
+  onSnooze?: (kind: InsightSnooze) => void;
   children?: React.ReactNode;
   footer?: React.ReactNode;
 }) {
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
   return (
     <div className="rounded-lg p-2.5 flex flex-col gap-2"
          style={{
@@ -76,11 +86,38 @@ function Shell({ tone, title, onDismiss, dismissTitle, children, footer }: {
               style={{ color: 'var(--color-text-primary)' }}>
           {title}
         </span>
-        <button type="button" onClick={onDismiss} title={dismissTitle}
+        <button type="button"
+                onClick={e => (onSnooze ? setMenuAt({ x: e.clientX, y: e.clientY }) : onDismiss())}
+                title={onSnooze ? 'Hide…' : dismissTitle}
                 className="border-none bg-transparent cursor-pointer p-0.5 flex shrink-0"
                 style={{ color: 'var(--color-text-muted)' }}>
           <CloseIcon size={10} color="currentColor" />
         </button>
+        {onSnooze && (
+          <ContextMenuView
+            testId="history-hide-menu"
+            width="auto"
+            open={!!menuAt}
+            anchorEl={null}
+            position={menuAt ?? undefined}
+            onClose={() => setMenuAt(null)}
+            items={[
+              { id: 'never', label: 'Do not suggest this',
+                icon: <EyeOffIcon size={12} />, iconColor: 'var(--color-error)',
+                onClick: () => { setMenuAt(null); onDismiss(); } },
+              { id: 'sep', label: '', separator: true },
+              { id: 'session', label: 'Hide until Daakia reopens',
+                icon: <RestartIcon size={12} />, iconColor: 'var(--color-info)',
+                onClick: () => { setMenuAt(null); onSnooze('session'); } },
+              { id: 'today', label: 'Hide for today',
+                icon: <SunIcon size={12} />, iconColor: 'var(--color-warning)',
+                onClick: () => { setMenuAt(null); onSnooze('today'); } },
+              { id: 'week', label: 'Hide for 7 days',
+                icon: <ClockIcon size={12} />, iconColor: 'var(--color-success)',
+                onClick: () => { setMenuAt(null); onSnooze('week'); } },
+            ]}
+          />
+        )}
       </div>
       {children}
       {footer && <div className="flex items-center gap-1.5 flex-wrap">{footer}</div>}
@@ -161,9 +198,10 @@ function SecretCard({ finding, onDismiss, onShow }: {
 
 // ── The first failing run ───────────────────────────────────────────────────
 
-function FailureCard({ boundary, onDismiss, onOpen, rows }: {
+function FailureCard({ boundary, onDismiss, onSnooze, onOpen, rows }: {
   boundary: FailureBoundary;
   onDismiss: () => void;
+  onSnooze: (kind: InsightSnooze) => void;
   onOpen: (rowId: number) => void;
   rows: readonly HistoryRowLike[];
 }) {
@@ -191,6 +229,7 @@ function FailureCard({ boundary, onDismiss, onOpen, rows }: {
       tone={tone}
       dismissTitle="Stop telling me about this endpoint"
       onDismiss={onDismiss}
+      onSnooze={onSnooze}
       title={
         <>
           <span className="font-mono text-[10px]" style={{ color: 'var(--color-filter-field)', fontWeight: 600 }}>
@@ -267,9 +306,10 @@ function FailureCard({ boundary, onDismiss, onOpen, rows }: {
 
 // ── The save suggestion ─────────────────────────────────────────────────────
 
-function SaveCard({ suggestion, onDismiss, onSave, name, onName, naming }: {
+function SaveCard({ suggestion, onDismiss, onSnooze, onSave, name, onName, naming }: {
   suggestion: SaveSuggestion;
   onDismiss: () => void;
+  onSnooze: (kind: InsightSnooze) => void;
   onSave: () => void;
   name: string;
   onName: () => void;
@@ -281,6 +321,7 @@ function SaveCard({ suggestion, onDismiss, onSave, name, onName, naming }: {
       tone={tone}
       dismissTitle="Do not suggest this one again"
       onDismiss={onDismiss}
+      onSnooze={onSnooze}
       title={
         <>
           Sent <b style={{ color: tone }}>{suggestion.count} times</b>
@@ -339,6 +380,9 @@ export function HistoryInsights({ rows, saved, collections, resolve, protocol, o
     failure: loadDismissed('failure'),
   }));
   const [at, setAt] = useState(0);
+  /* Hidden for a while from the ✕ menu — secret findings excepted, see history-dismissals. */
+  const [snoozed, setSnoozed] = useState(() => insightsSnoozed());
+  const snooze = (kind: InsightSnooze) => { snoozeInsights(kind); setSnoozed(true); };
   const [saving, setSaving] = useState<SaveSuggestion | null>(null);
   const [aiName, setAiName] = useState<{ id: string; text: string } | null>(null);
 
@@ -352,6 +396,7 @@ export function HistoryInsights({ rows, saved, collections, resolve, protocol, o
     })) {
       out.push({ kind: 'secret', key: finding.key, finding });
     }
+    if (snoozed) return out;
     for (const boundary of findFailureBoundaries(rows, { resolve, dismissed: dismissed.failure })) {
       out.push({ kind: 'failure', key: boundary.key, boundary });
     }
@@ -361,7 +406,7 @@ export function HistoryInsights({ rows, saved, collections, resolve, protocol, o
       out.push({ kind: 'save', key: suggestion.key, suggestion });
     }
     return out;
-  }, [rows, secrets, saved, collections, resolve, dismissed]);
+  }, [rows, secrets, saved, collections, resolve, dismissed, snoozed]);
 
   /* Dismissing the last card would otherwise leave the pager pointing past the
      end and the strip empty while findings remain. */
@@ -413,6 +458,7 @@ export function HistoryInsights({ rows, saved, collections, resolve, protocol, o
           boundary={card.boundary}
           rows={rows}
           onDismiss={() => dismiss('failure', card.key)}
+          onSnooze={snooze}
           onOpen={onOpenRow}
         />
       )}
@@ -422,6 +468,7 @@ export function HistoryInsights({ rows, saved, collections, resolve, protocol, o
           name={name}
           naming={!!aiName}
           onDismiss={() => dismiss('save', card.key)}
+          onSnooze={snooze}
           onSave={() => {
             logUiEvent('history.saveSuggestion.save', { endpoint: card.suggestion.endpoint });
             setSaving(card.suggestion);

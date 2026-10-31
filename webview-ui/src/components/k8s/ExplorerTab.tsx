@@ -325,6 +325,15 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
   const [listing, setListing] = useState<Listing | null>(null);
   const [pattern, setPattern] = useState('');
   /*
+    The folder's own filter, as the Logs tab has one.
+
+    Search walks the pod; this narrows what is already on screen — type and the
+    listing keeps only the names that match, with the match marked, the way a
+    log's filter keeps its lines. Plain text matches anywhere in the name, any
+    case; `/…/` is a regex. A new folder starts unfiltered.
+  */
+  const [listFilter, setListFilter] = useState('');
+  /*
     Where the walk starts: the whole pod, or the folder above.
 
     It only ever started at the folder above, which the tab opens at /var/lib
@@ -435,6 +444,7 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
   const go = useCallback(async (to: string) => {
     setBusy(true);
     setPath(to);
+    setListFilter('');
     /*
       The old listing goes the moment the path does.
 
@@ -723,6 +733,24 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
     } as FileBrowserEntry & { fullPath: string };
   });
 
+  const filterTest = useMemo(() => {
+    const q = listFilter.trim();
+    if (!q) return undefined;
+    const re = /^\/(.+)\/$/.exec(q);
+    if (re) {
+      try { const rx = new RegExp(re[1], 'i'); return (n: string) => rx.test(n); } catch { return () => false; }
+    }
+    const lower = q.toLowerCase();
+    return (n: string) => n.toLowerCase().includes(lower);
+  }, [listFilter]);
+  const shownRows = filterTest
+    ? rows.filter(r => filterTest(r.name) || (r.linkTarget ? filterTest(r.linkTarget) : false))
+    : rows;
+  /* What to mark in each name: the text itself, or a regex's literal run. */
+  const filterMark = filterTest
+    ? (/^\/(.+)\/$/.test(listFilter.trim()) ? literalOf(listFilter.trim().slice(1, -1)) : listFilter.trim())
+    : undefined;
+
   const hitRows: FileBrowserEntry[] = (hits?.hits ?? []).map(h => {
     const kind = h.kind === 'dir' ? 'dir' : 'file';
     const k = kindBadge({ name: h.name, kind, size: h.size });
@@ -936,10 +964,28 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
           </span>
         )}
 
+        {mode === 'files' && (
+          <span style={{
+            flex: '0 1 300px', minWidth: 180,
+            marginLeft: (containers?.length ?? 0) > 1 ? 0 : 'auto',
+          }}
+                onKeyDown={e => { if (e.key === 'Escape' && listFilter) { e.stopPropagation(); setListFilter(''); } }}>
+            <SearchFieldView
+              value={listFilter}
+              onChange={setListFilter}
+              onSearch={() => {}}
+              onClear={() => setListFilter('')}
+              placeholder="Filter this folder — text or /regex/"
+              size="sm"
+              accentColor={ACCENT}
+            />
+          </span>
+        )}
+
         {mode === 'files' && here && (
           <span style={{
             display: 'flex', alignItems: 'center', gap: 6,
-            marginLeft: (containers?.length ?? 0) > 1 ? 0 : 'auto', flexShrink: 0,
+            flexShrink: 0,
           }}>
             <MountChip mount={here} />
             {here.readOnly && <Cap>read-only</Cap>}
@@ -1084,7 +1130,8 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
           // is a list you scan, and a box around every icon on every row is
           // more border than content.
           dense
-          entries={rows}
+          entries={shownRows}
+          match={filterMark}
           onParent={path && path !== '/' ? () => go(parentOf(path)) : undefined}
           onOpen={e => {
             if (dirLike(e)) go((e as FileBrowserEntry & { fullPath: string }).fullPath);
@@ -1100,7 +1147,24 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
           accentColor={ACCENT}
           size="sm"
           loading={busy}
-          emptyText={
+          emptyText={filterTest && rows.length ? (
+            <div className="px-8 py-6">
+              <EmptyStateView
+                variant="medallion"
+                icon={<SearchIcon size={IconSize.medallion} />}
+                title={`Nothing in ${path || '/'} matches “${listFilter.trim()}”`}
+                message="The filter looks at this folder only. Search walks the whole pod."
+                accentColor="var(--color-warning)"
+                action={{
+                  label: 'Search the whole pod',
+                  onClick: () => {
+                    const q = listFilter.trim().replace(/^\/(.+)\/$/, '$1');
+                    setMode('search'); setSearchFrom('pod'); setPattern(q); runSearch(q);
+                  },
+                }}
+              />
+            </div>
+          ) : (
             /*
               An empty directory is an answer, and worth saying properly.
 
@@ -1128,10 +1192,10 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
                 ]}
               />
             </div>
-          }
+          )}
           footer={listing && (
             <>
-              {rows.length} {rows.length === 1 ? 'entry' : 'entries'}
+              {filterTest ? `${shownRows.length} of ${rows.length}` : rows.length} {rows.length === 1 ? 'entry' : 'entries'}
               {' · '}
               <span style={{ opacity: 0.75 }}>{listing.command}</span>
             </>

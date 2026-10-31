@@ -2301,3 +2301,13 @@ button[title="Copied!"] > svg polyline {
   tab-size: 2;
 }
 .dk-hl code { font-family: inherit; background: none; padding: 0; }
+
+/* The History suggestion card's hide menu: four short choices, set small to
+   match the 11px card they belong to. dui's menu has no size of its own and
+   writes its row size inline, so only !important reaches it — scoped to this
+   one menu by its test id. */
+[data-testid="history-hide-menu"] .dui_ctx-menu__item {
+  font-size: 11px !important;
+  padding: 5px 9px !important;
+  gap: 7px !important;
+}
