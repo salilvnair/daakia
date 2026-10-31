@@ -4,6 +4,63 @@ All notable changes to the Daakia API Client extension are documented here.
 
 ---
 
+## [3.4.0] — 2026-10-31
+
+Finding things in a pod, and the reported rough edges: a file search that finds
+what `find /` finds, split panes that keep streaming, downloads that work and
+ask where they go, and a REST backlog of small wrongs.
+
+### Added
+
+- **Explorer → Files: "Filter this folder."** The listing narrows as you type
+  and the match is marked, like the Logs tab's filter — plain text or `/regex/`,
+  symlink targets included, "N of M entries". With nothing matching it offers
+  Search the whole pod.
+- **Explorer → Search: Whole pod | This folder, Files | Folders | Both, match
+  case**, and the recent searches Quick Search keeps. A folder hit opens the
+  folder.
+- **Pod table sorts by column** — ascending, descending, then back to the usual
+  order. Remembered.
+- **History's suggestion card can be hidden for a while:** Hide until Daakia
+  reopens, Hide for today, Hide for 7 days, beside Do not suggest this. Secret
+  warnings still show.
+- **Hover or click the URL bar to see the resolved URL** for a moment.
+
+### Changed
+
+- **File search streams.** Hits show as `find` prints them, and Stop keeps what
+  was found; there is no 30-second give-up. A plain name is matched inside
+  `find`, as `find -name` does, instead of statting every file in the pod;
+  `/proc`, `/sys` and `/dev` are skipped; any depth by default. A bare word now
+  matches file names, not the whole path — use a regex such as `^/config/` for
+  that.
+- **Explorer downloads ask where to save** — a Save dialog for a file, a folder
+  picker for a folder. They went to a temp folder without asking.
+- **Timeline and Network log show the URL that was sent**, variables resolved.
+- **Show code adds Content-Type** when the request sets none, as the send does.
+- The URL bar's history list stays shut after Send until the URL is edited.
+- The refresh icon turns clockwise, the way it spins.
+
+### Fixed
+
+- **Split panes stopped streaming** when you pressed Escape, went Back, opened
+  another pod or toggled Following — and still said they were live.
+- **Download on the search results page failed** for every choice but On
+  screen (`--tail=undefined`). Split panes and downloaded-log tabs had a
+  Download button wired to nothing; a downloaded-log tab now saves a copy of
+  the whole file. Every download says where it went, or why it did not.
+- **A read's first 200 lines could land after newer ones**, and after "ended",
+  while the log's format was being worked out.
+- **Ctrl+V did nothing in the URL bar and header values** inside VS Code.
+- **Pre-flight warned about URLs that were fine:** `{{baseUrl}}/users` as
+  missing a protocol, `{{id}}` as a stray brace, a URL in the query as a double
+  slash, and a missing Content-Type that Daakia sends anyway.
+- **Show code left out JSON bodies.**
+- **The AI chat's pod picker** looked like a column of checkbox emoji.
+- **`.env` was packaged** into the extension.
+
+---
+
 ## [3.3.0] — 2026-10-05
 
 dk8s learns to read a log: what a line names, which logger wrote it, what ran
