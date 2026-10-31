@@ -126,7 +126,54 @@ export async function handleFilesRead(msg: Record<string, unknown>, post: PostMe
   }
 }
 
-/** Where downloads land, beside the artifacts dk8s already collects. */
+/*
+  Where a download goes: asked, as every other save in Daakia asks.
+
+  Explorer downloads went straight to a temp folder with no dialog, while log
+  exports opened a folder picker — so the same Download button meant "pick a
+  place" on one screen and "somewhere under %TEMP%" on the next, and the file
+  was only findable through the Downloads tab. Now a file opens a Save dialog
+  and a folder a folder picker, starting in the user's Downloads folder.
+
+  A retry from the Downloads tab names the path it used the first time, so it
+  does not ask again. Cancelling the dialog starts nothing.
+*/
+async function askFileDest(name: string, pod: string): Promise<string | undefined> {
+  try {
+    const vscode = await import('vscode');
+    const picked = await vscode.window.showSaveDialog({
+      defaultUri: vscode.Uri.file(path.join(userDownloads(), name)),
+      saveLabel: 'Download',
+      title: `Download ${name} from ${pod}`,
+    });
+    return picked?.fsPath;
+  } catch {
+    // No VS Code API (a test, a host without dialogs): the old place.
+    return path.join(downloadDir(pod), name);
+  }
+}
+
+async function askDirDest(name: string, pod: string): Promise<string | undefined> {
+  try {
+    const vscode = await import('vscode');
+    const picked = await vscode.window.showOpenDialog({
+      canSelectFiles: false, canSelectFolders: true, canSelectMany: false,
+      defaultUri: vscode.Uri.file(userDownloads()),
+      openLabel: 'Download here',
+      title: `Download the folder ${name} from ${pod} into…`,
+    });
+    return picked?.[0] ? path.join(picked[0].fsPath, name) : undefined;
+  } catch {
+    return path.join(downloadDir(pod), name);
+  }
+}
+
+function userDownloads(): string {
+  const home = process.env.USERPROFILE ?? process.env.HOME ?? '';
+  return home ? path.join(home, 'Downloads') : downloadDir('');
+}
+
+/** Where downloads landed before they asked, and still do with no dialog to ask in. */
 export function downloadDir(pod: string): string {
   const base = path.join(
     process.env.TEMP ?? process.env.TMPDIR ?? '/tmp',
@@ -152,7 +199,8 @@ export async function handleFilesDownload(msg: Record<string, unknown>, post: Po
   const t = targetOf(msg);
   const remote = String(msg.path ?? '');
   const name = String(msg.name ?? (path.basename(remote) || 'download'));
-  const dest = path.join(downloadDir(t.pod), name);
+  const dest = typeof msg.dest === 'string' && msg.dest ? msg.dest : await askFileDest(name, t.pod);
+  if (!dest) return;
   /*
     Keyed by destination, which is what the webview already has.
 
@@ -230,8 +278,9 @@ export async function handleFilesDownloadDir(msg: Record<string, unknown>, post:
   const t = targetOf(msg);
   const remote = String(msg.path ?? '');
   const name = String(msg.name ?? (path.basename(remote) || 'directory'));
-  const folder = downloadDir(t.pod);
-  const dest = path.join(folder, name);
+  const dest = typeof msg.dest === 'string' && msg.dest ? msg.dest : await askDirDest(name, t.pod);
+  if (!dest) return;
+  const folder = path.dirname(dest);
 
   /*
     The destination goes in RELATIVE, from a working directory.

@@ -157,6 +157,8 @@ export const useDk8sFilesStore = create<FilesStore>((set) => ({
       context: d.source.context, namespace: d.source.namespace,
       pod: d.source.pod, container: d.source.container,
       path: d.source.path, name: d.name,
+      /* Where it went the first time, so a retry does not ask again. */
+      dest: d.dest,
     });
     // The old row goes: the new one is about to arrive, and two rows for one
     // file with different outcomes is a list that cannot be read.
