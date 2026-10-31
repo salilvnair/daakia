@@ -49,6 +49,34 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '3.4.0',
+    date: '2026-10-31',
+    headline: 'Finding things in a pod, and the reported rough edges: a file search that finds what find / finds, split panes that keep streaming, and downloads that work and ask where they go.',
+    lines: [
+      // ── Files in a pod ──
+      { kind: 'feature', area: 'dk8s', text: 'Explorer → Files has a filter: the folder narrows as you type and the match is marked, like the Logs tab — text or /regex/. With nothing matching it offers Search the whole pod.' },
+      { kind: 'change', area: 'dk8s', text: 'File search streams hits as find prints them, and Stop keeps what was found — no 30-second give-up. A name is matched the way find -name matches it, /proc and /sys are skipped, and any depth is the default.' },
+      { kind: 'feature', area: 'dk8s', text: 'Explorer → Search: Whole pod or This folder, Files, Folders or Both, match case, and your recent searches. A folder hit opens the folder.' },
+      { kind: 'change', area: 'dk8s', text: 'Explorer downloads ask where to save — a Save dialog for a file, a folder picker for a folder — instead of landing in a temp folder.' },
+
+      // ── Logs ──
+      { kind: 'fix', area: 'dk8s', text: 'Split panes keep streaming when you press Escape, go Back, open another pod or toggle Following. They used to stop, and still say they were live.' },
+      { kind: 'fix', area: 'dk8s', text: 'Download works from the search results page for every choice, from a split pane, and from a downloaded-log tab (a copy of the whole file) — and every download says where it went.' },
+      { kind: 'fix', area: 'dk8s', text: 'A read\'s first lines can no longer land after newer ones while the log\'s format is worked out.' },
+      { kind: 'feature', area: 'dk8s', text: 'The pod table sorts by any column, ascending or descending, and remembers it.' },
+
+      // ── REST ──
+      { kind: 'fix', area: 'REST', text: 'Ctrl+V pastes in the URL bar and header values inside VS Code again.' },
+      { kind: 'feature', area: 'REST', text: 'Hover or click the URL bar to see the resolved URL; Timeline and Network log show the URL that was actually sent.' },
+      { kind: 'fix', area: 'REST', text: 'Pre-flight no longer flags {{baseUrl}}/users, {{id}}, a URL in the query, or a Content-Type Daakia sends for you.' },
+      { kind: 'fix', area: 'REST', text: 'Show code includes JSON bodies, with their Content-Type.' },
+      { kind: 'feature', area: 'History', text: 'The suggestion above History can be hidden until Daakia reopens, for today or for 7 days. Secret warnings still show.' },
+
+      // ── Everywhere ──
+      { kind: 'change', area: 'UI', text: 'The refresh icon turns clockwise, and the AI chat\'s pod picker reads as checkboxes, not emoji.' },
+    ],
+  },
+  {
     version: '3.3.0',
     date: '2026-10-05',
     headline: 'dk8s learns to read a log: what a line names, which logger wrote it, what ran around it, and how to reach the pod — with a Daakia AI that can ask the cluster itself.',
