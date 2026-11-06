@@ -312,6 +312,19 @@ function WorkspaceHeader({
   const [overflow, setOverflow] = useState(false);
   const overflowBtn = useRef<HTMLButtonElement>(null);
   const [sharedOpen, setSharedOpen] = useState(false);
+  /*
+    The flyout closes a moment after the pointer leaves, not on the instant.
+    The way from "Import shared" to a workspace in the flyout runs through the
+    switcher's padding and the gap beside it, and closing on mouseleave shut
+    the flyout on every crossing — it vanished as you reached for it.
+  */
+  const sharedClose = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const holdShared = () => { clearTimeout(sharedClose.current); setSharedOpen(true); };
+  const dropShared = () => {
+    clearTimeout(sharedClose.current);
+    sharedClose.current = setTimeout(() => setSharedOpen(false), 300);
+  };
+  useEffect(() => () => clearTimeout(sharedClose.current), []);
   const readOnly = isReadOnly(active);
   const mine = workspaces.filter(w => !isReadOnly(w));
   const groups = showShared ? sharedGroups(team, workspaces) : [];
@@ -456,10 +469,10 @@ function WorkspaceHeader({
           ))}
           <div className="ws-menu-rule" />
           {showShared && <div className="ws-menu-subwrap"
-               onMouseEnter={() => setSharedOpen(true)}
-               onMouseLeave={() => setSharedOpen(false)}>
+               onMouseEnter={holdShared}
+               onMouseLeave={dropShared}>
             <button type="button" className={`ws-menu-item${sharedOpen ? ' ws-menu-item--hover' : ''}`}
-                    onClick={() => setSharedOpen(true)}>
+                    onClick={holdShared}>
               <UsersIcon size={12} /> <span className="ws-menu-label">Import shared</span>
               <ChevronRightIcon size={11} className="ws-menu-tick" />
             </button>

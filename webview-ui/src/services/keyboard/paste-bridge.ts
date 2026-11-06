@@ -127,6 +127,54 @@ async function paste(e: KeyboardEvent): Promise<void> {
   */
   field.focus();
   document.execCommand('insertText', false, text);
+  lastBridgeInsert = Date.now();
+}
+
+/** When the bridge last inserted, so a late native paste does not insert again. */
+let lastBridgeInsert = 0;
+
+/*
+  Ctrl+V into a dui text field, inside VS Code.
+
+  VS Code does not let the keystroke paste. It catches Ctrl+V in the
+  workbench and replies by running `document.execCommand('paste')` in the
+  webview — so the `paste` event fires from inside an execCommand. dui's URL
+  bar and header editors (contenteditable, so `{{vars}}` can be coloured)
+  answer every paste the same way: cancel it, then
+  `execCommand('insertText', …)` with its text. That second call is nested in
+  the first, and Chromium refuses a nested execCommand — it returns false and
+  does nothing. The paste was cancelled and its replacement refused, so Ctrl+V
+  left the field as it was, with the text sitting right there in the event.
+  The bridge saw a paste carrying data and stood down.
+
+  In the browser build Ctrl+V is a real keystroke, not an execCommand, so the
+  same handler works — which is how it passed there and failed here.
+
+  So a paste into a contenteditable is taken before dui sees it and inserted
+  a tick later, once the host's execCommand has returned. Plain inputs and
+  textareas keep the native paste, which works; Monaco handles its own; a
+  paste carrying files is left for whoever wants the files.
+*/
+function takeOverRichPaste(e: ClipboardEvent): void {
+  const target = e.target as HTMLElement | null;
+  if (!target || typeof target.closest !== 'function') return;
+  if (target.closest('.monaco-editor')) return;
+  const field = (target.closest('[contenteditable="true"]') as HTMLElement | null)
+    ?? (target.isContentEditable ? target : null);
+  if (!field) return;
+  const data = e.clipboardData;
+  if (!data || data.files?.length) return;
+  const text = data.getData('text/plain');
+  if (!text) return;
+
+  e.preventDefault();
+  e.stopPropagation();
+  /* The bridge already inserted for this keystroke: the host's paste came late. */
+  if (Date.now() - lastBridgeInsert < 1000) return;
+  setTimeout(() => {
+    field.focus();
+    document.execCommand('insertText', false, text);
+  }, 0);
 }
 
 let installed = false;
@@ -156,6 +204,7 @@ export function installPasteBridge(): () => void {
     const data = (e as ClipboardEvent).clipboardData;
     if (data && !data.getData('text/plain') && !data.files?.length) return;
     lastNativePaste = Date.now();
+    takeOverRichPaste(e as ClipboardEvent);
   };
 
   /*
@@ -169,8 +218,9 @@ export function installPasteBridge(): () => void {
     window.removeEventListener('keydown', onKeyDown, true);
     window.removeEventListener('paste', onPaste, true);
     installed = false;
+    lastBridgeInsert = 0;
   };
 }
 
 /** Exported for the tests — the combo rules are the fiddly half. */
-export const __test = { isPasteCombo, editableTarget };
+export const __test = { isPasteCombo, editableTarget, takeOverRichPaste };
