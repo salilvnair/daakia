@@ -10,6 +10,9 @@ import { importPostmanCollection } from './services/postman-importer';
 import { importOpenAPISpec, isOpenAPISpec } from './services/openapi-importer';
 import { importHarFile, isHarFile } from './services/har-importer';
 import { importBrunoCollection } from './services/bruno-importer';
+import { postImportReport, importToast } from './services/import-report';
+import { handleGetEnvironments } from './panel/main/handlers/environment-handler';
+import type { ImportResult } from './services/import-types';
 import { importDaakiaCollection } from './services/daakia-importer';
 import { importThunderClientCollection, isThunderClientCollection } from './services/thunder-importer';
 import { importHttpieCollection, isHttpieFile } from './services/httpie-importer';
@@ -162,6 +165,24 @@ export async function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  /*
+    The end of every REST import from a file: refresh what changed, toast it,
+    and leave the full report in DevTools and the audit log.
+
+    Imported collections are always REST-shaped, so the broadcast is tagged
+    'rest' — only the REST sidebar absorbs it, not whichever protocol tab is
+    active. A Bruno import can bring environments too.
+  */
+  const finishRestImport = (result: ImportResult, source: string) => {
+    const post = (m: unknown) => { MainPanel.currentPanel?.postMessage(m); };
+    if (result.success) {
+      post({ type: 'collectionsData', protocol: 'rest', collections: getCollectionTree('rest') });
+      if (result.environmentCount) handleGetEnvironments(post);
+    }
+    post({ type: 'toast', ...importToast(result) });
+    postImportReport(post, result, source);
+  };
+
   context.subscriptions.push(
     vscode.commands.registerCommand('daakia.importCollection', async () => {
       const uri = await vscode.window.showOpenDialog({
@@ -178,21 +199,14 @@ export async function activate(context: vscode.ExtensionContext) {
              inline chain that predated it and knew about five formats rather
              than seven — so Daakia could not read its own exports from the one
              import path people actually use. */
-          const result = importAnyCollection(content);
+          /* The path too: a Bruno .yml brings the folder it belongs to. */
+          const result = importAnyCollection(content, uri[0].fsPath);
           MainPanel.createOrShow(context.extensionUri);
-          if (result.success) {
-            // Postman/OpenAPI/HAR/Thunder/HTTPie collections are always REST-shaped —
-            // tag the broadcast so only the REST sidebar panel (matching what actually
-            // changed in the DB) absorbs it, instead of whichever protocol tab happens
-            // to be active right now.
-            MainPanel.currentPanel?.postMessage({ type: 'collectionsData', protocol: 'rest', collections: getCollectionTree('rest') });
-            MainPanel.currentPanel?.postMessage({ type: 'toast', toastType: 'success', message: `Imported "${result.collectionName}" (${result.requestCount} requests)` });
-          } else {
-            MainPanel.currentPanel?.postMessage({ type: 'toast', toastType: 'error', message: `Import failed: ${result.error}` });
-          }
+          finishRestImport(result, uri[0].fsPath);
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Failed to read file';
-          void vscode.window.showErrorMessage(`Import failed: ${msg}`);
+          MainPanel.createOrShow(context.extensionUri);
+          finishRestImport({ success: false, collectionName: '', requestCount: 0, error: msg }, uri[0].fsPath);
         }
       }
     })
@@ -211,17 +225,11 @@ export async function activate(context: vscode.ExtensionContext) {
         try {
           const result = importBrunoCollection(uri[0].fsPath);
           MainPanel.createOrShow(context.extensionUri);
-          if (result.success) {
-            // Bruno collections are always REST-shaped — same reasoning as the
-            // Postman/OpenAPI/HAR/Thunder/HTTPie import above.
-            MainPanel.currentPanel?.postMessage({ type: 'collectionsData', protocol: 'rest', collections: getCollectionTree('rest') });
-            MainPanel.currentPanel?.postMessage({ type: 'toast', toastType: 'success', message: `Imported "${result.collectionName}" (${result.requestCount} requests)` });
-          } else {
-            MainPanel.currentPanel?.postMessage({ type: 'toast', toastType: 'error', message: `Bruno import failed: ${result.error}` });
-          }
+          finishRestImport(result, uri[0].fsPath);
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Failed to read Bruno folder';
-          void vscode.window.showErrorMessage(`Bruno import failed: ${msg}`);
+          MainPanel.createOrShow(context.extensionUri);
+          finishRestImport({ success: false, collectionName: '', requestCount: 0, format: 'Bruno', error: msg }, uri[0].fsPath);
         }
       }
     })

@@ -124,6 +124,16 @@
   max-height: 320px;
   overflow-y: auto;
 }
+/* A bridge over the gap between the two menus. It belongs to the row that
+   holds the flyout open, so the pointer crossing it never leaves that row. */
+.ws-menu-subwrap::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  width: 12px;
+}
 .ws-menu-item--hover { background: color-mix(in srgb, var(--color-text-primary) 8%, transparent); }
 .ws-menu-head.ws-menu-head--user {
   display: flex;

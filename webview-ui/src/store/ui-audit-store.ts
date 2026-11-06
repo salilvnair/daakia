@@ -139,7 +139,7 @@ const BASE_AUDIT_EVENT_DEFS: AuditEventDef[] = [
   { id: 'collection.rename',    module: 'Collections', button: 'Rename',         action: 'update', description: 'Rename collection or item',     color: 'var(--color-primary)', defaultEnabled: false },
   { id: 'collection.move',      module: 'Collections', button: 'Move',           action: 'update', description: 'Move item to another folder',   color: 'var(--color-primary)', defaultEnabled: false },
   { id: 'collection.export',    module: 'Collections', button: 'Export',         action: 'click',  description: 'Export collection to file',     color: 'var(--color-primary)', defaultEnabled: false },
-  { id: 'collection.import',    module: 'Collections', button: 'Import',         action: 'create', description: 'Import collection from file',   color: 'var(--color-primary)', defaultEnabled: true },
+  { id: 'collection.import',    module: 'Collections', button: 'Import',         action: 'create', description: 'Import a collection from a file or URL — the format, the counts, and why it failed',   color: 'var(--color-primary)', defaultEnabled: true },
   { id: 'collection.open',      module: 'Collections', button: 'Open',           action: 'click',  description: 'Open request from collection', color: 'var(--color-primary)', defaultEnabled: false },
 
   // ── Environment ────────────────────────────────────────────────────────────

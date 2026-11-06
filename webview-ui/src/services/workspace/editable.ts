@@ -66,17 +66,36 @@ export const HISTORY_TO_COLLECTION_IDS: ReadonlySet<string> = new Set(['save']);
 interface MenuItem {
   id: string;
   disabled?: boolean;
-  description?: string;
+  shortcut?: string;
   children?: MenuItem[];
 }
 
-/** The same items, with the edits disabled when the area is not editable. */
+/** What a locked menu item says, where its shortcut would be. */
+export const READ_ONLY_TAG = 'Read only';
+
+/*
+  The same items, with the edits disabled when the area is not editable.
+
+  A locked item carries a short tag in its shortcut column, not the full reason
+  as a description: the paragraph under "Import" doubled the menu's width and
+  height to say what the read-only pill in the header already says. The full
+  reason stays on the buttons, as their tooltip.
+
+  A locked parent locks its submenu too. dui still opens the submenu of a
+  disabled item, and every importer in it was live.
+*/
 export function lockEdits<T extends MenuItem>(items: T[], editable: boolean, ids: ReadonlySet<string>): T[] {
   if (editable) return items;
   return items.map(item => {
-    if (ids.has(item.id)) return { ...item, disabled: true, description: READ_ONLY_REASON };
+    if (ids.has(item.id)) return lockAll(item);
     return item.children
       ? { ...item, children: lockEdits(item.children as T[], editable, ids) }
       : item;
   });
+}
+
+function lockAll<T extends MenuItem>(item: T): T {
+  return item.children
+    ? { ...item, disabled: true, children: item.children.map(c => lockAll(c)) }
+    : { ...item, disabled: true, shortcut: READ_ONLY_TAG };
 }

@@ -43,6 +43,7 @@ import { handleMockMessages } from './messages/mock-messages';
 import { handleAiMessages } from './messages/ai-messages';
 import { handleMcpMessages } from './messages/mcp-messages';
 import { handleRealtimeMessages } from './messages/realtime-messages';
+import { handleImportReport } from './messages/import-report';
 
 export interface ExtensionMessageCtx {
   setSqliteStatus: (s: { ok: boolean; error?: string }) => void;
@@ -446,6 +447,9 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
           setPaletteOpen(prev => !prev);
           break;
         }
+        case 'importReport':
+          handleImportReport(msg);
+          break;
         case 'toast': {
           useToastStore.getState().addToast({
             type: msg.toastType || 'info',

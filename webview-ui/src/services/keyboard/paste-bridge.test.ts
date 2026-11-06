@@ -172,6 +172,64 @@ describe('one insert, never two', () => {
     field.remove();
   });
 
+  /*
+    Inside VS Code, Ctrl+V arrives as the host running execCommand('paste'),
+    and dui's URL bar answers the paste with a nested execCommand('insertText')
+    that Chromium refuses. The text was in the event and never landed.
+  */
+  function richField() {
+    const field = document.createElement('div');
+    field.setAttribute('contenteditable', 'true');
+    document.body.appendChild(field);
+    const ownHandler = vi.fn();
+    field.addEventListener('paste', ownHandler);
+    return { field, ownHandler };
+  }
+
+  function pasteOf(text: string) {
+    const ev = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(ev, 'clipboardData', { value: { getData: () => text, files: [] } });
+    return ev;
+  }
+
+  it('pastes into a dui text field itself, a tick later, outside the host paste', async () => {
+    armed();
+    const { field, ownHandler } = richField();
+    const ev = pasteOf('https://echo.hoppscotch.io');
+    field.dispatchEvent(ev);
+
+    expect(ev.defaultPrevented).toBe(true);
+    expect(ownHandler).not.toHaveBeenCalled();
+    // Not inside the paste event — that is the call Chromium refuses.
+    expect(inserts).toEqual([]);
+    await settle();
+    expect(inserts).toEqual(['https://echo.hoppscotch.io']);
+    field.remove();
+  });
+
+  it('does not paste twice when the host paste comes after the bridge inserted', async () => {
+    armed();
+    const { field } = richField();
+    ctrlV(field);
+    await settle();
+    expect(inserts).toEqual(['ledger-svc']);
+
+    field.dispatchEvent(pasteOf('ledger-svc'));
+    await settle();
+    expect(inserts).toEqual(['ledger-svc']);
+    field.remove();
+  });
+
+  it('leaves a plain input to the native paste, which works', async () => {
+    const input = armed();
+    const ev = pasteOf('abc');
+    input.dispatchEvent(ev);
+    await settle();
+    expect(ev.defaultPrevented).toBe(false);
+    expect(inserts).toEqual([]);
+    input.remove();
+  });
+
   it('leaves a keystroke that lands nowhere editable alone', async () => {
     armed();
     const plain = document.createElement('div');

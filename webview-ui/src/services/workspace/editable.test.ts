@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  lockEdits, permissionsFor, COLLECTION_EDIT_IDS, SHARED_READ_ONLY, EDITABLE_EVERYWHERE, READ_ONLY_REASON,
+  lockEdits, permissionsFor, COLLECTION_EDIT_IDS, SHARED_READ_ONLY, EDITABLE_EVERYWHERE, READ_ONLY_TAG,
 } from './editable';
 
 /* One table decides what a workspace lets you change; every panel's menus go
@@ -29,12 +29,21 @@ describe('lockEdits', () => {
     expect(lockEdits(items, true, COLLECTION_EDIT_IDS)).toBe(items);
   });
 
-  it('disables edits, with the reason, and keeps everything else', () => {
+  it('disables edits, with a short tag, and keeps everything else', () => {
     const locked = lockEdits(items, false, COLLECTION_EDIT_IDS);
     expect(locked.map(i => [i.id, !!(i as { disabled?: boolean }).disabled])).toEqual([
       ['open', false], ['rename', true], ['import', true], ['export', false],
     ]);
-    expect((locked[1] as { description?: string }).description).toBe(READ_ONLY_REASON);
+    expect((locked[1] as { shortcut?: string }).shortcut).toBe(READ_ONLY_TAG);
+    // No paragraph under the label: it doubled the menu to repeat the header's pill.
+    expect((locked[1] as { description?: string }).description).toBeUndefined();
+  });
+
+  it('locks the submenu of a locked parent, which dui still opens', () => {
+    const locked = lockEdits(items, false, COLLECTION_EDIT_IDS);
+    const child = locked[2].children![0] as { disabled?: boolean; shortcut?: string };
+    expect(child.disabled).toBe(true);
+    expect(child.shortcut).toBe(READ_ONLY_TAG);
   });
 
   it('reaches into submenus', () => {

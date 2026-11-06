@@ -20,6 +20,7 @@ import { prodForwardRefusal } from './port-forward-handler';
 import { archiveCollection, archiveCollectionRequest } from '../../../services/bin';
 import { searchTree, type SearchNode } from '../../../services/collection-search';
 import { importAnyCollection } from '../../../services/import-any';
+import { postImportReport, importToast } from '../../../services/import-report';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -389,15 +390,10 @@ export async function handleImportCollectionUrl(msg: Record<string, unknown>, po
     }
 
     const result = importAnyCollection(text);
-    if (!result.success) {
-      postMessage({ type: 'toast', toastType: 'error', message: `Import failed: ${result.error}` });
-      return;
-    }
+    postImportReport(postMessage, result, url.toString());
+    postMessage({ type: 'toast', ...importToast(result) });
+    if (!result.success) return;
     postMessage({ type: 'collectionsData', protocol: 'rest', collections: getCollectionTree('rest') });
-    postMessage({
-      type: 'toast', toastType: 'success',
-      message: `Imported "${result.collectionName}" (${result.requestCount} requests)`,
-    });
   } catch (err) {
     postMessage({
       type: 'toast', toastType: 'error',
