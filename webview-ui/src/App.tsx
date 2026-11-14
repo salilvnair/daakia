@@ -705,7 +705,8 @@ export default function App() {
           tab, the state machine — owns the whole surface. The protocol rail
           must not keep showing REST as selected underneath it. */}
       {/* Left protocol icon rail */}
-      <div className="flex flex-col items-center w-12 bg-[var(--color-panel)] border-r border-[var(--color-surface-border)] py-2 gap-1 flex-shrink-0">
+      {/* data-dk-zoom: Settings → Appearance scales each region on its own (index.css). */}
+      <div data-dk-zoom="rail" className="flex flex-col items-center w-12 bg-[var(--color-panel)] border-r border-[var(--color-surface-border)] py-2 gap-1 flex-shrink-0">
         {/* Workspace sits above the protocols, behind a rule, because it is not
             one of them — it is the box they all work inside. */}
         <ProtocolIcon
@@ -914,7 +915,13 @@ export default function App() {
         <SqliteBanner sqliteOk={sqliteStatus.ok} error={sqliteStatus.error} />
 
         {/* Tab bar */}
-        <TabBar requestAccentColor={protocolAccent} onEnvironmentsClick={() => setSidebarSection('environments')} />
+        <div data-dk-zoom="tabs" className="flex-shrink-0 min-w-0">
+          <TabBar requestAccentColor={protocolAccent} onEnvironmentsClick={() => setSidebarSection('environments')} />
+        </div>
+
+        {/* Everything under the tab bar is one region for Settings → Appearance,
+            so the main area can be sized apart from the chrome around it. */}
+        <div data-dk-zoom="content" className="flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden">
 
         {/* DaakiaAiPanel — always mounted when a daakia-ai tab exists so ConvEngineChat
             never loses its internal state across tab switches. Hidden via display:none when
@@ -1107,6 +1114,7 @@ export default function App() {
             <McpPanel />
           )
         ) : null}
+        </div>
 
         {/* DevTools bottom panel */}
         <DevToolsPanel />

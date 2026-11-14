@@ -149,8 +149,7 @@ describe('deleting', () => {
 
   it('a folder takes its subfolders with it, and its scratchpads go to the default folder', () => {
     reset([pad({ id: 'a', folderId: 'orders' }), pad({ id: 'b', folderId: 'payloads' }), pad({ id: 'c' })]);
-    const moved = useScratchpadStore.getState().deleteFolder('orders');
-    expect(moved).toBe(2);
+    expect(useScratchpadStore.getState().deleteFolder('orders')).toEqual({ moved: 2, deleted: 0 });
     expect(useScratchpadStore.getState().folders.map(f => f.id)).toEqual([DEFAULT]);
     expect(useScratchpadStore.getState().files.every(f => f.folderId === DEFAULT)).toBe(true);
     /* The moves are written before the folders go, so nothing is ever in a folder that is gone. */
@@ -158,10 +157,33 @@ describe('deleting', () => {
     expect(kinds.lastIndexOf('scratchpads:save')).toBeLessThan(kinds.indexOf('scratchpads:deleteFolders'));
   });
 
-  it('the default folder cannot be deleted', () => {
-    reset([pad({})]);
-    expect(useScratchpadStore.getState().deleteFolder(DEFAULT)).toBe(0);
-    expect(useScratchpadStore.getState().folders).toHaveLength(3);
+  it('deleting the default folder deletes what is in it and keeps the folder', () => {
+    reset([pad({ id: 'a' }), pad({ id: 'b', folderId: 'orders' })]);
+    const sub = useScratchpadStore.getState().createFolder(DEFAULT, 'inner');
+    useScratchpadStore.setState(st => ({ files: [...st.files, pad({ id: 'c', folderId: sub.id })] }));
+    useScratchpadStore.getState().open('a');
+    posted.length = 0;
+
+    expect(useScratchpadStore.getState().deleteFolder(DEFAULT)).toEqual({ moved: 0, deleted: 2 });
+    const st = useScratchpadStore.getState();
+    expect(st.folders.map(f => f.id)).toEqual([DEFAULT, 'orders', 'payloads']);
+    expect(st.defaultFolderId).toBe(DEFAULT);
+    /* Only what was inside: the scratchpad in another folder is untouched. */
+    expect(st.files.map(f => f.id)).toEqual(['b']);
+    expect(posted).toContainEqual({ type: 'scratchpads:delete', id: 'a' });
+    expect(posted).toContainEqual({ type: 'scratchpads:delete', id: 'c' });
+    expect(posted).toContainEqual({ type: 'scratchpads:deleteFolders', ids: [sub.id] });
+    expect(useTabsStore.getState().tabs).toHaveLength(0);
+  });
+
+  it('a save still waiting for a scratchpad in the emptied folder is dropped, not written back', () => {
+    vi.useFakeTimers();
+    reset([pad({ id: 'a' })]);
+    useScratchpadStore.getState().setContent('a', 'typed');
+    useScratchpadStore.getState().deleteFolder(DEFAULT);
+    posted.length = 0;
+    vi.advanceTimersByTime(1000);
+    expect(posted).toHaveLength(0);
   });
 });
 

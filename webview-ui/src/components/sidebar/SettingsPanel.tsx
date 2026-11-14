@@ -6,7 +6,7 @@ import { useDbStatusStore } from '../../store/db-status-store';
 import { useAppSettingsStore } from '../../store/app-settings-store';
 import type { TabItem } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
-import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, GitHubIcon, LockIcon, TrashIcon, KeyboardIcon, Dk8sIcon, TerminalIcon,
+import { SettingsIcon, SunIcon, TextSizeIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, GitHubIcon, LockIcon, TrashIcon, KeyboardIcon, Dk8sIcon, TerminalIcon,
          CookieIcon, NetworkIcon, ShieldIcon, UptimeIcon, FilterIcon, LayersIcon, BulkEditIcon, GaugeIcon,
          DocumentIcon, ConnectIcon, ClipboardCompareIcon, FolderIcon, BugIcon, IssueOpenedIcon, InfoCircleIcon, SearchIcon, ChartBarIcon, DownloadIcon, PortForwardIcon } from '../../icons';
 import { useAiFeaturesStore, type AiFeatureKey } from '../../store/ai-features-store';
@@ -57,10 +57,11 @@ import { DebugSnapshotTab } from '../settings/devtools/DebugSnapshotTab';
 import { AuditConfigTab } from '../settings/devtools/AuditConfigTab';
 import { setFixedPortEnabled, useFixedPortEnabled } from '../mock/fixed-port';
 import { AboutPanel } from '../settings/AboutPanel';
+import { AppearanceSettings } from '../settings/AppearanceSettings';
 import { Dk8sGeneralSettings, DkghGeneralSettings } from '../settings/SurfaceGeneralSettings';
 import { Dk8sCommandsSection } from '../settings/Dk8sCommandsSection';
 
-type SettingsSection = 'general' | 'theme' | 'keymap' | 'about' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'code-scan' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-general' | 'dk8s-cluster' | 'dk8s-logs' | 'dk8s-logs-downloads' | 'dk8s-logs-formats' | 'dk8s-logs-archive' | 'dk8s-fields' | 'dk8s-determinants' | 'dk8s-terminal' | 'dk8s-port-forward' | 'dk8s-commands' | 'dkgh-general' | 'dkgh';
+type SettingsSection = 'general' | 'theme' | 'appearance' | 'keymap' | 'about' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'code-scan' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-general' | 'dk8s-cluster' | 'dk8s-logs' | 'dk8s-logs-downloads' | 'dk8s-logs-formats' | 'dk8s-logs-archive' | 'dk8s-fields' | 'dk8s-determinants' | 'dk8s-terminal' | 'dk8s-port-forward' | 'dk8s-commands' | 'dkgh-general' | 'dkgh';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
 type PowerSubtab = 'cookies' | 'proxy' | 'certs' | 'monitor' | 'interceptor' | 'diff' | 'bulk' | 'load'
   | 'schema-diff' | 'openapi' | 'security' | 'webhook' | 'postman' | 'clustering'
@@ -71,6 +72,7 @@ type ActiveNavId = SettingsSection;
 const SETTINGS_SECTION_META: Record<SettingsSection, { label: string; icon: React.ReactNode }> = {
   'general':         { label: 'General',        icon: <SettingsIcon size={14} /> },
   'theme':           { label: 'Theme',           icon: <SunIcon size={14} /> },
+  'appearance':      { label: 'Appearance',      icon: <TextSizeIcon size={14} /> },
   'keymap':          { label: 'Keymap',          icon: <KeyboardIcon size={14} /> },
   'about':           { label: 'About',           icon: <InfoCircleIcon size={14} /> },
   'mock-server':     { label: 'Mock Server',     icon: <ServerIcon size={14} /> },
@@ -103,6 +105,7 @@ const SETTINGS_NAV_ITEMS: SideNavItem[] = [
   { id: 'g-general', label: 'General', isGroup: true, children: [
     { id: 'general', label: SETTINGS_SECTION_META.general.label, icon: SETTINGS_SECTION_META.general.icon },
     { id: 'theme', label: SETTINGS_SECTION_META.theme.label, icon: SETTINGS_SECTION_META.theme.icon },
+    { id: 'appearance', label: SETTINGS_SECTION_META.appearance.label, icon: SETTINGS_SECTION_META.appearance.icon },
     { id: 'keymap', label: SETTINGS_SECTION_META.keymap.label, icon: SETTINGS_SECTION_META.keymap.icon },
     { id: 'about', label: SETTINGS_SECTION_META.about.label, icon: SETTINGS_SECTION_META.about.icon },
   ] },
@@ -277,6 +280,8 @@ export function SettingsPanel() {
               <DevToolsSettingsPage />
             ) : activeSection === 'theme' ? (
               <ThemeSettings />
+            ) : activeSection === 'appearance' ? (
+              <AppearanceSettings />
             ) : activeSection === 'about' ? (
               <AboutPanel />
             ) : null}
@@ -1016,8 +1021,8 @@ function ThemeSettings() {
   return (
     <div className="p-6 flex flex-col gap-6">
       <div>
-        <h3 className="text-[13px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>Appearance</h3>
-        <p className="text-[11px] mt-1" style={{ color: 'var(--color-text-muted)' }}>Choose how Daakia looks to you</p>
+        <h3 className="text-[13px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>Theme</h3>
+        <p className="text-[11px] mt-1" style={{ color: 'var(--color-text-muted)' }}>Dark, light, or whatever the system is. Fonts and sizes are under Appearance.</p>
       </div>
 
       <div className="flex gap-3 flex-wrap">

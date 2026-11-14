@@ -38,6 +38,7 @@ import { SaveRequestModal } from '../../shared';
 import { ContextMenuView } from '@salilvnair/dui';
 import { isAiFeatureOn } from '../../../store/ai-features-store';
 import { logUiEvent } from '../../../store/ui-audit-store';
+import { useToastStore } from '../../../store/toast-store';
 import { useEnvStore } from '../../../store/env-store';
 import { askForName, askWhyItBroke, readNameAnswer } from '../../../services/history-filter/ai-suggest';
 import { suggestSaves, type SaveSuggestion } from '../../../services/history-filter/repeat-suggest';
@@ -198,6 +199,35 @@ function SecretCard({ finding, onDismiss, onShow }: {
 
 // ── The first failing run ───────────────────────────────────────────────────
 
+/** One AI answer as it arrives, and whether it has finished arriving. */
+export type Asking = { id: string; text: string; done: boolean };
+
+/**
+ * Follow one AI reply into `set`, the way the host sends it: `ai:chunk` carries
+ * `delta` (sometimes `text`), `ai:complete` carries the whole answer in
+ * `message.content`. These cards read `content` off the chunk and ignored
+ * `complete` — and the namer asks for no streaming, so it only ever gets a
+ * `complete`: the button said "Naming…" and nothing followed.
+ */
+export function followReply(id: string, set: (fn: (s: Asking | null) => Asking | null) => void, failed: string) {
+  const onMessage = (event: MessageEvent) => {
+    const msg = event.data;
+    if (msg?.tabId !== id) return;
+    if (msg.type === 'ai:chunk') {
+      const piece = msg.delta ?? msg.text ?? '';
+      if (piece) set(s => (s && s.id === id ? { ...s, text: s.text + piece } : s));
+    } else if (msg.type === 'ai:complete') {
+      const whole = msg.message?.content ?? '';
+      set(s => (s && s.id === id ? { ...s, text: whole || s.text, done: true } : s));
+    } else if (msg.type === 'ai:error') {
+      set(() => null);
+      useToastStore.getState().addToast({ type: 'error', message: `${failed}: ${msg.message || 'the model did not answer.'}` });
+    }
+  };
+  window.addEventListener('message', onMessage);
+  return () => window.removeEventListener('message', onMessage);
+}
+
 function FailureCard({ boundary, onDismiss, onSnooze, onOpen, rows }: {
   boundary: FailureBoundary;
   onDismiss: () => void;
@@ -206,23 +236,12 @@ function FailureCard({ boundary, onDismiss, onSnooze, onOpen, rows }: {
   rows: readonly HistoryRowLike[];
 }) {
   const tone = 'var(--color-time-critical, var(--color-error))';
-  const [why, setWhy] = useState<{ id: string; text: string } | null>(null);
+  const [why, setWhy] = useState<Asking | null>(null);
   const change = likeliestChange(boundary.changes);
   const narrowed = change ? narrow(change.before, change.after) : undefined;
 
-  useEffect(() => {
-    if (!why) return;
-    const onMessage = (event: MessageEvent) => {
-      const msg = event.data;
-      if (msg?.tabId !== why.id) return;
-      if (msg.type === 'ai:chunk') {
-        setWhy(s => (s && s.id === msg.tabId ? { ...s, text: s.text + (msg.content ?? '') } : s));
-      }
-      if (msg.type === 'ai:error') setWhy(null);
-    };
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, [why]);
+  const whyId = why?.id;
+  useEffect(() => (whyId ? followReply(whyId, setWhy, 'Could not ask why') : undefined), [whyId]);
 
   return (
     <Shell
@@ -251,12 +270,12 @@ function FailureCard({ boundary, onDismiss, onSnooze, onOpen, rows }: {
               to keep in step with this one. */}
           {isAiFeatureOn('responseDiff') && !!change && (
             <Secondary
-              label={why ? 'Asking…' : 'Why?'}
+              label={why && !why.done ? 'Asking…' : 'Why?'}
               icon={<SparkleIcon size={10} color="currentColor" />}
               title="Ask the Response Diff Analyzer what this change would do"
               tone="var(--color-protocol-ai)"
               onClick={() => setWhy({
-                id: askWhyItBroke(boundary, rows), text: '',
+                id: askWhyItBroke(boundary, rows), text: '', done: false,
               })}
             />
           )}
@@ -384,7 +403,7 @@ export function HistoryInsights({ rows, saved, collections, resolve, protocol, o
   const [snoozed, setSnoozed] = useState(() => insightsSnoozed());
   const snooze = (kind: InsightSnooze) => { snoozeInsights(kind); setSnoozed(true); };
   const [saving, setSaving] = useState<SaveSuggestion | null>(null);
-  const [aiName, setAiName] = useState<{ id: string; text: string } | null>(null);
+  const [aiName, setAiName] = useState<Asking | null>(null);
 
   const environments = useEnvStore(s => s.environments);
   const secrets = useMemo(() => collectSecrets(environments), [environments]);
@@ -415,19 +434,8 @@ export function HistoryInsights({ rows, saved, collections, resolve, protocol, o
 
   useEffect(() => { setAiName(null); }, [card?.key]);
 
-  useEffect(() => {
-    if (!aiName) return;
-    const onMessage = (event: MessageEvent) => {
-      const msg = event.data;
-      if (msg?.tabId !== aiName.id) return;
-      if (msg.type === 'ai:chunk') {
-        setAiName(s => (s && s.id === msg.tabId ? { ...s, text: s.text + (msg.content ?? '') } : s));
-      }
-      if (msg.type === 'ai:error') setAiName(null);
-    };
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, [aiName]);
+  const aiNameId = aiName?.id;
+  useEffect(() => (aiNameId ? followReply(aiNameId, setAiName, 'Could not name it') : undefined), [aiNameId]);
 
   if (!card) return null;
 
@@ -466,14 +474,14 @@ export function HistoryInsights({ rows, saved, collections, resolve, protocol, o
         <SaveCard
           suggestion={card.suggestion}
           name={name}
-          naming={!!aiName}
+          naming={!!aiName && !aiName.done}
           onDismiss={() => dismiss('save', card.key)}
           onSnooze={snooze}
           onSave={() => {
             logUiEvent('history.saveSuggestion.save', { endpoint: card.suggestion.endpoint });
             setSaving(card.suggestion);
           }}
-          onName={() => setAiName({ id: askForName(card.suggestion), text: '' })}
+          onName={() => setAiName({ id: askForName(card.suggestion), text: '', done: false })}
         />
       )}
 

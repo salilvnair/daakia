@@ -35,6 +35,7 @@ export function ConfirmDialog({
 
   return createPortal(
     <div
+      data-dk-modal=""
       className="fixed inset-0 z-[99999] flex items-center justify-center bg-[rgba(0,0,0,0.55)] backdrop-blur-[2px]"
       role="presentation"
     >

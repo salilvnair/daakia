@@ -214,7 +214,7 @@ function AssertionEditModal({ assertion, onUpdate, onClose }: {
   onClose: () => void;
 }) {
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+    <div data-dk-modal="" className="fixed inset-0 z-[9999] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" />
       <div className="relative w-[420px] bg-[var(--color-surface)] border border-[var(--color-surface-border)] rounded-xl shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}

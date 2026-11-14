@@ -2764,3 +2764,15 @@ export function ScratchpadIcon(props: IconProps) {
     </svg>
   );
 }
+
+/** A large and a small letter — font and size settings. */
+export function TextSizeIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M3 19l5-14 5 14" />
+      <path d="M4.8 14h6.4" />
+      <path d="M14 19l3.5-9 3.5 9" />
+      <path d="M15.2 16h4.6" />
+    </svg>
+  );
+}

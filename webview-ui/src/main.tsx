@@ -6,6 +6,8 @@ import { useAppThemeStore, resolveMode, type ThemeMode } from './store/app-theme
 import 'highlight.js/styles/github-dark.css';
 import '@salilvnair/dui/style.css';
 import '@salilvnair/dui/monaco-setup';
+import { applyStoredAppearance } from './store/appearance-store';
+import { installEditorAppearance } from './services/appearance/editor-appearance';
 
 /*
   The palette goes on before the first render, not after it.
@@ -19,6 +21,11 @@ import '@salilvnair/dui/monaco-setup';
   const choice = (localStorage.getItem('daakia-theme') as ThemeMode) || 'dark';
   useAppThemeStore.getState().repaint(resolveMode(choice));
 }
+
+/* Settings → Appearance, for the same reason: sizes and fonts that arrive
+   after the first frame make the whole window jump. */
+applyStoredAppearance();
+installEditorAppearance();
 
 const isDuiShowcase = import.meta.env.DEV && window.location.hash === '#dui';
 

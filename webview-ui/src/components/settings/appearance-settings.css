@@ -1,0 +1,265 @@
+/* Settings → Appearance (dk-ap). Every colour is a theme token; --ap-accent is
+   set per card, tile and chip from the token that card is about. */
+
+.dk-ap {
+  --ap-accent: var(--color-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px;
+  max-width: 1040px;
+  container-type: inline-size;
+}
+
+/* ── hero ── */
+.dk-ap-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 28%, var(--color-surface-border));
+  background:
+    radial-gradient(120% 160% at 0% 0%, color-mix(in srgb, var(--color-primary) 16%, transparent), transparent 60%),
+    radial-gradient(100% 140% at 100% 100%, color-mix(in srgb, var(--color-scratchpad) 12%, transparent), transparent 60%),
+    var(--color-surface);
+}
+.dk-ap-hero__mark {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-scratchpad));
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+.dk-ap-hero__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.dk-ap-hero__text h3 { margin: 0; font-size: 17px; font-weight: 600; color: var(--color-text-primary); letter-spacing: -0.01em; }
+.dk-ap-hero__text p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--color-text-secondary); max-width: 62ch; }
+.dk-ap-hero__changes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.dk-ap-pill {
+  font-size: 11px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+  white-space: nowrap;
+}
+
+/* ── reset ── */
+.dk-ap-reset {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid var(--color-surface-border);
+  cursor: pointer;
+  transition: color 120ms, border-color 120ms, background 120ms;
+}
+.dk-ap-reset:hover { color: var(--ap-accent); border-color: color-mix(in srgb, var(--ap-accent) 45%, transparent); }
+.dk-ap-reset--strong { --ap-accent: var(--color-primary); }
+.dk-ap-reset:focus-visible,
+.dk-ap-chip:focus-visible,
+.dk-ap-font:focus-visible { outline: 2px solid var(--ap-accent); outline-offset: 2px; }
+
+/* ── cards ── */
+.dk-ap-card {
+  border-radius: 14px;
+  border: 1px solid var(--color-surface-border);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+.dk-ap-card__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--color-surface-border);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--ap-accent) 9%, transparent), transparent 70%);
+}
+.dk-ap-card__titles { flex: 1; min-width: 0; }
+.dk-ap-card__titles h4 { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--color-text-primary); }
+.dk-ap-card__titles p { margin: 2px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--color-text-muted); }
+.dk-ap-card__body { padding: 18px; display: flex; flex-direction: column; gap: 18px; }
+
+.dk-ap-tile {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  color: var(--ap-accent);
+  background: color-mix(in srgb, var(--ap-accent) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ap-accent) 28%, transparent);
+}
+.dk-ap-tile--sm { width: 26px; height: 26px; border-radius: 7px; }
+
+/* ── fields ── */
+.dk-ap-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.dk-ap-field__label { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.dk-ap-field__label > span:first-child {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+.dk-ap-field__value { font-size: 11.5px; color: var(--color-text-muted); }
+
+.dk-ap-inline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dk-ap-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; max-width: 760px; }
+
+/* ── chips ── */
+.dk-ap-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.dk-ap-chip {
+  height: 26px;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+  background: var(--color-panel);
+  border: 1px solid var(--color-surface-border);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 120ms, border-color 120ms, background 120ms;
+}
+.dk-ap-chip:hover { color: var(--color-text-primary); border-color: color-mix(in srgb, var(--ap-accent) 40%, var(--color-surface-border)); }
+.dk-ap-chip.is-on {
+  color: var(--ap-accent);
+  background: color-mix(in srgb, var(--ap-accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--ap-accent) 55%, transparent);
+  font-weight: 600;
+}
+
+/* ── font tiles ── */
+.dk-ap-fontpick { display: flex; flex-direction: column; gap: 10px; }
+.dk-ap-fonts { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; }
+.dk-ap-font {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 11px 9px;
+  border-radius: 10px;
+  text-align: left;
+  background: var(--color-panel);
+  border: 1px solid var(--color-surface-border);
+  cursor: pointer;
+  transition: border-color 120ms, background 120ms, transform 120ms;
+}
+.dk-ap-font:hover { border-color: color-mix(in srgb, var(--ap-accent) 45%, var(--color-surface-border)); }
+.dk-ap-font.is-on {
+  background: color-mix(in srgb, var(--ap-accent) 12%, var(--color-panel));
+  border-color: var(--ap-accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ap-accent) 35%, transparent);
+}
+.dk-ap-font__sample { font-size: 19px; line-height: 1.15; color: var(--color-text-primary); white-space: nowrap; }
+.dk-ap-font.is-on .dk-ap-font__sample { color: var(--ap-accent); }
+.dk-ap-font__name { font-size: 11px; color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.dk-ap-font__note { font-size: 10px; color: var(--color-text-muted); }
+.dk-ap-font.is-missing .dk-ap-font__sample { opacity: 0.45; }
+.dk-ap-font--custom .dk-ap-font__sample { font-style: italic; color: var(--color-text-secondary); }
+.dk-ap-font__check {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 17px;
+  height: 17px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: var(--ap-accent);
+}
+.dk-ap-custom { display: flex; flex-direction: column; gap: 5px; max-width: 460px; }
+.dk-ap-custom__hint { font-size: 11px; color: var(--color-text-muted); }
+
+/* ── editor card ── */
+/* Controls, then the preview under them at full width — it reads as the result of the choices above it. */
+.dk-ap-editor { display: flex; flex-direction: column; gap: 18px; }
+.dk-ap-editor__controls { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.dk-ap-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--color-info) 25%, var(--color-surface-border));
+  background: color-mix(in srgb, var(--color-info) 5%, var(--color-panel));
+  min-width: 0;
+}
+.dk-ap-preview__head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.dk-ap-preview__head > span:first-child { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-info); }
+.dk-ap-preview__summary { font-size: 11px; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.dk-ap-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: var(--color-panel);
+  border: 1px solid var(--color-surface-border);
+}
+.dk-ap-toggle > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dk-ap-toggle__label { font-size: 12.5px; font-weight: 500; color: var(--color-text-primary); }
+.dk-ap-toggle__desc { font-size: 11.5px; color: var(--color-text-muted); }
+.dk-ap-toggle__desc code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 0 4px;
+  border-radius: 4px;
+  color: var(--color-info);
+  background: color-mix(in srgb, var(--color-info) 12%, transparent);
+}
+
+/* ── size tiles ── */
+.dk-ap-regions { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 10px; }
+.dk-ap-region {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 13px;
+  border-radius: 12px;
+  background: var(--color-panel);
+  border: 1px solid var(--color-surface-border);
+  transition: border-color 120ms, background 120ms;
+}
+.dk-ap-region.is-changed {
+  border-color: color-mix(in srgb, var(--ap-accent) 50%, var(--color-surface-border));
+  background: color-mix(in srgb, var(--ap-accent) 6%, var(--color-panel));
+}
+.dk-ap-region__top { display: flex; align-items: center; gap: 9px; }
+.dk-ap-region__name { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--color-text-primary); }
+.dk-ap-region__pct {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+.dk-ap-region.is-changed .dk-ap-region__pct { color: var(--ap-accent); }
+.dk-ap-region__desc { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--color-text-muted); min-height: 2.9em; }
+.dk-ap-region__controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dk-ap-region .dk-ap-chip { height: 24px; padding: 0 8px; font-size: 11px; }
+
+/* Narrow: size and line height one above the other. */
+@container (max-width: 560px) {
+  .dk-ap-pair { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dk-ap-chip, .dk-ap-font, .dk-ap-reset, .dk-ap-region { transition: none; }
+}

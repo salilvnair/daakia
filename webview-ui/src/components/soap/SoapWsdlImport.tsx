@@ -144,7 +144,7 @@ export function SoapWsdlImport({ open, onClose }: SoapWsdlImportProps) {
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+    <div data-dk-modal="" className="fixed inset-0 z-[9999] flex items-center justify-center">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60" />
 
