@@ -5,7 +5,7 @@ import { EnvironmentsPanel } from '../rest/sidebar/EnvironmentsPanel';
 import { GraphQLDocumentationPanel, GraphQLSchemaExplorer } from '../graphql';
 import { RunAndDebugPanel } from '../shared/debugger';
 import { ScratchpadsPanel } from '../scratchpad/ScratchpadsPanel';
-import { CollectionsFolderIcon, ClockIcon, LayersIcon, SettingsIcon, DocumentIcon, CodeIcon, BugIcon, GrpcIcon, SoapIcon, SparkleIcon, GeneralAssistantIcon, BookOpenIcon, GitHubIcon, RefreshIcon, InfoCircleIcon, ScratchpadIcon } from '../../icons';
+import { CollectionsFolderIcon, ClockIcon, LayersIcon, SettingsIcon, DocumentIcon, CodeIcon, BugIcon, GrpcIcon, SoapIcon, SparkleIcon, GeneralAssistantIcon, BookOpenIcon, GitHubIcon, RefreshIcon, InfoCircleIcon } from '../../icons';
 import { useTabsStore } from '../../store/tabs-store';
 import { useDebugStore } from '../../store/debug-store';
 import { useAiProvidersStore } from '../../store/ai-providers-store';
@@ -117,11 +117,15 @@ export function AppSidebar({ activeSection, onSectionChange, onOpenChange, sideb
           transition: sidebarDragging ? 'none' : 'width 180ms cubic-bezier(0.2, 0.8, 0.2, 1)',
         }}
       >
-        {showPanel && <SidebarPanelContent section={activeSection} rtProtocol={rtProtocol} />}
+        {showPanel && (
+          <div data-dk-zoom="sidebar" className="flex flex-col h-full w-full min-h-0 min-w-0">
+            <SidebarPanelContent section={activeSection} rtProtocol={rtProtocol} />
+          </div>
+        )}
       </div>
 
       {/* Icon rail — always has left border for clean separation */}
-      <div className="flex flex-col items-center w-12 bg-[var(--color-panel)] border-l border-[var(--color-surface-border)] py-2 gap-1 flex-shrink-0">
+      <div data-dk-zoom="sideRail" className="flex flex-col items-center w-12 bg-[var(--color-panel)] border-l border-[var(--color-surface-border)] py-2 gap-1 flex-shrink-0">
         {/* REST sidebar icons */}
         {showRestSidebar && (
           <>
@@ -378,11 +382,12 @@ export function AppSidebar({ activeSection, onSectionChange, onOpenChange, sideb
         {showScratchSidebar && (
           <SidebarIcon
             active={activeSection === 'scratchpads'}
-            accentColor="var(--color-scratchpad)"
+            accentColor="var(--color-sidebar-collections)"
             onClick={() => toggle('scratchpads')}
-            title="Scratchpads"
+            title="Scratchpad Collections"
           >
-            <ScratchpadIcon size={16} style={{ color: 'var(--color-scratchpad)' }} />
+            {/* The same folder as REST's Collections: this is the scratchpads' collection. */}
+            <CollectionsFolderIcon style={{ color: 'var(--color-sidebar-collections)' }} />
           </SidebarIcon>
         )}
 

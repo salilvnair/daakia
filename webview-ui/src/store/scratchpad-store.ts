@@ -135,7 +135,12 @@ interface ScratchpadState {
 
   createFolder: (parentId: string | null, name?: string) => ScratchpadFolder;
   renameFolder: (id: string, name: string) => void;
-  deleteFolder: (id: string) => number;
+  /**
+   * Delete a folder. Any folder but the default goes with its subfolders, and
+   * what was in them moves to the default folder. The default folder is never
+   * removed: deleting it deletes what is inside it and leaves it empty.
+   */
+  deleteFolder: (id: string) => { moved: number; deleted: number };
   setDefaultFolder: (id: string) => void;
   setFolderOpen: (id: string, open: boolean) => void;
   /** Unfold every folder above a scratchpad, so its row is on screen. */
@@ -340,17 +345,38 @@ export const useScratchpadStore = create<ScratchpadState>((set, get) => {
       sendFolder(next);
     },
 
-    /** Delete a folder and its subfolders; what was in them goes to the default folder. Returns how many moved. */
     deleteFolder: (id) => {
       const s = get();
-      if (id === s.defaultFolderId) return 0;
-      const ids = folderAndDescendants(s.folders, id);
-      const moved = s.files.filter(f => ids.includes(f.folderId));
-      for (const f of moved) patchFile(f.id, { folderId: s.defaultFolderId });
-      set(st => ({ folders: st.folders.filter(f => !ids.includes(f.id)) }));
-      postMsg({ type: 'scratchpads:deleteFolders', ids });
-      logUiEvent('scratchpad.folder.delete', { moved: moved.length });
-      return moved.length;
+      if (!s.folders.some(f => f.id === id)) return { moved: 0, deleted: 0 };
+      const all = folderAndDescendants(s.folders, id);
+      const inside = s.files.filter(f => all.includes(f.folderId));
+
+      if (id === s.defaultFolderId) {
+        /* The folder stays, so new scratchpads still have somewhere to go. */
+        const gone = all.filter(f => f !== id);
+        const ids = new Set(inside.map(f => f.id));
+        for (const f of inside) {
+          const t = pending.get(f.id);
+          if (t) { clearTimeout(t); pending.delete(f.id); }
+          postMsg({ type: 'scratchpads:delete', id: f.id });
+        }
+        set(st => ({
+          files: st.files.filter(f => !ids.has(f.id)),
+          folders: st.folders.filter(f => !gone.includes(f.id)),
+          lastDeleted: st.lastDeleted && ids.has(st.lastDeleted.id) ? null : st.lastDeleted,
+        }));
+        if (gone.length) postMsg({ type: 'scratchpads:deleteFolders', ids: gone });
+        const tabs = useTabsStore.getState();
+        tabs.tabs.filter(tb => tb.type === 'scratchpad' && tb.scratchpadId && ids.has(tb.scratchpadId)).forEach(tb => tabs.closeTab(tb.id));
+        logUiEvent('scratchpad.folder.delete', { moved: 0, deleted: inside.length, emptiedDefault: true });
+        return { moved: 0, deleted: inside.length };
+      }
+
+      for (const f of inside) patchFile(f.id, { folderId: s.defaultFolderId });
+      set(st => ({ folders: st.folders.filter(f => !all.includes(f.id)) }));
+      postMsg({ type: 'scratchpads:deleteFolders', ids: all });
+      logUiEvent('scratchpad.folder.delete', { moved: inside.length, deleted: 0 });
+      return { moved: inside.length, deleted: 0 };
     },
 
     setDefaultFolder: (id) => {

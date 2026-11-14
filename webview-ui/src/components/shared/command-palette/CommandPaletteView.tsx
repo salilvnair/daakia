@@ -14,7 +14,7 @@ import type { SidebarSection } from '../../sidebar/AppSidebar';
 import {
   SearchIcon, ChevronLeftIcon, ChevronRightIcon, PlusSquareIcon,
   FolderIcon, ClockIcon, LayersIcon, SettingsIcon, ServerIcon, SparkleIcon,
-  SunIcon, CpuIcon, AgentIcon, CodeBracketsIcon, FolderImportIcon, PortForwardIcon,
+  SunIcon, TextSizeIcon, CpuIcon, AgentIcon, CodeBracketsIcon, FolderImportIcon, PortForwardIcon,
   ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge,
   ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, BookOpenIcon,
   Dk8sIcon, StethoscopeIcon, RefreshIcon, LayoutGridIcon, TableIcon, IssueOpenedIcon,
@@ -72,7 +72,8 @@ const PROTOCOL_REQUESTS: { protocol: Protocol; label: string; icon: React.ReactN
 /** Mirrors SettingsPanel.tsx's SETTINGS_SECTION_META — every real Settings section, searchable directly. */
 const SETTINGS_SECTIONS: { id: string; label: string; icon: React.ReactNode; keywords: string[] }[] = [
   { id: 'general', label: 'Settings: General', icon: <SettingsIcon size={15} />, keywords: ['redirects', 'timeout', 'history entries', 'database location'] },
-  { id: 'theme', label: 'Settings: Theme', icon: <SunIcon size={15} />, keywords: ['dark', 'light', 'system', 'appearance'] },
+  { id: 'theme', label: 'Settings: Theme', icon: <SunIcon size={15} />, keywords: ['dark', 'light', 'system', 'palette'] },
+  { id: 'appearance', label: 'Settings: Appearance', icon: <TextSizeIcon size={15} />, keywords: ['font', 'font size', 'editor font', 'zoom', 'scale', 'size', 'ligatures', 'line height', 'bigger', 'smaller'] },
   { id: 'mock-server', label: 'Settings: Mock Server', icon: <ServerIcon size={15} />, keywords: ['port range', 'glow'] },
   { id: 'llm', label: 'Settings: LLM Provider', icon: <CpuIcon size={15} />, keywords: ['api key', 'openai', 'anthropic', 'ollama', 'copilot', 'model'] },
   { id: 'ai-features', label: 'Settings: AI Features', icon: <SparkleIcon size={15} />, keywords: ['toggle', 'enable', 'disable'] },

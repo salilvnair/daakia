@@ -45,6 +45,7 @@ function JsonPopupModal({ value, accentColor, onClose }: { value: string; accent
 
   return createPortal(
     <div
+      data-dk-modal=""
       className="fixed inset-0 z-[9999] flex items-center justify-center"
       style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
       onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}

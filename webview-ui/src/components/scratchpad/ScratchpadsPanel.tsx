@@ -7,9 +7,9 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ButtonView, IconButtonView, InfoPopupView, TextInputView } from '@salilvnair/dui';
-import { ContextMenu, type ContextMenuItem } from '../shared';
+import { ConfirmDialog, ContextMenu, type ContextMenuItem } from '../shared';
 import {
-  useScratchpadStore, SCRATCHPAD_TYPES, SCRATCHPAD_TYPE_ORDER, scratchpadFileName, folderPath,
+  useScratchpadStore, SCRATCHPAD_TYPES, SCRATCHPAD_TYPE_ORDER, scratchpadFileName, folderPath, folderAndDescendants,
   type Scratchpad, type ScratchpadFolder, type ScratchpadType,
 } from '../../store/scratchpad-store';
 import { useTabsStore } from '../../store/tabs-store';
@@ -25,6 +25,8 @@ import { relativeTime } from './scratchpad-format';
 import './scratchpad.css';
 
 const DRAG_TYPE = 'application/x-daakia-scratchpad';
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 type Menu =
   | { kind: 'new'; x: number; y: number }
@@ -62,6 +64,7 @@ export function ScratchpadsPanel() {
   const [undoFor, setUndoFor] = useState<string | null>(null);
   const dragId = useRef<string | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [confirmEmpty, setConfirmEmpty] = useState<ScratchpadFolder | null>(null);
   const infoAnchorRef = useRef<HTMLDivElement>(null);
   const [, tick] = useState(0);
 
@@ -111,11 +114,28 @@ export function ScratchpadsPanel() {
     setUndoFor(scratchpadFileName(f));
   };
 
+  /** What deleting a folder would take with it: scratchpads and subfolders, at any depth. */
+  const contentsOf = (f: ScratchpadFolder) => {
+    const ids = folderAndDescendants(folders, f.id);
+    return { files: files.filter(x => ids.includes(x.folderId)).length, folders: ids.length - 1 };
+  };
+
   const deleteFolder = (f: ScratchpadFolder) => {
-    const moved = store().deleteFolder(f.id);
+    /* The default folder stays and only its contents go, which cannot be undone — so ask. */
+    if (f.id === defaultFolderId) { setConfirmEmpty(f); return; }
+    const { moved } = store().deleteFolder(f.id);
     useToastStore.getState().addToast({
       type: 'info',
       message: moved ? `Deleted "${f.name}". Its ${moved} scratchpad${moved === 1 ? '' : 's'} moved to ${defaultName}.` : `Deleted "${f.name}".`,
+    });
+  };
+
+  const emptyDefault = (f: ScratchpadFolder) => {
+    setConfirmEmpty(null);
+    const { deleted } = store().deleteFolder(f.id);
+    useToastStore.getState().addToast({
+      type: 'info',
+      message: `Deleted everything in "${f.name}"${deleted ? ` — ${plural(deleted, 'scratchpad')}` : ''}. The folder stays as the default for new scratchpads.`,
     });
   };
 
@@ -169,7 +189,12 @@ export function ScratchpadsPanel() {
         icon: <StarIcon size={13} filled={isDefault} />, iconColor: 'var(--color-scratchpad)', disabled: isDefault,
       },
       { id: 'sep2', label: '', separator: true },
-      { id: 'delete', label: isDefault ? 'Delete folder (the default cannot be deleted)' : 'Delete folder', icon: <TrashIcon size={13} />, danger: !isDefault, disabled: isDefault },
+      (() => {
+        /* The default folder can be deleted too: it stays, and what is inside it goes. */
+        const c = contentsOf(folder);
+        const empty = isDefault && c.files === 0 && c.folders === 0;
+        return { id: 'delete', label: empty ? 'Delete folder (already empty)' : 'Delete folder', icon: <TrashIcon size={13} />, danger: !empty, disabled: empty };
+      })(),
     ];
   };
 
@@ -254,7 +279,7 @@ export function ScratchpadsPanel() {
         <span className="flex-shrink-0" style={{ color: 'var(--color-scratchpad)' }}>
           <ScratchpadIcon size={16} />
         </span>
-        <span>Scratchpads</span>
+        <span>Scratchpad Collections</span>
       </div>
 
       <div className="px-3 py-2 border-b border-[var(--color-surface-border)] flex items-center gap-1.5">
@@ -446,6 +471,20 @@ export function ScratchpadsPanel() {
       <div className="dk-scratch-panel__foot">
         Drag a scratchpad onto a folder to move it. New ones go to <b>{defaultName}</b>.
       </div>
+
+      {confirmEmpty && (() => {
+        const c = contentsOf(confirmEmpty);
+        const what = [c.files ? plural(c.files, 'scratchpad') : '', c.folders ? plural(c.folders, 'folder') : ''].filter(Boolean).join(' and ');
+        return (
+          <ConfirmDialog
+            title={`Delete everything in "${confirmEmpty.name}"?`}
+            message={`${what} will be deleted. "${confirmEmpty.name}" itself stays, as the folder new scratchpads go to. This cannot be undone.`}
+            confirmLabel="Delete"
+            onConfirm={() => emptyDefault(confirmEmpty)}
+            onCancel={() => setConfirmEmpty(null)}
+          />
+        );
+      })()}
 
       {menu && (
         <ContextMenu

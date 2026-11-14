@@ -1,5 +1,6 @@
 import { EditorView, type EditorOptions, type EditorContextMenuMode } from '@salilvnair/dui';
 import { registerVarCompletions } from '../../../services/template/monaco-var-completions';
+import { keepHoversInView } from './monaco-hover-fit';
 
 export type CodeLanguage = 'javascript' | 'json' | 'xml' | 'python' | 'text' | 'html' | 'typescript' | 'java' | 'graphql' | 'plaintext' | 'yaml' | 'sql';
 
@@ -98,6 +99,7 @@ export function CodeEditor({
            `{{` completes in all of them without each call site remembering
            to ask for it. The caller's own mount handler still runs. */
         registerVarCompletions(monaco);
+        keepHoversInView(editor);
         onEditorMount?.(editor, monaco);
       }}
       editorOptions={{

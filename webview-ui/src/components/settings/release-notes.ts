@@ -51,8 +51,29 @@ export const RELEASES: Release[] = [
   {
     version: '3.4.1',
     date: '2026-11-06',
-    headline: 'Bruno collections import whole, Ctrl+V pastes in VS Code, and an import that goes wrong now says why.',
+    headline: 'Scratchpads for JSON, XML, YAML, SQL and text, fonts and sizes you choose, Bruno collections that import whole, and Ctrl+V that pastes in VS Code.',
     lines: [
+      // ── Scratchpads ──
+      { kind: 'feature', area: 'Scratchpads', text: 'Scratchpads: JSON, XML, YAML, SQL and text in the same editor as everywhere else, saved as you type. The icon under MCP opens the last one, or makes scratchpad1.json.' },
+      { kind: 'feature', area: 'Scratchpads', text: 'The Scratchpads panel keeps them in folders, like Collections. New ones go to the default folder; drag one onto another folder, or use Move to. Deleting a folder moves its scratchpads to the default folder instead of deleting them; deleting the default folder deletes what is in it and keeps the folder, after asking.' },
+      { kind: 'feature', area: 'Scratchpads', text: 'Search in the panel looks through names and contents. Format tidies JSON and XML, and a scratchpad can change type without losing its text.' },
+      { kind: 'feature', area: 'Scratchpads', text: 'Scratchpad tabs rename on a double-click and take the usual Close Others, Close to the Right, Close to the Left and Close All. The + on a scratchpad tab makes another.' },
+      { kind: 'feature', area: 'Scratchpads', text: 'In the command palette, type json, xml, yml, sql or txt for New JSON scratchpad and the rest, and for every scratchpad that matches.' },
+
+      // ── Appearance ──
+      { kind: 'feature', area: 'Settings', text: 'Settings → Appearance, under Theme: the font, size, line height and ligatures of every code editor — request and response bodies, scripts, scratchpads, GraphQL, the AI tools — with a preview.' },
+      { kind: 'feature', area: 'Settings', text: 'Appearance also sets the interface font and the monospace font used for URLs and paths, and a size for each part of the window on its own: the protocol rail, tabs, side panel, its icons, the main area, menus and dialogs.' },
+
+      // ── Editor ──
+      { kind: 'fix', area: 'Editor', text: "The editor's find box: the close button sits level with the arrows and stays on the Find row with Replace open, and its tooltip no longer flickers or gets cut off at the edge." },
+
+      // ── History ──
+      { kind: 'fix', area: 'History', text: "Name it on History's save suggestion, and Why? on a failure, showed Naming… or Asking… and then nothing. They read the model's answer now, and say what went wrong when there is none." },
+
+      // ── REST and the palette ──
+      { kind: 'change', area: 'REST', text: 'A new request starts with a JSON body and opens on the Body tab instead of Params.' },
+      { kind: 'change', area: 'UI', text: 'The command palette is Ctrl+Win+K, Ctrl+Cmd+K on macOS.' },
+
       // ── Import ──
       { kind: 'feature', area: 'Import', text: 'Collections the Bruno VS Code extension saves as YAML import in full: folders in order, headers, params, bodies, auth, scripts and environments. .bru collections import as before, and a folder can mix the two.' },
       { kind: 'fix', area: 'Import', text: 'A Bruno JSON export imports as Bruno instead of failing as "Not a valid Postman Collection v2.1 file". A request it exported empty is read from its file when that is still on disk.' },

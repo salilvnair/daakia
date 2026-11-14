@@ -1348,6 +1348,21 @@ button[title="Copied!"] > svg polyline {
 .monaco-editor .monaco-editor-hover {
   pointer-events: none !important;
 }
+/* The rule above stopped one layer short. The workbench hover is mounted in a
+   .context-view, and that wrapper kept pointer-events, so a tooltip drawn over
+   its own button (the find widget's X) took the pointer off the button: the
+   hover ended, the tooltip went, the button was hovered again — a flicker for
+   as long as the pointer moved. */
+.context-view:has(> .workbench-hover-container) {
+  pointer-events: none !important;
+}
+/* And why the tooltip was over the button at all: near the editor's right edge
+   the shrink-to-fit width squeezed "Close (Escape)" onto two lines after Monaco
+   had placed it above the X for one, so its second line landed on the X.
+   max-content keeps it the width of its text (Monaco's max-width still caps it). */
+.monaco-hover.workbench-hover {
+  width: max-content;
+}
 
 /* ─── Daakia Debug Variable Hover (custom popup) ─── */
 .daakia-debug-hover {
@@ -1548,9 +1563,25 @@ button[title="Copied!"] > svg polyline {
    row = (33-22)/2 = 5.5px. A fixed offset, not 50%: with Replace open the
    widget is two rows tall, and 50% dropped the X between them — VS Code keeps
    it on the Find row.
+   That sum only holds in content-box, which is what Monaco is written for and
+   what VS Code runs with. Tailwind's reset makes every element border-box, so
+   here each button came out 16px in all, its 16px glyph overflowed a 10px box,
+   and the X — pinned by its top edge — sat 3px above the centred arrows.
+   (The toggles beside the input set border-box themselves, so they stay as
+   they are.)
    ─────────────────────────────────────────────────────────────────────────── */
-.monaco-editor .find-widget > .button.codicon-widget-close {
-  top: 5.5px !important;
+.monaco-editor .find-widget .button {
+  box-sizing: content-box;
+}
+/* `.codicon` is in the selector only to outrank dui's copy of this rule, which
+   says `top: calc(50% - 11px) !important` and loads after this file — with
+   Replace open that put the X between the two rows. The fix is in dui's
+   source too; once that version is installed here this can lose the class. */
+.monaco-editor .find-widget > .button.codicon.codicon-widget-close {
+  /* 4.5, not the 5.5 the sum above gives: measured, the arrows, the input and
+     the selection toggle all centre 1px higher than that, and the X belongs on
+     their line. */
+  top: 4.5px !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -2325,3 +2356,41 @@ button[title="Copied!"] > svg polyline {
   padding: 5px 9px !important;
   gap: 7px !important;
 }
+
+/* ─── Settings → Appearance: each region at its own size ─────────────────────
+   The values are custom properties set on <html> by appearance-store.ts; 1 is
+   the size the region was designed at. `zoom` rather than font-size because
+   almost every size in Daakia is a pixel in a class, so only zoom moves the
+   text, the icons and the spacing together.
+   ─────────────────────────────────────────────────────────────────────────── */
+[data-dk-zoom="rail"]     { zoom: var(--dk-zoom-rail, 1); }
+[data-dk-zoom="tabs"]     { zoom: var(--dk-zoom-tabs, 1); }
+[data-dk-zoom="sidebar"]  { zoom: var(--dk-zoom-sidebar, 1); }
+[data-dk-zoom="sideRail"] { zoom: var(--dk-zoom-sideRail, 1); }
+[data-dk-zoom="content"]  { zoom: var(--dk-zoom-content, 1); }
+
+/* Menus scale their rows, not their box. The box is placed at the pointer,
+   and a zoomed box lands at the pointer times the zoom. Daakia's own menus
+   mark themselves; dui's are known by their row class. */
+[data-dk-menu] > *,
+.dui_ctx-menu__item,
+.dui_select__menu > * { zoom: var(--dk-zoom-menus, 1); }
+
+/* Dialogs scale their card. The backdrop covers the window from inset 0,
+   which zoom leaves where it is, and the card is centred by the backdrop's
+   layout rather than placed at coordinates — so it stays centred. dui's
+   ModalView card is the backdrop's child holding `.dui_modal__body`; Daakia's
+   own dialogs mark their backdrop with data-dk-modal. */
+body > div > :has(> .dui_modal__body),
+[data-dk-modal] > * { zoom: var(--dk-zoom-modals, 1); }
+
+/* A card's height cap is in vh, and zoom enlarges vh with everything else:
+   85vh at 130% is taller than the window. While dialogs are zoomed, cap the
+   card so it is at most 90% of the window as drawn, whatever the zoom. */
+html[data-dk-modals-zoomed] body > div > :has(> .dui_modal__body),
+html[data-dk-modals-zoomed] [data-dk-modal] > :not(.absolute) {
+  max-height: calc(90vh / var(--dk-zoom-modals, 1)) !important;
+}
+/* Width needs no such cap: the card is 100% of the backdrop at most, and a
+   percentage is not enlarged. Capping it here would replace each dialog's own
+   width (New Collection drew 1560px wide). */

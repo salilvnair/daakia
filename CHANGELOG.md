@@ -6,11 +6,37 @@ All notable changes to the Daakia API Client extension are documented here.
 
 ## [3.4.1] — 2026-11-06
 
-Bruno collections import whole, Ctrl+V pastes in VS Code, and an import that
-goes wrong now says why.
+Scratchpads for JSON, XML, YAML, SQL and text, fonts and sizes you choose,
+Bruno collections that import whole, and Ctrl+V that pastes in VS Code.
 
 ### Added
 
+- **Scratchpads.** JSON, XML, YAML, SQL and text in the same Monaco editor as
+  the rest of Daakia, saved as you type — there is no Save button. The icon
+  under MCP opens the last one, or makes `scratchpad1.json`. They are kept in
+  `daakia.db` across every workspace, like themes.
+- **The Scratchpads panel** keeps them in folders, like Collections. New
+  scratchpads go to the default folder unless made from a folder's own menu;
+  drag one onto another folder, or use Move to. Deleting a folder moves its
+  scratchpads to the default folder instead of deleting them; deleting the
+  default folder deletes what is in it and keeps the folder, after asking. A
+  deleted scratchpad can be undone for a few seconds. Search looks through
+  names and contents.
+- **Scratchpad tabs** rename on a double-click and take the usual Close
+  Others / Right / Left / All; Format tidies JSON and XML, and a scratchpad can
+  change type without losing its text.
+- **Scratchpads in the command palette:** type `json`, `xml`, `yml`, `sql` or
+  `txt` for New JSON scratchpad and the rest, and for every scratchpad that
+  matches.
+- **Settings → Appearance**, under Theme.
+  - **Editor:** font, size, line height and ligatures for every code editor —
+    request and response bodies, scripts, scratchpads, GraphQL, the AI tools —
+    with a live preview. Size can also stay each editor's own.
+  - **Interface fonts:** the font for menus, labels and panels, and the
+    monospace font for URLs, paths and headers outside an editor.
+  - **Sizes:** each part of the window scales on its own, 70–160%: the
+    protocol rail, the tab bar, the side panel, its icons, the main area,
+    menus and dialogs. Text, icons and spacing scale together.
 - **Bruno YAML collections.** What the Bruno VS Code extension saves —
   `opencollection.yml`, `folder.yml` and a `.yml` per request — imports in
   full: folders in `seq` order, headers, query params, bodies, bearer / basic /
@@ -27,12 +53,22 @@ goes wrong now says why.
 
 ### Changed
 
+- **A new REST request starts with a JSON body** and opens on the Body tab
+  instead of Params.
+- **The command palette is Ctrl+Win+K** (Ctrl+Cmd+K on macOS).
 - **Read-only workspaces:** the Import menu shows a short "Read only" tag in
   place of the paragraph under each item, and a locked item's submenu is
   locked too.
 
 ### Fixed
 
+- **History's Name it and Why? did nothing.** The button showed Naming… or
+  Asking… and the card stayed as it was: neither read the model's answer the
+  way it arrives, and a failed request was dropped without a word. Both show
+  the answer now, and a failure says why (no model configured, for one).
+- **The editor's find box:** the close button sat 3px above the arrows and,
+  with Replace open, dropped between the two rows; its tooltip flickered while
+  the pointer moved over it and was cut off at the editor's right edge.
 - **A Bruno JSON export was refused** as "Not a valid Postman Collection v2.1
   file". It imports as Bruno now, and a request the export left empty
   (`partial`) is read from its file when that is still on disk.

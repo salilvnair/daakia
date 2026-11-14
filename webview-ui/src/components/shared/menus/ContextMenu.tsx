@@ -116,6 +116,7 @@ function SubmenuFlyout({ items, anchorRect, onSelect, onCloseAll, keepOpenOnSele
     <div
       ref={ref}
       data-submenu-flyout="true"
+      data-dk-menu=""
       className="fixed z-[10000] min-w-[210px] py-1.5 rounded-lg bg-[var(--color-elevated)] border border-[var(--color-elevated-border)] shadow-2xl animate-[fadeSlideIn_80ms_ease-out]"
       style={{ top: anchorRect.top, left: -9999, visibility: 'hidden' }}
       onMouseDown={e => e.stopPropagation()}
@@ -312,6 +313,7 @@ export function ContextMenu({ items: given, position, onSelect, onClose }: Conte
   return createPortal(
     <div
       ref={menuRef}
+      data-dk-menu=""
       className="fixed z-[9999] min-w-[220px] py-1.5 rounded-lg bg-[var(--color-elevated)] border border-[var(--color-elevated-border)] shadow-xl animate-[fadeSlideIn_100ms_ease-out]"
       style={{ top: position.y, left: position.x, visibility: 'hidden' }}
     >
