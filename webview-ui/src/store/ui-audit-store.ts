@@ -154,6 +154,13 @@ const BASE_AUDIT_EVENT_DEFS: AuditEventDef[] = [
   { id: 'tab.close',            module: 'Tabs', button: 'Close Tab',   action: 'close',  description: 'Close request tab',              color: 'var(--color-text-secondary)', defaultEnabled: false },
   { id: 'tab.duplicate',        module: 'Tabs', button: 'Duplicate',   action: 'create', description: 'Duplicate current request tab',  color: 'var(--color-text-secondary)', defaultEnabled: false },
 
+  // ── Scratchpads — the type and counts only, never the text ──
+  { id: 'scratchpad.create',        module: 'Scratchpads', button: 'New scratchpad', action: 'create', description: 'Create or duplicate a scratchpad',          color: 'var(--color-scratchpad)', defaultEnabled: true },
+  { id: 'scratchpad.delete',        module: 'Scratchpads', button: 'Delete',         action: 'delete', description: 'Delete a scratchpad',                       color: 'var(--color-scratchpad)', defaultEnabled: true },
+  { id: 'scratchpad.move',          module: 'Scratchpads', button: 'Move to',        action: 'update', description: 'Move a scratchpad to another folder',       color: 'var(--color-scratchpad)', defaultEnabled: false },
+  { id: 'scratchpad.folder.create', module: 'Scratchpads', button: 'New folder',     action: 'create', description: 'Create a scratchpad folder',                color: 'var(--color-scratchpad)', defaultEnabled: false },
+  { id: 'scratchpad.folder.delete', module: 'Scratchpads', button: 'Delete folder',  action: 'delete', description: 'Delete a scratchpad folder (its contents move to the default folder)', color: 'var(--color-scratchpad)', defaultEnabled: true },
+
   // ── History ────────────────────────────────────────────────────────────────
   { id: 'history.open',         module: 'History', button: 'Open',   action: 'click',  description: 'Open a history entry',    color: 'var(--color-info)', defaultEnabled: false },
   { id: 'history.copy',         module: 'History', button: 'Copy',   action: 'click',  description: 'Copy from history',       color: 'var(--color-info)', defaultEnabled: false },

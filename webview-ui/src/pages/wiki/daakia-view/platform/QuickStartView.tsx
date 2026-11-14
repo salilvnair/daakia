@@ -98,7 +98,7 @@ export function QuickStartView({ onNavigate }: { onNavigate?: (id: TabId) => voi
       <div>
         <SectionTitle id="qs-palette" icon="⌘">Command Palette</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--dw-muted)]">
-          <Code>Cmd+K</Code> (Mac) / <Code>Ctrl+K</Code> (Windows/Linux) opens Daakia's own in-app command palette —
+          <Code>Ctrl+⌘K</Code> (Mac) / <Code>Ctrl+Win+K</Code> (Windows/Linux) opens Daakia's own in-app command palette —
           separate from VS Code's <Code>Ctrl+Shift+P</Code> palette. Type to search; every result is a real action,
           not a static menu:
         </p>
@@ -123,7 +123,7 @@ export function QuickStartView({ onNavigate }: { onNavigate?: (id: TabId) => voi
       <div>
         <SectionTitle id="qs-shortcuts" icon="keyboard">Keyboard Shortcuts</SectionTitle>
         <ShortcutGrid items={[
-          { label: 'Command Palette', keys: ['Ctrl+K'] },
+          { label: 'Command Palette', keys: ['Ctrl+Win+K'] },
           { label: 'Send request', keys: ['Ctrl+Enter'] },
           { label: 'New tab', keys: ['Ctrl+N'] },
           { label: 'Close tab', keys: ['Ctrl+W'] },

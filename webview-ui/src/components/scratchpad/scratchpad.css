@@ -1,0 +1,260 @@
+/* Scratchpads — the tab (dk-scratch) and the side panel (dk-scratch-panel / -tree). */
+
+.dk-scratch-badge {
+  display: inline-block;
+  min-width: 26px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-align: center;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* ── The tab ── */
+
+.dk-scratch {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+}
+
+.dk-scratch--empty {
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+.dk-scratch__empty-title { font-size: 13px; color: var(--color-text-primary); }
+.dk-scratch__empty-row { display: flex; gap: 8px; }
+
+.dk-scratch__bar {
+  height: 38px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px 0 14px;
+  border-bottom: 1px solid var(--color-panel-border, var(--color-surface-border));
+  background: var(--color-panel);
+}
+
+.dk-scratch__crumb {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.dk-scratch__crumb-folder { overflow: hidden; text-overflow: ellipsis; }
+.dk-scratch__crumb-file { color: var(--color-text-primary); font-family: var(--font-mono, ui-monospace, monospace); }
+
+.dk-scratch__type {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--color-surface-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 11.5px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.dk-scratch__type:hover { color: var(--color-text-primary); border-color: var(--color-scratchpad); }
+.dk-scratch__dot { width: 7px; height: 7px; border-radius: 50%; }
+
+.dk-scratch__saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.dk-scratch__saved svg { color: var(--color-success); }
+.dk-scratch__saved-word { color: var(--color-text-secondary); }
+
+.dk-scratch__rule { width: 1px; height: 18px; background: var(--color-surface-border); }
+
+.dk-scratch__tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+.dk-scratch__tool--icon { width: 28px; padding: 0; justify-content: center; }
+.dk-scratch__tool:hover { background: var(--color-surface-hover); color: var(--color-text-primary); }
+.dk-scratch__tool--on { color: var(--color-scratchpad); }
+
+.dk-scratch__editor { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.dk-scratch__editor > * { flex: 1; min-height: 0; }
+
+/* ── The panel ── */
+
+.dk-scratch-panel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+
+.dk-scratch-panel__head {
+  height: 38px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--color-surface-border);
+}
+.dk-scratch-panel__title { flex: 1; font-size: 13px; font-weight: 600; color: var(--color-text-primary); }
+.dk-scratch-panel__icon {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.dk-scratch-panel__icon:hover { background: var(--color-surface-hover); color: var(--color-text-primary); }
+
+.dk-scratch-panel__tools { display: flex; flex-direction: column; gap: 8px; padding: 10px 10px 6px; }
+.dk-scratch-panel__row { display: flex; align-items: center; gap: 6px; }
+.dk-scratch-panel__new {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px 0 7px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--color-scratchpad);
+  color: var(--color-btn-primary-text, #fff);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.dk-scratch-panel__new:hover { filter: brightness(1.08); }
+.dk-scratch-panel__count { font-size: 11px; color: var(--color-text-muted); white-space: nowrap; }
+
+.dk-scratch-tree { flex: 1; min-height: 0; overflow: auto; padding: 2px 4px 10px; }
+.dk-scratch-tree__note { padding: 14px 10px; font-size: 12px; line-height: 1.5; color: var(--color-text-muted); }
+
+.dk-scratch-tree__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding-right: 4px;
+  border-radius: 5px;
+  font-size: 12.5px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+}
+.dk-scratch-tree__row:hover { background: var(--color-surface-hover); }
+.dk-scratch-tree__row:focus-visible { box-shadow: inset 0 0 0 1px var(--color-scratchpad); }
+.dk-scratch-tree__row--active { background: color-mix(in srgb, var(--color-scratchpad) 16%, transparent); }
+.dk-scratch-tree__row--active:hover { background: color-mix(in srgb, var(--color-scratchpad) 22%, transparent); }
+.dk-scratch-tree__row--drop {
+  background: color-mix(in srgb, var(--color-scratchpad) 20%, transparent);
+  box-shadow: inset 0 0 0 1px var(--color-scratchpad);
+}
+
+.dk-scratch-tree__chevron { flex-shrink: 0; color: var(--color-text-muted); transition: transform 120ms; }
+.dk-scratch-tree__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk-scratch-tree__name--file { flex: 1; font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; }
+.dk-scratch-tree__default {
+  flex-shrink: 0;
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--color-scratchpad) 45%, transparent);
+  border-radius: 4px;
+  font-size: 9.5px;
+  line-height: 15px;
+  color: var(--color-scratchpad);
+}
+.dk-scratch-tree__count, .dk-scratch-tree__ago { flex-shrink: 0; font-size: 11px; color: var(--color-text-muted); white-space: nowrap; }
+
+.dk-scratch-tree__act {
+  width: 20px;
+  height: 20px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.dk-scratch-tree__row:hover .dk-scratch-tree__act,
+.dk-scratch-tree__row:focus-within .dk-scratch-tree__act { display: inline-flex; }
+.dk-scratch-tree__row:hover .dk-scratch-tree__ago { display: none; }
+.dk-scratch-tree__act:hover { background: var(--color-icon-hover-bg, var(--color-surface-hover)); color: var(--color-text-primary); }
+
+.dk-scratch-tree__input {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--color-scratchpad);
+  border-radius: 4px;
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  outline: none;
+}
+.dk-scratch-tree__ext { flex-shrink: 0; font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; color: var(--color-text-muted); }
+
+.dk-scratch-panel__undo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 8px 6px;
+  padding: 6px 8px 6px 10px;
+  border: 1px solid var(--color-surface-border);
+  border-radius: 6px;
+  background: var(--color-panel);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.dk-scratch-panel__undo span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk-scratch-panel__undo button {
+  height: 22px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--color-scratchpad) 20%, transparent);
+  color: var(--color-scratchpad);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dk-scratch-panel__foot {
+  flex-shrink: 0;
+  padding: 9px 12px;
+  border-top: 1px solid var(--color-surface-border);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+.dk-scratch-panel__foot b { color: var(--color-text-secondary); font-weight: 500; }

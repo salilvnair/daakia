@@ -122,7 +122,7 @@ export function UrlBar() {
       url: '',
       headers: [{ id: crypto.randomUUID(), key: '', value: '', enabled: true }],
       params: [{ id: crypto.randomUUID(), key: '', value: '', enabled: true }],
-      bodyMode: 'none',
+      bodyMode: 'json',
       bodyRaw: '',
       bodyFormData: [{ id: crypto.randomUUID(), key: '', value: '', type: 'text', enabled: true }],
       bodyUrlEncoded: [{ id: crypto.randomUUID(), key: '', value: '', enabled: true }],

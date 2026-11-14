@@ -243,6 +243,21 @@ describe('picking a Bruno .yml in the ordinary Import dialog', () => {
   });
 });
 
+describe('picking a .bru in the ordinary Import dialog', () => {
+  it('imports the collection the file belongs to', () => {
+    write('bruno.json', JSON.stringify({ name: 'legacy' }));
+    const file = write('users/Get.bru', 'meta {\n  name: Get\n  seq: 1\n}\n\nget {\n  url: https://x/users\n}\n');
+    const r = importAnyCollection(fs.readFileSync(file, 'utf-8'), file);
+    expect(r).toMatchObject({ success: true, collectionName: 'legacy', requestCount: 1 });
+  });
+
+  it('and so does picking bruno.json', () => {
+    const file = write('bruno.json', JSON.stringify({ version: '1', name: 'legacy', type: 'collection' }));
+    write('Get.bru', 'get {\n  url: https://x\n}\n');
+    expect(importAnyCollection(fs.readFileSync(file, 'utf-8'), file)).toMatchObject({ success: true, collectionName: 'legacy', requestCount: 1 });
+  });
+});
+
 describe('.bru, the older format', () => {
   it('still reads, and no longer takes folder.bru for a request', () => {
     write('bruno.json', JSON.stringify({ name: 'legacy' }));

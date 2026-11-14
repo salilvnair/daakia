@@ -437,8 +437,9 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
           data: JSON.stringify({
             headers: [],
             params: [],
-            bodyMode: 'none',
+            bodyMode: 'json',
             bodyRaw: '',
+            bodyContentType: 'application/json',
             bodyFormData: [],
             bodyUrlEncoded: [],
             authType: 'none',

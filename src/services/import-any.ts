@@ -22,6 +22,7 @@ import { importInsomniaCollection, isInsomniaExport } from './insomnia-importer'
 import { importBrunoCollection, importBrunoJsonExport, isBrunoJsonExport, findBrunoCollectionRoot } from './bruno-importer';
 import type { ImportResult } from './import-types';
 import { load as loadYaml } from 'js-yaml';
+import * as path from 'path';
 
 /** Daakia's own export — the one format that names itself. */
 export function isDaakiaExport(content: string): boolean {
@@ -38,13 +39,19 @@ export function isDaakiaExport(content: string): boolean {
 }
 
 /*
-  A YAML file from a Bruno collection.
+  One file from a Bruno collection.
 
-  Bruno 3 and its VS Code extension save a collection as a folder of .yml
-  files — `opencollection.yml` at the root and one file per request. Picking
-  either in the Import dialog means "this collection", so the folder is found
-  and imported whole. Needs the path: from the text alone there is no folder.
+  Bruno saves a collection as a folder, never as one file: `bruno.json` and a
+  `.bru` per request, or — Bruno 3 and its VS Code extension — `opencollection.yml`
+  and a `.yml` per request. Picking any of them in the Import dialog means
+  "this collection", so the folder is found and imported whole. Needs the path:
+  from the text alone there is no folder.
 */
+function isBrunoCollectionFile(content: string, filePath: string): boolean {
+  const name = path.basename(filePath).toLowerCase();
+  return name.endsWith('.bru') || name === 'bruno.json' || isOpenCollectionFile(content);
+}
+
 function isOpenCollectionFile(content: string): boolean {
   try {
     const doc = loadYaml(content) as { opencollection?: unknown; info?: { type?: unknown } } | null;
@@ -101,12 +108,13 @@ export function importAnyCollection(content: string, filePath?: string): ImportR
      and Bruno's export has both — it failed there as "not a valid Postman
      Collection v2.1 file", which said nothing about what it actually was. */
   if (isBrunoJsonExport(content)) return importBrunoJsonExport(content);
-  if (filePath && isOpenCollectionFile(content)) {
+  if (filePath && isBrunoCollectionFile(content, filePath)) {
     const root = findBrunoCollectionRoot(filePath);
     if (root) return importBrunoCollection(root);
     return {
-      success: false, collectionName: '', requestCount: 0, format: 'Bruno (YAML)',
-      error: 'This is one file of a Bruno collection, but no opencollection.yml was found above it',
+      success: false, collectionName: '', requestCount: 0,
+      format: filePath.toLowerCase().endsWith('.bru') ? 'Bruno (.bru)' : 'Bruno (YAML)',
+      error: 'This is one file of a Bruno collection, but no bruno.json or opencollection.yml was found above it',
       notes: [`Looked in ${filePath} and the folders above it. Use Import → Bruno and pick the collection folder.`],
     };
   }

@@ -12,6 +12,7 @@ import { logUiEvent } from '../store/ui-audit-store';
 import { nameForStage, screenForStage } from '../store/ai-audit-events';
 import { showAiFailure, showSilentFailure } from './ai-failure-toast';
 import { useTabsStore } from '../store/tabs-store';
+import { useScratchpadStore } from '../store/scratchpad-store';
 import { useToastStore } from '../store/toast-store';
 import { useEnvStore } from '../store/env-store';
 import { useDynamicVarsStore } from '../store/dynamic-vars-store';
@@ -472,6 +473,9 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
           }
           break;
         }
+        case 'scratchpads:data':
+          useScratchpadStore.getState().hydrate(msg);
+          break;
         case 'themes:data': {
           /*
             The database's answer replaces the cache both stores painted the

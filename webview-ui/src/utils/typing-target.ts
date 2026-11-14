@@ -55,7 +55,7 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 /**
  * True when this key event should be left alone by a global shortcut.
  *
- * The modifier check is here too because it is the same decision: `Ctrl+K` is
+ * The modifier check is here too because it is the same decision: `Ctrl+Win+K` is
  * somebody asking the app for something, `k` on its own inside a field is a
  * letter. A shortcut that wants modifiers should test for them itself.
  */

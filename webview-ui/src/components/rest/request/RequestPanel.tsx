@@ -127,18 +127,21 @@ const TABLES: Record<string, 'params' | 'headers' | 'variables'
   urlEncoded: 'bodyUrlEncoded',
 };
 
+/** A tab you have not picked a section for opens on Body: a new request starts as JSON, so that is where it is written. */
+const DEFAULT_SECTION = 'body';
+
 export function RequestPanel() {
   const { tabs, activeTabId, updateTab } = useTabsStore();
   const tab = tabs.find(t => t.id === activeTabId);
   const storedSection = useUiStateStore(s => s.prefs[`rest.subtab.${activeTabId}`]);
-  const [activeSection, setActiveSectionLocal] = useState(storedSection || 'params');
+  const [activeSection, setActiveSectionLocal] = useState(storedSection || DEFAULT_SECTION);
   const [oauth2Loading, setOauth2Loading] = useState(false);
   const [cookieJarRows, setCookieJarRows] = useState<{ key: string; value: string }[]>([]);
   const [showFuzzer, setShowFuzzer] = useState(false);
 
   // Sync tab preference when active tab changes
   useEffect(() => {
-    const pref = useUiStateStore.getState().getPref(`rest.subtab.${activeTabId}`, 'params');
+    const pref = useUiStateStore.getState().getPref(`rest.subtab.${activeTabId}`, DEFAULT_SECTION);
     setActiveSectionLocal(pref!);
   }, [activeTabId]);
 

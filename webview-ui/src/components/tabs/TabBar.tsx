@@ -5,9 +5,10 @@ import { useEnvStore, GLOBAL_ENV_ID } from '../../store/env-store';
 import { selectedEnvId } from './env-selector';
 import { getProtocolAccent } from '../../colors';
 import { MethodBadge, ConfirmDialog, ContextMenu, type ContextMenuItem, type ContextMenuSubItem } from '../shared';
-import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, DaakiaMarkIcon, FilterIcon, BookOpenIcon, Dk8sIcon, SearchIcon, IssueOpenedIcon, StethoscopeIcon, LayoutGridIcon, PinIcon, UnpinIcon, ClockIcon } from '../../icons';
+import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, DaakiaMarkIcon, FilterIcon, BookOpenIcon, Dk8sIcon, SearchIcon, IssueOpenedIcon, StethoscopeIcon, LayoutGridIcon, PinIcon, UnpinIcon, ClockIcon, ScratchpadIcon } from '../../icons';
 import { IconButtonView, StateMachineIcon, SelectInputView, type SelectOption } from '@salilvnair/dui';
 import { logUiEvent } from '../../store/ui-audit-store';
+import { useScratchpadStore, SCRATCHPAD_TYPES, SCRATCHPAD_TYPE_ORDER, type ScratchpadType } from '../../store/scratchpad-store';
 
 interface TabContextMenuState {
   tabId: string;
@@ -116,6 +117,9 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
   const [confirmCloseAll, setConfirmCloseAll] = useState(false);
   const [confirmCloseProtocol, setConfirmCloseProtocol] = useState<Protocol | null>(null);
   const [contextMenu, setContextMenu] = useState<TabContextMenuState | null>(null);
+  /* The + button's type menu, when the tab in front is a scratchpad. */
+  const [newScratchMenu, setNewScratchMenu] = useState<{ x: number; y: number } | null>(null);
+  const scratchFiles = useScratchpadStore(s => s.files);
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef<HTMLInputElement>(null);
@@ -201,6 +205,9 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
     const tab = tabs.find(t => t.id === tabId);
     const tabIdx = tabs.findIndex(t => t.id === tabId);
     const isRequest = tab?.type === 'request';
+    /* A scratchpad is a document like a request: it renames, duplicates and
+       pins. Renaming it renames the scratchpad, not just the tab. */
+    const isScratch = tab?.type === 'scratchpad';
     /*
       The surfaces there is only ever one of.
 
@@ -228,9 +235,10 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
     const uniqueProtocols = [...new Set(presentProtocols)];
 
     const items: ContextMenuItem[] = [];
-    if (isRequest) items.push({ id: 'rename', label: 'Rename', shortcut: 'R', icon: <RenameIcon size={13} />, iconColor: 'var(--color-ctx-rename)' });
+    if (isRequest || isScratch) items.push({ id: 'rename', label: 'Rename', shortcut: 'R', icon: <RenameIcon size={13} />, iconColor: 'var(--color-ctx-rename)' });
     if (!isSingleton) items.push({ id: 'duplicate', label: 'Duplicate', shortcut: 'D', icon: <CopyIcon size={13} />, iconColor: 'var(--color-ctx-duplicate)' });
- if (isRequest) items.push({ id: isPinned ? 'unpin': 'pin', label: isPinned ? 'Unpin': 'Pin', shortcut: isPinned ? 'U': 'P', icon: isPinned ? <UnpinIcon size={13} /> : <PinIcon size={13} />, iconColor: 'var(--color-ctx-pin)'});
+ if (isRequest || isScratch) items.push({ id: isPinned ? 'unpin': 'pin', label: isPinned ? 'Unpin': 'Pin', shortcut: isPinned ? 'U': 'P', icon: isPinned ? <UnpinIcon size={13} /> : <PinIcon size={13} />, iconColor: 'var(--color-ctx-pin)'});
+    if (isScratch) items.push({ id: 'reveal', label: 'Reveal in Scratchpads', icon: <ScratchpadIcon size={13} />, iconColor: 'var(--color-scratchpad)' });
 
     if (hasRequestTabs && uniqueProtocols.length >= 1) {
       items.push({ id: 'sep-filter', label: '', separator: true });
@@ -284,7 +292,20 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
 
     switch (actionId) {
       case 'rename': startRename(tabId); setContextMenu(null); break;
-      case 'duplicate': logUiEvent('tab.duplicate', { tabId }); duplicateTab(tabId); setContextMenu(null); break;
+      case 'duplicate': {
+        const scratchId = tabs.find(t => t.id === tabId)?.scratchpadId;
+        /* A copy of a scratchpad is a new scratchpad, not a second tab on the same text. */
+        if (scratchId) useScratchpadStore.getState().duplicate(scratchId);
+        else { logUiEvent('tab.duplicate', { tabId }); duplicateTab(tabId); }
+        setContextMenu(null);
+        break;
+      }
+      case 'reveal': {
+        const scratchId = tabs.find(t => t.id === tabId)?.scratchpadId;
+        if (scratchId) { setActiveTab(tabId); useScratchpadStore.getState().reveal(scratchId); }
+        setContextMenu(null);
+        break;
+      }
       case 'pin': pinTab(tabId); setContextMenu(null); break;
       case 'unpin': unpinTab(tabId); setContextMenu(null); break;
       case 'close': handleClose(tabId); setContextMenu(null); break;
@@ -360,12 +381,16 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
     const tab = tabs.find(t => t.id === tabId);
     if (!tab) return;
     setRenamingTabId(tabId);
-    setRenameValue(tab.name);
+    /* A scratchpad is renamed without its extension — the type supplies it. */
+    const scratch = tab.scratchpadId ? scratchFiles.find(f => f.id === tab.scratchpadId) : undefined;
+    setRenameValue(scratch ? scratch.name : tab.name);
   };
 
   const finishRename = () => {
     if (renamingTabId && renameValue.trim()) {
-      updateTab(renamingTabId, { name: renameValue.trim() });
+      const scratchId = tabs.find(t => t.id === renamingTabId)?.scratchpadId;
+      if (scratchId) useScratchpadStore.getState().rename(scratchId, renameValue);
+      else updateTab(renamingTabId, { name: renameValue.trim() });
     }
     setRenamingTabId(null);
   };
@@ -466,8 +491,10 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
           const isDk8sWindow = tab.type === 'dk8s-window';
           const isDkgh = tab.type === 'dkgh';
           const isWorkspace = tab.type === 'workspace';
+          const isScratch = tab.type === 'scratchpad';
+          const scratch = isScratch ? scratchFiles.find(f => f.id === tab.scratchpadId) : undefined;
           const SM_ACCENT = 'var(--color-sm-tab, #f59e0b)';
-          const tabAccent = isSettings ? 'var(--color-settings)' : isMockServer ? 'var(--color-mock-server)' : isDaakiaAi ? 'var(--color-ai-accent, #D97757)' : isStateMachine ? SM_ACCENT : isWiki ? 'var(--color-wiki)' : isDk8s || isDk8sResults || isDk8sLogFile || isDk8sWindow ? 'var(--color-dk8s)' : isDkgh ? 'var(--color-dkgh)' : isWorkspace ? 'var(--color-workspace)' : (tab.protocol ? getProtocolAccent(tab.protocol) : requestAccentColor);
+          const tabAccent = isSettings ? 'var(--color-settings)' : isMockServer ? 'var(--color-mock-server)' : isDaakiaAi ? 'var(--color-ai-accent, #D97757)' : isStateMachine ? SM_ACCENT : isWiki ? 'var(--color-wiki)' : isDk8s || isDk8sResults || isDk8sLogFile || isDk8sWindow ? 'var(--color-dk8s)' : isDkgh ? 'var(--color-dkgh)' : isWorkspace ? 'var(--color-workspace)' : isScratch ? 'var(--color-scratchpad)' : (tab.protocol ? getProtocolAccent(tab.protocol) : requestAccentColor);
           const isDragOver = dragOverIdx === idx && dragIdx !== idx;
           return (
             <div
@@ -490,6 +517,8 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
                   : 'bg-[var(--color-panel)] hover:bg-[var(--color-surface-hover)]'
               } ${isDragOver ? 'border-l-2 border-l-[var(--color-primary)]' : ''} ${dragIdx === idx ? 'opacity-50' : ''}`}
               onClick={() => setActiveTab(tab.id)}
+              onDoubleClick={isScratch ? () => startRename(tab.id) : undefined}
+              title={isScratch ? `${tab.name} — double-click to rename` : undefined}
             >
               {/* Active top-line indicator — absolutely positioned div, immune to overflow clipping */}
               {isActive && (
@@ -517,6 +546,10 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
                 <IssueOpenedIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dkgh)' }} />
               ) : isWorkspace ? (
                 <LayoutGridIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-workspace)' }} />
+              ) : isScratch ? (
+                scratch
+                  ? <span className="inline-block font-mono font-bold text-[9.5px] leading-none flex-shrink-0" style={{ color: SCRATCHPAD_TYPES[scratch.type].color }}>{SCRATCHPAD_TYPES[scratch.type].badge}</span>
+                  : <ScratchpadIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-scratchpad)' }} />
               ) : tab.protocol === 'graphql' ? (
                 <span className="inline-block font-mono font-bold text-[10px] leading-none text-[var(--color-protocol-graphql)] flex-shrink-0">GQL</span>
               ) : tab.protocol === 'websocket' ? (
@@ -570,7 +603,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
                 <button
                   type="button"
                   className={`flex items-center justify-center w-[18px] h-[18px] rounded cursor-pointer transition-all self-center mt-px ${
-                    isSettings || isMockServer
+                    isSettings || isMockServer || tab.type === 'scratchpad'
                       ? 'text-[var(--color-error)] hover:bg-[var(--color-icon-hover-bg)]'
                       : 'opacity-0 group-hover:opacity-100 text-[var(--color-error)] hover:bg-[var(--color-icon-hover-bg)]'
                   }`}
@@ -589,8 +622,16 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
           type="button"
           className="flex items-center justify-center w-9 h-full text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] cursor-pointer flex-shrink-0 transition-colors"
           style={{ color: requestAccentColor }}
-          onClick={() => { logUiEvent('tab.new'); addTab(); }}
-          title="New Tab"
+          onClick={(e) => {
+            /* In front of a scratchpad, + makes another — of whichever type. */
+            if (activeTab?.type === 'scratchpad') {
+              const r = e.currentTarget.getBoundingClientRect();
+              setNewScratchMenu({ x: r.left, y: r.bottom + 2 });
+              return;
+            }
+            logUiEvent('tab.new'); addTab();
+          }}
+          title={activeTab?.type === 'scratchpad' ? 'New scratchpad' : 'New Tab'}
         >
           <PlusIcon size={16} />
         </button>
@@ -721,6 +762,28 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
         position={{ x: contextMenu.x, y: contextMenu.y }}
         onSelect={handleContextMenuSelect}
         onClose={() => setContextMenu(null)}
+      />
+    )}
+    {newScratchMenu && (
+      <ContextMenu
+        items={[
+          { id: 'heading', label: 'New scratchpad', heading: true },
+          ...SCRATCHPAD_TYPE_ORDER.map(k => ({
+            id: k,
+            label: SCRATCHPAD_TYPES[k].label,
+            icon: <span className="inline-block font-mono font-bold text-[9.5px] leading-none" style={{ color: SCRATCHPAD_TYPES[k].color }}>{SCRATCHPAD_TYPES[k].badge}</span>,
+            shortcut: `.${SCRATCHPAD_TYPES[k].ext}`,
+          })),
+          { id: 'sep', label: '', separator: true },
+          { id: 'request', label: 'New request tab', icon: <PlusIcon size={13} />, iconColor: requestAccentColor },
+        ]}
+        position={newScratchMenu}
+        onSelect={(id) => {
+          setNewScratchMenu(null);
+          if (id === 'request') { logUiEvent('tab.new'); addTab(); }
+          else if (id in SCRATCHPAD_TYPES) useScratchpadStore.getState().create(id as ScratchpadType);
+        }}
+        onClose={() => setNewScratchMenu(null)}
       />
     )}
     </>

@@ -125,7 +125,7 @@ function SurfaceGeneral({ surface, name, what, accent, icon, open, children }: {
              }}>
           <KeyboardIcon size={14} style={{ marginTop: 1, flexShrink: 0 }} />
           <span>
-            The icon is off. <b>Ctrl+K</b> (⌘K on a Mac) opens the command palette —
+            The icon is off. <b>Ctrl+Win+K</b> (Ctrl+⌘K on a Mac) opens the command palette —
             type <b>{name}</b> and it is the first result.
           </span>
         </div>

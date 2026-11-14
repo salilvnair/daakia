@@ -54,7 +54,7 @@ export type BodyMode = 'none' | 'json' | 'raw' | 'form-data' | 'x-www-form-urlen
 
 export type AuthType = 'none' | 'bearer' | 'basic' | 'api-key' | 'oauth2';
 
-export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki' | 'dk8s' | 'dk8s-results' | 'dk8s-logfile' | 'dk8s-payload' | 'dk8s-window' | 'dkgh' | 'workspace';
+export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki' | 'dk8s' | 'dk8s-results' | 'dk8s-logfile' | 'dk8s-payload' | 'dk8s-window' | 'dkgh' | 'workspace' | 'scratchpad';
 
 /** A log payload opened in a tab of its own — held whole, so it outlives the log it came from. */
 export interface PayloadView {
@@ -112,6 +112,8 @@ export interface RequestTab {
   payloadView?: PayloadView;
   /** `dk8s-window` only: the window it reads. */
   windowView?: WindowView;
+  /** `scratchpad` only: which scratchpad the tab edits. The text lives in the scratchpad store, not here. */
+  scratchpadId?: string;
   name: string;
   method: HttpMethod;
   url: string;
@@ -568,7 +570,7 @@ function createDefaultTab(partial?: Partial<RequestTab>): RequestTab {
     url: '',
     params: [],
     headers: [],
-    bodyMode: 'none',
+    bodyMode: 'json',
     bodyRaw: '',
     bodyContentType: 'application/json',
     bodyFormData: [],
@@ -630,6 +632,8 @@ interface TabsState {
   focusDk8sResultsTab: () => boolean;
   openDkghTab: () => void;
   openWorkspaceTab: () => void;
+  /** A scratchpad's tab — the one already showing it, or a new one. */
+  openScratchpadTab: (scratchpadId: string, name: string) => void;
   /**
    * The Daakia AI tab — the existing one, or a new one. With `chatId`, a new
    * tab opened on that conversation, beside the others.
@@ -732,6 +736,20 @@ export const useTabsStore = create<TabsState>((set, get) => {
         activeTabId: tab.id,
         previousTabId: activeTabId,
       }));
+    },
+
+    /* One tab per scratchpad: a second would be two editors on one text,
+       each saving over the other. */
+    openScratchpadTab: (scratchpadId, name) => {
+      const { tabs, activeTabId } = get();
+      const existing = tabs.find(t => t.type === 'scratchpad' && t.scratchpadId === scratchpadId);
+      if (existing) {
+        set({ activeTabId: existing.id, previousTabId: activeTabId });
+        return;
+      }
+      const tab = createDefaultTab({ type: 'scratchpad', name });
+      tab.scratchpadId = scratchpadId;
+      set(s => ({ tabs: [...s.tabs, tab], activeTabId: tab.id, previousTabId: activeTabId }));
     },
 
     openDk8sTab: () => {
@@ -915,7 +933,7 @@ export const useTabsStore = create<TabsState>((set, get) => {
       let nextProtocol = activeProtocol;
       if (activeTabId === id) {
         // If closing a settings/mock-server/daakia-ai tab and we have a previousTabId, return to it
-        if (closedTab && (closedTab.type === 'settings' || closedTab.type === 'mock-server' || closedTab.type === 'daakia-ai' || closedTab.type === 'state-machine' || closedTab.type === 'wiki') && previousTabId && nextTabs.some(t => t.id === previousTabId)) {
+        if (closedTab && (closedTab.type === 'settings' || closedTab.type === 'mock-server' || closedTab.type === 'daakia-ai' || closedTab.type === 'state-machine' || closedTab.type === 'wiki' || closedTab.type === 'scratchpad') && previousTabId && nextTabs.some(t => t.id === previousTabId)) {
           nextActive = previousTabId;
           const prevTab = nextTabs.find(t => t.id === previousTabId);
           if (prevTab?.type === 'request' && prevTab.protocol) nextProtocol = prevTab.protocol;
@@ -957,8 +975,9 @@ export const useTabsStore = create<TabsState>((set, get) => {
       set(s => ({
         tabs: s.tabs.map(t => {
           if (t.id !== id) return t;
-          // daakia-ai tabs are never "dirty" — they have no save flow
-          if (t.type === 'daakia-ai') return { ...t, ...patch, dirty: false };
+          // daakia-ai tabs are never "dirty" — they have no save flow.
+          // Nor are scratchpads: every change is written as it is made.
+          if (t.type === 'daakia-ai' || t.type === 'scratchpad') return { ...t, ...patch, dirty: false };
 
           /*
             Dirty means changed, not written.

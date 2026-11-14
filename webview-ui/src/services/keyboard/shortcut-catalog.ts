@@ -16,8 +16,7 @@ export interface ShortcutMeta {
 
 export const SHORTCUT_CATALOG: ShortcutMeta[] = [
   // ── General ──
-  { id: 'app.command-palette-meta', label: 'Command Palette (⌘)',      category: 'General' },
-  { id: 'app.command-palette-ctrl', label: 'Command Palette (Ctrl)',   category: 'General' },
+  { id: 'app.command-palette',      label: 'Command Palette',          category: 'General' },
   { id: 'app.toggle-sidebar',       label: 'Toggle sidebar',           category: 'General' },
   { id: 'app.toggle-split',         label: 'Toggle split layout',      category: 'General' },
 

@@ -4,7 +4,8 @@ import { HistoryPanel } from '../rest/sidebar/HistoryPanel';
 import { EnvironmentsPanel } from '../rest/sidebar/EnvironmentsPanel';
 import { GraphQLDocumentationPanel, GraphQLSchemaExplorer } from '../graphql';
 import { RunAndDebugPanel } from '../shared/debugger';
-import { CollectionsFolderIcon, ClockIcon, LayersIcon, SettingsIcon, DocumentIcon, CodeIcon, BugIcon, GrpcIcon, SoapIcon, SparkleIcon, GeneralAssistantIcon, BookOpenIcon, GitHubIcon, RefreshIcon, InfoCircleIcon } from '../../icons';
+import { ScratchpadsPanel } from '../scratchpad/ScratchpadsPanel';
+import { CollectionsFolderIcon, ClockIcon, LayersIcon, SettingsIcon, DocumentIcon, CodeIcon, BugIcon, GrpcIcon, SoapIcon, SparkleIcon, GeneralAssistantIcon, BookOpenIcon, GitHubIcon, RefreshIcon, InfoCircleIcon, ScratchpadIcon } from '../../icons';
 import { useTabsStore } from '../../store/tabs-store';
 import { useDebugStore } from '../../store/debug-store';
 import { useAiProvidersStore } from '../../store/ai-providers-store';
@@ -18,7 +19,7 @@ import { postMsg } from '../../vscode';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { ButtonView } from '@salilvnair/dui';
 
-export type SidebarSection = 'collections' | 'history' | 'environments' | 'debug' | 'gql-docs' | 'gql-schema' | 'gql-collections' | 'gql-history' | 'ws-collections' | 'ws-history' | 'grpc-collections' | 'grpc-history' | 'soap-collections' | 'soap-history' | 'ai-collections' | 'ai-history' | 'mcp-collections' | 'mcp-history' | null;
+export type SidebarSection = 'collections' | 'history' | 'environments' | 'debug' | 'gql-docs' | 'gql-schema' | 'gql-collections' | 'gql-history' | 'ws-collections' | 'ws-history' | 'grpc-collections' | 'grpc-history' | 'soap-collections' | 'soap-history' | 'ai-collections' | 'ai-history' | 'mcp-collections' | 'mcp-history' | 'scratchpads' | null;
 
 interface AppSidebarProps {
   activeSection: SidebarSection;
@@ -85,6 +86,9 @@ export function AppSidebar({ activeSection, onSectionChange, onOpenChange, sideb
   const showSoapSidebar = showProtocolIcons && activeProtocol === 'soap';
   const showAiSidebar = showProtocolIcons && activeProtocol === 'ai';
   const showMcpSidebar = showProtocolIcons && activeProtocol === 'mcp';
+  /* A scratchpad is a standalone tab with a panel of its own: the folders its
+     siblings live in, the way a request has its collections. */
+  const showScratchSidebar = activeTab?.type === 'scratchpad';
 
   // Determine if panel should show
   const showPanel = activeSection && (
@@ -94,7 +98,8 @@ export function AppSidebar({ activeSection, onSectionChange, onOpenChange, sideb
     (showGrpcSidebar && (activeSection.startsWith('grpc-') || activeSection === 'environments')) ||
     (showSoapSidebar && (activeSection.startsWith('soap-') || activeSection === 'environments')) ||
     (showAiSidebar && (activeSection.startsWith('ai-') || activeSection === 'environments')) ||
-    (showMcpSidebar && (activeSection.startsWith('mcp-') || activeSection === 'environments'))
+    (showMcpSidebar && (activeSection.startsWith('mcp-') || activeSection === 'environments')) ||
+    (showScratchSidebar && activeSection === 'scratchpads')
   );
 
   return (
@@ -368,6 +373,17 @@ export function AppSidebar({ activeSection, onSectionChange, onOpenChange, sideb
               <LayersIcon style={{ color: 'var(--color-sidebar-environments)' }} />
             </SidebarIcon>
           </>
+        )}
+
+        {showScratchSidebar && (
+          <SidebarIcon
+            active={activeSection === 'scratchpads'}
+            accentColor="var(--color-scratchpad)"
+            onClick={() => toggle('scratchpads')}
+            title="Scratchpads"
+          >
+            <ScratchpadIcon size={16} style={{ color: 'var(--color-scratchpad)' }} />
+          </SidebarIcon>
         )}
 
         {/* Spacer */}
@@ -857,6 +873,8 @@ function SidebarPanelContent({ section, rtProtocol }: { section: SidebarSection;
       return <CollectionsPanel protocol="mcp" />;
     case 'mcp-history':
       return <HistoryPanel protocol="mcp" />;
+    case 'scratchpads':
+      return <ScratchpadsPanel />;
     default:
       return null;
   }

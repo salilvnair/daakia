@@ -60,7 +60,7 @@ export function DkghOverviewView() {
           The rail down the left, under the protocols — and if you never file
           issues, <strong>Settings → DKGH → General</strong> takes the icon off
           it. From 3.0.3 that icon is off on a fresh install; the command
-          palette (<Code>Ctrl+K</Code>) opens dkgh either way.
+          palette (<Code>Ctrl+Win+K</Code>) opens dkgh either way.
         </Callout>
       </div>
 
