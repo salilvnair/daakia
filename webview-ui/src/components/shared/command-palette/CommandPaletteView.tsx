@@ -9,6 +9,7 @@ import { useModalStore } from '../../../store/modal-store';
 import { useDevToolsStore } from '../../../store/devtools-store';
 import { useEnvStore } from '../../../store/env-store';
 import { postMsg } from '../../../vscode';
+import { useScratchpadStore, SCRATCHPAD_TYPES, SCRATCHPAD_TYPE_ORDER, scratchpadFileName, folderPath } from '../../../store/scratchpad-store';
 import type { SidebarSection } from '../../sidebar/AppSidebar';
 import {
   SearchIcon, ChevronLeftIcon, ChevronRightIcon, PlusSquareIcon,
@@ -149,6 +150,12 @@ export function CommandPaletteView({ open, onClose, onOpenSidebarSection }: Comm
 
   const activeProtocol = useTabsStore(s => s.activeProtocol);
   const tabs = useTabsStore(s => s.tabs);
+  const scratchFiles = useScratchpadStore(s => s.files);
+  const scratchFolders = useScratchpadStore(s => s.folders);
+  const scratchDefault = useScratchpadStore(s => s.defaultFolderId);
+
+  /* The palette is one of the ways in, so it reads the scratchpads itself. */
+  useEffect(() => { if (open) useScratchpadStore.getState().load(); }, [open]);
 
   useEffect(() => {
     if (!open) {
@@ -396,13 +403,54 @@ export function CommandPaletteView({ open, onClose, onOpenSidebarSection }: Comm
         icon: <PlusSquareIcon size={15} />,
         label: t.name || t.url || 'Untitled',
         keywords: [t.protocol, t.method, t.url],
-        badge: t.protocol,
+        badge: t.type === 'scratchpad' ? 'scratchpad' : t.protocol,
         run: () => useTabsStore.getState().setActiveTab(t.id),
       })),
     }];
   }, [search, tabs]);
 
-  const rootGroups = useMemo(() => [...baseGroups, ...searchGroups], [baseGroups, searchGroups]);
+  /*
+    Scratchpads, right under New Request: typing `json` offers a new JSON
+    scratchpad and every scratchpad that is JSON or says it in its name. The
+    existing ones only show once something is typed — a list of every scratch
+    file you ever made is not a command.
+  */
+  const scratchGroups = useMemo<PaletteGroup[]>(() => {
+    const badge = (k: keyof typeof SCRATCHPAD_TYPES) => (
+      <span className="font-mono font-bold text-[9.5px] leading-none" style={{ color: SCRATCHPAD_TYPES[k].color }}>{SCRATCHPAD_TYPES[k].badge}</span>
+    );
+    const where = folderPath(scratchFolders, scratchDefault) || 'Scratchpads';
+    const groups: PaletteGroup[] = [{
+      heading: 'Scratchpads',
+      items: SCRATCHPAD_TYPE_ORDER.map(k => ({
+        id: `scratch-new-${k}`,
+        icon: badge(k),
+        label: `New ${SCRATCHPAD_TYPES[k].label} scratchpad`,
+        keywords: ['scratchpad', 'scratch', 'new', 'create', k, SCRATCHPAD_TYPES[k].label, SCRATCHPAD_TYPES[k].ext],
+        badge: where,
+        run: () => useScratchpadStore.getState().create(k),
+      })),
+    }];
+    if (search.trim() && scratchFiles.length) {
+      groups.push({
+        heading: 'Open Scratchpad',
+        items: scratchFiles.map(f => ({
+          id: `scratch-open-${f.id}`,
+          icon: badge(f.type),
+          label: scratchpadFileName(f),
+          keywords: ['scratchpad', 'scratch', 'open', f.type, SCRATCHPAD_TYPES[f.type].label, folderPath(scratchFolders, f.folderId)],
+          badge: folderPath(scratchFolders, f.folderId),
+          run: () => { useScratchpadStore.getState().reveal(f.id); useScratchpadStore.getState().open(f.id); },
+        })),
+      });
+    }
+    return groups;
+  }, [search, scratchFiles, scratchFolders, scratchDefault]);
+
+  const rootGroups = useMemo(
+    () => [baseGroups[0], ...scratchGroups, ...baseGroups.slice(1), ...searchGroups],
+    [baseGroups, scratchGroups, searchGroups],
+  );
 
   const subPages = useMemo<Record<string, PalettePage>>(() => ({
     'ai-actions': {

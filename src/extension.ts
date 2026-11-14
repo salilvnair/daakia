@@ -188,9 +188,9 @@ export async function activate(context: vscode.ExtensionContext) {
       const uri = await vscode.window.showOpenDialog({
         canSelectMany: false,
         filters: {
-          'API Files': ['json', 'yaml', 'yml', 'har'],
+          'API Files': ['json', 'yaml', 'yml', 'har', 'bru'],
         },
-        title: 'Import a collection — Daakia, Postman, Insomnia, OpenAPI, Swagger, HAR, HTTPie or Thunder Client',
+        title: 'Import a collection — Daakia, Postman, Insomnia, Bruno, OpenAPI, Swagger, HAR, HTTPie or Thunder Client',
       });
       if (uri?.[0]) {
         try {

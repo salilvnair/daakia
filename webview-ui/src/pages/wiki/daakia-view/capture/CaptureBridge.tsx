@@ -79,7 +79,7 @@ export interface CaptureDirective {
   aiAuditEntries?: Record<string, unknown>[];
   // key — dispatches a real keydown at window level so app-level shortcut
   // handlers (registerShortcut/keyboard-registry.ts) fire exactly as they
-  // would for a real user keypress (e.g. Ctrl/Cmd+K for the command palette).
+  // would for a real user keypress (e.g. Ctrl+Win/Cmd+K for the command palette).
   key?: string;
   ctrlKey?: boolean;
   metaKey?: boolean;

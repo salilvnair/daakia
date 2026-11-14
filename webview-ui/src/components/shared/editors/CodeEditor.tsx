@@ -1,7 +1,7 @@
 import { EditorView, type EditorOptions, type EditorContextMenuMode } from '@salilvnair/dui';
 import { registerVarCompletions } from '../../../services/template/monaco-var-completions';
 
-export type CodeLanguage = 'javascript' | 'json' | 'xml' | 'python' | 'text' | 'html' | 'typescript' | 'java' | 'graphql' | 'plaintext' | 'yaml';
+export type CodeLanguage = 'javascript' | 'json' | 'xml' | 'python' | 'text' | 'html' | 'typescript' | 'java' | 'graphql' | 'plaintext' | 'yaml' | 'sql';
 
 interface Props {
   value: string;
@@ -43,7 +43,7 @@ const LANG_MAP: Record<CodeLanguage, Exclude<CodeLanguage, 'text'>> = {
   javascript: 'javascript', typescript: 'typescript', json: 'json', xml: 'xml',
   python: 'python', html: 'html', java: 'java', graphql: 'graphql',
   plaintext: 'plaintext',
-  yaml: 'yaml', text: 'plaintext',
+  yaml: 'yaml', sql: 'sql', text: 'plaintext',
 };
 
 /**

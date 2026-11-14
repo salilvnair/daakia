@@ -98,6 +98,10 @@ import {
 } from '../src/panel/main/handlers/environment-handler';
 import { handleGetDynamicVariables } from '../src/panel/main/handlers/dynamic-vars-handler';
 import { handleGetThemes, handleSaveTheme, handleDeleteTheme } from '../src/panel/main/handlers/theme-handler';
+import {
+  handleScratchpadsGet, handleScratchpadSave, handleScratchpadDelete,
+  handleScratchpadFolderSave, handleScratchpadFoldersDelete, handleScratchpadSetDefault,
+} from '../src/panel/main/handlers/scratchpad-handler';
 import { archiveHistoryEntry, archiveHistoryBatch } from '../src/services/bin';
 import {
   handleGitSyncGetSettings, handleGitSyncSaveSettings, handleGitSyncGetStatus, handleGitSyncInit,
@@ -289,6 +293,25 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'themes:delete':
       handleDeleteTheme(msg, post);
+      break;
+
+    case 'scratchpads:get':
+      handleScratchpadsGet(post);
+      break;
+    case 'scratchpads:save':
+      handleScratchpadSave(msg);
+      break;
+    case 'scratchpads:delete':
+      handleScratchpadDelete(msg);
+      break;
+    case 'scratchpads:saveFolder':
+      handleScratchpadFolderSave(msg);
+      break;
+    case 'scratchpads:deleteFolders':
+      handleScratchpadFoldersDelete(msg);
+      break;
+    case 'scratchpads:setDefault':
+      handleScratchpadSetDefault(msg);
       break;
 
     case 'dkgh:probe':

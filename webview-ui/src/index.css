@@ -87,6 +87,14 @@
      reads as the parent of both without being either. */
   --color-workspace: #2dd4bf;
   --color-dk8s: #22d3ee;
+  /* Scratchpads: the rail and tab accent, and one colour per type for the
+     JSON / XML / YML / SQL / TXT tags on tabs, rows and menus. */
+  --color-scratchpad: #a78bfa;
+  --color-scratch-json: #e2b84a;
+  --color-scratch-xml: #f0883e;
+  --color-scratch-yml: #4ec9b0;
+  --color-scratch-sql: #7aa2f7;
+  --color-scratch-txt: #a8a8a8;
   --color-dk8s-muted: #0e9bb5;
   /* dkgh. GitHub's mark is monochrome, so the tab needs a colour of its own:
      a warm terracotta, away from workspace teal, dk8s cyan and every protocol
@@ -401,6 +409,12 @@
   /* Darker cyan so it holds contrast on a light ground. */
   --color-workspace: #0d9488;
   --color-dk8s: #0891b2;
+  --color-scratchpad: #7c3aed;
+  --color-scratch-json: #9a6700;
+  --color-scratch-xml: #bc4c00;
+  --color-scratch-yml: #0f766e;
+  --color-scratch-sql: #2f5bd3;
+  --color-scratch-txt: #57606a;
   --color-dk8s-muted: #0e7490;
   /* The Follow boards' hues (see `follow-tone.ts`). Dark takes the boards' own
      hexes from each `var()`'s fallback; these are the ones that go thin on

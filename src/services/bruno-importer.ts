@@ -463,8 +463,9 @@ export function isBrunoCollectionDir(dir: string): boolean {
 
 /**
  * The collection a file belongs to: its own folder or the nearest one above
- * with a collection file in it. Lets a Bruno YAML request or opencollection.yml
- * be picked in the ordinary Import dialog and still bring the whole collection.
+ * with a collection file in it. Lets any one file of a Bruno collection — a
+ * .bru or .yml request, bruno.json, opencollection.yml — be picked in the
+ * ordinary Import dialog and still bring the whole collection.
  */
 export function findBrunoCollectionRoot(file: string): string | null {
   let dir = path.dirname(file);

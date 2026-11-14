@@ -49,6 +49,26 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '3.4.1',
+    date: '2026-11-06',
+    headline: 'Bruno collections import whole, Ctrl+V pastes in VS Code, and an import that goes wrong now says why.',
+    lines: [
+      // ── Import ──
+      { kind: 'feature', area: 'Import', text: 'Collections the Bruno VS Code extension saves as YAML import in full: folders in order, headers, params, bodies, auth, scripts and environments. .bru collections import as before, and a folder can mix the two.' },
+      { kind: 'fix', area: 'Import', text: 'A Bruno JSON export imports as Bruno instead of failing as "Not a valid Postman Collection v2.1 file". A request it exported empty is read from its file when that is still on disk.' },
+      { kind: 'feature', area: 'Import', text: 'Picking any Bruno file in the Import dialog — a .bru or .yml request, bruno.json, opencollection.yml — brings in the whole collection it belongs to.' },
+      { kind: 'feature', area: 'Import', text: 'Every import writes what it did to DevTools → Console — the format, the counts, what did not come across — and to the audit log. A file Daakia does not recognise says what was tried.' },
+      { kind: 'fix', area: 'Import', text: 'Older .bru collections: form-urlencoded bodies send in the right mode, and folder.bru is no longer imported as a request.' },
+
+      // ── REST ──
+      { kind: 'fix', area: 'REST', text: 'Ctrl+V pastes into the URL bar and header values inside VS Code. The 3.4.0 fix held in the browser build only.' },
+
+      // ── Workspaces ──
+      { kind: 'change', area: 'Workspace', text: 'In a read-only workspace the Import menu shows a short Read only tag instead of a paragraph, and its submenus are locked too.' },
+      { kind: 'fix', area: 'Workspace', text: 'The Import shared flyout stays open while the pointer moves across to it.' },
+    ],
+  },
+  {
     version: '3.4.0',
     date: '2026-10-31',
     headline: 'Finding things in a pod, and the reported rough edges: a file search that finds what find / finds, split panes that keep streaming, and downloads that work and ask where they go.',

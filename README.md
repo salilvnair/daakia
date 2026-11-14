@@ -40,7 +40,7 @@ feature without the tokens.
 ## Table of contents
 
 - [Install](#install)
-- [Ctrl+K — one box for everything](#ctrlk--one-box-for-everything)
+- [Ctrl+Win+K — one box for everything](#ctrlwink--one-box-for-everything)
 - [The surfaces](#the-surfaces)
 - [Protocols](#protocols)
   - [REST](#rest) · [GraphQL](#graphql) · [gRPC](#grpc) · [SOAP](#soap) · [Realtime](#realtime-websocket--sse--socketio--mqtt) · [MCP](#mcp)
@@ -82,11 +82,11 @@ in the activity bar. There is nothing to sign into.
 
 ---
 
-## Ctrl+K — one box for everything
+## Ctrl+Win+K — one box for everything
 
-![Ctrl+K — the command palette searching commands, requests, tabs and settings](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/command-palette.gif)
+![Ctrl+Win+K — the command palette searching commands, requests, tabs and settings](https://raw.githubusercontent.com/salilvnair/daakia/main/media/sections/command-palette.gif)
 
-The fastest way into any of what follows. `Ctrl+K` opens a single box that
+The fastest way into any of what follows. `Ctrl+Win+K` (`Ctrl+⌘K` on a Mac) opens a single box that
 searches across:
 
 - **New request** in any of the seven protocols
@@ -678,7 +678,7 @@ database in 3.2.0 and are carried over on first run.
 | `Ctrl+S` | Save request |
 | `Ctrl+W` | Close tab |
 | `Ctrl+L` | Focus URL bar |
-| `Ctrl+K` | Command palette (Daakia's own) |
+| `Ctrl+Win+K` (`Ctrl+⌘K`) | Command palette (Daakia's own) |
 | `Ctrl+Shift+I` | Import collection |
 
 Eighteen commands are registered under `Daakia:` in VS Code's palette, including

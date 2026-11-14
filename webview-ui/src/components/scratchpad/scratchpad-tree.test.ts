@@ -1,0 +1,57 @@
+/**
+ * The Scratchpads panel's rows, and the small helpers beside them.
+ */
+import { describe, it, expect } from 'vitest';
+import { buildScratchpadTree } from './scratchpad-tree';
+import { relativeTime, formatScratchpad, canFormat } from './scratchpad-format';
+import type { Scratchpad, ScratchpadFolder } from '../../store/scratchpad-store';
+
+const folders: ScratchpadFolder[] = [
+  { id: 'orders', name: 'Orders debugging', parentId: null, sortOrder: 1 },
+  { id: 'payloads', name: 'payloads', parentId: 'orders', sortOrder: 0 },
+  { id: 'def', name: 'Scratchpads', parentId: null, sortOrder: 5 },
+];
+const pad = (id: string, folderId: string, name: string, content = ''): Scratchpad => ({
+  id, folderId, name, type: 'json', content, createdAt: '', updatedAt: '',
+});
+const files = [pad('a', 'def', 'scratchpad1', '{"orderId":"ord_8f21"}'), pad('b', 'payloads', 'refund'), pad('c', 'orders', 'staging')];
+
+const labels = (rows: ReturnType<typeof buildScratchpadTree>) =>
+  rows.map(r => `${'  '.repeat(r.depth)}${r.kind === 'folder' ? r.folder.name : r.file.name}`);
+
+describe('the tree', () => {
+  it('puts the default folder first, and shows only what is unfolded', () => {
+    const rows = buildScratchpadTree(folders, files, { query: '', openFolders: { def: true, orders: true }, defaultFolderId: 'def' });
+    expect(labels(rows)).toEqual(['Scratchpads', '  scratchpad1', 'Orders debugging', '  payloads', '  staging']);
+  });
+
+  it('counts what is inside a folder at any depth', () => {
+    const rows = buildScratchpadTree(folders, files, { query: '', openFolders: {}, defaultFolderId: 'def' });
+    const orders = rows.find(r => r.kind === 'folder' && r.folder.id === 'orders');
+    expect(orders && orders.kind === 'folder' && orders.count).toBe(2);
+  });
+
+  it('searches names and contents, and opens every folder with a hit', () => {
+    expect(labels(buildScratchpadTree(folders, files, { query: 'refund', openFolders: {}, defaultFolderId: 'def' })))
+      .toEqual(['Orders debugging', '  payloads', '    refund']);
+    expect(labels(buildScratchpadTree(folders, files, { query: 'ord_8f21', openFolders: {}, defaultFolderId: 'def' })))
+      .toEqual(['Scratchpads', '  scratchpad1']);
+  });
+});
+
+describe('helpers', () => {
+  const now = Date.parse('2026-11-13T12:00:00Z');
+  it('says when, the way a person does', () => {
+    expect(relativeTime('2026-11-13T11:59:50Z', now)).toBe('just now');
+    expect(relativeTime('2026-11-13T11:58:00Z', now)).toBe('2 min ago');
+    expect(relativeTime('2026-11-12T10:00:00Z', now)).toBe('yesterday');
+    expect(relativeTime('2026-11-04T12:00:00Z', now)).toBe('last week');
+  });
+
+  it('formats JSON and XML, and leaves broken JSON alone', () => {
+    expect(formatScratchpad('json', '{"a":1}')).toBe('{\n  "a": 1\n}');
+    expect(formatScratchpad('json', '{"a":')).toBeNull();
+    expect(formatScratchpad('xml', '<a><b>1</b></a>')).toContain('\n');
+    expect(canFormat('sql')).toBe(false);
+  });
+});

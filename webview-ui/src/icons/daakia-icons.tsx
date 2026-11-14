@@ -2747,3 +2747,20 @@ export function RoundTripIcon(props: IconProps) {
 export function GripLinesIcon(props: IconProps) {
   return <svg {...withDefaults(props)}><path d="M4 8h16M4 16h16" /></svg>;
 }
+
+/**
+ * A page with its corner turned and a pencil at its foot — a scratchpad.
+ * The pencil is what tells it apart from FileTextIcon, which is a document
+ * somebody else wrote; this one is yours to scribble on.
+ */
+export function ScratchpadIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M13 3H6.5A2.5 2.5 0 0 0 4 5.5v13A2.5 2.5 0 0 0 6.5 21H11" />
+      <path d="M13 3l6 6v2.5" />
+      <path d="M13 3v6h6" />
+      <path d="M8 13h5M8 17h2.5" />
+      <path d="M18.6 14.4l2 2-5.6 5.6h-2v-2z" />
+    </svg>
+  );
+}

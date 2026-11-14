@@ -16,7 +16,7 @@ import { AUDIT_EVENT_DEFS, getAuditConfig, setAuditEventEnabled, isAuditEventEna
   screen that turns them on. Anything not listed now falls in at the end
   rather than disappearing.
 */
-const MODULE_ORDER = ['REST', 'GraphQL', 'gRPC', 'SOAP', 'WebSocket', 'SSE', 'MQTT', 'Socket.IO', 'Mock Server', 'AI', 'dk8s', 'Collections', 'Environment', 'History', 'DevTools', 'MCP', 'Settings'];
+const MODULE_ORDER = ['REST', 'GraphQL', 'gRPC', 'SOAP', 'WebSocket', 'SSE', 'MQTT', 'Socket.IO', 'Mock Server', 'AI', 'dk8s', 'Collections', 'Scratchpads', 'Environment', 'History', 'DevTools', 'MCP', 'Settings'];
 
 /**
  * Which groups are folded shut, and where the list was scrolled.

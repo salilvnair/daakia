@@ -1,5 +1,7 @@
 import { LogFileTab } from './components/k8s/LogFileTab';
 import { PayloadTab } from './components/k8s/PayloadTab';
+import { ScratchpadTab } from './components/scratchpad/ScratchpadTab';
+import { openScratchpads } from './store/scratchpad-store';
 import { WindowTab } from './components/k8s/WindowTab';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import '@salilvnair/convengine-chat/style.css';
@@ -79,7 +81,7 @@ import { getVsCodeApi, postMsg } from './vscode';
 import { useSMWorkspaceStore } from '@salilvnair/state-machine';
 import { DaakiaSMConsumer } from './consumer/DaakiaSMConsumer';
 import { getProtocolAccent } from './colors';
-import { ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, ServerIcon, StethoscopeIcon, Dk8sIcon, IssueOpenedIcon, DevToolsIcon, LayoutGridIcon } from './icons';
+import { ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, ServerIcon, StethoscopeIcon, Dk8sIcon, IssueOpenedIcon, DevToolsIcon, LayoutGridIcon, ScratchpadIcon } from './icons';
 import { DevToolsPanel } from './components/shared/devtools';
 import { DkghPanel } from './components/dkgh/DkghPanel';
 import { DebugHud } from './components/shared/debugger';
@@ -127,7 +129,7 @@ export default function App() {
   /* A tab that draws its own whole page. Leaving one out of this list does
      not hide its panel — it renders the REQUEST editor underneath it as
      well, which is how a search result came to have a URL bar below it. */
-  const STANDALONE_TABS = ['settings', 'mock-server', 'dk8s', 'dk8s-results', 'dk8s-logfile', 'dk8s-payload', 'dk8s-window', 'dkgh', 'state-machine', 'wiki', 'daakia-ai', 'workspace'];
+  const STANDALONE_TABS = ['settings', 'mock-server', 'dk8s', 'dk8s-results', 'dk8s-logfile', 'dk8s-payload', 'dk8s-window', 'dkgh', 'state-machine', 'wiki', 'daakia-ai', 'workspace', 'scratchpad'];
   const switchProtocol = useTabsStore(s => s.switchProtocol);
   const devToolsOpen = useDevToolsStore(s => s.isOpen);
   const protocolAccent = getProtocolAccent(activeProtocol);
@@ -185,6 +187,33 @@ export default function App() {
     recorded the sidebar open or the user asking for it.
   */
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  /*
+    A scratchpad tab brings its own panel. Entering one shows the Scratchpads
+    tree and remembers what was showing; leaving puts that back, so a REST
+    tab does not come back to an empty sidebar. Opened straight onto a
+    scratchpad — a restored session — there is nothing remembered, and the
+    protocol's own collections are what it goes back to.
+  */
+  const scratchActive = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId)?.type === 'scratchpad');
+  const sectionBeforeScratch = useRef<SidebarSection | undefined>(undefined);
+  useEffect(() => {
+    if (scratchActive) {
+      setSidebarSection(prev => {
+        if (prev === 'scratchpads') return prev;
+        sectionBeforeScratch.current = prev;
+        return 'scratchpads';
+      });
+      setSidebarOpen(true);
+    } else {
+      const remembered = sectionBeforeScratch.current;
+      sectionBeforeScratch.current = undefined;
+      const protocol = useTabsStore.getState().activeProtocol;
+      setSidebarSection(prev => (prev !== 'scratchpads' ? prev
+        : remembered !== undefined ? remembered
+        : `${PROTOCOL_SIDEBAR_PREFIX[protocol] ?? ''}collections` as SidebarSection));
+    }
+  }, [scratchActive]);
   const [sidebarDragging, setSidebarDragging] = useState(false);
   const [showSplitterTip, setShowSplitterTip] = useState(false);
   const sidebarDragRef = useRef({ startX: 0, startWidth: 0, moved: false });
@@ -311,6 +340,7 @@ export default function App() {
       : activeTab?.type === 'settings' ? 'var(--color-settings)'
       : activeTab?.type === 'wiki' ? 'var(--color-wiki)'
       : activeTab?.type === 'daakia-ai' ? 'var(--color-protocol-ai)'
+      : activeTab?.type === 'scratchpad' ? 'var(--color-scratchpad)'
       : map[tabProtocol] || map.rest;
     document.documentElement.style.setProperty('--color-accent', accent);
   }, [activeProtocol, activeTab?.type, activeTab?.protocol]);
@@ -401,12 +431,10 @@ export default function App() {
     if (input) { input.focus(); input.select(); }
   }, 'Focus URL bar');
 
-  // Cmd+K (Mac) / Ctrl+K (Win/Linux) — Global command palette
-  useKeyboardShortcut('app.command-palette-meta', { key: 'k', metaKey: true }, (e) => {
-    e.preventDefault();
-    setPaletteOpen(prev => !prev);
-  }, 'Command palette');
-  useKeyboardShortcut('app.command-palette-ctrl', { key: 'k', ctrlKey: true }, (e) => {
+  // Ctrl+⌘K (Mac) / Ctrl+Win+K (Win/Linux) — Global command palette.
+  // Not plain ⌘K / Ctrl+K: VS Code and Monaco both use that as a chord prefix
+  // (Ctrl+K Ctrl+0 folds all), so the palette kept swallowing their chords.
+  useKeyboardShortcut('app.command-palette', { key: 'k', ctrlKey: true, metaKey: true }, (e) => {
     e.preventDefault();
     setPaletteOpen(prev => !prev);
   }, 'Command palette');
@@ -648,6 +676,7 @@ export default function App() {
     : activeTab?.type === 'settings' ? 'var(--color-settings)'
     : activeTab?.type === 'wiki' ? 'var(--color-wiki)'
     : activeTab?.type === 'daakia-ai' ? 'var(--color-protocol-ai)'
+    : activeTab?.type === 'scratchpad' ? 'var(--color-scratchpad)'
     : tabProtocol === 'graphql' ? 'var(--color-protocol-graphql)'
     : tabProtocol === 'websocket' ? 'var(--color-protocol-websocket)'
     : tabProtocol === 'grpc' ? 'var(--color-protocol-grpc)'
@@ -662,7 +691,7 @@ export default function App() {
       <DebugHud />
       {/* Headless wiki capture automation driver — passive until wiki:capture:run is received */}
       <CaptureBridge />
-      {/* Global Cmd+K / Ctrl+K command palette */}
+      {/* Global Ctrl+⌘K / Ctrl+Win+K command palette */}
       <CommandPaletteView
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
@@ -766,6 +795,20 @@ export default function App() {
           title="MCP"
         >
           <ProtocolMcpBadge size={32} />
+        </ProtocolIcon>
+
+        {/* Scratchpads — IntelliJ's scratch files. Under the protocols rather
+            than among them: nothing here is sent anywhere, it is where you keep
+            what you are working with. */}
+        <ProtocolIcon
+          active={activeTab?.type === 'scratchpad'}
+          open={tabs.some(t => t.type === 'scratchpad')}
+          accentColor="var(--color-scratchpad)"
+          onClick={openScratchpads}
+          title="Scratchpads"
+        >
+          {/* Coloured at rest, like the protocol badges above it. */}
+          <ScratchpadIcon size={24} strokeWidth={1.8} style={{ color: 'var(--color-scratchpad)' }} />
         </ProtocolIcon>
 
         {/* Spacer pushes bottom icons down */}
@@ -935,6 +978,7 @@ export default function App() {
         {/* A log payload, opened in a tab of its own. */}
         {activeTab?.type === 'dk8s-payload' && <PayloadTab key={activeTab.id} tab={activeTab} />}
         {activeTab?.type === 'dk8s-window' && <WindowTab key={activeTab.id} tab={activeTab} />}
+        {activeTab?.type === 'scratchpad' && <ScratchpadTab key={activeTab.id} tab={activeTab} />}
 
         {tabs.some(t => t.type === 'dkgh') && (
           <div

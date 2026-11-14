@@ -1348,7 +1348,7 @@ export const TOUR_STOPS: TourStop[] = [
     section: 'platform',
     chapter: 'DevTools & AI',
     title: 'Everything by keyboard',
-    blurb: 'Ctrl+K reaches any protocol, request, collection or setting without touching the mouse.',
+    blurb: 'Ctrl+Win+K (Ctrl+⌘K on a Mac) reaches any protocol, request, collection or setting without touching the mouse.',
     hotspots: [
       { anchor: 'New Request', title: 'New request',
         body: 'Every protocol from one place, so starting a gRPC call does not mean finding the gRPC rail icon first.' },

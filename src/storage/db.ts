@@ -618,6 +618,37 @@ function _createSchema(db: SqlJsDatabase): void {
       )
     `);
   }
+
+  /*
+    ── Scratchpads ──
+
+    IntelliJ's scratch files: JSON, XML, YAML, SQL or text that somebody is
+    holding on to while they work — a payload to compare, a query to run
+    later. Not workspace-scoped, like the themes above: a scratch file is the
+    person's notepad, and one that vanished when they switched workspace would
+    be lost work. Folders nest the way collection folders do.
+  */
+  db.run(`
+    CREATE TABLE IF NOT EXISTS scratchpad_folders (
+      id         TEXT PRIMARY KEY,
+      name       TEXT NOT NULL,
+      parent_id  TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    )
+  `);
+  db.run(`
+    CREATE TABLE IF NOT EXISTS scratchpads (
+      id         TEXT PRIMARY KEY,
+      folder_id  TEXT NOT NULL,
+      name       TEXT NOT NULL,
+      type       TEXT NOT NULL DEFAULT 'json',
+      content    TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    )
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_scratchpads_folder ON scratchpads(folder_id)`);
 }
 
 // ────────────────────── Migrations ──────────────────────
@@ -1862,6 +1893,77 @@ export function upsertTheme(kind: ThemeKind, theme: { id: string; label: string;
 export function deleteTheme(kind: ThemeKind, id: string): void {
   if (!_db) { return; }
   _db.run(`DELETE FROM ${THEME_TABLE[kind]} WHERE id = ?`, [id]);
+  _scheduleSave();
+}
+
+// ────────────────────── Scratchpads ──────────────────────
+
+export interface ScratchpadFolderRow {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  sort_order: number;
+}
+
+export interface ScratchpadRow {
+  id: string;
+  folder_id: string;
+  name: string;
+  type: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export function getScratchpadFolders(): ScratchpadFolderRow[] {
+  if (!_db) { return []; }
+  const stmt = _db.prepare('SELECT id, name, parent_id, sort_order FROM scratchpad_folders ORDER BY sort_order, created_at');
+  const results: ScratchpadFolderRow[] = [];
+  while (stmt.step()) results.push(stmt.getAsObject() as unknown as ScratchpadFolderRow);
+  stmt.free();
+  return results;
+}
+
+export function getScratchpads(): ScratchpadRow[] {
+  if (!_db) { return []; }
+  const stmt = _db.prepare('SELECT id, folder_id, name, type, content, created_at, updated_at FROM scratchpads ORDER BY created_at');
+  const results: ScratchpadRow[] = [];
+  while (stmt.step()) results.push(stmt.getAsObject() as unknown as ScratchpadRow);
+  stmt.free();
+  return results;
+}
+
+export function upsertScratchpadFolder(folder: { id: string; name: string; parentId: string | null; sortOrder: number }): void {
+  if (!_db) { return; }
+  _db.run(
+    `INSERT INTO scratchpad_folders (id, name, parent_id, sort_order) VALUES (?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET name = excluded.name, parent_id = excluded.parent_id, sort_order = excluded.sort_order`,
+    [folder.id, folder.name, folder.parentId, folder.sortOrder]
+  );
+  _scheduleSave();
+}
+
+export function deleteScratchpadFolders(ids: string[]): void {
+  if (!_db || !ids.length) { return; }
+  for (const id of ids) _db.run('DELETE FROM scratchpad_folders WHERE id = ?', [id]);
+  _scheduleSave();
+}
+
+/** `updated_at` is the caller's: the webview stamps an edit when it is typed, not when the debounce lets it through. */
+export function upsertScratchpad(pad: { id: string; folderId: string; name: string; type: string; content: string; updatedAt: string }): void {
+  if (!_db) { return; }
+  _db.run(
+    `INSERT INTO scratchpads (id, folder_id, name, type, content, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET folder_id = excluded.folder_id, name = excluded.name, type = excluded.type,
+       content = excluded.content, updated_at = excluded.updated_at`,
+    [pad.id, pad.folderId, pad.name, pad.type, pad.content, pad.updatedAt]
+  );
+  _scheduleSave();
+}
+
+export function deleteScratchpad(id: string): void {
+  if (!_db) { return; }
+  _db.run('DELETE FROM scratchpads WHERE id = ?', [id]);
   _scheduleSave();
 }
 

@@ -4,6 +4,46 @@ All notable changes to the Daakia API Client extension are documented here.
 
 ---
 
+## [3.4.1] — 2026-11-06
+
+Bruno collections import whole, Ctrl+V pastes in VS Code, and an import that
+goes wrong now says why.
+
+### Added
+
+- **Bruno YAML collections.** What the Bruno VS Code extension saves —
+  `opencollection.yml`, `folder.yml` and a `.yml` per request — imports in
+  full: folders in `seq` order, headers, query params, bodies, bearer / basic /
+  API-key auth, scripts and `environments/*.yml`. Secrets come across without
+  their values. `.bru` collections import as before, from the same
+  Import → Bruno, and a folder can mix the two.
+- **Picking any Bruno file in the Import dialog** — a `.bru` or `.yml`
+  request, `bruno.json` or `opencollection.yml` — brings in the whole
+  collection it belongs to. `.bru` files can be picked there now.
+- **An import report.** Every import from a file or URL writes its format,
+  counts and notes to DevTools → Console and logs `collection.import` to the
+  audit trail. A file Daakia does not recognise says which formats were tried
+  and what its top-level keys were.
+
+### Changed
+
+- **Read-only workspaces:** the Import menu shows a short "Read only" tag in
+  place of the paragraph under each item, and a locked item's submenu is
+  locked too.
+
+### Fixed
+
+- **A Bruno JSON export was refused** as "Not a valid Postman Collection v2.1
+  file". It imports as Bruno now, and a request the export left empty
+  (`partial`) is read from its file when that is still on disk.
+- **Ctrl+V did nothing in the URL bar and header values inside VS Code** —
+  right-click Paste worked. The 3.4.0 fix held only in the browser build.
+- **`.bru` collections:** form-urlencoded bodies were sent in a mode the
+  executor did not know, and `folder.bru` was imported as a request.
+- **The Import shared flyout closed** while the pointer crossed to it.
+
+---
+
 ## [3.4.0] — 2026-10-31
 
 Finding things in a pod, and the reported rough edges: a file search that finds

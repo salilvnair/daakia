@@ -67,6 +67,7 @@ const MODULE_MAP: Record<string, ModuleInfo> = {
   'MCP':         { label: 'MCP',         color: 'var(--color-protocol-mcp)' },
   'Mock Server': { label: 'Mock Server', color: 'var(--color-mock-server)' },
   'Collections': { label: 'Collections', color: 'var(--color-primary)' },
+  'Scratchpads': { label: 'Scratchpads', color: 'var(--color-scratchpad)' },
   'History':     { label: 'History',     color: 'var(--color-info)' },
   'AI Chat':     { label: 'AI Chat',     color: 'var(--color-protocol-ai)' },
   'Tools':       { label: 'Tools',       color: '#a78bfa' },
@@ -93,6 +94,7 @@ function moduleFromStage(stage: string): ModuleInfo {
   if (stage.startsWith('sio.'))                          return MODULE_MAP['Socket.IO']!;
   if (stage.startsWith('mcp.'))                          return MODULE_MAP['MCP']!;
   if (stage.startsWith('collection.'))                   return MODULE_MAP['Collections']!;
+  if (stage.startsWith('scratchpad.'))                   return MODULE_MAP['Scratchpads']!;
   if (stage.startsWith('import.'))                       return MODULE_MAP['Import']!;
   if (stage.startsWith('test.'))                         return MODULE_MAP['Testing']!;
   if (stage.startsWith('data.') || stage.startsWith('agent.')) return MODULE_MAP['Tools']!;

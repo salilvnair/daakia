@@ -134,7 +134,7 @@ export function KeymapSettings() {
           Every keyboard shortcut in Daakia. Click a shortcut, press the keys you want, and save —
           the new binding applies immediately and persists. Showing {IS_MAC ? 'macOS' : 'Windows/Linux'} conventions.
         </p>
-        {/* Rebinding here governs Daakia's OWN listener. A handful of chords (⌘K chief among
+        {/* Rebinding here governs Daakia's OWN listener. A handful of chords (plain ⌘K chief among
             them) are claimed by VS Code itself and never reach the webview at all, so saying
             so up front beats the user rebinding something and concluding it is broken. */}
         <p className="text-[10.5px] mt-2 px-2 py-1.5 rounded-md" style={{
