@@ -27,6 +27,10 @@ import { installEditorAppearance } from './services/appearance/editor-appearance
 applyStoredAppearance();
 installEditorAppearance();
 
+/* No native right-click menu: in VS Code a webview element can opt out of the
+   Cut / Copy / Paste it adds. Daakia's own menus come from RightClickMenu. */
+document.body.dataset.vscodeContext = JSON.stringify({ preventDefaultContextMenuItems: true });
+
 const isDuiShowcase = import.meta.env.DEV && window.location.hash === '#dui';
 
 const Component = isDuiShowcase

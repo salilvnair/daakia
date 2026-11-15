@@ -24,6 +24,9 @@ import { tryAutoUnlockFromKeychain } from './services/vault';
 import { purgeExpiredTrash } from './services/bin';
 import { setDk8sStorageRoot } from './panel/main/handlers/k8s-handler';
 
+/** True while the Import file dialog is up — see daakia.importCollection. */
+let importDialogOpen = false;
+
 export async function activate(context: vscode.ExtensionContext) {
   /* Whatever a crash left in the downloaded-logs folder goes now. */
   cleanCaptures();
@@ -185,13 +188,23 @@ export async function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('daakia.importCollection', async () => {
-      const uri = await vscode.window.showOpenDialog({
-        canSelectMany: false,
-        filters: {
-          'API Files': ['json', 'yaml', 'yml', 'har', 'bru'],
-        },
-        title: 'Import a collection — Daakia, Postman, Insomnia, Bruno, OpenAPI, Swagger, HAR, HTTPie or Thunder Client',
-      });
+      /* Ctrl+Shift+I arrives twice in the panel: the webview's own shortcut
+         asks for this command, and so does the keybinding in package.json.
+         One dialog, not two in a row. */
+      if (importDialogOpen) return;
+      importDialogOpen = true;
+      let uri: vscode.Uri[] | undefined;
+      try {
+        uri = await vscode.window.showOpenDialog({
+          canSelectMany: false,
+          filters: {
+            'API Files': ['json', 'yaml', 'yml', 'har', 'bru'],
+          },
+          title: 'Import a collection — Daakia, Postman, Insomnia, Bruno, OpenAPI, Swagger, HAR, HTTPie or Thunder Client',
+        });
+      } finally {
+        importDialogOpen = false;
+      }
       if (uri?.[0]) {
         try {
           const content = fs.readFileSync(uri[0].fsPath, 'utf-8');

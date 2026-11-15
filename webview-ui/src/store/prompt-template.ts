@@ -231,6 +231,9 @@ export type AiPromptTemplateKey =
   // ── Script Autocomplete ────────────────────────────────────────────────────
   | 'rest.script.autocomplete'
   | 'rest.script.autocomplete.system'
+  // ── Script Ask AI ──────────────────────────────────────────────────────────
+  | 'rest.script.generate'
+  | 'rest.script.generate.system'
   // ── Contract Testing ───────────────────────────────────────────────────────
   | 'rest.contract.test'
   | 'rest.contract.test.system'
@@ -513,6 +516,7 @@ export const PROMPT_WHERE_USED: Partial<Record<AiPromptTemplateKey, string>> = {
   'rest.code.import': '"Extract with AI" in REST URL bar → ⋮ → Import cURL → Import Request → Code tab',
   'rest.curl.explain': '"Explain with AI" in REST URL bar → ⋮ → Import cURL → Import Request → cURL tab',
   'rest.docs.generate': '"Write with AI" in a REST request → Docs tab',
+  'rest.script.generate': '"Ask AI" in a request → Scripts tab, beside Snippets',
   'rest.fuzz.analyze': '"Analyze Results" in the AI fuzzer — opened from "Fuzz" in a REST body, the GraphQL editor, a gRPC request, a SOAP request, or MCP → Tools',
 };
 
@@ -824,6 +828,11 @@ Rules:
     `Generate a complete set of dk.* contract test assertions for this API response.\n\nEndpoint: {method} {url}\nStatus: {status}\nResponse body:\n\`\`\`json\n{responseBody}\n\`\`\`\n\n{schemaContext}\n\nGenerate a post-response test script using the dk.test() and dk.expect() API. Include:\n1. Status code assertion\n2. Response time assertion (< 2000ms)\n3. Field presence assertions for all required fields\n4. Type assertions for key fields\n5. Value/range assertions where appropriate\n6. Schema compliance if schema is provided\n\nReturn ONLY the JavaScript code — no explanation, no markdown fences.`,
   'rest.contract.test.system':
     `You are an expert API contract test generator. Generate concise, comprehensive dk.* test scripts for Daakia. Return ONLY valid JavaScript — no explanation, no code fences. Use dk.test(), dk.expect(), dk.response.json(), dk.response.status, dk.response.time. Keep each test atomic and descriptive.`,
+  // ── Script Ask AI ────────────────────────────────────────────────────────
+  'rest.script.generate':
+    `Write a Daakia script for this request.\n\nWhat the user wants:\n{ask}\n\nThey are on the {target} script. Put each script where it has to run, whichever tab they are on: a token fetched before the call goes in pre-request, checks on the response go in post-response.\n\nThe request:\n{request}\n\nVariables that already exist (names only):\n{variables}\n\nThe pre-request script now:\n\`\`\`javascript\n{preScript}\n\`\`\`\n\nThe post-response script now:\n\`\`\`javascript\n{postScript}\n\`\`\`\n\nThe Daakia script API. Use nothing outside it:\n{dkApi}\n\nWorked examples from Daakia's snippet library:\n{examples}\n\nIf the user pasted Postman or Bruno code, translate it with these pairs:\n{dialects}`,
+  'rest.script.generate.system':
+    `You write pre-request and post-response scripts for Daakia, an API client. Scripts run in Daakia's sandbox, not in Node or a browser: use only the API you are given.\n\nStart with one or two plain sentences on what the script does. Then the code, in fenced blocks tagged with where each one goes: \`\`\`pre-request or \`\`\`post-response. One block per script; use both only when the job needs both. Last, if the script reads variables the user has to create, list them under "Set these variables", one line each with what goes in it.\n\nRules:\n- Never put a secret in the code. Read client secrets, passwords and keys with dk.env.get("name") and list the variable.\n- No placeholder values like "YOUR_TENANT_ID": read them from a variable too.\n- Keep a token with dk.env.secret, with its expiry beside it, and reuse it until it expires rather than fetching one on every send.\n- Write await dk.sendRequest(...) and check res.status: it returns status 0 instead of throwing.\n- Your code is added after the user's existing script, so do not repeat what is already there.\n- Short, readable code, with a comment only where a step is not obvious.`,
   // ── Response Diff ────────────────────────────────────────────────────────
   'rest.response.diff':
     `Compare these two API responses and explain what changed.\n\nResponse A ({labelA}):\n\`\`\`json\n{responseA}\n\`\`\`\n\nResponse B ({labelB}):\n\`\`\`json\n{responseB}\n\`\`\`\n\nProvide a concise analysis:\n1. What fields were added or removed?\n2. What values changed significantly?\n3. What might have caused these changes?\n4. Are there any potential issues or regressions to watch for?`,
@@ -1235,6 +1244,8 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   'rest.script.autocomplete.system': { label: 'Script Autocomplete — System',  description: 'Behavioral rules for AI script autocomplete (return completion text only)' },
   'rest.contract.test':        { label: 'Contract Test Generator',       description: 'Generates dk.* contract test assertions from response + schema' },
   'rest.contract.test.system': { label: 'Contract Test Generator — System', description: 'Behavioral rules for contract test generator (JavaScript only)' },
+  'rest.script.generate':        { label: 'Script Ask AI',                 description: 'Writes a pre-request or post-response script from a description, in the Scripts tab' },
+  'rest.script.generate.system': { label: 'Script Ask AI — System',        description: 'How Ask AI answers: tagged pre-request / post-response blocks, no secrets in code' },
   'rest.response.diff':        { label: 'Response Diff Analyzer',        description: 'Explains what changed between two API responses' },
   'rest.response.diff.system': { label: 'Response Diff — System',        description: 'Behavioral rules for response diff analyzer' },
   'rest.schema.validate':        { label: 'Schema Validator',             description: 'Validates response against JSON Schema/OpenAPI spec and explains mismatches' },
@@ -1449,6 +1460,8 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'rest.script.autocomplete.system': [],
   'rest.contract.test':        ['{method}', '{url}', '{status}', '{responseBody}', '{schemaContext}'],
   'rest.contract.test.system': [],
+  'rest.script.generate':        ['{ask}', '{target}', '{request}', '{variables}', '{preScript}', '{postScript}', '{dkApi}', '{examples}', '{dialects}'],
+  'rest.script.generate.system': [],
   'rest.response.diff':        ['{labelA}', '{responseA}', '{labelB}', '{responseB}'],
   'rest.response.diff.system': [],
   'rest.schema.validate':        ['{method}', '{url}', '{status}', '{responseBody}', '{schema}'],
@@ -1595,7 +1608,7 @@ export const AI_TEMPLATE_CATEGORIES: {
     keys: [
       'rest.headers.suggest.generate', 'rest.body.generate', 'rest.docs.generate', 'rest.env.extract',
       'rest.assert.generate', 'rest.preflight', 'rest.request.fuzz', 'rest.fuzz.analyze',
-      'rest.code.import', 'rest.response.transform', 'rest.script.autocomplete',
+      'rest.code.import', 'rest.response.transform', 'rest.script.autocomplete', 'rest.script.generate',
       'rest.pattern.baseline', 'rest.record.baseline', 'rest.curl.explain',
     ],
   },
@@ -1801,6 +1814,8 @@ export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
   'rest.script.autocomplete.system': '#a78bfa',
   'rest.contract.test':        '#10b981',
   'rest.contract.test.system': '#10b981',
+  'rest.script.generate':        '#a78bfa',
+  'rest.script.generate.system': '#a78bfa',
   'rest.response.diff':        '#f59e0b',
   'rest.response.diff.system': '#f59e0b',
   'rest.schema.validate':        '#06b6d4',

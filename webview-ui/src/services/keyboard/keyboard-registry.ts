@@ -69,13 +69,34 @@ export function getRegisteredShortcuts(): ReadonlyArray<{ id: string; combo: Key
   return registry.map(({ id, combo, description }) => ({ id, combo, description }));
 }
 
+/*
+  When each shortcut last ran here. In VS Code the same keypress reaches the
+  extension too: the webview hands every keydown to the workbench, which runs
+  the keybinding Daakia declares for it (package.json — there so VS Code's own
+  Ctrl+N or Ctrl+W does not fire instead), and that command posts the action
+  back. Handled twice, Ctrl+N opened two tabs and Ctrl+W closed two.
+*/
+const lastRun = new Map<string, number>();
+const ECHO_MS = 600;
+
+/**
+ * True when the shortcut `id` has just run in the webview, so a host command
+ * arriving now is the echo of that same keypress, not a second request. When
+ * the key never got here — an editor kept it — the host command still acts.
+ */
+export function ranLocally(id: string, now = Date.now()): boolean {
+  const at = lastRun.get(id);
+  return at !== undefined && now - at < ECHO_MS;
+}
+
 /** The global keydown listener — must be installed once at app start */
-function globalKeydownHandler(e: KeyboardEvent) {
+export function globalKeydownHandler(e: KeyboardEvent) {
   for (const shortcut of registry) {
     // `combo` is the DEFAULT the feature registered with; the user may have rebound it.
     // Resolving here means every shortcut is rebindable without its call site knowing.
     const active = resolveCombo(shortcut.id, shortcut.combo);
     if (active && matchesCombo(e, active)) {
+      lastRun.set(shortcut.id, Date.now());
       shortcut.handler(e);
       return; // first match wins
     }

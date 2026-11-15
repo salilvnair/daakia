@@ -12,6 +12,7 @@ import { logUiEvent } from '../store/ui-audit-store';
 import { nameForStage, screenForStage } from '../store/ai-audit-events';
 import { showAiFailure, showSilentFailure } from './ai-failure-toast';
 import { useTabsStore } from '../store/tabs-store';
+import { ranLocally } from '../services/keyboard';
 import { useScratchpadStore } from '../store/scratchpad-store';
 import { useToastStore } from '../store/toast-store';
 import { useEnvStore } from '../store/env-store';
@@ -409,10 +410,13 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
           break;
         }
         case 'newRequest': {
+          // The echo of a key the webview already handled — see ranLocally.
+          if (ranLocally('app.new-tab')) break;
           useTabsStore.getState().addTab();
           break;
         }
         case 'sendRequest': {
+          if (ranLocally('app.send-request')) break;
           const { tabs: st, activeTabId: sid, updateTab: su } = useTabsStore.getState();
           const stab = st.find(x => x.id === sid);
           if (stab && !stab.loading && stab.url.trim()) {
@@ -422,6 +426,7 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
           break;
         }
         case 'saveRequest': {
+          if (ranLocally('app.save-request')) break;
           const { tabs: svt, activeTabId: svi, updateTab: svu } = useTabsStore.getState();
           const svTab = svt.find(x => x.id === svi);
           if (svTab) {
@@ -431,11 +436,13 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
           break;
         }
         case 'closeTab': {
+          if (ranLocally('app.close-tab')) break;
           const { activeTabId: ctId, closeTab: ctFn } = useTabsStore.getState();
           if (ctId) ctFn(ctId);
           break;
         }
         case 'focusUrl': {
+          if (ranLocally('app.focus-url')) break;
           const urlInput = document.querySelector<HTMLInputElement>('.url-bar input');
           if (urlInput) { urlInput.focus(); urlInput.select(); }
           break;
@@ -445,6 +452,7 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
           break;
         }
         case 'openCommandPalette': {
+          if (ranLocally('app.command-palette')) break;
           setPaletteOpen(prev => !prev);
           break;
         }

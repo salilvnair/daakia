@@ -32,7 +32,8 @@ const DAAKIA_SURFACE = [
   'dk.response.headers          — header map',
   'dk.response.time             — elapsed ms',
   'dk.env.get(k) / dk.env.set(k, v)      — active environment',
-  'dk.global.get(k) / dk.global.set(k, v) — global variables',
+  'dk.globals.get(k) / dk.globals.set(k, v) — global variables',
+  'dk.collectionVariables.get(k) / .set(k, v) — collection variables',
   'dk.request.url / dk.request.headers    — the outgoing request',
 ].join('\n');
 
@@ -50,8 +51,8 @@ const PAIRS: Partial<Record<Dialect, string[]>> = {
     'pm.response.responseTime           -> dk.response.time',
     'pm.response.headers.get(h)         -> dk.response.headers[h]',
     'pm.environment.get/set(k[, v])     -> dk.env.get/set(k[, v])',
-    'pm.globals.get/set(k[, v])         -> dk.global.get/set(k[, v])',
-    'pm.collectionVariables.get/set     -> dk.env.get/set  (Daakia has no separate collection scope)',
+    'pm.globals.get/set(k[, v])         -> dk.globals.get/set(k[, v])',
+    'pm.collectionVariables.get/set     -> dk.collectionVariables.get/set',
     'pm.request.url.toString()          -> dk.request.url',
     'postman.setEnvironmentVariable     -> dk.env.set  (legacy form)',
     'responseCode.code                  -> dk.response.status  (legacy form)',
@@ -68,7 +69,7 @@ const PAIRS: Partial<Record<Dialect, string[]>> = {
     'req.getUrl() / req.setUrl(u)       -> dk.request.url',
     'req.getHeaders() / req.setHeaders  -> dk.request.headers',
     'bru.getEnvVar(k) / bru.setEnvVar   -> dk.env.get(k) / dk.env.set(k, v)',
-    'bru.getVar(k) / bru.setVar(k, v)   -> dk.global.get(k) / dk.global.set(k, v)',
+    'bru.getVar(k) / bru.setVar(k, v)   -> dk.globals.get(k) / dk.globals.set(k, v)',
     'bru.sleep(ms)                      -> await new Promise(r => setTimeout(r, ms))',
   ],
   insomnia: [
@@ -77,14 +78,14 @@ const PAIRS: Partial<Record<Dialect, string[]>> = {
     'insomnia.response.code             -> dk.response.status',
     'insomnia.response.json()           -> JSON.parse(dk.response.body)',
     'insomnia.environment.get/set       -> dk.env.get/set',
-    'insomnia.baseEnvironment.get/set   -> dk.global.get/set',
+    'insomnia.baseEnvironment.get/set   -> dk.globals.get/set',
     "{% response 'body', id, '$.path' %} -> chain the value in Daakia with dk.env.set from the earlier request's script",
     '{% uuid %} / {% now %}             -> {{$guid}} / {{$timestamp}} in the URL or body',
     '{% faker ... %}                    -> Daakia has no faker tag; generate in the pre-request script',
   ],
   'thunder-client': [
     'tc.setVar(k, v) / tc.getVar(k)     -> dk.env.set(k, v) / dk.env.get(k)',
-    'tc.setGlobalVar / tc.getGlobalVar  -> dk.global.set / dk.global.get',
+    'tc.setGlobalVar / tc.getGlobalVar  -> dk.globals.set / dk.globals.get',
     'tests: [{ type: "res-code" }]      -> dk.test("status", () => dk.expect(dk.response.status).toBe(n))',
     'tests: [{ type: "json-query" }]    -> dk.test(name, () => dk.expect(<jsonpath on the parsed body>).toBe(value))',
     'tests: [{ type: "res-body" }]      -> dk.expect(dk.response.body).toContain(value)',
@@ -112,6 +113,11 @@ const PAIRS: Partial<Record<Dialect, string[]>> = {
     '-L / --location                    -> follow redirects (a Daakia setting, not a header)',
   ],
 };
+
+/** Just the pairs for a dialect, without the Daakia surface — for a prompt that brings its own. */
+export function dialectPairs(dialect: Dialect): string[] {
+  return PAIRS[dialect] ?? [];
+}
 
 /** The mapping table for a dialect, ready to drop into the prompt. */
 export function mappingsFor(dialect: Dialect): string {

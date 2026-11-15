@@ -635,6 +635,11 @@ interface TabsState {
   /** A scratchpad's tab — the one already showing it, or a new one. */
   openScratchpadTab: (scratchpadId: string, name: string) => void;
   /**
+   * The Scratchpads home: a scratchpad tab with no scratchpad in it, where
+   * the last one deleted leaves you — still in Scratchpads, with New to hand.
+   */
+  openScratchpadHome: () => void;
+  /**
    * The Daakia AI tab — the existing one, or a new one. With `chatId`, a new
    * tab opened on that conversation, beside the others.
    */
@@ -747,8 +752,26 @@ export const useTabsStore = create<TabsState>((set, get) => {
         set({ activeTabId: existing.id, previousTabId: activeTabId });
         return;
       }
+      /* The empty home becomes the scratchpad, rather than a second tab beside it. */
+      const home = tabs.find(t => t.type === 'scratchpad' && !t.scratchpadId);
+      if (home) {
+        set(s => ({
+          tabs: s.tabs.map(t => (t.id === home.id ? { ...t, scratchpadId, name } : t)),
+          activeTabId: home.id,
+          previousTabId: activeTabId === home.id ? s.previousTabId : activeTabId,
+        }));
+        return;
+      }
       const tab = createDefaultTab({ type: 'scratchpad', name });
       tab.scratchpadId = scratchpadId;
+      set(s => ({ tabs: [...s.tabs, tab], activeTabId: tab.id, previousTabId: activeTabId }));
+    },
+
+    openScratchpadHome: () => {
+      const { tabs, activeTabId } = get();
+      const home = tabs.find(t => t.type === 'scratchpad' && !t.scratchpadId);
+      if (home) { set({ activeTabId: home.id, previousTabId: activeTabId }); return; }
+      const tab = createDefaultTab({ type: 'scratchpad', name: 'Scratchpads' });
       set(s => ({ tabs: [...s.tabs, tab], activeTabId: tab.id, previousTabId: activeTabId }));
     },
 

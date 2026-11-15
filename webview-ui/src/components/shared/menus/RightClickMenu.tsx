@@ -819,6 +819,15 @@ export function RightClickMenu() {
   const handleContextMenu = useCallback((e: MouseEvent) => {
     const target = e.target as HTMLElement;
 
+    /*
+      The browser's (and VS Code's) own menu never opens anywhere in Daakia —
+      a right-click shows one of our menus or nothing. Default prevented, not
+      propagation stopped: a row's own onContextMenu still runs and draws its
+      menu. VS Code's webview checks defaultPrevented before showing its
+      Copy / Paste menu; main.tsx also opts the body out of its default items.
+    */
+    e.preventDefault();
+
     // Don't intercept elements with their own context menu (e.g., TabBar tabs, sidebar rows)
     if (target.closest('[data-context-menu]')) return;
 
@@ -847,14 +856,7 @@ export function RightClickMenu() {
       context = 'selection';
     }
 
-    /*
-      Suppressed only once a menu is actually going to appear.
-
-      This used to run before the check above, so every right-click in the app
-      with nothing selected swallowed the event and then showed nothing —
-      leaving no menu of ours and no native one either.
-    */
-    e.preventDefault();
+    /* Our menu is going to appear: nothing else gets this right-click. */
     e.stopPropagation();
     e.stopImmediatePropagation();
 

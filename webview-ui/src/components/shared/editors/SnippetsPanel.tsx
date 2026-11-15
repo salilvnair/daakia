@@ -7,7 +7,7 @@ import { HELPER_COLORS, dynamicColor } from '../../../services/template/category
 
 // ────────── Types ──────────
 
-interface Snippet {
+export interface Snippet {
   id: string;
   label: string;
   description: string;
@@ -27,7 +27,7 @@ interface Snippet {
   token?: boolean;
 }
 
-type SnippetCategory = 'tests' | 'variables' | 'dynamic' | 'workflows' | 'response' | 'request';
+export type SnippetCategory = 'tests' | 'variables' | 'dynamic' | 'workflows' | 'response' | 'request';
 
 const CATEGORY_LABELS: Record<SnippetCategory, string> = {
   tests: 'Tests',
@@ -49,7 +49,8 @@ const CATEGORY_COLORS: Record<SnippetCategory, string> = {
 
 // ────────── Snippets Data ──────────
 
-const SNIPPETS: Snippet[] = [
+/** The fixed snippets — also the worked examples Ask AI shows the model (services/ai/script-ai-context.ts). */
+export const SNIPPETS: Snippet[] = [
   // Tests
   {
     id: 'test-status-200',

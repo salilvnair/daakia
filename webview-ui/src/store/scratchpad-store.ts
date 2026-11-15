@@ -143,6 +143,8 @@ interface ScratchpadState {
   deleteFolder: (id: string) => { moved: number; deleted: number };
   setDefaultFolder: (id: string) => void;
   setFolderOpen: (id: string, open: boolean) => void;
+  /** Open or close several folders at once — a folder's own expand / collapse all. */
+  setFoldersOpen: (ids: string[], open: boolean) => void;
   /** Unfold every folder above a scratchpad, so its row is on screen. */
   reveal: (id: string) => void;
   /** Unfold every folder. */
@@ -303,8 +305,14 @@ export const useScratchpadStore = create<ScratchpadState>((set, get) => {
       if (t) { clearTimeout(t); pending.delete(id); }
       set(s => ({ files: s.files.filter(f => f.id !== id), lastDeleted: cur }));
       postMsg({ type: 'scratchpads:delete', id });
-      const tabs = useTabsStore.getState();
-      tabs.tabs.filter(tb => tb.type === 'scratchpad' && tb.scratchpadId === id).forEach(tb => tabs.closeTab(tb.id));
+      /*
+        Deleting a scratchpad keeps you in Scratchpads. Closing its tab sent
+        you back to whatever protocol was open before, and the Scratchpads
+        button, finding none left, made a new scratchpad1 — so a delete looked
+        like it had not happened. Another open scratchpad comes to the front
+        instead; with none, the tab becomes the empty home.
+      */
+      leaveDeletedTabs(new Set([id]));
       logUiEvent('scratchpad.delete', { type: cur.type });
     },
 
@@ -366,8 +374,7 @@ export const useScratchpadStore = create<ScratchpadState>((set, get) => {
           lastDeleted: st.lastDeleted && ids.has(st.lastDeleted.id) ? null : st.lastDeleted,
         }));
         if (gone.length) postMsg({ type: 'scratchpads:deleteFolders', ids: gone });
-        const tabs = useTabsStore.getState();
-        tabs.tabs.filter(tb => tb.type === 'scratchpad' && tb.scratchpadId && ids.has(tb.scratchpadId)).forEach(tb => tabs.closeTab(tb.id));
+        leaveDeletedTabs(ids);
         logUiEvent('scratchpad.folder.delete', { moved: 0, deleted: inside.length, emptiedDefault: true });
         return { moved: 0, deleted: inside.length };
       }
@@ -387,6 +394,13 @@ export const useScratchpadStore = create<ScratchpadState>((set, get) => {
 
     setFolderOpen: (id, open) => {
       const openFolders = { ...get().openFolders, [id]: open };
+      set({ openFolders });
+      persistOpen(openFolders);
+    },
+
+    setFoldersOpen: (ids, open) => {
+      const openFolders = { ...get().openFolders };
+      for (const id of ids) openFolders[id] = open;
       set({ openFolders });
       persistOpen(openFolders);
     },
@@ -438,6 +452,23 @@ export function lastOpenedScratchpadId(): string | undefined {
   The rail icon: back to the scratchpad you were in, or the one most recently
   changed, or — with none at all — a new JSON one. Never an empty page.
 */
+/**
+ * The tabs of scratchpads that were just deleted. Another scratchpad tab that
+ * survives comes to the front; with none, one tab stays as the empty home and
+ * the rest close — you are still in Scratchpads either way.
+ */
+function leaveDeletedTabs(deleted: ReadonlySet<string>): void {
+  const store = useTabsStore.getState;
+  const gone = store().tabs.filter(t => t.type === 'scratchpad' && t.scratchpadId && deleted.has(t.scratchpadId));
+  if (!gone.length) return;
+  const wasActive = gone.some(t => t.id === store().activeTabId);
+  const survivor = store().tabs.find(t => t.type === 'scratchpad' && !gone.some(g => g.id === t.id));
+  const keep = survivor ? undefined : gone[0];
+  for (const t of gone) if (t !== keep) store().closeTab(t.id);
+  if (keep) store().updateTab(keep.id, { scratchpadId: undefined, name: 'Scratchpads' });
+  if (wasActive) store().setActiveTab((survivor ?? keep)!.id);
+}
+
 export function openScratchpads(): void {
   const store = useScratchpadStore.getState();
   const tabs = useTabsStore.getState();
@@ -459,7 +490,8 @@ export function openScratchpads(): void {
   const pick = store.files.find(f => f.id === last)
     ?? [...store.files].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
   if (pick) store.open(pick.id);
-  else store.create('json');
+  /* None left: the home, with New — not a scratchpad nobody asked for. */
+  else tabs.openScratchpadHome();
 }
 
 if (typeof window !== 'undefined') {

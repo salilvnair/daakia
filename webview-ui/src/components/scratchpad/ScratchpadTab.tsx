@@ -14,7 +14,7 @@ import { useTabsStore, type RequestTab } from '../../store/tabs-store';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { useToastStore } from '../../store/toast-store';
 import { copyText } from '../../utils/clipboard';
-import { CheckIcon, ChevronDownIcon, ChevronRightIcon, CopyIcon, WrapLinesIcon, CodeBracketsIcon } from '../../icons';
+import { CheckIcon, ChevronDownIcon, ChevronRightIcon, CopyIcon, WrapLinesIcon, CodeBracketsIcon, ScratchpadIcon } from '../../icons';
 import { relativeTime, canFormat, formatScratchpad } from './scratchpad-format';
 import './scratchpad.css';
 
@@ -42,6 +42,36 @@ export function ScratchpadTab({ tab }: { tab: RequestTab }) {
 
   if (!loaded) {
     return <div className="dk-scratch dk-scratch--empty">Opening scratchpad…</div>;
+  }
+
+  /* The home: no scratchpad in this tab — the last one was deleted, or there never was one. */
+  if (!tab.scratchpadId) {
+    return (
+      <div className="dk-scratch dk-scratch--empty">
+        <span className="dk-scratch__home-mark"><ScratchpadIcon size={22} /></span>
+        <div className="dk-scratch__empty-title">No scratchpad open</div>
+        <div className="dk-scratch__empty-sub">Start one, or open one from Scratchpad Collections on the right.</div>
+        <div className="dk-scratch__home-types">
+          {SCRATCHPAD_TYPE_ORDER.map(k => (
+            <button
+              key={k}
+              type="button"
+              className="dk-scratch__home-type"
+              style={{ ['--type' as string]: SCRATCHPAD_TYPES[k].color }}
+              onClick={() => useScratchpadStore.getState().create(k)}
+            >
+              <span className="dk-scratch-badge" style={{ color: SCRATCHPAD_TYPES[k].color }}>{SCRATCHPAD_TYPES[k].badge}</span>
+              New {SCRATCHPAD_TYPES[k].label}
+            </button>
+          ))}
+        </div>
+        {lastDeleted && (
+          <button type="button" className="dk-scratch__home-undo" onClick={() => useScratchpadStore.getState().undoRemove()}>
+            Undo delete of {scratchpadFileName(lastDeleted)}
+          </button>
+        )}
+      </div>
+    );
   }
 
   if (!pad) {
