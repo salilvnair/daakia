@@ -71,7 +71,10 @@ describe('showAiFailure', () => {
   it('says it again once the collapse has expired', () => {
     showAiFailure('F', 'nope', '503', 1000);
     showAiFailure('F', 'nope', '503', 1000 + REPEAT_MS + 1);
-    expect(toasts()).toHaveLength(2);
+    /* Said again — and since the first is still on screen, as "×2" on it
+       rather than a second card with the same words. */
+    expect(toasts()).toHaveLength(1);
+    expect(toasts()[0].count).toBe(2);
   });
 
   it('never collapses two different failures together', () => {

@@ -19,7 +19,7 @@ import { useEnvStore } from '../store/env-store';
 import { useDynamicVarsStore } from '../store/dynamic-vars-store';
 import { useAppThemeStore, resolveMode, type ThemeMode } from '../store/app-theme-store';
 import { useDk8sTerminalStore } from '../store/dk8s-terminal-store';
-import { useCollectionsStore } from '../store/collections-store';
+import { useCollectionsStore, withInherited, type InheritedProps } from '../store/collections-store';
 import { useUrlSuggestionsStore } from '../store/url-suggestions-store';
 import { useUiStateStore } from '../store/ui-state-store';
 import { useDevToolsStore } from '../store/devtools-store';
@@ -516,15 +516,17 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
           break;
         }
         case 'collectionPropertiesData': {
-          const { id: colId, properties: colProps } = msg as { id: string; properties: Record<string, unknown> };
-          useCollectionsStore.getState().setProperties(colId, {
+          const { id: colId, properties: colProps, inherited } = msg as { id: string; properties: Record<string, unknown>; inherited?: InheritedProps };
+          // The cache is what requests are sent with, so it holds the folder's own
+          // settings over what the folders above it give it.
+          useCollectionsStore.getState().setProperties(colId, withInherited({
             headers: (colProps.headers as []) ?? [],
             authType: (colProps.authType as string) ?? 'none',
             authData: (colProps.authData as Record<string, string>) ?? {},
             variables: (colProps.variables as []) ?? [],
             preRequestScript: (colProps.preRequestScript as string) ?? '',
             postResponseScript: (colProps.postResponseScript as string) ?? (colProps.testScript as string) ?? '',
-          });
+          }, inherited));
           break;
         }
         case 'historyData': {

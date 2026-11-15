@@ -195,24 +195,6 @@ export const GRPC_STREAM_TYPE_COLORS: Record<'unary' | 'server_streaming' | 'cli
   bidi_streaming: '#f472b6',   // pink-400 — both directions stream simultaneously
 };
 
-// ─── Toast Type Config ───────────────────────────────────────────────────────
-
-export interface ToastTypeStyle {
-  border: string;
-  bg: string;
-  icon: string;
-}
-
-export function getToastTypeConfig(): Record<string, ToastTypeStyle> {
-  const c = resolveColors();
-  return {
-    success: { border: c.success, bg: hexToRgba(c.success, 0.08), icon: '✓' },
-    error:   { border: c.error,   bg: hexToRgba(c.error, 0.08),   icon: '✕' },
-    info:    { border: c.info,    bg: hexToRgba(c.info, 0.08),    icon: 'ℹ' },
- warning: { border: c.warning, bg: hexToRgba(c.warning, 0.08), icon: ''},
-  };
-}
-
 // ─── Response Time Colors ────────────────────────────────────────────────────
 
 /** Returns appropriate color for response time thresholds */

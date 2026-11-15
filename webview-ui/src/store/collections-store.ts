@@ -9,6 +9,39 @@ export interface CollectionPropsCache {
   postResponseScript: string;
 }
 
+type KV = { key: string; value: string; enabled: boolean };
+
+/** What the host says a folder gets from the folders above it. */
+export interface InheritedProps {
+  variables?: KV[];
+  headers?: KV[];
+  authType?: string;
+  authData?: Record<string, string>;
+}
+
+function layer(base: KV[] | undefined, own: KV[], foldCase: boolean): KV[] {
+  const name = (k: string) => (foldCase ? k.toLowerCase() : k);
+  const ownKeys = new Set(own.filter(kv => kv.enabled && kv.key).map(kv => name(kv.key)));
+  return [...(base ?? []).filter(kv => !ownKeys.has(name(kv.key))), ...own];
+}
+
+/**
+ * A folder's own properties with what it inherits underneath — what a request
+ * in it is sent with. Its own variables and headers win by key; its own auth
+ * wins unless it is `none`. Scripts are its own only.
+ */
+export function withInherited(own: CollectionPropsCache, inherited: InheritedProps | undefined): CollectionPropsCache {
+  if (!inherited) return own;
+  const ownAuth = own.authType && own.authType !== 'none' && own.authType !== 'inherit';
+  return {
+    ...own,
+    variables: layer(inherited.variables, own.variables, false),
+    headers: layer(inherited.headers, own.headers, true),
+    authType: ownAuth ? own.authType : (inherited.authType ?? 'none'),
+    authData: ownAuth ? own.authData : (inherited.authData ?? {}),
+  };
+}
+
 interface CollectionsState {
   /** Cache of collection properties by collection ID */
   propertiesCache: Record<string, CollectionPropsCache>;

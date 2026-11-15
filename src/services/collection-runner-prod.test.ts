@@ -21,6 +21,8 @@ vi.mock('../storage/db', () => ({
     ],
   }],
   getCollectionData: () => JSON.stringify({ variables: [{ key: 'zp', value: 'http://localhost:18081', enabled: true }] }),
+  // Variables are read along the folder chain; this collection is its own root.
+  getCollectionBreadcrumb: (id: string) => [{ id, name: 'zp' }],
   getAllEnvironments: () => [],
   getSetting: () => undefined,
 }));

@@ -11,7 +11,7 @@ import type { ImportResult } from './import-types';
 
 // ─── OpenAPI Types (subset) ──────────────────────────────────────────────────
 
-interface OpenAPIParameter {
+export interface OpenAPIParameter {
   name: string;
   in: 'query' | 'header' | 'path' | 'cookie';
   required?: boolean;
@@ -25,7 +25,7 @@ interface OpenAPIRequestBody {
   required?: boolean;
 }
 
-interface OpenAPISecurityScheme {
+export interface OpenAPISecurityScheme {
   type: string;
   scheme?: string;
   bearerFormat?: string;
@@ -33,7 +33,7 @@ interface OpenAPISecurityScheme {
   in?: string;
 }
 
-interface OpenAPIOperation {
+export interface OpenAPIOperation {
   operationId?: string;
   summary?: string;
   description?: string;
@@ -44,7 +44,7 @@ interface OpenAPIOperation {
   deprecated?: boolean;
 }
 
-interface OpenAPIPathItem {
+export interface OpenAPIPathItem {
   get?: OpenAPIOperation;
   post?: OpenAPIOperation;
   put?: OpenAPIOperation;
@@ -55,7 +55,7 @@ interface OpenAPIPathItem {
   parameters?: OpenAPIParameter[];
 }
 
-interface OpenAPISpec {
+export interface OpenAPISpec {
   /** Kept at import so `toMatchSchema('#/components/schemas/X')` can resolve. */
   definitions?: Record<string, unknown>;
   openapi?: string; // "3.x.x"
@@ -72,7 +72,7 @@ interface OpenAPISpec {
 }
 
 // Swagger 2.x operation has different body handling
-interface Swagger2Parameter {
+export interface Swagger2Parameter {
   name: string;
   in: string;
   required?: boolean;
@@ -82,7 +82,7 @@ interface Swagger2Parameter {
   type?: string;
 }
 
-interface Swagger2Operation extends Omit<OpenAPIOperation, 'parameters'> {
+export interface Swagger2Operation extends Omit<OpenAPIOperation, 'parameters'> {
   consumes?: string[];
   produces?: string[];
   parameters?: Swagger2Parameter[];
@@ -90,7 +90,7 @@ interface Swagger2Operation extends Omit<OpenAPIOperation, 'parameters'> {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'] as const;
+export const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'] as const;
 
 function getBaseUrl(spec: OpenAPISpec): string {
   // OpenAPI 3.x
@@ -114,14 +114,14 @@ function resolveParameterValue(param: OpenAPIParameter): string {
   return `{{${param.name}}}`;
 }
 
-function buildHeaders(params: OpenAPIParameter[] | undefined): { key: string; value: string; enabled: boolean }[] {
+export function buildHeaders(params: OpenAPIParameter[] | undefined): { key: string; value: string; enabled: boolean }[] {
   if (!params) return [];
   return params
     .filter(p => p.in === 'header')
     .map(p => ({ key: p.name, value: resolveParameterValue(p), enabled: true }));
 }
 
-function buildQueryParams(params: OpenAPIParameter[] | undefined): { key: string; value: string; enabled: boolean }[] {
+export function buildQueryParams(params: OpenAPIParameter[] | undefined): { key: string; value: string; enabled: boolean }[] {
   if (!params) return [];
   return params
     .filter(p => p.in === 'query')
@@ -143,7 +143,7 @@ function buildUrlWithPathParams(baseUrl: string, path: string, params: OpenAPIPa
   return `${baseUrl}${fullPath}`;
 }
 
-function extractRequestBody(operation: OpenAPIOperation | Swagger2Operation, isSwagger2: boolean): { bodyMode: string; bodyRaw: string; bodyFormData: object[]; bodyUrlEncoded: object[] } {
+export function extractRequestBody(operation: OpenAPIOperation | Swagger2Operation, isSwagger2: boolean): { bodyMode: string; bodyRaw: string; bodyFormData: object[]; bodyUrlEncoded: object[] } {
   const noBody = { bodyMode: 'none', bodyRaw: '', bodyFormData: [], bodyUrlEncoded: [] };
 
   if (isSwagger2) {

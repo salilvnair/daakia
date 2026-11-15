@@ -11,10 +11,11 @@ import { useSidebarDataStore } from '../../../store/sidebar-data-store';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import { useAiPromptTemplatesStore } from '../../../store/prompt-template';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
+import { SwaggerImportWizard } from '../../workspace/SwaggerImportWizard';
 import { NewItemModal, ConfirmDialog, RunCollectionModal, CollectionPropertiesModal, ExportResponseOptionModal, ImportExportIcon, type CollectionProperties } from '../../shared';
 import { findNodeById, findParentOfRequest, findRequestById, filterTree, collectAllIds, hasAnyRequests, openCollectionRequest, useStarredIds, toggleStar, starFirst, type CollectionTreeNode, type CollectionRequest } from '../../../services/collections';
 import { METHOD_COLORS, getProtocolAccent } from '../../../colors';
-import { PlusIcon, FolderIcon, FolderOpenIcon, PlayIcon, DocumentIcon, ServerIcon, RenameIcon, CopyIcon, SettingsIcon, TrashIcon, ExternalLinkIcon, PlusSquareIcon, ChevronRightIcon, MoreVerticalIcon, FilePlusIcon, FolderPlusIcon, FolderImportIcon, FolderExportIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, SparkleIcon, CloseCircleIcon, SearchIcon, HelpCircleIcon, SortIcon, CheckIcon, ExpandAllIcon, CollapseAllIcon, StarIcon } from '../../../icons';
+import { PlusIcon, FolderIcon, FolderOpenIcon, PlayIcon, DocumentIcon, ServerIcon, RenameIcon, CopyIcon, SettingsIcon, TrashIcon, ExternalLinkIcon, PlusSquareIcon, ChevronRightIcon, MoreVerticalIcon, FilePlusIcon, FolderPlusIcon, FolderImportIcon, FolderExportIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, SparkleIcon, CloseCircleIcon, SearchIcon, HelpCircleIcon, SortIcon, CheckIcon, ExpandAllIcon, CollapseAllIcon, StarIcon, BracesIcon, FileTextIcon, BookOpenIcon } from '../../../icons';
 import { SidebarSkeleton } from '../../shared/display/SidebarSkeleton';
 import { AiEnvExtractModal } from '../../ai/AiEnvExtractModal';
 import { AiCollectionOrganizerModal } from '../../ai/AiCollectionOrganizerModal';
@@ -175,6 +176,46 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
   const [showLogsImport, setShowLogsImport] = useState(false);
   const [showInsomniaImport, setShowInsomniaImport] = useState(false);
   const [pendingExport, setPendingExport] = useState<{ type: string; collectionId?: string; formatLabel: string } | null>(null);
+  const [showSwaggerImport, setShowSwaggerImport] = useState(false);
+
+  /** Import → With AI. Each entry only when its AI feature is on. */
+  const importAiItems: DuiContextMenuItem[] = [
+    ...(aiEnabled('importFromScreenshot') ? [{ id: 'import-screenshot', label: 'Screenshot', shortcut: 'S', icon: <SparkleIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowScreenshotImport(true); setHeaderMenu(null); } }] : []),
+    ...(aiEnabled('importFromLogs') ? [{ id: 'import-logs', label: 'Server logs', shortcut: 'L', icon: <SparkleIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowLogsImport(true); setHeaderMenu(null); } }] : []),
+    ...(aiEnabled('describeWorkflow') ? [{ id: 'ai-conversation', label: 'Describe a workflow', shortcut: 'W', icon: <SparkleIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowConversationToCollection(true); setHeaderMenu(null); } }] : []),
+    ...(aiEnabled('generateScenario') ? [{ id: 'ai-scenario', label: 'Generate a scenario', shortcut: 'G', icon: <SparkleIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { setShowScenarioGenerator(true); setHeaderMenu(null); } }] : []),
+    ...(aiEnabled('reverseEngineer') ? [{ id: 'ai-reverse-engineer', label: 'Reverse engineer', shortcut: 'R', icon: <SparkleIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowReverseEngineer(true); setHeaderMenu(null); } }] : []),
+  ];
+
+  /**
+   * Export, grouped by what you hand over: a collection for another client,
+   * a spec, or docs for people. One list for the header menu (every
+   * collection) and a collection's own menu (`collectionId`).
+   */
+  const exportItems = (collectionId: string | undefined, close: () => void, size: number): DuiContextMenuItem[] => {
+    const scope = collectionId ? { collectionId } : {};
+    const icon = (color: string) => <FolderExportIcon size={size} style={{ color }} />;
+    return [
+      {
+        id: 'export-collection', label: 'Collection', shortcut: 'C', icon: <FolderIcon size={size} style={{ color: 'var(--color-text-muted)' }} />,
+        children: [
+          { id: 'export-daakia', label: 'Daakia JSON', shortcut: 'J', icon: icon('var(--color-warning)'), onClick: () => { setPendingExport({ type: 'exportCollectionDaakia', ...scope, formatLabel: 'Daakia JSON' }); close(); } },
+          { id: 'export-postman', label: 'Postman', shortcut: 'M', icon: icon('var(--color-warning)'), onClick: () => { setPendingExport({ type: 'exportCollectionPostman', ...scope, formatLabel: 'Postman' }); close(); } },
+          { id: 'export-insomnia', label: 'Insomnia', shortcut: 'I', icon: icon('var(--color-info)'), onClick: () => { postMsg({ type: 'exportCollectionInsomnia', ...scope }); close(); } },
+          { id: 'export-bruno', label: 'Bruno (.bru)', shortcut: 'B', icon: icon('var(--color-warning)'), onClick: () => { postMsg({ type: 'exportCollectionBruno', ...scope }); close(); } },
+          { id: 'export-httpie', label: 'HTTPie', shortcut: 'H', icon: icon('var(--color-success)'), onClick: () => { postMsg({ type: 'exportCollectionHttpie', ...scope }); close(); } },
+        ],
+      },
+      { id: 'export-openapi', label: 'OpenAPI 3.1', shortcut: 'O', icon: <BracesIcon size={size} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'exportCollectionOpenApi', ...scope }); close(); } },
+      {
+        id: 'export-docs-group', label: 'API docs', shortcut: 'D', icon: <BookOpenIcon size={size} style={{ color: 'var(--color-info)' }} />,
+        children: [
+          { id: 'export-docs', label: 'Markdown', shortcut: 'M', icon: icon('var(--color-info)'), onClick: () => { postMsg({ type: 'exportCollectionDocs', ...scope }); close(); } },
+          { id: 'export-docs-html', label: 'HTML page', shortcut: 'H', icon: icon('var(--color-info)'), onClick: () => { postMsg({ type: 'exportCollectionDocsHtml', ...scope }); close(); } },
+        ],
+      },
+    ];
+  };
   // Sprint 11 state
   const [showSequenceComposer, setShowSequenceComposer] = useState(false);
   const [knowledgeGraphNode, setKnowledgeGraphNode] = useState<CollectionTreeNode | null>(null);
@@ -672,16 +713,7 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
       ...(aiSub.length ? [{ id: 'ai-actions', label: 'AI Actions', icon: <SparkleIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, children: aiSub }] : []),
       {
         id: 'export', label: 'Export', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-warning)' }} />,
-        children: [
-          { id: 'export-daakia',  label: 'Daakia JSON',         shortcut: 'J', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-warning)' }} />, onClick: () => { setPendingExport({ type: 'exportCollectionDaakia', collectionId: targetId, formatLabel: 'Daakia JSON' }); close(); } },
-          { id: 'export-postman', label: 'Postman',             shortcut: 'M', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-warning)' }} />, onClick: () => { setPendingExport({ type: 'exportCollectionPostman', collectionId: targetId, formatLabel: 'Postman' }); close(); } },
-          { id: 'export-insomnia',label: 'Insomnia',            shortcut: 'I', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-info)' }} />,    onClick: () => { postMsg({ type: 'exportCollectionInsomnia', collectionId: targetId }); close(); } },
-          { id: 'export-bruno',   label: 'Bruno (.bru)',        shortcut: 'B', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-warning)' }} />, onClick: () => { postMsg({ type: 'exportCollectionBruno',    collectionId: targetId }); close(); } },
-          { id: 'export-httpie',  label: 'HTTPie',              shortcut: 'H', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'exportCollectionHttpie',   collectionId: targetId }); close(); } },
-          { id: 'export-openapi', label: 'OpenAPI 3.1',         shortcut: 'O', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'exportCollectionOpenApi',  collectionId: targetId }); close(); } },
-          { id: 'export-docs',    label: 'API Docs (Markdown)', shortcut: 'D', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-info)' }} />,    onClick: () => { postMsg({ type: 'exportCollectionDocs',     collectionId: targetId }); close(); } },
-          { id: 'export-docs-html', label: 'API Docs (HTML page)', shortcut: 'W', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-info)' }} />,    onClick: () => { postMsg({ type: 'exportCollectionDocsHtml',     collectionId: targetId }); close(); } },
-        ],
+        children: exportItems(targetId, close, 13),
       },
       {
         id: 'mock-collection', label: 'Mock', icon: <ServerIcon size={13} style={{ color: 'var(--color-warning)' }} />, disabled: !hasReqs,
@@ -960,38 +992,38 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
             position={headerMenu?.kind === 'importExport' ? { x: headerMenu.x, y: headerMenu.y } : undefined}
             onClose={() => setHeaderMenu(null)}
             items={lockEdits([
-              // Two submenus rather than one flat list — the combined set runs well past the
-              // height of the sidebar, and it mirrors the per-collection right-click menu.
+              /*
+                Grouped by where the thing comes from or goes, so each menu opens
+                three rows tall instead of eleven. The URL import sits on top on
+                its own: it is the one that reads a running service.
+              */
               {
                 id: 'import', label: 'Import', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-accent)' }} />,
                 children: [
-                  { id: 'import-daakia', label: 'Daakia JSON', shortcut: 'D', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-accent)' }} />, onClick: () => { postMsg({ type: 'importCollectionDaakia' }); setHeaderMenu(null); } },
-                  { id: 'import-postman', label: 'Postman', shortcut: 'P', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-method-post)' }} />, onClick: () => { postMsg({ type: 'importCollectionRequest' }); setHeaderMenu(null); } },
-                  { id: 'import-openapi', label: 'OpenAPI', shortcut: 'O', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'importCollectionRequest' }); setHeaderMenu(null); } },
-                  { id: 'import-bruno', label: 'Bruno', shortcut: 'B', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { postMsg({ type: 'importBrunoRequest' }); setHeaderMenu(null); } },
-                  { id: 'import-insomnia', label: 'Insomnia', shortcut: 'I', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowInsomniaImport(true); setHeaderMenu(null); } },
-                  { id: 'import-har', label: 'HAR', shortcut: 'H', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-primary)' }} />, onClick: () => { postMsg({ type: 'importCollectionRequest' }); setHeaderMenu(null); } },
-                  ...(aiEnabled('importFromScreenshot') ? [{ id: 'import-screenshot', label: 'Screenshot (AI)', shortcut: 'S', icon: <SparkleIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowScreenshotImport(true); setHeaderMenu(null); } } as DuiContextMenuItem] : []),
-                  ...(aiEnabled('importFromLogs')       ? [{ id: 'import-logs',        label: 'Server Logs (AI)', shortcut: 'L', icon: <SparkleIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowLogsImport(true); setHeaderMenu(null); } } as DuiContextMenuItem] : []),
-                  ...(aiEnabled('describeWorkflow')     ? [{ id: 'ai-conversation',    label: 'Describe Workflow (AI)',       shortcut: 'W', icon: <SparkleIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowConversationToCollection(true); setHeaderMenu(null); } } as DuiContextMenuItem] : []),
-                  ...(aiEnabled('generateScenario')     ? [{ id: 'ai-scenario',        label: 'Generate Scenario (AI)',      shortcut: 'G', icon: <SparkleIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { setShowScenarioGenerator(true); setHeaderMenu(null); } } as DuiContextMenuItem] : []),
-                  ...(aiEnabled('reverseEngineer')      ? [{ id: 'ai-reverse-engineer',label: 'Reverse Engineer (AI)',       shortcut: 'R', icon: <SparkleIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowReverseEngineer(true); setHeaderMenu(null); } } as DuiContextMenuItem] : []),
+                  { id: 'import-swagger-url', label: 'Swagger / OpenAPI URL', shortcut: 'U', icon: <BracesIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { setShowSwaggerImport(true); setHeaderMenu(null); } },
+                  { id: 'import-sep', label: '', separator: true },
+                  {
+                    id: 'import-file', label: 'From a file', shortcut: 'F', icon: <FileTextIcon size={14} style={{ color: 'var(--color-text-muted)' }} />,
+                    children: [
+                      { id: 'import-daakia', label: 'Daakia JSON', shortcut: 'D', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-accent)' }} />, onClick: () => { postMsg({ type: 'importCollectionDaakia' }); setHeaderMenu(null); } },
+                      { id: 'import-postman', label: 'Postman', shortcut: 'P', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-method-post)' }} />, onClick: () => { postMsg({ type: 'importCollectionRequest' }); setHeaderMenu(null); } },
+                      { id: 'import-openapi', label: 'OpenAPI file', shortcut: 'O', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'importCollectionRequest' }); setHeaderMenu(null); } },
+                      { id: 'import-bruno', label: 'Bruno', shortcut: 'B', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { postMsg({ type: 'importBrunoRequest' }); setHeaderMenu(null); } },
+                      { id: 'import-insomnia', label: 'Insomnia', shortcut: 'I', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowInsomniaImport(true); setHeaderMenu(null); } },
+                      { id: 'import-har', label: 'HAR', shortcut: 'H', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-primary)' }} />, onClick: () => { postMsg({ type: 'importCollectionRequest' }); setHeaderMenu(null); } },
+                    ],
+                  },
+                  ...(importAiItems.length ? [{
+                    id: 'import-ai', label: 'With AI', shortcut: 'A', icon: <SparkleIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />,
+                    children: importAiItems,
+                  } as DuiContextMenuItem] : []),
                 ],
               },
               {
                 id: 'export', label: 'Export', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-warning)' }} />,
                 // No collectionId — these export every collection, the same set "Export as JSON"
                 // always did (not just the protocol this panel is showing).
-                children: [
-                  { id: 'export-daakia',  label: 'Daakia JSON',         shortcut: 'J', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { setPendingExport({ type: 'exportCollectionDaakia', formatLabel: 'Daakia JSON' }); setHeaderMenu(null); } },
-                  { id: 'export-postman', label: 'Postman',             shortcut: 'M', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { setPendingExport({ type: 'exportCollectionPostman', formatLabel: 'Postman' }); setHeaderMenu(null); } },
-                  { id: 'export-insomnia',label: 'Insomnia',            shortcut: 'I', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-info)' }} />,    onClick: () => { postMsg({ type: 'exportCollectionInsomnia' }); setHeaderMenu(null); } },
-                  { id: 'export-bruno',   label: 'Bruno (.bru)',        shortcut: 'B', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { postMsg({ type: 'exportCollectionBruno' }); setHeaderMenu(null); } },
-                  { id: 'export-httpie',  label: 'HTTPie',              shortcut: 'H', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'exportCollectionHttpie' }); setHeaderMenu(null); } },
-                  { id: 'export-openapi', label: 'OpenAPI 3.1',         shortcut: 'O', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'exportCollectionOpenApi' }); setHeaderMenu(null); } },
-                  { id: 'export-docs',    label: 'API Docs (Markdown)', shortcut: 'D', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-info)' }} />,    onClick: () => { postMsg({ type: 'exportCollectionDocs' }); setHeaderMenu(null); } },
-                  { id: 'export-docs-html', label: 'API Docs (HTML page)', shortcut: 'W', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-info)' }} />, onClick: () => { postMsg({ type: 'exportCollectionDocsHtml' }); setHeaderMenu(null); } },
-                ],
+                children: exportItems(undefined, () => setHeaderMenu(null), 14),
               },
             ] as DuiContextMenuItem[], canEdit, COLLECTION_EDIT_IDS)}
           />
@@ -1349,6 +1381,7 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
         />
       )}
 
+      {showSwaggerImport && <SwaggerImportWizard onClose={() => setShowSwaggerImport(false)} />}
       {showInsomniaImport && (
         <InsomniaImportModal
           onClose={() => setShowInsomniaImport(false)}

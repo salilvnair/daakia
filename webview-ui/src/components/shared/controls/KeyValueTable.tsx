@@ -42,6 +42,12 @@ interface Props {
   accentColor?: string;
   /** Extra icon buttons rendered before the trash icon in the toolbar */
   toolbarExtra?: React.ReactNode;
+  /**
+   * Clear all hands over to the caller instead of leaving one empty row —
+   * for a table that is optional, so clearing it can take the table away.
+   * Enabled whenever there is a row; asks first only when one has text.
+   */
+  onClear?: () => void;
 }
 
 export function KeyValueTable({
@@ -56,6 +62,7 @@ export function KeyValueTable({
   label,
   accentColor,
   toolbarExtra,
+  onClear,
 }: Props) {
   const updateRow = (idx: number, field: keyof KeyValueRow, value: string | boolean) => {
     const updated = [...rows];
@@ -115,8 +122,10 @@ export function KeyValueTable({
     }
   };
 
+  const hasText = rows.some(r => r.key || r.value);
   const handleClearAll = () => {
-    onChange([{ id: crypto.randomUUID(), key: '', value: '', description: '', enabled: true }]);
+    if (onClear) onClear();
+    else onChange([{ id: crypto.randomUUID(), key: '', value: '', description: '', enabled: true }]);
     setShowClearConfirm(false);
     setBulkEdit(false);
   };
@@ -136,9 +145,9 @@ export function KeyValueTable({
             icon={<TrashIcon size={14} />}
             size="md"
             tooltip="Clear all"
-            disabled={!rows.some(r => r.key || r.value)}
+            disabled={onClear ? rows.length === 0 : !hasText}
             style={{ '--dui-hover-color': 'var(--color-error)', '--dui-hover-bg': 'color-mix(in srgb, var(--color-error) 8%, transparent)' } as React.CSSProperties}
-            onClick={() => { if (rows.some(r => r.key || r.value)) setShowClearConfirm(true); }}
+            onClick={() => { if (hasText) setShowClearConfirm(true); else if (onClear) handleClearAll(); }}
           />
           <IconButtonView
             icon={<BulkEditIcon size={14} />}

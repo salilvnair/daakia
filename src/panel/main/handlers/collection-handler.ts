@@ -20,6 +20,7 @@ import { prodForwardRefusal } from './port-forward-handler';
 import { archiveCollection, archiveCollectionRequest } from '../../../services/bin';
 import { searchTree, type SearchNode } from '../../../services/collection-search';
 import { importAnyCollection } from '../../../services/import-any';
+import { inheritedCollectionProps } from '../../../services/collection-inherit';
 import { postImportReport, importToast } from '../../../services/import-report';
 
 type PostMessage = (msg: unknown) => void;
@@ -137,7 +138,11 @@ export function handleUpdateCollectionProperties(msg: Record<string, unknown>) {
 export function handleGetCollectionProperties(msg: Record<string, unknown>, postMessage: PostMessage) {
   const id = msg.id as string;
   const data = getCollectionData(id);
-  postMessage({ type: 'collectionPropertiesData', id, properties: JSON.parse(data) });
+  /*
+    `properties` stays the folder's own — the Properties dialog edits exactly
+    that. `inherited` is what the folders above it add, for sending.
+  */
+  postMessage({ type: 'collectionPropertiesData', id, properties: JSON.parse(data), inherited: inheritedCollectionProps(id) });
 }
 
 export function handleClearCollections(postMessage: PostMessage, protocol?: string) {

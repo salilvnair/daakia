@@ -1,70 +1,139 @@
-import { useEffect, useRef, useState } from 'react';
+/**
+ * Toasts, drawn the way the rest of Daakia's floating surfaces are.
+ *
+ * The same elevated card as a menu or popover. Colour lives in the icon tile
+ * and a 2px timer line along the bottom — not a stripe down the edge, and not
+ * a tinted wash behind the text. The close button is grey: it dismisses, it
+ * does not warn.
+ *
+ * Behaviour:
+ *   - newest in front; the rest tuck behind as a stack and fan out on hover;
+ *   - hovering (or focusing) any toast pauses every timer — the timer is the
+ *     line's CSS animation, so pausing it is `animation-play-state`, and the
+ *     toast leaves when that animation ends;
+ *   - an error stays until dismissed; the same toast again counts ("×3").
+ */
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { useToastStore, type ToastData } from '../../../store/toast-store';
-import { getToastTypeConfig } from '../../../colors';
+import { useToastStore, defaultDuration, type ToastData } from '../../../store/toast-store';
+import { CheckIcon, CloseIcon, InfoCircleIcon, WarningTriangleIcon, XCircleIcon } from '../../../icons';
+import './toast.css';
 
-function ToastItem({ toast, onDismiss }: { toast: ToastData; onDismiss: (id: string) => void }) {
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [exiting, setExiting] = useState(false);
-  const TYPE_CONFIG = getToastTypeConfig();
-  const config = TYPE_CONFIG[toast.type] || TYPE_CONFIG.info;
+const ICON: Record<ToastData['type'], ReactNode> = {
+  success: <CheckIcon size={15} />,
+  error: <XCircleIcon size={15} />,
+  warning: <WarningTriangleIcon size={15} />,
+  info: <InfoCircleIcon size={15} />,
+};
 
-  const dismiss = () => {
-    setExiting(true);
-    setTimeout(() => onDismiss(toast.id), 200);
+function ToastItem({ toast, onGone, style, behind, measure }: {
+  toast: ToastData;
+  onGone: (id: string) => void;
+  style?: React.CSSProperties;
+  behind?: boolean;
+  measure?: (el: HTMLDivElement | null) => void;
+}) {
+  const [leaving, setLeaving] = useState(false);
+  const duration = toast.duration ?? defaultDuration(toast.type);
+
+  const onAnimationEnd = (e: React.AnimationEvent) => {
+    // `dk-toast-out-fade` is the reduced-motion exit.
+    if (e.animationName.startsWith('dk-toast-out')) onGone(toast.id);
+    else if (e.animationName === 'dk-toast-timer') setLeaving(true);
   };
-
-  useEffect(() => {
-    const dur = toast.duration ?? 4000;
-    if (dur > 0) {
-      timerRef.current = setTimeout(dismiss, dur);
-    }
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [toast.id]);
 
   return (
     <div
-      className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg border-l-[3px] text-[13px] text-[var(--color-text-primary)] shadow-lg backdrop-blur-sm transition-all duration-200 ${
-        exiting ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0 animate-[toastSlideUp_0.3s_cubic-bezier(0.16,1,0.3,1)]'
-      }`}
-      style={{
-        borderColor: config.border,
-        borderTop: '1px solid color-mix(in srgb, var(--color-text-primary) 6%, transparent)',
-        borderRight: '1px solid color-mix(in srgb, var(--color-text-primary) 6%, transparent)',
-        borderBottom: '1px solid color-mix(in srgb, var(--color-text-primary) 6%, transparent)',
-        background: `${config.bg}`,
-        backdropFilter: 'blur(12px)',
-      }}
+      ref={measure}
+      className={`dk-toast dk-toast--${toast.type}${leaving ? ' is-leaving' : ''}${behind ? ' is-behind' : ''}`}
+      role={toast.type === 'error' ? 'alert' : 'status'}
+      style={style}
+      onAnimationEnd={onAnimationEnd}
     >
-      <span
-        className="w-5 h-5 flex items-center justify-center rounded-full text-[11px] font-bold flex-shrink-0"
-        style={{ background: config.border, color: 'var(--color-btn-primary-text)' }}
-      >
-        {config.icon}
-      </span>
-      <span className="flex-1 leading-snug break-words overflow-hidden">{toast.message}</span>
-      <button
-        type="button"
-        className="text-[#ef4444] hover:text-[#dc2626] cursor-pointer text-base leading-none ml-1"
-        onClick={dismiss}
-      >
-        ×
+      <span className="dk-toast__icon" aria-hidden="true">{ICON[toast.type]}</span>
+      <div className="dk-toast__body">
+        {toast.title && (
+          <p className="dk-toast__title">
+            {toast.title}
+            {(toast.count ?? 1) > 1 && <span className="dk-toast__count">×{toast.count}</span>}
+          </p>
+        )}
+        <p className={toast.title ? 'dk-toast__msg' : 'dk-toast__msg dk-toast__msg--only'}>
+          {toast.message}
+          {!toast.title && (toast.count ?? 1) > 1 && <span className="dk-toast__count">×{toast.count}</span>}
+        </p>
+      </div>
+      {toast.action && (
+        <button
+          type="button"
+          className="dk-toast__action"
+          onClick={() => { toast.action!.run(); setLeaving(true); }}
+        >
+          {toast.action.label}
+        </button>
+      )}
+      <button type="button" className="dk-toast__close" aria-label="Dismiss" onClick={() => setLeaving(true)}>
+        <CloseIcon size={13} />
       </button>
+      {duration > 0 && !leaving && (
+        <span
+          key={toast.rev ?? 0}
+          className="dk-toast__timer"
+          style={{ animationDuration: `${duration}ms` }}
+        />
+      )}
     </div>
   );
 }
 
 export function ToastContainer() {
   const { toasts, dismissToast } = useToastStore();
+  const [open, setOpen] = useState(false);
+  const [frontH, setFrontH] = useState(0);
+  const frontRef = useRef<HTMLDivElement | null>(null);
+
+  // The cards behind take the front card's height, so the stack reads as one pile.
+  useLayoutEffect(() => {
+    const el = frontRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setFrontH(el.offsetHeight));
+    ro.observe(el);
+    setFrontH(el.offsetHeight);
+    return () => ro.disconnect();
+  }, [toasts.length]);
 
   if (toasts.length === 0) return null;
+  const fanned = open || toasts.length === 1;
+  const ordered = [...toasts].reverse(); // newest first
 
   return createPortal(
-    <div className="fixed bottom-4 right-4 z-[9999] flex flex-col-reverse gap-2 max-w-sm pointer-events-auto">
-      {toasts.map(t => (
-        <ToastItem key={t.id} toast={t} onDismiss={dismissToast} />
-      ))}
+    <div
+      className={`dk-toasts${fanned ? ' is-open' : ''}`}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOpen(false); }}
+    >
+      {ordered.map((t, i) => {
+        if (fanned) return <ToastItem key={t.id} toast={t} onGone={dismissToast} measure={i === 0 ? el => { frontRef.current = el; } : undefined} />;
+        if (i === 0) return <ToastItem key={t.id} toast={t} onGone={dismissToast} measure={el => { frontRef.current = el; }} style={{ zIndex: 10 }} />;
+        return (
+          <ToastItem
+            key={t.id}
+            toast={t}
+            onGone={dismissToast}
+            behind
+            style={{
+              position: 'absolute', left: 0, right: 0, bottom: 0,
+              height: frontH || undefined,
+              zIndex: 10 - i,
+              opacity: i > 2 ? 0 : 1,
+              transform: `translateY(${-i * 10}px) scale(${1 - i * 0.05})`,
+            }}
+          />
+        );
+      })}
     </div>,
-    document.body
+    document.body,
   );
 }
