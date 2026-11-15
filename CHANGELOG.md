@@ -4,10 +4,11 @@ All notable changes to the Daakia API Client extension are documented here.
 
 ---
 
-## [3.4.1] — 2026-11-06
+## [3.4.1] — 2026-11-15
 
-Scratchpads for JSON, XML, YAML, SQL and text, fonts and sizes you choose,
-Bruno collections that import whole, and Ctrl+V that pastes in VS Code.
+Scratchpads for JSON, XML, YAML, SQL and text, Ask AI for scripts, fonts and
+sizes you choose, Bruno collections that import whole, and shortcuts and Ctrl+V
+that work in VS Code.
 
 ### Added
 
@@ -21,7 +22,19 @@ Bruno collections that import whole, and Ctrl+V that pastes in VS Code.
   scratchpads to the default folder instead of deleting them; deleting the
   default folder deletes what is in it and keeps the folder, after asking. A
   deleted scratchpad can be undone for a few seconds. Search looks through
-  names and contents.
+  names and contents. Inside each folder they are grouped by when they were
+  last edited, the way History is: Today, Yesterday, this month's days,
+  earlier months and years.
+- **Deleting a scratchpad keeps you in Scratchpads.** Another open scratchpad
+  comes to the front; with none, the tab becomes an empty home with New and
+  Undo. With none left at all, the Scratchpads button opens that home instead
+  of making a new `scratchpad1`.
+- **Ask AI in the Scripts tab.** Describe a script — an Azure AD token,
+  HMAC signing, saving an id for the next request, response tests — or paste a
+  Postman or Bruno one, and it is written with Daakia's script API. Each part
+  is marked pre-request or post-response and injects into that script.
+  Variables are sent by name only, never their values. The prompt is
+  "Script Ask AI" in the Prompt Library.
 - **Scratchpad tabs** rename on a double-click and take the usual Close
   Others / Right / Left / All; Format tidies JSON and XML, and a scratchpad can
   change type without losing its text.
@@ -56,6 +69,11 @@ Bruno collections that import whole, and Ctrl+V that pastes in VS Code.
 - **A new REST request starts with a JSON body** and opens on the Body tab
   instead of Params.
 - **The command palette is Ctrl+Win+K** (Ctrl+Cmd+K on macOS).
+- **The + after the tabs opens a menu:** a new request in the protocol you
+  are in, first, then a new scratchpad of any type. Ctrl+N still opens a
+  request straight away.
+- **No browser right-click menu** anywhere in Daakia, inside VS Code included:
+  a right-click shows Daakia's own menu or nothing.
 - **Read-only workspaces:** the Import menu shows a short "Read only" tag in
   place of the paragraph under each item, and a locked item's submenu is
   locked too.
@@ -74,6 +92,14 @@ Bruno collections that import whole, and Ctrl+V that pastes in VS Code.
   (`partial`) is read from its file when that is still on disk.
 - **Ctrl+V did nothing in the URL bar and header values inside VS Code** —
   right-click Paste worked. The 3.4.0 fix held only in the browser build.
+- **Every shortcut ran twice in VS Code.** Ctrl+N opened two tabs, Ctrl+W
+  closed two, Ctrl+Shift+I opened the import dialog twice: the webview handled
+  the key, and the extension's keybinding for it sent the same action back.
+- **Anything → Daakia wrote `dk.global`**, which scripts do not have, for
+  Postman and Bruno globals. It writes `dk.globals` now, and
+  `pm.collectionVariables` becomes `dk.collectionVariables`.
+- **Red menu items** such as Delete folder showed an arrow, not the hand
+  cursor, and one that was turned off still looked clickable.
 - **`.bru` collections:** form-urlencoded bodies were sent in a mode the
   executor did not know, and `folder.bru` was imported as a request.
 - **The Import shared flyout closed** while the pointer crossed to it.

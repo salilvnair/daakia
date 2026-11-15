@@ -218,7 +218,7 @@ dk.env.set('user_id', dk.response.json().data.user.id);`}
             [<Code>dk.request</Code>, 'Both', 'Read/mutate the underlying HTTP request before send'],
             [<Code>dk.response</Code>, 'Post-response only', 'status, headers, body, .json() — the raw GraphQL envelope, errors array included'],
             [<Code>dk.test(name, fn)</Code>, 'Both', 'Runs fn(), records pass/fail'],
-            [<Code>dk.env / dk.collection / dk.global</Code>, 'Both', 'Get/set variables at each scope'],
+            [<Code>dk.env / dk.collectionVariables / dk.globals</Code>, 'Both', 'Get/set variables at each scope'],
           ]}
         />
       </WikiCard>

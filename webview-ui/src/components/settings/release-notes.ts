@@ -50,14 +50,21 @@ export interface Release {
 export const RELEASES: Release[] = [
   {
     version: '3.4.1',
-    date: '2026-11-06',
-    headline: 'Scratchpads for JSON, XML, YAML, SQL and text, fonts and sizes you choose, Bruno collections that import whole, and Ctrl+V that pastes in VS Code.',
+    date: '2026-11-15',
+    headline: 'Scratchpads for JSON, XML, YAML, SQL and text, Ask AI for scripts, fonts and sizes you choose, Bruno collections that import whole, and shortcuts and Ctrl+V that work in VS Code.',
     lines: [
       // ── Scratchpads ──
       { kind: 'feature', area: 'Scratchpads', text: 'Scratchpads: JSON, XML, YAML, SQL and text in the same editor as everywhere else, saved as you type. The icon under MCP opens the last one, or makes scratchpad1.json.' },
       { kind: 'feature', area: 'Scratchpads', text: 'The Scratchpads panel keeps them in folders, like Collections. New ones go to the default folder; drag one onto another folder, or use Move to. Deleting a folder moves its scratchpads to the default folder instead of deleting them; deleting the default folder deletes what is in it and keeps the folder, after asking.' },
       { kind: 'feature', area: 'Scratchpads', text: 'Search in the panel looks through names and contents. Format tidies JSON and XML, and a scratchpad can change type without losing its text.' },
-      { kind: 'feature', area: 'Scratchpads', text: 'Scratchpad tabs rename on a double-click and take the usual Close Others, Close to the Right, Close to the Left and Close All. The + on a scratchpad tab makes another.' },
+      { kind: 'feature', area: 'Scratchpads', text: 'Each folder groups its scratchpads by when they were last edited, the way History does: Today, Yesterday, this month\'s days, earlier months and years, each heading opening and closing on its own.' },
+      { kind: 'feature', area: 'Scratchpads', text: 'Deleting a scratchpad keeps you in Scratchpads: another open one comes to the front, or the tab becomes an empty home with New and Undo. With none left, the Scratchpads button opens that home instead of making a new scratchpad1.' },
+      { kind: 'feature', area: 'Scratchpads', text: 'Scratchpad tabs rename on a double-click and take the usual Close Others, Close to the Right, Close to the Left and Close All.' },
+      { kind: 'change', area: 'UI', text: 'The + after the tabs opens a menu: a new request in the protocol you are in, first, then a new JSON, XML, YAML, SQL or text scratchpad. Ctrl+N still opens a request straight away.' },
+
+      // ── Scripts ──
+      { kind: 'feature', area: 'AI', text: 'Ask AI in the Scripts tab: describe a script — an Azure AD token, HMAC signing, saving an id for the next request, response tests — or paste a Postman or Bruno one, and it is written with Daakia\'s script API. Each part is marked pre-request or post-response and injects into that script. Variables are sent by name only, never their values.' },
+      { kind: 'fix', area: 'Scripts', text: 'Anything → Daakia (Settings → AI tools) wrote dk.global for Postman and Bruno globals, which scripts do not have. It writes dk.globals now, and pm.collectionVariables becomes dk.collectionVariables.' },
       { kind: 'feature', area: 'Scratchpads', text: 'In the command palette, type json, xml, yml, sql or txt for New JSON scratchpad and the rest, and for every scratchpad that matches.' },
 
       // ── Appearance ──
@@ -83,6 +90,9 @@ export const RELEASES: Release[] = [
 
       // ── REST ──
       { kind: 'fix', area: 'REST', text: 'Ctrl+V pastes into the URL bar and header values inside VS Code. The 3.4.0 fix held in the browser build only.' },
+      { kind: 'fix', area: 'UI', text: 'In VS Code every Daakia shortcut ran twice: Ctrl+N opened two tabs, Ctrl+W closed two, Ctrl+Shift+I opened the import dialog twice. Each runs once now.' },
+      { kind: 'change', area: 'UI', text: 'The browser\'s own right-click menu no longer opens anywhere in Daakia, inside VS Code included: a right-click shows Daakia\'s menu or nothing.' },
+      { kind: 'fix', area: 'UI', text: 'Red menu items such as Delete folder show the hand cursor, and one that is turned off no longer looks clickable.' },
 
       // ── Workspaces ──
       { kind: 'change', area: 'Workspace', text: 'In a read-only workspace the Import menu shows a short Read only tag instead of a paragraph, and its submenus are locked too.' },

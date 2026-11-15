@@ -416,7 +416,7 @@ export function ConsoleTab() {
               { code: '↑ / ↓', label: 'Navigate command history' },
               { code: 'Line #', label: 'Toggle line numbers' },
             ]}
-            footer="Supports multi-line scripts, console.log, dk.env, dk.global, and more."
+            footer="Supports multi-line scripts, console.log, dk.env, dk.globals, and more."
             wikiSlug="collections-env"
             accentColor={getProtocolAccent(useTabsStore.getState().activeProtocol)}
           />
