@@ -51,8 +51,17 @@ export const RELEASES: Release[] = [
   {
     version: '3.4.1',
     date: '2026-11-15',
-    headline: 'Scratchpads for JSON, XML, YAML, SQL and text, Ask AI for scripts, fonts and sizes you choose, Bruno collections that import whole, and shortcuts and Ctrl+V that work in VS Code.',
+    headline: 'Import from a Swagger URL, scratchpads for JSON, XML, YAML, SQL and text, Ask AI for scripts, fonts and sizes you choose, Bruno collections that import whole, and shortcuts and Ctrl+V that work in VS Code.',
     lines: [
+      // ── Import from a Swagger URL ──
+      { kind: 'feature', area: 'Import', text: 'Import → Swagger / OpenAPI URL: paste a spec URL, or the Swagger UI, springdoc or ReDoc page in front of it, and Daakia finds the spec. https anywhere, plain http on this machine, and a header for a private spec.' },
+      { kind: 'feature', area: 'Import', text: "Arrange it before anything is created: group by tag, path or flat, name requests by summary, operationId or method and path, untick what you don't want, and drag requests and folders where they belong." },
+      { kind: 'feature', area: 'Import', text: "The collection runs against any copy of the service: an environment per server, {{baseUrl}} in every URL, each auth scheme reading a secret variable, and shared path parameters as collection variables. JSON bodies come from the spec's examples." },
+      { kind: 'fix', area: 'Collections', text: "Variables, headers and auth set on a collection reach the requests in its folders and subfolders, the nearest folder winning. Before, an OpenAPI import's {{baseUrl}} and API key on the collection never reached the requests in its tag folders." },
+      { kind: 'change', area: 'UI', text: 'Import and Export open three rows tall. Import: Swagger / OpenAPI URL, From a file, With AI. Export, here and on a collection: Collection, OpenAPI 3.1, API docs.' },
+      { kind: 'change', area: 'UI', text: "Toasts look like Daakia's menus, with the colour in the icon and a timer line. Hovering pauses them, older ones stack behind the newest, the same message counts up instead of repeating, and errors stay until dismissed." },
+
+
       // ── Scratchpads ──
       { kind: 'feature', area: 'Scratchpads', text: 'Scratchpads: JSON, XML, YAML, SQL and text in the same editor as everywhere else, saved as you type. The icon under MCP opens the last one, or makes scratchpad1.json.' },
       { kind: 'feature', area: 'Scratchpads', text: 'The Scratchpads panel keeps them in folders, like Collections. New ones go to the default folder; drag one onto another folder, or use Move to. Deleting a folder moves its scratchpads to the default folder instead of deleting them; deleting the default folder deletes what is in it and keeps the folder, after asking.' },
@@ -61,10 +70,14 @@ export const RELEASES: Release[] = [
       { kind: 'feature', area: 'Scratchpads', text: 'Deleting a scratchpad keeps you in Scratchpads: another open one comes to the front, or the tab becomes an empty home with New and Undo. With none left, the Scratchpads button opens that home instead of making a new scratchpad1.' },
       { kind: 'feature', area: 'Scratchpads', text: 'Scratchpad tabs rename on a double-click and take the usual Close Others, Close to the Right, Close to the Left and Close All.' },
       { kind: 'change', area: 'UI', text: 'The + after the tabs opens a menu: a new request in the protocol you are in, first, then a new JSON, XML, YAML, SQL or text scratchpad. Ctrl+N still opens a request straight away.' },
+      { kind: 'change', area: 'Scratchpads', text: 'Scratchpads have their own icon: a spiral-bound pad.' },
 
       // ── Scripts ──
       { kind: 'feature', area: 'AI', text: 'Ask AI in the Scripts tab: describe a script — an Azure AD token, HMAC signing, saving an id for the next request, response tests — or paste a Postman or Bruno one, and it is written with Daakia\'s script API. Each part is marked pre-request or post-response and injects into that script. Variables are sent by name only, never their values.' },
       { kind: 'fix', area: 'Scripts', text: 'Anything → Daakia (Settings → AI tools) wrote dk.global for Postman and Bruno globals, which scripts do not have. It writes dk.globals now, and pm.collectionVariables becomes dk.collectionVariables.' },
+      { kind: 'change', area: 'AI', text: 'Ask AI stops a pre-request script with throw, which keeps the request from going out, never with return, which does not.' },
+      { kind: 'fix', area: 'Scripts', text: 'The script editor no longer marks a top-level await or return as an error — scripts run inside an async function — nor require() of crypto, buffer, url, querystring, path or util. require("fs") is still marked: scripts cannot load it.' },
+      { kind: 'feature', area: 'Scripts', text: "Scripts can use URL, URLSearchParams, TextEncoder, TextDecoder and structuredClone. A token request's form body is new URLSearchParams({...}).toString()." },
       { kind: 'feature', area: 'Scratchpads', text: 'In the command palette, type json, xml, yml, sql or txt for New JSON scratchpad and the rest, and for every scratchpad that matches.' },
 
       // ── Appearance ──
