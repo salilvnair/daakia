@@ -300,7 +300,7 @@ dk.env.set('user_id', dk.response.json().id);`}
             [<Code>dk.test(name, fn)</Code>, 'Both', 'Runs fn(), records pass/fail — never throws out'],
             [<Code>dk.expect(x)</Code>, 'Both', '.toBe / .toEqual / .toContain / .toHaveProperty / …'],
             [<Code>dk.sendRequest(opts)</Code>, 'Both', 'Async sub-request — chaining, token refresh, setup'],
-            [<Code>dk.env / dk.collection / dk.global</Code>, 'Both', 'Get/set variables at each scope'],
+            [<Code>dk.env / dk.collectionVariables / dk.globals</Code>, 'Both', 'Get/set variables at each scope'],
           ]}
         />
       </WikiCard>
