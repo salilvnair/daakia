@@ -251,7 +251,7 @@ exports.provider = {
 | Environment | `core:env` | 100 | dk.env, dk.environment, dk.globals, dk.collectionVariables |
 | Request | `core:request` | 100 | dk.request, dk.response, dk.sendRequest() |
 | Console | `core:console` | 100 | console.log/info/warn/error/debug |
-| Utils | `core:utils` | 100 | JSON, Math, Date, atob/btoa, dk.interpolate() |
+| Utils | `core:utils` | 100 | JSON, Math, Date, atob/btoa, URL, URLSearchParams, TextEncoder/Decoder, structuredClone, dk.interpolate() |
 | Test | `core:test` | 90 | dk.test(), dk.expect() |
 | Crypto | `core:crypto` | 80 | crypto.randomUUID/createHash/createHmac |
 | Require | `core:require` | 80 | require() — whitelisted modules only |
@@ -282,7 +282,7 @@ src/services/script-runtime/
 │   ├── test-provider.ts        ← dk.test(), dk.expect()
 │   ├── console-provider.ts     ← console.log/info/warn/error/debug
 │   ├── crypto-provider.ts      ← crypto.*
-│   ├── utils-provider.ts       ← JSON, Math, Date, atob/btoa, dk.interpolate()
+│   ├── utils-provider.ts       ← JSON, Math, Date, atob/btoa, URL/URLSearchParams, dk.interpolate()
 │   └── require-provider.ts     ← sandboxed require()
 ├── extensions/                 ← User-defined providers (auto-discovered)
 │   ├── index.ts                ← Extension loader (scans .daakia/extensions/)
