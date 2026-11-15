@@ -4,6 +4,7 @@ import type { Protocol } from '../../store/tabs-store';
 import { useEnvStore, GLOBAL_ENV_ID } from '../../store/env-store';
 import { selectedEnvId } from './env-selector';
 import { getProtocolAccent } from '../../colors';
+import { COLLECTION_PROTOCOL_LABELS } from '../../services/collections';
 import { MethodBadge, ConfirmDialog, ContextMenu, type ContextMenuItem, type ContextMenuSubItem } from '../shared';
 import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, DaakiaMarkIcon, FilterIcon, BookOpenIcon, Dk8sIcon, SearchIcon, IssueOpenedIcon, StethoscopeIcon, LayoutGridIcon, PinIcon, UnpinIcon, ClockIcon, ScratchpadIcon } from '../../icons';
 import { IconButtonView, StateMachineIcon, SelectInputView, type SelectOption } from '@salilvnair/dui';
@@ -117,9 +118,10 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
   const [confirmCloseAll, setConfirmCloseAll] = useState(false);
   const [confirmCloseProtocol, setConfirmCloseProtocol] = useState<Protocol | null>(null);
   const [contextMenu, setContextMenu] = useState<TabContextMenuState | null>(null);
-  /* The + button's type menu, when the tab in front is a scratchpad. */
+  /* The + button's menu: a request in the protocol you are in, or a scratchpad of any type. */
   const [newScratchMenu, setNewScratchMenu] = useState<{ x: number; y: number } | null>(null);
   const scratchFiles = useScratchpadStore(s => s.files);
+  const protocolLabel = activeProtocol === 'ai' ? 'AI' : COLLECTION_PROTOCOL_LABELS[activeProtocol] ?? 'REST';
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef<HTMLInputElement>(null);
@@ -623,15 +625,11 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
           className="flex items-center justify-center w-9 h-full text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] cursor-pointer flex-shrink-0 transition-colors"
           style={{ color: requestAccentColor }}
           onClick={(e) => {
-            /* In front of a scratchpad, + makes another — of whichever type. */
-            if (activeTab?.type === 'scratchpad') {
-              const r = e.currentTarget.getBoundingClientRect();
-              setNewScratchMenu({ x: r.left, y: r.bottom + 2 });
-              return;
-            }
-            logUiEvent('tab.new'); addTab();
+            /* Always a menu: a request in the protocol you are in, or a scratchpad. */
+            const r = e.currentTarget.getBoundingClientRect();
+            setNewScratchMenu({ x: r.left, y: r.bottom + 2 });
           }}
-          title={activeTab?.type === 'scratchpad' ? 'New scratchpad' : 'New Tab'}
+          title={`New ${protocolLabel} request or scratchpad`}
         >
           <PlusIcon size={16} />
         </button>
@@ -767,6 +765,9 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
     {newScratchMenu && (
       <ContextMenu
         items={[
+          /* The protocol you are in comes first: it is what + made before it had a menu. */
+          { id: 'request', label: `New ${protocolLabel} request`, icon: <PlusIcon size={13} />, iconColor: requestAccentColor },
+          { id: 'sep', label: '', separator: true },
           { id: 'heading', label: 'New scratchpad', heading: true },
           ...SCRATCHPAD_TYPE_ORDER.map(k => ({
             id: k,
@@ -774,8 +775,6 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
             icon: <span className="inline-block font-mono font-bold text-[9.5px] leading-none" style={{ color: SCRATCHPAD_TYPES[k].color }}>{SCRATCHPAD_TYPES[k].badge}</span>,
             shortcut: `.${SCRATCHPAD_TYPES[k].ext}`,
           })),
-          { id: 'sep', label: '', separator: true },
-          { id: 'request', label: 'New request tab', icon: <PlusIcon size={13} />, iconColor: requestAccentColor },
         ]}
         position={newScratchMenu}
         onSelect={(id) => {

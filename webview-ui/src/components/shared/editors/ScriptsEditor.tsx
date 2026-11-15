@@ -8,7 +8,10 @@ import { useAiScriptAutocomplete, type AiAutocompleteMode } from '../../../hooks
 import { registerDkLanguageSupport } from '../../../services/dk-repl';
 import { SparkleIcon } from '../../../icons';
 import { AiContractTestGenerator, type AiContractTestHandle } from '../../ai/AiContractTestGenerator';
-import { useAiFeaturesStore } from '../../../store/ai-features-store';
+import { useAiFeaturesStore, isAiStageEnabled } from '../../../store/ai-features-store';
+import { AiScriptGenerator } from '../../ai/AiScriptGenerator';
+import { appendScript, SCRIPT_TARGET_LABEL, type ScriptTarget } from '../../../services/ai/script-ai-context';
+import { useToastStore } from '../../../store/toast-store';
 
 interface ScriptsEditorProps {
   preRequestScript: string;
@@ -31,6 +34,9 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
   const aiFeatureEnabled = useAiFeaturesStore(s => s.isEnabled);
   const contractTestAllowed = aiFeatureEnabled('contractTestGenerator');
   const autocompleteAllowed = aiFeatureEnabled('scriptAutocomplete');
+  /* Subscribed through the store so turning it off in AI Features hides the button at once. */
+  const askAiAllowed = useAiFeaturesStore(() => isAiStageEnabled('rest.script.generate'));
+  const [askAiOpen, setAskAiOpen] = useState(false);
 
   // AI Scripting Autocomplete — local toggle (only shown when feature is enabled)
   const [aiEnabled, setAiEnabled] = useState(false);
@@ -116,6 +122,14 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
     setCondInput(null);
   }, [condInput, activeTabId, currentPhase]);
 
+  /* Ask AI's Inject: added to the end of that script, and that script brought to the front. */
+  const handleInjectScript = (target: ScriptTarget, code: string) => {
+    if (target === 'pre-request') onPreRequestScriptChange(appendScript(preRequestScript, code));
+    else onPostResponseScriptChange(appendScript(postResponseScript, code));
+    setActiveScript(target);
+    useToastStore.getState().addToast({ type: 'success', message: `Added to the ${SCRIPT_TARGET_LABEL[target]} script.` });
+  };
+
   const handleInsertSnippet = (code: string) => {
     const current = activeScript === 'pre-request' ? preRequestScript : postResponseScript;
     const newValue = current ? current + '\n\n' + code : code;
@@ -194,6 +208,20 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
               style={{ backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 10%, transparent)', color: 'var(--color-protocol-ai)' }}
             >
               {aiMode === 'on-demand' ? '⌃⌥Space' : 'auto'}
+            </ButtonView>
+          )}
+          {/* Ask AI — describe a script, inject what comes back */}
+          {askAiAllowed && (
+            <ButtonView
+              size="xs"
+              variant="ghost"
+              iconLeft={<SparkleIcon size={10} />}
+              title="Describe a script and have AI write it: OAuth tokens, signing, chaining, tests"
+              onClick={() => setAskAiOpen(true)}
+              disabled={isDebuggingThisScript}
+              style={{ color: 'var(--color-protocol-ai)' }}
+            >
+              Ask AI
             </ButtonView>
           )}
           {/* Snippets toggle */}
@@ -292,6 +320,17 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
           </>
         )}
       </div>
+
+      {askAiOpen && (
+        <AiScriptGenerator
+          tabId={activeTabId}
+          current={currentPhase}
+          preScript={preRequestScript}
+          postScript={postResponseScript}
+          onInject={handleInjectScript}
+          onClose={() => setAskAiOpen(false)}
+        />
+      )}
 
       {/* AI Contract Test Generator modal */}
       <AiContractTestGenerator

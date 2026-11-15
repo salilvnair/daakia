@@ -65,6 +65,57 @@ export function ScratchpadsPanel() {
   const dragId = useRef<string | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
   const [confirmEmpty, setConfirmEmpty] = useState<ScratchpadFolder | null>(null);
+  /* Date headings that are closed, by `<folder id>::<heading>[::<inner>]`. Open unless closed. */
+  const [collapsedDates, setCollapsedDates] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleDate = (key: string) => setCollapsedDates(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+
+  /* Every date heading there is, at any depth, as if all were open — what a
+     collapse-all closes. */
+  const allDateKeys = () => buildScratchpadTree(folders, files, {
+    query: '', defaultFolderId, openFolders: Object.fromEntries(folders.map(f => [f.id, true])),
+  }).flatMap(r => (r.kind === 'date' ? [r.key] : []));
+
+  /* History's per-group expand / collapse all, for a folder or a date heading.
+     `prefixes` are the date keys at and under it: a folder's id, or a heading's own key. */
+  const setDatesOpen = (prefixes: string[], open: boolean) => setCollapsedDates(prev => {
+    const under = (k: string) => prefixes.some(p => k === p || k.startsWith(`${p}::`));
+    const next = new Set([...prev].filter(k => !under(k)));
+    if (!open) for (const k of allDateKeys()) if (under(k)) next.add(k);
+    return next;
+  });
+  const expandFolderTree = (id: string) => {
+    const ids = folderAndDescendants(folders, id);
+    store().setFoldersOpen(ids, true);
+    setDatesOpen(ids, true);
+  };
+  const collapseFolderTree = (id: string) => {
+    const ids = folderAndDescendants(folders, id);
+    store().setFoldersOpen(ids, false);
+    setDatesOpen(ids, false);
+  };
+
+  /* The small pair History puts on each group heading — only on one holding more
+     than three, where opening it all or folding it away saves clicks. */
+  const treeButtons = (expand: () => void, collapse: () => void, small = false) => (
+    <span className="dk-scratch-tree__tree-btns" onClick={e => e.stopPropagation()}>
+      <IconButtonView
+        icon={<ExpandAllIcon size={small ? 9 : 10} className="text-[var(--color-info)]" />}
+        size="xs"
+        tooltip="Expand all"
+        onClick={expand}
+      />
+      <IconButtonView
+        icon={<CollapseAllIcon size={small ? 9 : 10} className="text-[var(--color-warning)]" />}
+        size="xs"
+        tooltip="Collapse all"
+        onClick={collapse}
+      />
+    </span>
+  );
   const infoAnchorRef = useRef<HTMLDivElement>(null);
   const [, tick] = useState(0);
 
@@ -81,8 +132,8 @@ export function ScratchpadsPanel() {
   }, [undoFor]);
 
   const rows = useMemo(
-    () => buildScratchpadTree(folders, files, { query, openFolders, defaultFolderId }),
-    [folders, files, query, openFolders, defaultFolderId],
+    () => buildScratchpadTree(folders, files, { query, openFolders, defaultFolderId, collapsedDates }),
+    [folders, files, query, openFolders, defaultFolderId, collapsedDates],
   );
   const store = useScratchpadStore.getState;
   const defaultName = folders.find(f => f.id === defaultFolderId)?.name ?? 'Scratchpads';
@@ -185,7 +236,7 @@ export function ScratchpadsPanel() {
       { id: 'sep1', label: '', separator: true },
       { id: 'rename', label: 'Rename', icon: <RenameIcon size={13} />, iconColor: 'var(--color-ctx-rename)', shortcut: 'F2' },
       {
-        id: 'default', label: isDefault ? 'Default for new scratchpads' : 'Make default for new scratchpads',
+        id: 'default', label: isDefault ? 'Default folder' : 'Set as default',
         icon: <StarIcon size={13} filled={isDefault} />, iconColor: 'var(--color-scratchpad)', disabled: isDefault,
       },
       { id: 'sep2', label: '', separator: true },
@@ -314,7 +365,7 @@ export function ScratchpadsPanel() {
             icon={<ExpandAllIcon size={13} className="text-[var(--color-info)]" />}
             size="sm"
             tooltip="Expand all"
-            onClick={() => store().expandAll()}
+            onClick={() => { store().expandAll(); setCollapsedDates(new Set()); }}
           />
           <IconButtonView
             icon={<CollapseAllIcon size={13} className="text-[var(--color-warning)]" />}
@@ -389,6 +440,7 @@ export function ScratchpadsPanel() {
                     <span className="dk-scratch-tree__name">{f.name}</span>
                     {f.id === defaultFolderId && <span className="dk-scratch-tree__default" title="New scratchpads go here">default</span>}
                     <span className="flex-1" />
+                    {row.count > 3 && treeButtons(() => expandFolderTree(f.id), () => collapseFolderTree(f.id))}
                     <span className="dk-scratch-tree__count">{row.count}</span>
                     <button
                       type="button"
@@ -400,6 +452,30 @@ export function ScratchpadsPanel() {
                     </button>
                   </>
                 )}
+              </div>
+            );
+          }
+          if (row.kind === 'date') {
+            /* A date heading belongs to its folder: a scratchpad dropped on it lands there. */
+            const folderId = row.key.split('::')[0];
+            return (
+              <div
+                key={`t:${row.key}`}
+                role="treeitem"
+                aria-expanded={row.expanded}
+                className={`dk-scratch-tree__row dk-scratch-tree__row--date dk-scratch-tree__row--date${row.level}${dropId === folderId ? ' dk-scratch-tree__row--drop' : ''}`}
+                style={{ paddingLeft: 6 + row.depth * 14 }}
+                onClick={() => toggleDate(row.key)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDate(row.key); } }}
+                onDragOver={dragOver(folderId)}
+                onDrop={drop(folderId)}
+                tabIndex={0}
+              >
+                <ChevronRightIcon size={10} strokeWidth={2.5} className="dk-scratch-tree__chevron" style={{ transform: row.expanded ? 'rotate(90deg)' : undefined }} />
+                <span className="dk-scratch-tree__date">{row.label}</span>
+                <span className="flex-1" />
+                {row.count > 3 && treeButtons(() => setDatesOpen([row.key], true), () => setDatesOpen([row.key], false), row.level > 1)}
+                <span className="dk-scratch-tree__count">{row.count}</span>
               </div>
             );
           }

@@ -7,47 +7,11 @@
   flex-direction: column;
   gap: 18px;
   padding: 24px;
-  max-width: 1040px;
   container-type: inline-size;
 }
 
-/* ── hero ── */
-.dk-ap-hero {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  padding: 18px 20px;
-  border-radius: 14px;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 28%, var(--color-surface-border));
-  background:
-    radial-gradient(120% 160% at 0% 0%, color-mix(in srgb, var(--color-primary) 16%, transparent), transparent 60%),
-    radial-gradient(100% 140% at 100% 100%, color-mix(in srgb, var(--color-scratchpad) 12%, transparent), transparent 60%),
-    var(--color-surface);
-}
-.dk-ap-hero__mark {
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-scratchpad));
-  box-shadow: 0 6px 18px color-mix(in srgb, var(--color-primary) 35%, transparent);
-}
-.dk-ap-hero__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.dk-ap-hero__text h3 { margin: 0; font-size: 17px; font-weight: 600; color: var(--color-text-primary); letter-spacing: -0.01em; }
-.dk-ap-hero__text p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--color-text-secondary); max-width: 62ch; }
-.dk-ap-hero__changes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.dk-ap-pill {
-  font-size: 11px;
-  padding: 2px 9px;
-  border-radius: 999px;
-  color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
-  white-space: nowrap;
-}
+/* ── top: one row, the reset on the right; the Settings nav already names the page ── */
+.dk-ap-top { display: flex; justify-content: flex-end; margin-bottom: -6px; }
 
 /* ── reset ── */
 .dk-ap-reset {
@@ -65,7 +29,8 @@
   cursor: pointer;
   transition: color 120ms, border-color 120ms, background 120ms;
 }
-.dk-ap-reset:hover { color: var(--ap-accent); border-color: color-mix(in srgb, var(--ap-accent) 45%, transparent); }
+.dk-ap-reset:disabled { opacity: 0.45; cursor: default; }
+.dk-ap-reset:not(:disabled):hover { color: var(--ap-accent); border-color: color-mix(in srgb, var(--ap-accent) 45%, transparent); }
 .dk-ap-reset--strong { --ap-accent: var(--color-primary); }
 .dk-ap-reset:focus-visible,
 .dk-ap-chip:focus-visible,

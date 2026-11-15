@@ -8,14 +8,14 @@
  * are steppers — any value, not a list someone else picked — with the common
  * ones a chip away.
  */
-import { useMemo, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { StepperInputView, ToggleSwitchView, TextInputView } from '@salilvnair/dui';
 import { CodeEditor } from '../shared/editors/CodeEditor';
 import {
   useAppearanceStore, ZOOM_REGIONS, ZOOM_MIN, ZOOM_MAX, DEFAULT_APPEARANCE, cssFontStack, type ZoomRegion,
 } from '../../store/appearance-store';
 import {
-  PaletteIcon, CodeBracketsIcon, TypeIcon, TextSizeIcon, SidebarLeftIcon, ColumnsIcon, SidebarRightIcon,
+  CodeBracketsIcon, TypeIcon, TextSizeIcon, SidebarLeftIcon, ColumnsIcon, SidebarRightIcon,
   LayoutGridIcon, DocumentIcon, MoreHorizontalIcon, PanelMaximizeIcon, CheckIcon, UndoIcon,
 } from '../../icons';
 import './appearance-settings.css';
@@ -251,18 +251,6 @@ export function AppearanceSettings() {
   const editorChanged = !!(a.editorFontFamily || a.editorFontSize || a.editorLineHeight || a.editorLigatures);
   const fontsChanged = !!(a.uiFontFamily || a.monoFontFamily);
   const sizesChanged = ZOOM_REGIONS.some(r => a.zoom[r.id] !== DEFAULT_APPEARANCE.zoom[r.id]);
-  const changes = useMemo(() => {
-    const out: string[] = [];
-    if (a.editorFontFamily) out.push(a.editorFontFamily.split(',')[0]);
-    if (a.editorFontSize) out.push(`Editor ${a.editorFontSize}px`);
-    if (a.editorLineHeight) out.push(`Lines ${a.editorLineHeight}×`);
-    if (a.editorLigatures) out.push('Ligatures');
-    if (a.uiFontFamily) out.push(`UI ${a.uiFontFamily.split(',')[0].replace(/^-apple-system$/, 'SF Pro')}`);
-    if (a.monoFontFamily) out.push(`Mono ${a.monoFontFamily.split(',')[0]}`);
-    for (const r of ZOOM_REGIONS) if (a.zoom[r.id] !== 100) out.push(`${r.label} ${a.zoom[r.id]}%`);
-    return out;
-  }, [a]);
-
   const previewSummary = [
     a.editorFontFamily ? a.editorFontFamily.split(',')[0] : 'Default font',
     a.editorFontSize ? `${a.editorFontSize}px` : 'own size',
@@ -271,22 +259,16 @@ export function AppearanceSettings() {
 
   return (
     <div className="dk-ap">
-      <div className="dk-ap-hero">
-        <span className="dk-ap-hero__mark"><PaletteIcon size={22} /></span>
-        <div className="dk-ap-hero__text">
-          <h3>Appearance</h3>
-          <p>Fonts for the editor and the interface, and a size for every part of the window. Changes apply as you make them.</p>
-          {changes.length > 0 && (
-            <div className="dk-ap-hero__changes">
-              {changes.map(c => <span key={c} className="dk-ap-pill">{c}</span>)}
-            </div>
-          )}
-        </div>
-        {changes.length > 0 && (
-          <button type="button" className="dk-ap-reset dk-ap-reset--strong" onClick={() => a.reset()}>
-            <UndoIcon size={12} /> Reset everything
-          </button>
-        )}
+      <div className="dk-ap-top">
+        <button
+          type="button"
+          className="dk-ap-reset dk-ap-reset--strong"
+          onClick={() => a.reset()}
+          disabled={!(editorChanged || fontsChanged || sizesChanged)}
+          title="Put every font and size back to Daakia's own"
+        >
+          <UndoIcon size={12} /> Reset everything
+        </button>
       </div>
 
       <Card

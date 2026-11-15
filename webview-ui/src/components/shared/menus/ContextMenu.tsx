@@ -180,10 +180,11 @@ function SubmenuFlyout({ items, anchorRect, onSelect, onCloseAll, keepOpenOnSele
             }}
             onMouseEnter={() => setOpenNestedId(null)}
             className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-[12.5px] text-left transition-colors ${
-              item.danger
-                ? 'text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]'
-                : item.disabled
-                  ? 'text-[var(--color-text-muted)] opacity-50 cursor-not-allowed'
+              /* Disabled first: a Delete that cannot run must not look like one that can. */
+              item.disabled
+                ? 'text-[var(--color-text-muted)] opacity-50 cursor-not-allowed'
+                : item.danger
+                  ? 'cursor-pointer text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]'
                   : 'cursor-pointer text-[var(--color-text-primary)] hover:bg-[var(--color-item-hover-bg)]'
             }`}
           >
@@ -376,10 +377,11 @@ export function ContextMenu({ items: given, position, onSelect, onClose }: Conte
             }}
             onMouseEnter={() => setOpenSubmenuId(null)}
             className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-[12.5px] text-left transition-colors ${
-              item.danger
-                ? 'text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]'
-                : item.disabled
-                  ? 'text-[var(--color-text-muted)] opacity-50 cursor-not-allowed'
+              /* Disabled first: a Delete that cannot run must not look like one that can. */
+              item.disabled
+                ? 'text-[var(--color-text-muted)] opacity-50 cursor-not-allowed'
+                : item.danger
+                  ? 'cursor-pointer text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]'
                   : 'cursor-pointer text-[var(--color-text-primary)] hover:bg-[var(--color-item-hover-bg)]'
             }`}
           >

@@ -1,0 +1,316 @@
+/* Ask AI in the Scripts tab (dk-askai). Every colour is a theme token; the two
+   ends of the gradient are Daakia's primary and the scratchpad violet, the
+   same pair the Appearance page opens with. */
+
+.dk-askai-modal {
+  --ai-a: var(--color-primary);
+  --ai-b: var(--color-scratchpad);
+}
+
+.dk-askai {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── header mark ── */
+.dk-askai-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-scratchpad));
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--color-scratchpad) 40%, transparent);
+}
+
+/* ── start: composer, ideas, what is sent ── */
+.dk-askai-start {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px 20px;
+  overflow-y: auto;
+}
+
+.dk-askai-composer {
+  border-radius: 14px;
+  padding: 1px;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--ai-a, var(--color-primary)) 55%, var(--color-surface-border)),
+    color-mix(in srgb, var(--ai-b, var(--color-scratchpad)) 55%, var(--color-surface-border)));
+  transition: box-shadow 160ms;
+}
+.dk-askai-composer:focus-within {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ai-b, var(--color-scratchpad)) 16%, transparent),
+              0 10px 30px color-mix(in srgb, var(--ai-a, var(--color-primary)) 14%, transparent);
+}
+.dk-askai-composer textarea {
+  display: block;
+  width: 100%;
+  resize: vertical;
+  min-height: 112px;
+  max-height: 320px;
+  padding: 14px 16px 6px;
+  border: 0;
+  border-radius: 13px 13px 0 0;
+  outline: none;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+}
+.dk-askai-composer textarea::placeholder { color: var(--color-text-muted); }
+.dk-askai-composer__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 10px 10px 12px;
+  border-radius: 0 0 13px 13px;
+  background: var(--color-surface);
+}
+
+/* where it goes */
+.dk-askai-seg {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border-radius: 9px;
+  background: var(--color-panel);
+  border: 1px solid var(--color-surface-border);
+}
+.dk-askai-seg button {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 0;
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  background: transparent;
+  cursor: pointer;
+  transition: color 120ms, background 120ms;
+}
+.dk-askai-seg button:hover { color: var(--color-text-primary); }
+.dk-askai-seg button.is-on {
+  color: var(--color-text-primary);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--ai-b, var(--color-scratchpad)) 22%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ai-b, var(--color-scratchpad)) 45%, transparent);
+}
+
+.dk-askai-kbd {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-surface-border);
+  background: var(--color-panel);
+}
+
+/* the primary action — gradient, the one loud thing on the page */
+.dk-askai-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 9px;
+  border: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, var(--ai-a, var(--color-primary)), var(--ai-b, var(--color-scratchpad)));
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--ai-a, var(--color-primary)) 30%, transparent);
+  cursor: pointer;
+  transition: transform 120ms, box-shadow 120ms, opacity 120ms, filter 120ms;
+  white-space: nowrap;
+}
+.dk-askai-go:hover:not(:disabled) { filter: brightness(1.08); box-shadow: 0 8px 22px color-mix(in srgb, var(--ai-a, var(--color-primary)) 40%, transparent); }
+.dk-askai-go:active:not(:disabled) { transform: translateY(1px); }
+.dk-askai-go:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+.dk-askai-go.is-done { opacity: 1; background: color-mix(in srgb, var(--color-success) 18%, transparent); color: var(--color-success); box-shadow: none; cursor: default; }
+.dk-askai-go--sm { height: 26px; padding: 0 10px; font-size: 11.5px; border-radius: 7px; gap: 5px; }
+
+.dk-askai-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid var(--color-surface-border);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 120ms, border-color 120ms, background 120ms;
+}
+.dk-askai-ghost:hover:not(:disabled) { color: var(--color-text-primary); border-color: color-mix(in srgb, var(--ai-b, var(--color-scratchpad)) 45%, var(--color-surface-border)); }
+.dk-askai-ghost:disabled { cursor: default; }
+.dk-askai-ghost.is-done { color: var(--color-success); border-color: color-mix(in srgb, var(--color-success) 35%, transparent); }
+
+.dk-askai-go:focus-visible, .dk-askai-ghost:focus-visible, .dk-askai-seg button:focus-visible, .dk-askai-idea:focus-visible {
+  outline: 2px solid var(--ai-b, var(--color-scratchpad));
+  outline-offset: 2px;
+}
+
+/* ideas */
+.dk-askai-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: -6px;
+}
+.dk-askai-ideas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+.dk-askai-idea {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  text-align: left;
+  background: var(--color-panel);
+  border: 1px solid var(--color-surface-border);
+  cursor: pointer;
+  transition: border-color 140ms, background 140ms, transform 140ms;
+}
+.dk-askai-idea:hover {
+  border-color: color-mix(in srgb, var(--idea) 50%, var(--color-surface-border));
+  background: color-mix(in srgb, var(--idea) 6%, var(--color-panel));
+  transform: translateY(-1px);
+}
+.dk-askai-idea.is-on {
+  border-color: var(--idea);
+  background: color-mix(in srgb, var(--idea) 11%, var(--color-panel));
+}
+.dk-askai-idea__icon {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  color: var(--idea);
+  background: color-mix(in srgb, var(--idea) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--idea) 28%, transparent);
+}
+.dk-askai-idea__text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.dk-askai-idea__text b { font-size: 12.5px; font-weight: 600; color: var(--color-text-primary); }
+.dk-askai-idea__text span { font-size: 11px; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* what goes with the ask */
+.dk-askai-sent { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.dk-askai-sent__lead { font-size: 11px; color: var(--color-text-muted); margin-right: 2px; }
+.dk-askai-pill {
+  font-size: 10.5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--ai-a, var(--color-primary)) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ai-a, var(--color-primary)) 22%, var(--color-surface-border));
+  white-space: nowrap;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dk-askai-pill--mono { font-family: var(--font-mono); }
+
+/* ── answer ── */
+.dk-askai-wait { display: flex; align-items: center; gap: 10px; padding: 22px 20px; font-size: 12px; color: var(--color-text-muted); }
+.dk-askai-error {
+  margin: 18px 20px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  font-size: 12px;
+  color: var(--color-error);
+  background: color-mix(in srgb, var(--color-error) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-error) 30%, transparent);
+}
+.dk-askai-answer { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding: 4px 0 8px; }
+.dk-askai-prose { padding: 14px 20px 6px; }
+.dk-askai-caret { display: inline-block; width: 2px; height: 13px; margin-left: 2px; vertical-align: text-bottom; background: var(--ai-b, var(--color-scratchpad)); animation: dk-askai-blink 1s steps(2) infinite; }
+.dk-askai-note { padding: 0 20px 14px; font-size: 11.5px; color: var(--color-text-muted); }
+
+.dk-askai-block {
+  margin: 0 20px 12px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--target) 32%, var(--color-surface-border));
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--target) 7%, transparent);
+}
+.dk-askai-block__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 7px 10px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--target) 12%, var(--color-surface)), var(--color-surface) 70%);
+  border-bottom: 1px solid color-mix(in srgb, var(--target) 22%, var(--color-surface-border));
+}
+.dk-askai-block__tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 6px;
+  color: var(--target);
+  background: color-mix(in srgb, var(--target) 15%, transparent);
+}
+.dk-askai-block__lines { font-size: 11px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+
+.dk-askai-refine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 20px 14px;
+  padding: 5px 5px 5px 12px;
+  border-radius: 11px;
+  background: var(--color-surface);
+  border: 1px solid color-mix(in srgb, var(--ai-b, var(--color-scratchpad)) 30%, var(--color-surface-border));
+  flex-shrink: 0;
+}
+.dk-askai-refine:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--ai-b, var(--color-scratchpad)) 15%, transparent); }
+.dk-askai-refine input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--color-text-primary);
+  background: transparent;
+}
+.dk-askai-refine input::placeholder { color: var(--color-text-muted); }
+
+/* typing dots */
+.dk-askai-dots { display: inline-flex; gap: 4px; align-items: center; margin-right: 4px; }
+.dk-askai-dots i {
+  width: 6px; height: 6px; border-radius: 999px;
+  background: linear-gradient(135deg, var(--ai-a, var(--color-primary)), var(--ai-b, var(--color-scratchpad)));
+  animation: dk-askai-bounce 900ms ease-in-out infinite;
+}
+.dk-askai-dots i:nth-child(2) { animation-delay: 120ms; }
+.dk-askai-dots i:nth-child(3) { animation-delay: 240ms; }
+
+@keyframes dk-askai-bounce { 0%, 80%, 100% { transform: translateY(0); opacity: 0.55; } 40% { transform: translateY(-4px); opacity: 1; } }
+@keyframes dk-askai-blink { 50% { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .dk-askai-dots i, .dk-askai-caret { animation: none; }
+  .dk-askai-idea, .dk-askai-go, .dk-askai-composer { transition: none; }
+  .dk-askai-idea:hover { transform: none; }
+}

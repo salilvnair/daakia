@@ -12,7 +12,7 @@ const posted = vi.hoisted(() => [] as Record<string, unknown>[]);
 vi.mock('../vscode', () => ({ postMsg: (m: Record<string, unknown>) => posted.push(m) }));
 
 import {
-  useScratchpadStore, nextScratchpadName, cleanScratchpadName, scratchpadFileName, folderPath, folderAndDescendants,
+  useScratchpadStore, nextScratchpadName, cleanScratchpadName, scratchpadFileName, folderPath, folderAndDescendants, openScratchpads,
   type ScratchpadFolder, type Scratchpad,
 } from './scratchpad-store';
 import { useTabsStore } from './tabs-store';
@@ -137,14 +137,40 @@ describe('renaming, moving, retyping', () => {
 });
 
 describe('deleting', () => {
-  it('closes the tab and can be undone', () => {
+  it('keeps you in Scratchpads: the last one leaves an empty home, and can be undone into it', () => {
     reset([pad({})]);
     useScratchpadStore.getState().open('p1');
     useScratchpadStore.getState().remove('p1');
-    expect(useTabsStore.getState().tabs).toHaveLength(0);
+    const [home] = useTabsStore.getState().tabs;
+    expect(useTabsStore.getState().tabs).toHaveLength(1);
+    expect(home).toMatchObject({ type: 'scratchpad', scratchpadId: undefined, name: 'Scratchpads' });
+    expect(useTabsStore.getState().activeTabId).toBe(home.id);
     expect(posted).toContainEqual({ type: 'scratchpads:delete', id: 'p1' });
     useScratchpadStore.getState().undoRemove();
     expect(useScratchpadStore.getState().files.map(f => f.id)).toEqual(['p1']);
+    /* The home becomes the restored scratchpad rather than a second tab. */
+    expect(useTabsStore.getState().tabs).toHaveLength(1);
+    expect(useTabsStore.getState().tabs[0].scratchpadId).toBe('p1');
+  });
+
+  it('brings another open scratchpad to the front instead', () => {
+    reset([pad({ id: 'a' }), pad({ id: 'b' })]);
+    useScratchpadStore.getState().open('b');
+    useScratchpadStore.getState().open('a');
+    useScratchpadStore.getState().remove('a');
+    const tabs = useTabsStore.getState().tabs;
+    expect(tabs.map(t => t.scratchpadId)).toEqual(['b']);
+    expect(useTabsStore.getState().activeTabId).toBe(tabs[0].id);
+  });
+
+  it('opening Scratchpads with none left shows the home, not a new scratchpad', () => {
+    reset([]);
+    openScratchpads();
+    expect(useScratchpadStore.getState().files).toHaveLength(0);
+    const tabs = useTabsStore.getState().tabs;
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0].type).toBe('scratchpad');
+    expect(tabs[0].scratchpadId).toBeUndefined();
   });
 
   it('a folder takes its subfolders with it, and its scratchpads go to the default folder', () => {
@@ -173,7 +199,8 @@ describe('deleting', () => {
     expect(posted).toContainEqual({ type: 'scratchpads:delete', id: 'a' });
     expect(posted).toContainEqual({ type: 'scratchpads:delete', id: 'c' });
     expect(posted).toContainEqual({ type: 'scratchpads:deleteFolders', ids: [sub.id] });
-    expect(useTabsStore.getState().tabs).toHaveLength(0);
+    /* Still in Scratchpads: the open one's tab is now the empty home. */
+    expect(useTabsStore.getState().tabs.map(t => t.scratchpadId)).toEqual([undefined]);
   });
 
   it('a save still waiting for a scratchpad in the emptied folder is dropped, not written back', () => {

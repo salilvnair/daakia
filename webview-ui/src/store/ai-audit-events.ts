@@ -30,6 +30,7 @@ import type { AuditEventDef } from './ui-audit-store';
 const SCREEN_OVERRIDES: Record<string, string> = {
   'rest.docs.generate': 'REST · Docs',
   'rest.script.autocomplete': 'REST · Scripts',
+  'rest.script.generate': 'REST · Scripts',
   'rest.assert.generate': 'REST · Response',
   'rest.contract.test': 'REST · Response',
   'rest.schema.validate': 'REST · Response',
