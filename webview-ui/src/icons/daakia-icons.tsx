@@ -2749,18 +2749,16 @@ export function GripLinesIcon(props: IconProps) {
 }
 
 /**
- * A page with its corner turned and a pencil at its foot — a scratchpad.
- * The pencil is what tells it apart from FileTextIcon, which is a document
- * somebody else wrote; this one is yours to scribble on.
+ * A spiral-bound pad, rings along the top — a scratchpad.
+ * The rings are what tell it apart from FileTextIcon, which is a document
+ * somebody else wrote; this is a pad you jot on and tear a sheet off.
  */
 export function ScratchpadIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>
-      <path d="M13 3H6.5A2.5 2.5 0 0 0 4 5.5v13A2.5 2.5 0 0 0 6.5 21H11" />
-      <path d="M13 3l6 6v2.5" />
-      <path d="M13 3v6h6" />
-      <path d="M8 13h5M8 17h2.5" />
-      <path d="M18.6 14.4l2 2-5.6 5.6h-2v-2z" />
+      <path d="M7 5h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" />
+      <path d="M9 3v4M12 3v4M15 3v4" />
+      <path d="M8.5 12h7M8.5 16h4.5" />
     </svg>
   );
 }

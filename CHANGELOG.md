@@ -6,11 +6,29 @@ All notable changes to the Daakia API Client extension are documented here.
 
 ## [3.4.1] — 2026-11-15
 
-Scratchpads for JSON, XML, YAML, SQL and text, Ask AI for scripts, fonts and
-sizes you choose, Bruno collections that import whole, and shortcuts and Ctrl+V
-that work in VS Code.
+Import from a Swagger URL, scratchpads for JSON, XML, YAML, SQL and text, Ask
+AI for scripts, fonts and sizes you choose, Bruno collections that import
+whole, and shortcuts and Ctrl+V that work in VS Code.
 
 ### Added
+
+- **Import from a Swagger / OpenAPI URL** (Import → Swagger / OpenAPI URL).
+  Paste a spec URL, or the Swagger UI, springdoc or ReDoc page in front of it,
+  and Daakia finds the spec behind the page. https anywhere, plain http on this
+  machine, and a header for a private spec. Nothing is created until the last
+  of four steps:
+  - **Organize** — group by tag, path or flat; name requests by summary,
+    operationId or method and path; untick what you don't want; drag requests
+    and folders where they belong, and rename or add folders.
+  - **Variables** — an environment per server, `{{baseUrl}}` in every URL,
+    each auth scheme reading a secret variable (`{{apiKey}}`,
+    `{{accessToken}}`…), and shared path parameters as collection variables.
+    The scheme most requests use goes on the collection.
+  - **Review**, then create. JSON bodies are built from the spec's examples.
+- **Scripts can use `URL`, `URLSearchParams`, `TextEncoder`, `TextDecoder` and
+  `structuredClone`** without `require()`. A token request's form body is
+  `new URLSearchParams({...}).toString()`. `fetch` and timers stay out:
+  `dk.sendRequest` is the way out of a script.
 
 - **Scratchpads.** JSON, XML, YAML, SQL and text in the same Monaco editor as
   the rest of Daakia, saved as you type — there is no Save button. The icon
@@ -66,6 +84,16 @@ that work in VS Code.
 
 ### Changed
 
+- **Import and Export open three rows tall.** Import: Swagger / OpenAPI URL,
+  From a file, With AI. Export, in the panel header and on a collection:
+  Collection, OpenAPI 3.1, API docs.
+- **Toasts look like Daakia's menus,** with the colour in the icon and a timer
+  line along the bottom. Hovering pauses them, older ones stack behind the
+  newest and fan out on hover, the same message counts up ("×3") instead of
+  repeating, and errors stay until dismissed.
+- **Scratchpads have their own icon:** a spiral-bound pad.
+- **Ask AI stops a pre-request script with `throw`,** which keeps the request
+  from going out, never with `return`, which does not.
 - **A new REST request starts with a JSON body** and opens on the Body tab
   instead of Params.
 - **The command palette is Ctrl+Win+K** (Ctrl+Cmd+K on macOS).
@@ -80,6 +108,15 @@ that work in VS Code.
 
 ### Fixed
 
+- **A collection's variables, headers and auth reach its subfolders.** They
+  were read only from the folder a request sits in, so an OpenAPI import —
+  `{{baseUrl}}` and the API key on the collection, requests in tag folders —
+  sent `{{baseUrl}}` unresolved and no key. Now each folder sees the whole
+  chain, the nearest winning; scripts still run only where they are set.
+- **The script editor marked working code as errors:** a top-level `await` or
+  `return` (scripts run inside an async function), and `require()` of
+  `crypto`, `buffer`, `url`, `querystring`, `path` and `util`. `require('fs')`
+  is still marked, since scripts cannot load it.
 - **History's Name it and Why? did nothing.** The button showed Naming… or
   Asking… and the card stayed as it was: neither read the model's answer the
   way it arrives, and a failed request was dropped without a word. Both show
