@@ -1,0 +1,113 @@
+/* Toasts — the elevated surface menus and popovers use, colour only in the
+   icon tile and the timer line. Every value is a theme token. */
+
+.dk-toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 9999;
+  width: min(384px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dk-toasts:not(.is-open) { gap: 0; }
+/* Hover or focus anywhere on the stack holds every timer. */
+.dk-toasts:hover .dk-toast__timer,
+.dk-toasts:focus-within .dk-toast__timer { animation-play-state: paused; }
+
+.dk-toast {
+  --tone: var(--color-info);
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 8px 12px 12px;
+  background: var(--color-elevated);
+  border: 1px solid var(--color-elevated-border);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.25);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  overflow: hidden;
+  transform-origin: bottom center;
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s;
+  animation: dk-toast-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.dk-toast--success { --tone: var(--color-success); }
+.dk-toast--error { --tone: var(--color-error); border-color: color-mix(in srgb, var(--color-error) 32%, var(--color-elevated-border)); }
+.dk-toast--warning { --tone: var(--color-warning); }
+.dk-toast--info { --tone: var(--color-info); }
+.dk-toast.is-leaving { animation: dk-toast-out 0.2s ease-in forwards; }
+.dk-toast.is-behind > :not(.dk-toast__timer) { visibility: hidden; }
+.dk-toast.is-behind .dk-toast__timer { opacity: 0; }
+
+.dk-toast__icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tone);
+  background: color-mix(in srgb, var(--tone) 14%, transparent);
+}
+.dk-toast__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dk-toast__title { margin: 0; font-size: 13px; font-weight: 600; line-height: 18px; }
+.dk-toast__msg { margin: 0; font-size: 12.5px; line-height: 18px; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.dk-toast__msg--only { color: var(--color-text-primary); font-size: 13px; }
+.dk-toast__count { margin-left: 6px; font-weight: 500; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+
+.dk-toast__action {
+  flex: none;
+  border: 0;
+  background: none;
+  color: var(--color-primary-hover);
+  font: 600 12px var(--font-sans);
+  padding: 6px 9px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.dk-toast__action:hover { background: var(--color-icon-hover-bg); }
+.dk-toast__close {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--color-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.dk-toast__close:hover { background: var(--color-surface-hover); color: var(--color-text-primary); }
+.dk-toast__action:focus-visible, .dk-toast__close:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+
+.dk-toast__timer {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 100%;
+  border-radius: 0 2px 2px 0;
+  background: var(--tone);
+  opacity: 0.85;
+  animation-name: dk-toast-timer;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes dk-toast-in { from { opacity: 0; transform: translateY(12px) scale(0.97); } }
+@keyframes dk-toast-out { to { opacity: 0; transform: translateX(32px); } }
+@keyframes dk-toast-timer { from { width: 100%; } to { width: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .dk-toast { transition: opacity 0.2s; animation: dk-toast-fade 0.2s; }
+  .dk-toast.is-leaving { animation: dk-toast-out-fade 0.2s forwards; }
+  @keyframes dk-toast-fade { from { opacity: 0; } }
+  @keyframes dk-toast-out-fade { to { opacity: 0; } }
+}

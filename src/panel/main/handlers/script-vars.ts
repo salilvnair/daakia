@@ -25,6 +25,7 @@ import {
   getCollectionData, updateCollectionData,
 } from '../../../storage/db';
 import { decryptIfNeeded, decryptEnvVariables, encryptEnvVariables } from '../../../services/vault';
+import { effectiveCollectionVars, inheritedCollectionProps } from '../../../services/collection-inherit';
 
 /**
  * The environment's own variables, as a layer of their own.
@@ -51,13 +52,9 @@ export function loadScriptEnvVars(envId: string | undefined): Record<string, str
   return vars;
 }
 
+/** The folder's variables, with those of every folder above it underneath. */
 export function loadCollectionVars(collectionId: string | undefined): Record<string, string> {
-  if (!collectionId) return {};
-  const data = getCollectionData(collectionId);
-  const props = JSON.parse(data) as { variables?: { key: string; value: string; enabled: boolean }[] };
-  const vars: Record<string, string> = {};
-  if (props.variables) for (const v of props.variables) if (v.enabled && v.key) vars[v.key] = v.value;
-  return vars;
+  return effectiveCollectionVars(collectionId);
 }
 
 export function loadGlobalVars(): Record<string, string> {
@@ -112,14 +109,21 @@ export function persistScriptVars(
     const data = getCollectionData(collectionId);
     const props = JSON.parse(data) as { variables?: { key: string; value: string; enabled: boolean }[]; [k: string]: unknown };
     const existingVars = props.variables || [];
+    /*
+      Only what the script changed. `originalCol` holds every variable the
+      folder can see, inherited ones included; writing all of them back would
+      copy the root's {{baseUrl}} into this folder, where it would quietly
+      stop following the root.
+    */
     for (const [key, value] of Object.entries(updatedCol)) {
+      if (originalCol[key] === value) continue;
       const found = existingVars.find(v => v.key === key);
       if (found) found.value = value;
       else existingVars.push({ key, value, enabled: true });
     }
     props.variables = existingVars;
     updateCollectionData(collectionId, JSON.stringify(props));
-    postMessage({ type: 'collectionPropertiesData', id: collectionId, properties: props });
+    postMessage({ type: 'collectionPropertiesData', id: collectionId, properties: props, inherited: inheritedCollectionProps(collectionId) });
   }
   if (JSON.stringify(updatedGlobal) !== JSON.stringify(originalGlobal)) {
     setSetting('dk_globals', updatedGlobal);

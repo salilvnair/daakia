@@ -127,6 +127,7 @@ import {
   handleDuplicateRequest, handleReorderCollections, handleMoveRequest,
   handleReorderRequests, handleRunCollection, handleStopCollectionRun,
 } from '../src/panel/main/handlers/collection-handler';
+import { handleOpenApiUrlFetch, handleOpenApiUrlImport } from '../src/panel/main/handlers/openapi-url-handler';
 import {
   handleStartMockServer, handleStopMockServer, handleUpdateMockRoutes,
   handleSaveMockConfigs, handleGetMockServerState, handleSetMockPortRange,
@@ -1139,6 +1140,12 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'saveWorkspaceDocs':
       handleSaveWorkspaceDocs(msg, post);
+      break;
+    case 'openapiUrl:fetch':
+      void handleOpenApiUrlFetch(msg, post);
+      break;
+    case 'openapiUrl:import':
+      handleOpenApiUrlImport(msg, post);
       break;
     case 'importCollectionUrl':
       void handleImportCollectionUrl(msg, post);

@@ -64,6 +64,7 @@ import {
   handleDuplicateRequest, handleReorderCollections, handleMoveRequest,
   handleReorderRequests, handleRunCollection, handleStopCollectionRun, handlePickRunData, handleSearchCollections,
 } from './handlers/collection-handler';
+import { handleOpenApiUrlFetch, handleOpenApiUrlImport } from './handlers/openapi-url-handler';
 import {
   handleExportCollectionDaakia, handleExportCollectionPostman,
   handleExportCollectionBruno, handleExportCollectionInsomnia,
@@ -1520,6 +1521,12 @@ export class MainPanel {
         break;
       case 'saveWorkspaceDocs':
         handleSaveWorkspaceDocs(msg, this._post);
+        break;
+      case 'openapiUrl:fetch':
+        void handleOpenApiUrlFetch(msg, this._post);
+        break;
+      case 'openapiUrl:import':
+        handleOpenApiUrlImport(msg, this._post);
         break;
       case 'importCollectionUrl':
         void handleImportCollectionUrl(msg, this._post);

@@ -16,6 +16,7 @@ import {
   getAllEnvironments, getSetting, type CollectionTreeNode, type CollectionRequestRow,
 } from '../storage/db';
 import { decryptIfNeeded } from './vault';
+import { effectiveCollectionVars } from './collection-inherit';
 import { mergeRuns, passCount } from './run-merge';
 import { afterScript } from './template/after-script';
 
@@ -173,14 +174,8 @@ function loadGlobalVars(): Record<string, string> {
 }
 
 function loadCollectionVars(collectionId: string): Record<string, string> {
-  try {
-    const props = JSON.parse(getCollectionData(collectionId)) as { variables?: { key: string; value: string; enabled: boolean }[] };
-    const vars: Record<string, string> = {};
-    if (props.variables) {
-      for (const v of props.variables) { if (v.enabled && v.key) vars[v.key] = v.value; }
-    }
-    return vars;
-  } catch { return {}; }
+  // The run's folder and every folder above it, nearest winning.
+  return effectiveCollectionVars(collectionId);
 }
 
 /*

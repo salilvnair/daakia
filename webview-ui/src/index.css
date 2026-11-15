@@ -1118,10 +1118,6 @@ input[type="number"] {
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-@keyframes toastSlideUp {
-  from { opacity: 0; transform: translateY(12px) scale(0.96); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
 
 /* ── AI Generate modal snake-border glow animation ─────────────── */
 @keyframes ai-snake-spin {
