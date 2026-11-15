@@ -14,7 +14,7 @@ import type { ScriptProvider } from '../types';
 export const utilsProvider: ScriptProvider = {
   id: 'core:utils',
   name: 'JavaScript Builtins & Utilities',
-  description: 'JSON, Math, Date, atob/btoa, encode/decode URI, dk.interpolate()',
+  description: 'JSON, Math, Date, atob/btoa, encode/decode URI, URL, URLSearchParams, TextEncoder/Decoder, structuredClone, dk.interpolate()',
   priority: 100,
 
   activate(ctx) {
@@ -89,6 +89,20 @@ export const utilsProvider: ScriptProvider = {
         Symbol,
         Proxy,
         Reflect,
+        /*
+          Web-standard helpers a script reaches for before it thinks of
+          require(): new URLSearchParams({...}).toString() for a form body,
+          new URL(dk.request.url).searchParams, TextEncoder for bytes to sign.
+          None of them can reach the network, the disk or a timer — the three
+          things this sandbox keeps out — so they are as safe as JSON.
+          Not here on purpose: fetch (dk.sendRequest is the way out, and the
+          one that is recorded) and setTimeout (it would outlive the timeout).
+        */
+        URL,
+        URLSearchParams,
+        TextEncoder,
+        TextDecoder,
+        structuredClone,
       },
     };
   },

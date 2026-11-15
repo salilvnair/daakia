@@ -31,6 +31,8 @@ export const SCRIPT_TARGET_LABEL: Record<ScriptTarget, string> = {
  * Keep in step with those providers, as `dk-repl.ts` is.
  */
 export const DK_SCRIPT_API = `Scripts run inside an async function, so top-level \`await\` works.
+A \`return\` ends the script, nothing more: the request is still sent.
+\`throw new Error("why")\` in a pre-request script stops the request and shows "Pre-request script failed: why".
 
 Variables (all values are strings)
   dk.env.get(k) / dk.env.set(k, v) / dk.env.has(k) / dk.env.toObject()   active environment
@@ -64,6 +66,7 @@ Also available
   console.log / info / warn / error
   crypto.randomUUID(), crypto.createHash(algo), crypto.createHmac(algo, key), crypto.randomBytes(n)
   atob, btoa, JSON, Math, Date, encodeURIComponent, decodeURIComponent
+  URL, URLSearchParams (a form body: new URLSearchParams({...}).toString()), TextEncoder, TextDecoder, structuredClone
   require() of: crypto, buffer, url, querystring, path, util — nothing else
 
 Not available: fetch, XMLHttpRequest, setTimeout, setInterval, import, the file system, pm.*, bru.*`;

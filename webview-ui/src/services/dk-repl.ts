@@ -323,6 +323,32 @@ export function replSendRequest(opts: DkSendRequestOpts): Promise<DkSendRequestR
 // global — stops "Cannot find name 'dk'" errors in the script editor.
 // Keep in sync with createDkStub() above.
 
+/**
+ * What `require()` in a script can load — `require-provider.ts` on the host.
+ * Each is declared to Monaco so `require('querystring')` is not underlined as
+ * a missing module; `require('fs')`, which throws at runtime, still is.
+ * Shorthand declarations (`declare module 'x';`): every import is `any`, so
+ * `const { stringify } = require('querystring')` checks too — a body of
+ * `export = any` does not allow named members.
+ */
+export const SCRIPT_MODULES = ['crypto', 'buffer', 'url', 'querystring', 'path', 'util'] as const;
+
+/**
+ * Errors the editor would show on code that runs fine.
+ *
+ * A script is the body of an async function (`script-runtime` wraps it), so a
+ * top-level `await` or `return` is valid — but Monaco checks the text as a
+ * plain file, where both are errors. Every script that awaits
+ * `dk.sendRequest` got a red line under it.
+ *
+ *   1108  'return' outside a function
+ *   1375  'await' at the top level of a non-module
+ *   1378  top-level 'await' needs module esnext
+ *   1431  'for await' at the top level of a non-module
+ *   1432  top-level 'for await' needs module esnext
+ */
+export const SCRIPT_BODY_DIAGNOSTICS = [1108, 1375, 1378, 1431, 1432] as const;
+
 // Declare dk as `any` — suppresses "Cannot find name 'dk'" without introducing
 // false type errors (over-constrained interfaces break valid dynamic patterns like
 // dk.request.headers.set(), dk.response.json().someField, etc.).
@@ -330,6 +356,7 @@ export function replSendRequest(opts: DkSendRequestOpts): Promise<DkSendRequestR
 export const DK_TYPE_DEFS = `
 /** Daakia scripting API — available in Pre-request and Post-response scripts. */
 declare var dk: any;
+${SCRIPT_MODULES.map(m => `declare module '${m}';`).join('\n')}
 `;
 
 // ─── Postman `pm` declarations ────────────────────────────────────────────────
@@ -382,7 +409,16 @@ export function registerDkLanguageSupport(monaco: any): void {
   if (dkLanguageSupportRegistered) return;
   dkLanguageSupportRegistered = true;
 
-  monaco.languages.typescript.javascriptDefaults.addExtraLib(DK_TYPE_DEFS, 'ts:daakia-dk.d.ts');
+  const js = monaco.languages.typescript.javascriptDefaults;
+  js.addExtraLib(DK_TYPE_DEFS, 'ts:daakia-dk.d.ts');
+  /* Monaco's JavaScript service is shared, so this reaches every JS editor —
+     which is right: mock route scripts are function bodies too. Merged, not
+     replaced, so the validation that is on stays on. */
+  const current = js.getDiagnosticsOptions?.() ?? {};
+  js.setDiagnosticsOptions({
+    ...current,
+    diagnosticCodesToIgnore: [...new Set([...(current.diagnosticCodesToIgnore ?? []), ...SCRIPT_BODY_DIAGNOSTICS])],
+  });
 
   monaco.languages.registerCompletionItemProvider('javascript', {
     triggerCharacters: ['.'],
