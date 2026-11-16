@@ -49,6 +49,21 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '3.4.2',
+    date: '2026-11-15',
+    headline: 'Scan code and the Swagger URL import as one wizard that ends in the same place, the folder open in VS Code found for you, Ask AI on GPT-5 and the o-series, and sharing a workspace one click away.',
+    lines: [
+      { kind: 'change', area: 'Import', text: 'Scan code for requests and Import from Swagger URL are now the same wizard: steps along the top, the same buttons, the same folder tree and the same last step.' },
+      { kind: 'feature', area: 'Import', text: 'The last step of both is Save to: pick the workspace, then a new collection or a collection or folder you already have. A Swagger import into an existing collection arrives as a folder carrying the auth and variables, which its requests inherit.' },
+      { kind: 'feature', area: 'Scan', text: "A scan's results can be arranged before they are written: drag requests between folders, nest and rename folders, group by source file, path or flat, and name requests by method name or method and path. How Daakia knows stays beside the request you click." },
+      { kind: 'feature', area: 'Scan', text: 'Scan code for requests fills in the folder open in VS Code, and offers every open folder, and the workspace\'s own folder, as one click.' },
+      { kind: 'fix', area: 'Scan', text: 'Scanning into an existing folder no longer moves that folder to the top of the collection tree.' },
+      { kind: 'fix', area: 'AI', text: "Ask AI and the other AI buttons work with OpenAI's GPT-5 and o-series models, which refuse max_tokens and a temperature: Daakia sends max_completion_tokens, and leaves temperature and top_p out for those models. An Azure deployment with a name of its own is retried once without what the server refused, and remembered." },
+      { kind: 'fix', area: 'UI', text: "A header row's name suggestions are no longer cut off by the dialog they are in — the Swagger import's header table sliced them in half at its footer." },
+      { kind: 'feature', area: 'Workspace', text: 'Share with team is in the workspace Quick actions, and stays filled in while the workspace is shared; click again to stop sharing. The settings menu is wider, so each line reads on one line.' },
+    ],
+  },
+  {
     version: '3.4.1',
     date: '2026-11-15',
     headline: 'Import from a Swagger URL, scratchpads for JSON, XML, YAML, SQL and text, Ask AI for scripts, fonts and sizes you choose, Bruno collections that import whole, and shortcuts and Ctrl+V that work in VS Code.',
