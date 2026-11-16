@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { postMsg } from '../../vscode';
-import { RadioIcon, TrashIcon, AutoScrollIcon, CopyIcon, ArrowDownLeftIcon } from '../../icons';
+import { RadioIcon, TrashIcon, AutoScrollIcon, ArrowDownLeftIcon } from '../../icons';
+import { copyText } from '../../utils/clipboard';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 interface SubscriptionEvent {
   id: string;
@@ -104,15 +106,6 @@ export function GraphQLSubscription() {
 
   const handleClear = useCallback(() => {
     setEvents([]);
-  }, []);
-
-  const handleCopyEvent = useCallback((data: string) => {
-    try {
-      const formatted = JSON.stringify(JSON.parse(data), null, 2);
-      navigator.clipboard.writeText(formatted);
-    } catch {
-      navigator.clipboard.writeText(data);
-    }
   }, []);
 
   if (!activeTab) return null;
@@ -220,14 +213,7 @@ export function GraphQLSubscription() {
                       {new Date(evt.timestamp).toLocaleTimeString(undefined, { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 })}
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleCopyEvent(evt.data)}
-                    className="h-[20px] w-[20px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] opacity-0 group-hover:opacity-100 cursor-pointer transition-all flex items-center justify-center rounded"
-                    title="Copy event data"
-                  >
-                    <CopyIcon size={10} />
-                  </button>
+                  <EventCopyButton data={evt.data} />
                 </div>
                 <pre className="text-[11px] text-[var(--color-text-primary)] font-mono whitespace-pre-wrap break-all leading-relaxed">
                   {formatEventData(evt.data)}
@@ -248,4 +234,24 @@ function formatEventData(data: string): string {
   } catch {
     return data;
   }
+}
+
+/** One event's copy, with the shared green tick — and visible while it shows, not only on hover. */
+function EventCopyButton({ data }: { data: string }) {
+  const { copied, flash } = useCopyTick();
+  const copy = async () => {
+    let text = data;
+    try { text = JSON.stringify(JSON.parse(data), null, 2); } catch { /* not JSON: as it came */ }
+    if (await copyText(text)) flash();
+  };
+  return (
+    <button
+      type="button"
+      onClick={() => { void copy(); }}
+      className={`h-[20px] w-[20px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] ${copied ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} cursor-pointer transition-all flex items-center justify-center rounded`}
+      title={copied ? 'Copied' : 'Copy event data'}
+    >
+      <CopyGlyph copied={copied} size={10} />
+    </button>
+  );
 }

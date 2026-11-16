@@ -1,14 +1,15 @@
 import { useState, useCallback } from 'react';
-import { CopyIcon } from '../../../icons';
 import { useCopyTick, CopyGlyph } from '../../shared/CopyTick';
+import { copyText } from '../../../utils/clipboard';
 
 export function HeadersView({ headers }: { headers: [string, string][] }) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const { copied: allCopied, flash: flashAll } = useCopyTick();
 
   const copyAll = useCallback(() => {
     const text = headers.map(([k, v]) => `${k}: ${v}`).join('\n');
-    navigator.clipboard.writeText(text);
-  }, [headers]);
+    void copyText(text).then(ok => { if (ok) flashAll(); });
+  }, [headers, flashAll]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
@@ -19,9 +20,9 @@ export function HeadersView({ headers }: { headers: [string, string][] }) {
           type="button"
           onClick={copyAll}
           className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
-          title="Copy all headers"
+          title={allCopied ? 'Copied' : 'Copy all headers'}
         >
-          <CopyIcon size={14} />
+          <CopyGlyph copied={allCopied} size={14} />
         </button>
       </div>
 

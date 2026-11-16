@@ -159,7 +159,8 @@ const BASE_AUDIT_EVENT_DEFS: AuditEventDef[] = [
   { id: 'scratchpad.delete',        module: 'Scratchpads', button: 'Delete',         action: 'delete', description: 'Delete a scratchpad',                       color: 'var(--color-scratchpad)', defaultEnabled: true },
   { id: 'scratchpad.move',          module: 'Scratchpads', button: 'Move to',        action: 'update', description: 'Move a scratchpad to another folder',       color: 'var(--color-scratchpad)', defaultEnabled: false },
   { id: 'scratchpad.folder.create', module: 'Scratchpads', button: 'New folder',     action: 'create', description: 'Create a scratchpad folder',                color: 'var(--color-scratchpad)', defaultEnabled: false },
-  { id: 'scratchpad.folder.delete', module: 'Scratchpads', button: 'Delete folder',  action: 'delete', description: 'Delete a scratchpad folder (its contents move to the default folder)', color: 'var(--color-scratchpad)', defaultEnabled: true },
+  { id: 'scratchpad.folder.move',   module: 'Scratchpads', button: 'Drag folder',    action: 'update', description: 'Move a scratchpad folder into another, or to the top level', color: 'var(--color-scratchpad)', defaultEnabled: false },
+  { id: 'scratchpad.folder.delete', module: 'Scratchpads', button: 'Delete folder',  action: 'delete', description: 'Delete a scratchpad folder (from its menu its contents move to the default folder; from Select and delete they go with it)', color: 'var(--color-scratchpad)', defaultEnabled: true },
 
   // ── History ────────────────────────────────────────────────────────────────
   { id: 'history.open',         module: 'History', button: 'Open',   action: 'click',  description: 'Open a history entry',    color: 'var(--color-info)', defaultEnabled: false },

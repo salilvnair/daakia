@@ -221,7 +221,7 @@ export function EnvironmentsPanel({ createSignal = 0 }: {
       { id: 'duplicate', label: 'Duplicate',       shortcut: 'D', icon: <CopyIcon size={14} style={{ color: 'var(--color-ctx-duplicate)' }} />,  onClick: () => { duplicateEnv(envId); setRowMenu(null); } },
       { id: 'export',    label: 'Export as JSON',  shortcut: 'X', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { exportOne(envId); setRowMenu(null); } },
       { id: 'sep1', label: '', separator: true },
-      { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon size={14} />, onClick: () => { handleDeleteEnv(envId); setRowMenu(null); } },
+      { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon size={14} style={{ color: 'var(--color-error)' }} />, onClick: () => { handleDeleteEnv(envId); setRowMenu(null); } },
     ] as DuiContextMenuItem[];
   }, [duplicateEnv, exportOne]);
 

@@ -25,9 +25,11 @@ import {
   resolveTerminalTheme, groundMode,
 } from '@salilvnair/dui';
 import {
-  TerminalIcon, SparkleIcon, CopyIcon, TrashIcon, RefreshIcon, CloseIcon, LockIcon,
+  TerminalIcon, SparkleIcon, TrashIcon, RefreshIcon, CloseIcon, LockIcon,
 } from '../../icons';
 import { postMsg } from '../../vscode';
+import { copyText } from '../../utils/clipboard';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 import { useK8sStore } from '../../store/k8s-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { useDk8sTerminalStore } from '../../store/dk8s-terminal-store';
@@ -81,6 +83,7 @@ export function PodTerminal() {
   const idRef = useRef<string>('');
 
   const [phase, setPhase] = useState<Phase>('opening');
+  const screenCopy = useCopyTick();
   /*
     The palette, remembered per person rather than per pod.
 
@@ -483,9 +486,9 @@ export function PodTerminal() {
             </BadgeChipView>
           </button>
         )}
-        <IconBtn label="Copy everything on screen"
-                 onClick={() => void navigator.clipboard?.writeText(buffer())}>
-          <CopyIcon size={IconSize.inline} />
+        <IconBtn label={screenCopy.copied ? 'Copied' : 'Copy everything on screen'}
+                 onClick={() => { void copyText(buffer()).then(ok => { if (ok) screenCopy.flash(); }); }}>
+          <CopyGlyph copied={screenCopy.copied} size={IconSize.inline} />
         </IconBtn>
         <IconBtn label="Clear the screen" onClick={() => termRef.current?.clear()}>
           <TrashIcon size={IconSize.inline} />
