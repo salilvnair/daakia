@@ -49,6 +49,22 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '3.4.3',
+    date: '2026-11-16',
+    headline: 'New collections named where they will appear, folders that drag anywhere without a question, select and delete in every tree, and the green tick on every copy button.',
+    lines: [
+      { kind: 'change', area: 'Collections', text: 'New collection, folder and request are named in a row in the tree, where they will appear, instead of a popup. Enter or clicking away creates it; Escape leaves nothing behind. The row stays until the item exists, and a create that goes unanswered comes back with the name still in it.' },
+      { kind: 'change', area: 'Collections', text: 'Dragging a folder asks nothing: it drops into another folder directly, never into itself or one of its own subfolders, and a strip shown while it moves takes it out to the top level.' },
+      { kind: 'feature', area: 'Collections', text: 'Select and delete, in the More menu of every protocol: checkboxes in the tree\'s colour, a ticked folder carries everything inside it, and what goes goes to the Bin.' },
+      { kind: 'feature', area: 'Scratchpads', text: 'Select and delete and Delete all scratchpads, in the More menu. A folder takes its contents with it; the default folder stays, empty. Scratchpads have no Bin, and the confirmation says so.' },
+      { kind: 'feature', area: 'Scratchpads', text: 'Folders drag into other folders and out to the top level, as collections do.' },
+      { kind: 'change', area: 'Workspace', text: 'New collection on the workspace page picks a protocol from a row of chips instead of a dialog, and each protocol row has its own add button.' },
+      { kind: 'change', area: 'UI', text: 'Folder icons take the tree\'s colour — each protocol\'s own, violet in the scratchpads — and Delete items in menus are red, icon and all.' },
+      { kind: 'change', area: 'UI', text: 'Every copy button turns into the green tick when it copies: the scratchpad\'s, GraphQL subscription events, the terminal\'s copy screen, cookie Export, the Git Sync ID, the WebSocket connect payload and the response headers\' Copy all.' },
+      { kind: 'fix', area: 'Workspace', text: 'The Overview\'s New collection and New environment quick actions open what they say; they switched tabs and did nothing else.' },
+    ],
+  },
+  {
     version: '3.4.2',
     date: '2026-11-15',
     headline: 'Scan code and the Swagger URL import as one wizard that ends in the same place, the folder open in VS Code found for you, Ask AI on GPT-5 and the o-series, and sharing a workspace one click away.',

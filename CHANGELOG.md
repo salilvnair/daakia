@@ -4,6 +4,48 @@ All notable changes to the Daakia API Client extension are documented here.
 
 ---
 
+## [3.4.3] — 2026-11-16
+
+New collections named where they will appear, folders that drag anywhere
+without a question, select and delete in every tree, and the green tick on
+every copy button.
+
+### Added
+
+- **Select and delete**, in the More menu of every protocol's collections and
+  of the scratchpads. Rows get a checkbox in the tree's colour; a ticked folder
+  carries everything inside it. Collections go to the Bin; scratchpads, which
+  have no Bin, say so before they go.
+- **Delete all scratchpads**, in the scratchpads' More menu. The default folder
+  stays, empty, for new scratchpads to go to.
+- **Scratchpad folders drag** into other folders and out to the top level.
+
+### Changed
+
+- **New collection, folder and request are named in the tree**, in a row
+  where they will appear, instead of a popup. Enter or clicking away creates
+  it; Escape leaves nothing behind. The row stays until the item exists, and a
+  create that goes unanswered comes back with the name still in it.
+- **Dragging a folder asks nothing.** It drops into another folder directly,
+  never into itself or one of its own subfolders, and a strip shown while it
+  moves takes it out to the top level.
+- **The workspace page's New collection** picks a protocol from a row of chips
+  instead of a dialog, and each protocol row has its own add button.
+- **Folder icons take the tree's colour**: each protocol's own in its
+  collections, violet in the scratchpads.
+- **Delete items in menus are red, icon and all.**
+- **Every copy button turns into the green tick** when it copies — the
+  scratchpad's, GraphQL subscription events, the terminal's copy screen, cookie
+  Export, the Git Sync ID, the WebSocket connect payload and the response
+  headers' Copy all, which had a toast or nothing.
+
+### Fixed
+
+- The Overview's New collection and New environment quick actions open what
+  they say. They switched tabs and did nothing else.
+
+---
+
 ## [3.4.2] — 2026-11-15
 
 Scan code and the Swagger URL import as one wizard that ends in the same
