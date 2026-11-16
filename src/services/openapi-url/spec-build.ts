@@ -19,6 +19,12 @@ import { eachOperation, type SpecOutline, type OutlineScheme } from './spec-outl
 
 export interface ImportPlan {
   collectionName: string;
+  /**
+   * An existing collection or folder to go inside. The import then arrives as
+   * a folder there, named `collectionName`, carrying what a new collection
+   * would have carried: the auth, the variables, the schemas.
+   */
+  parentId?: string | null;
   folders: { id: string; name: string; parentId: string | null }[];
   /** In the order they should appear; `opId` is an outline operation id. */
   requests: { opId: string; folderId: string | null; name: string }[];

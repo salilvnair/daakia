@@ -65,6 +65,8 @@ interface ScanState {
   stage: ScanStage;
 
   dir: string;
+  /** The folders open in the editor, offered first and filled in when the box is empty. */
+  editorFolders: { name: string; path: string }[];
   /** What the host could tell us about the folder before scanning it. */
   detected: { id: string; label: string }[];
   manifests: string[];
@@ -114,6 +116,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
   open: false,
   stage: 'source',
   dir: '',
+  editorFolders: [],
   detected: [],
   manifests: [],
   profiles: [],
@@ -138,11 +141,13 @@ export const useScanStore = create<ScanState>((set, get) => ({
       collectionName: '',
     });
     if (dir) get().inspect(dir);
+    postMsg({ type: 'scan:editorFolders' });
   },
 
   close: () => set({ open: false }),
 
-  setDir: (dir) => set({ dir, detected: [], manifests: [], profiles: [], profile: undefined }),
+  /* A different folder is a different repository: its name is derived afresh. */
+  setDir: (dir) => set({ dir, detected: [], manifests: [], profiles: [], profile: undefined, collectionName: '' }),
   setProfile: (profile) => set({ profile }),
 
   pickFolder: () => postMsg({ type: 'scan:pickFolder' }),
@@ -177,6 +182,17 @@ export const useScanStore = create<ScanState>((set, get) => ({
         set({ dir: String(msg.dir), detected: [], profiles: [], profile: undefined });
         get().inspect(String(msg.dir));
         break;
+
+      case 'scan:editorFolders': {
+        const folders = ((msg.folders as { name: string; path: string }[]) ?? []).filter(f => f?.path);
+        set({ editorFolders: folders });
+        /* Nothing typed yet: the folder open in the editor is the likeliest answer. */
+        if (!get().dir.trim() && folders[0]) {
+          set({ dir: folders[0].path, detected: [], manifests: [], profiles: [], profile: undefined });
+          get().inspect(folders[0].path);
+        }
+        break;
+      }
 
       case 'scan:inspected':
         /* A reply for a folder somebody has already navigated away from is not

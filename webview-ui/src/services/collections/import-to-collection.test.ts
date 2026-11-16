@@ -12,7 +12,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const posted: Record<string, unknown>[] = [];
 vi.mock('../../vscode', () => ({ postMsg: (m: Record<string, unknown>) => { posted.push(m); } }));
 
-import { toCollectionRequest, importRequestsAsCollection } from './import-to-collection';
+import { toCollectionRequest, importRequestsAsCollection, importArranged } from './import-to-collection';
 
 beforeEach(() => { posted.length = 0; });
 
@@ -75,5 +75,47 @@ describe('folders', () => {
     const collection = posted.find(m => m.type === 'createCollection')!.id;
     expect(posted.filter(m => m.type === 'createFolder')).toHaveLength(0);
     expect(posted.find(m => m.type === 'saveRequestToCollection')!.collectionId).toBe(collection);
+  });
+});
+
+describe('importArranged', () => {
+  it('makes nested folders parents first, and files each request in its own', async () => {
+    vi.useFakeTimers();
+    const done = importArranged({
+      protocol: 'rest',
+      into: { kind: 'new', name: 'zp' },
+      // The child is listed before its parent on purpose.
+      folders: [{ id: 'b', name: 'jobs', parentId: 'a' }, { id: 'a', name: 'api', parentId: null }],
+      requests: [
+        { name: 'Run', method: 'POST', url: '/run', folderId: 'b' },
+        { name: 'Top', method: 'GET', url: '/top', folderId: null },
+      ],
+    });
+    await vi.runAllTimersAsync();
+    const { rootId } = await done;
+    vi.useRealTimers();
+
+    const created = posted.filter(m => m.type === 'createFolder');
+    expect(created.map(f => f.name)).toEqual(['api', 'jobs']);
+    expect(created[0].parentId).toBe(rootId);
+    expect(created[1].parentId).toBe(created[0].id);
+    const saves = posted.filter(m => m.type === 'saveRequestToCollection');
+    expect(saves[0].collectionId).toBe(created[1].id);
+    expect(saves[1].collectionId).toBe(rootId);
+  });
+
+  it('never re-creates an existing destination, which would move it to the top', async () => {
+    vi.useFakeTimers();
+    const done = importArranged({
+      protocol: 'rest',
+      into: { kind: 'existing', id: 'folder-9' },
+      folders: [],
+      requests: [{ name: 'A', method: 'GET', url: '/a', folderId: null }],
+    });
+    await vi.runAllTimersAsync();
+    await done;
+    vi.useRealTimers();
+    expect(posted.some(m => m.type === 'createCollection')).toBe(false);
+    expect(posted.find(m => m.type === 'saveRequestToCollection')?.collectionId).toBe('folder-9');
   });
 });

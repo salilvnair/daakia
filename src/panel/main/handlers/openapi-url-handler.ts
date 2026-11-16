@@ -12,7 +12,7 @@
 import { randomUUID } from 'crypto';
 import {
   upsertCollection, updateCollectionData, upsertCollectionRequest, reorderCollections,
-  getCollectionTree, upsertEnvironment,
+  getCollectionTree, upsertEnvironment, getCollectionBreadcrumb,
 } from '../../../storage/db';
 import { encryptIfUnlocked } from '../../../services/vault';
 import { fetchSpec } from '../../../services/openapi-url/spec-fetch';
@@ -56,9 +56,16 @@ export function handleOpenApiUrlImport(msg: Record<string, unknown>, postMessage
     return;
   }
   try {
-    const built = buildCollection(held.spec, held.outline, msg.plan as ImportPlan);
+    const plan = msg.plan as ImportPlan;
+    // A parent that is not there (deleted since the picker listed it) would leave an orphan no tree shows.
+    const parentId = plan.parentId && getCollectionBreadcrumb(plan.parentId).length ? plan.parentId : null;
+    if (plan.parentId && !parentId) {
+      postMessage({ type: 'openapiUrl:imported', reqId, ok: false, error: 'That collection or folder is no longer there — pick another.' });
+      return;
+    }
+    const built = buildCollection(held.spec, held.outline, plan);
 
-    upsertCollection(built.root.id, built.root.name, null, 'rest');
+    upsertCollection(built.root.id, built.root.name, parentId, 'rest');
     updateCollectionData(built.root.id, JSON.stringify(built.root.data));
     // Parents before children, whatever order the wizard listed them in.
     const pending = [...built.folders];
@@ -87,7 +94,7 @@ export function handleOpenApiUrlImport(msg: Record<string, unknown>, postMessage
     if (built.environments.length) handleGetEnvironments(postMessage);
     postMessage({
       type: 'openapiUrl:imported', reqId, ok: true,
-      collectionId: built.root.id, name: built.root.name,
+      collectionId: built.root.id, name: built.root.name, parentId,
       requestCount: built.requests.length, folderCount: built.folders.length,
       environments: built.environments.map(e => e.name),
     });

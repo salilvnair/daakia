@@ -1,24 +1,29 @@
 /**
- * Scan code for requests.
+ * Scan code for requests — the same wizard frame as the Swagger URL import.
  *
- * Three screens behind one modal: which folder, what it is doing, and what it
- * found. The third is the one the feature lives or dies on — everything it
- * shows carries a marker saying how it came to be known, because a generator
- * you cannot audit is one you stop trusting the first time it is wrong.
+ *   1. Folder    which repository; the frameworks it recognises light up.
+ *   2. Review    what it found, arranged in folders you can drag about, with
+ *                the "how daakia knows" panel beside the selected request —
+ *                everything shown carries a marker saying how it came to be
+ *                known, because a generator you cannot audit is one you stop
+ *                trusting the first time it is wrong.
+ *   3. Save to   which workspace, a new collection or one you have, and the
+ *                environment that holds {{baseUrl}}.
+ *   4. Reconcile only when the destination already holds requests a scan
+ *                wrote: what this scan would change, decided row by row.
  *
- * Nothing is written until the button on the review screen is pressed.
+ * Nothing is written until the last button.
  */
-import { Fragment, useEffect, useMemo, useState } from 'react';
-import { ModalView, ButtonView, TextInputView, CopyButtonView } from '@salilvnair/dui';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { ModalView, ButtonView, TextInputView, SegmentedControlView, IconButtonView, CheckboxView } from '@salilvnair/dui';
 import hljs from 'highlight.js';
 import {
-  useScanStore, byFolder, isInternal, type ScannedRequest, type Provenance, type ProvenanceKind,
+  useScanStore, isInternal, type ScannedRequest, type Provenance, type ProvenanceKind,
 } from '../../../store/scan-store';
 import { useWorkspaceStore } from '../../../store/workspace-store';
-import { importRequestsAsCollection } from '../../../services/collections/import-to-collection';
+import { importArranged } from '../../../services/collections/import-to-collection';
 import { useToastStore } from '../../../store/toast-store';
-import { SearchIcon, FolderOpenIcon, RefreshIcon, CheckIcon } from '../../../icons';
-import { ScanDestination, type Destination } from './ScanDestination';
+import { SearchIcon, FolderOpenIcon, FolderPlusIcon, CheckIcon, InfoCircleIcon } from '../../../icons';
 import { useEnvStore } from '../../../store/env-store';
 import { ScanReconcile } from './ScanReconcile';
 import { reconcile, defaultSelection, type Reconciled } from '@daakia/scan-reconcile';
@@ -30,6 +35,14 @@ import {
   SCAN_DETECTORS_KEY, DETECTOR_IDS, DETECTOR_LABELS, type DetectorId,
 } from '../../../services/scan/scan-settings';
 import { DETECTOR_COLORS } from '@daakia/api-detector';
+import {
+  arrange, requestName, addFolder, foldersInUse, treeRows, setOn,
+  type Arrangement, type GroupBy, type NameBy, type OutlineOp,
+} from '../../../services/openapi-url/arrange';
+import { WizardSteps } from '../../shared/import-wizard/WizardSteps';
+import { ArrangeTree } from '../../shared/import-wizard/ArrangeTree';
+import { DestinationPicker, targetLabel, type Target } from '../../shared/import-wizard/DestinationPicker';
+import '../../shared/import-wizard/import-wizard.css';
 
 /** Collections is purple everywhere else in daakia; this lives under it. */
 const ACCENT = 'var(--color-sidebar-collections)';
@@ -55,36 +68,8 @@ const PROV_COLOR: Record<ProvenanceKind, string> = {
   unknown: 'var(--color-text-muted)',
 };
 
-/** What each marker means, said once at the top rather than in a tooltip. */
-const PROV_MEANS: Record<ProvenanceKind, string> = {
-  read: 'written in the source',
-  resolved: 'followed through a constant or an annotation',
-  example: 'lifted from a test or a spec',
-  generated: 'made to satisfy a stated constraint',
-  unknown: 'not known, and saying so',
-};
-
-function Method({ m }: { m: string }) {
-  return (
-    <span style={{
-      fontFamily: 'var(--font-mono, monospace)', fontSize: 10, fontWeight: 700,
-      color: METHOD_COLOR[m] ?? 'var(--color-text-muted)', minWidth: 42,
-    }}>{m}</span>
-  );
-}
-
 function Mark({ p, label }: { p: Provenance; label?: string }) {
-  const color = PROV_COLOR[p.kind];
-  return (
-    <span
-      title={describe(p)}
-      style={{
-        fontFamily: 'var(--font-mono, monospace)', fontSize: 9.5, letterSpacing: '.03em',
-        padding: '1px 5px', borderRadius: 3, whiteSpace: 'nowrap',
-        color, background: `color-mix(in srgb, ${color} 13%, transparent)`,
-      }}
-    >{label ?? p.kind}</span>
-  );
+  return <span className="dk-swi-mk" title={describe(p)} style={{ ['--mk' as string]: PROV_COLOR[p.kind] }}>{label ?? p.kind}</span>;
 }
 
 /** The sentence behind a marker — where it was read, or which rule made it. */
@@ -96,110 +81,6 @@ export function describe(p: Provenance): string {
     case 'generated': return `Generated to satisfy ${p.rule ?? 'a stated constraint'}`;
     default: return p.why ?? 'Not established';
   }
-}
-
-/**
- * A scan that found nothing, and why that might be.
- *
- * The usual reason is the folder — a parent directory, or a repository whose
- * routes are somewhere this does not look. But a detector turned off in
- * Settings produces exactly the same empty screen from a repository that is
- * full of endpoints, and somebody who set that last month will not connect the
- * two. So when the list is filtered, the screen says so and offers the way
- * back rather than leaving them to wonder whether the parser is broken.
- */
-function FoundNothing() {
-  const prefs = useUiStateStore(s => s.prefs);
-  const chosen = detectorPrefs(prefs[SCAN_DETECTORS_KEY]);
-  const off = DETECTOR_IDS.filter(id => !chosen.includes(id));
-
-  return (
-    <div style={{ padding: '38px 24px', textAlign: 'center' }}>
-      <p style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--color-text-primary)' }}>
-        No endpoints here
-      </p>
-      <p style={{
-        margin: '0 auto', fontSize: 11.5, lineHeight: 1.6, maxWidth: '54ch',
-        color: 'var(--color-text-muted)',
-      }}>
-        Nothing in this folder declares a route that daakia recognises. If you pointed it at a
-        parent directory, try the service itself &mdash; the walk stops at the file cap, and a
-        repository&rsquo;s controllers can be deeper than that.
-      </p>
-
-      {off.length > 0 && (
-        <p style={{
-          margin: '14px auto 0', fontSize: 11.5, lineHeight: 1.6, maxWidth: '54ch',
-          color: 'var(--color-warning)',
-        }}>
-          {off.map(id => DETECTOR_LABELS[id]).join(', ')}{' '}
-          {off.length === 1 ? 'is' : 'are'} turned off in Settings &rarr; Code Scan, so this scan
-          did not look for {off.length === 1 ? 'it' : 'them'}.{' '}
-          <button
-            type="button"
-            onClick={() => {
-              useUiStateStore.getState().setPref(SCAN_DETECTORS_KEY, '');
-              useScanStore.getState().run();
-            }}
-            style={{
-              color: ACCENT, background: 'none', border: 'none', padding: 0,
-              font: 'inherit', textDecoration: 'underline', cursor: 'pointer',
-            }}
-          >
-            Turn all back on and scan again
-          </button>
-        </p>
-      )}
-    </div>
-  );
-}
-
-function Row({ r, chosen, focused, onToggle, onFocus }: {
-  r: ScannedRequest; chosen: boolean; focused: boolean;
-  onToggle: () => void; onFocus: () => void;
-}) {
-  /* The most uncertain thing about a request is what the row should say — a
-     path that was resolved matters more than a body that was read. */
-  const worst = worstProvenance(r);
-  return (
-    <div
-      onClick={onFocus}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 9, padding: '6px 12px',
-        cursor: 'pointer',
-        borderBottom: '1px solid color-mix(in srgb, var(--color-surface-border) 55%, transparent)',
-        background: focused ? `color-mix(in srgb, ${ACCENT} 9%, transparent)` : undefined,
-      }}
-    >
-      <span
-        onClick={e => { e.stopPropagation(); onToggle(); }}
-        style={{
-          width: 13, height: 13, borderRadius: 3, flexShrink: 0,
-          border: `1.5px solid ${chosen ? ACCENT : 'var(--color-surface-border)'}`,
-          background: chosen ? ACCENT : 'transparent',
-          display: 'grid', placeItems: 'center',
-        }}
-      >
-        {chosen && (
-          <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="var(--color-panel)"
-               strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2.5 6.5L4.8 8.8L9.5 3.5" />
-          </svg>
-        )}
-      </span>
-      <Method m={r.method} />
-      <span style={{
-        fontFamily: 'var(--font-mono, monospace)', fontSize: 11.5,
-        color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap', minWidth: 0,
-      }}>{r.url.replace('{{baseUrl}}', '')}</span>
-      <span style={{ flex: 1, minWidth: 8 }} />
-      {isInternal(r) && (
-        <Mark p={{ kind: 'unknown', why: 'an internal path — listed, not selected' }} label="internal" />
-      )}
-      {worst && <Mark p={worst[1]} label={worst[0] === 'path' ? worst[1].kind : `${worst[0]} ${worst[1].kind}`} />}
-    </div>
-  );
 }
 
 /** The field whose provenance is least certain — that is what a row should admit to. */
@@ -216,31 +97,42 @@ export function worstProvenance(r: ScannedRequest): [string, Provenance] | undef
   return worst && worst[1].kind === 'read' ? undefined : worst;
 }
 
+/** A scanned request as the arrange tree sees it: its controller is its "tag". */
+function asOp(r: ScannedRequest): OutlineOp {
+  return {
+    id: r.scan.identity,
+    method: r.method,
+    path: r.url.replace('{{baseUrl}}', '') || '/',
+    summary: r.name,
+    operationId: '',
+    tag: r.folder || 'Ungrouped',
+    deprecated: false,
+    security: [],
+  };
+}
+
+const STEPS = ['Folder', 'Review', 'Save to'] as const;
+
 export function ScanModal() {
   const s = useScanStore();
-  const activeWorkspace = useWorkspaceStore(w => w.activeId);
   const addToast = useToastStore(t => t.addToast);
+  const [step, setStep] = useState(0);
   const [writing, setWriting] = useState(false);
-  /*
-    Where it goes, decided before it is written and not in a footer field.
 
-    A new collection named after the repository is the usual answer, so it is
-    the default — but a scan of a service you already have a collection for
-    should go into that collection, and that was not expressible at all.
-  */
-  const [destination, setDestination] = useState<Destination>({ kind: 'new', name: '' });
+  // 2. Review
+  const [groupBy, setGroupBy] = useState<GroupBy>('tag');
+  const [nameBy, setNameBy] = useState<NameBy>('summary');
+  const [arr, setArr] = useState<Arrangement>({ folders: [], requests: [] });
+
+  // 3. Save to
+  const [target, setTarget] = useState<Target>({ kind: 'new' });
+  const [name, setName] = useState('');
   /* Settings → Code Scan decides what this arrives as; it is still a checkbox. */
   const [createEnv, setCreateEnv] = useState(
     () => scanPreferences(useUiStateStore.getState().prefs).createEnvironment,
   );
-  const [step, setStep] = useState<'review' | 'destination' | 'reconcile'>('review');
-  /*
-    What a re-scan would do, worked out before anything is written.
 
-    Only ever populated when the destination is a collection that already
-    holds requests a scan wrote — a first scan has nothing to reconcile with
-    and should not be made to look at a screen about it.
-  */
+  // 4. Reconcile — only ever populated for a destination that already holds scanned requests.
   const [plan, setPlan] = useState<Reconciled[]>([]);
   const [planChosen, setPlanChosen] = useState<Set<string>>(new Set());
   const [tree, setTree] = useState<CollectionNodeWithRequests[]>([]);
@@ -271,78 +163,86 @@ export function ScanModal() {
   }, []);
 
   /*
-    A new scan starts on the review screen, and starts without a destination.
+    A new scan starts at the first step, with no destination.
 
     The modal is hidden rather than unmounted, so every piece of state here
-    outlives the scan that set it. After one successful write `step` stayed on
-    'destination', so the next scan rendered "where should they go?" on top of
-    the review it is meant to follow — and the review's own footer button,
-    still in the tree underneath, sat exactly under the one that writes.
-    Carrying the old destination forward is the same bug with worse
-    consequences: a scan of one repository would arrive, unasked, in the
-    collection built from another.
+    outlives the scan that set it. Carrying the old destination forward would
+    put a scan of one repository, unasked, into the collection built from
+    another.
   */
   useEffect(() => {
     if (s.stage !== 'source' && s.stage !== 'scanning') return;
-    setStep('review');
+    setStep(0);
     setPlan([]);
     setPlanChosen(new Set());
     setHomes(new Map());
     setCreateEnv(scanPreferences(useUiStateStore.getState().prefs).createEnvironment);
-    setDestination({ kind: 'new', name: '' });
+    setTarget({ kind: 'new' });
   }, [s.stage]);
 
-  /* The repository's name is the usual answer, once the scan knows it. */
+  /* A finished scan opens on its review, arranged one folder per source file. */
   useEffect(() => {
     if (s.stage !== 'review') return;
-    if (s.collectionName && destination.kind === 'new' && !destination.name) {
-      setDestination({ kind: 'new', name: s.collectionName });
-    }
+    setGroupBy('tag');
+    setArr(arrange(s.requests.map(asOp), 'tag', new Map(s.requests.map(r => [r.scan.identity, s.chosen.has(r.scan.identity)]))));
+    setName(s.collectionName);
+    setStep(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [s.stage, s.collectionName]);
+  }, [s.stage, s.requests]);
 
-  const groups = useMemo(() => byFolder(s.requests), [s.requests]);
-  const focused = s.requests.find(r => r.scan.identity === s.focused);
+  const byId = useMemo(() => new Map(s.requests.map(r => [r.scan.identity, r])), [s.requests]);
+  const focused = s.focused ? byId.get(s.focused) : undefined;
+  const onCount = arr.requests.filter(r => r.on).length;
+  const total = s.requests.length;
 
   if (!s.open) return null;
 
-  /** The requests that were ticked on the review screen. */
-  const picked = () => s.requests.filter(r => s.chosen.has(r.scan.identity));
+  const regroup = (by: GroupBy) => {
+    setGroupBy(by);
+    setArr(a => arrange(s.requests.map(asOp), by, new Map(a.requests.map(r => [r.opId, r.on]))));
+  };
+
+  /** The ticked requests, in tree order, each with the folder it sits in. */
+  const picked = () => treeRows(arr, true).flatMap(row => {
+    if (row.kind !== 'request') return [];
+    const r = byId.get(row.request.opId);
+    return r ? [{ r, folderId: row.request.folderId }] : [];
+  });
+  const folderName = (id: string | null) => arr.folders.find(f => f.id === id)?.name ?? '';
+  const destName = targetLabel(target, name.trim() || s.collectionName || 'Scanned API');
 
   /**
-   * Going forward from the destination step.
+   * Going forward from Save to.
    *
    * Into an existing collection that already holds scanned requests, this is a
    * re-scan and there is a decision to show. Anywhere else there is nothing to
-   * reconcile against, and making somebody look at an empty reconcile screen
-   * would be ceremony.
+   * reconcile against, and an empty reconcile screen would be ceremony.
    */
   const proceed = () => {
-    if (destination.kind !== 'existing') { void write(); return; }
-    const existing = existingRequests(tree, destination.id);
+    if (target.kind !== 'existing') { void write(); return; }
+    const existing = existingRequests(tree, target.id);
     if (!existing.some(e => e.scan)) { void write(); return; }
 
     /* Where each one lives now, so updating it does not also move it. */
     setHomes(new Map(existing.map(e => [e.id, e.collectionId])));
-
-    const rows = reconcile(existing, picked().map(r => ({
+    const rows = reconcile(existing, picked().map(({ r, folderId }) => ({
       name: r.name, method: r.method, url: r.url,
       headers: r.headers, params: r.params,
       bodyMode: r.bodyMode, bodyRaw: r.bodyRaw, authType: r.authType,
-      folder: r.folder, scan: r.scan,
+      folder: folderName(folderId) || r.folder, scan: r.scan,
     })));
     setPlan(rows);
     setPlanChosen(defaultSelection(rows));
-    setStep('reconcile');
+    setStep(3);
   };
 
   /** Apply a reconciliation: only the rows that were ticked, by their own id. */
   const applyPlan = async () => {
+    if (target.kind !== 'existing') return;
     setWriting(true);
     try {
+      const collectionId = target.id;
       const rows = plan.filter(r => planChosen.has(r.identity) && r.next && r.outcome !== 'orphaned');
-      const collectionId = destination.kind === 'existing' ? destination.id : undefined;
-      if (!collectionId) return;
 
       /*
         A request added by a re-scan goes in the folder for its source file,
@@ -397,11 +297,7 @@ export function ScanModal() {
       }
       postMsg({ type: 'getCollections', protocol: 'rest' });
       const added = rows.filter(r => r.outcome === 'added').length;
-      const updated = rows.length - added;
-      addToast({
-        type: 'success',
-        message: `${added} added, ${updated} updated in ${destination.name}`,
-      });
+      addToast({ type: 'success', title: 'Scan applied', message: `${added} added, ${rows.length - added} updated in ${destName}` });
       s.close();
     } finally {
       setWriting(false);
@@ -413,39 +309,30 @@ export function ScanModal() {
     if (!chosen.length) return;
     setWriting(true);
     try {
-      const name = destination.kind === 'new'
-        ? (destination.name.trim() || 'Scanned API')
-        : destination.name;
-
+      const envName = target.kind === 'new' ? destName : target.path[target.path.length - 1];
       /*
-        The environment first, and made active.
-
-        Every request is written against {{baseUrl}}, so a collection that
-        arrives before the variable that resolves it is a collection that
-        cannot be run — which is the state the first version shipped in.
+        The environment first, and made active. Every request is written
+        against {{baseUrl}}, so a collection that arrives before the variable
+        that resolves it is a collection that cannot be run.
       */
       if (createEnv && s.baseUrl?.url) {
         const env = useEnvStore.getState();
-        const id = env.addEnvironment(name);
+        const id = env.addEnvironment(envName);
         env.updateVariables(id, [{
-          id: crypto.randomUUID(),
-          key: 'baseUrl',
-          initialValue: s.baseUrl.url,
-          currentValue: s.baseUrl.url,
-          isSecret: false,
+          id: crypto.randomUUID(), key: 'baseUrl',
+          initialValue: s.baseUrl.url, currentValue: s.baseUrl.url, isSecret: false,
         }]);
         env.setActiveEnvironment(id);
       }
 
-      const saved = await importRequestsAsCollection({
-        name,
+      const usedIds = new Set(chosen.map(c => c.folderId));
+      const { saved } = await importArranged({
         protocol: 'rest',
-        ...(destination.kind === 'existing' ? { collectionId: destination.id } : {}),
-        /* One folder per source file, which is what the review screen showed. */
-        useFolders: true,
-        requests: chosen.map(r => ({
-          name: r.name,
-          folder: r.folder,
+        into: target.kind === 'new' ? { kind: 'new', name: destName } : { kind: 'existing', id: target.id },
+        folders: foldersInUse(arr).filter(f => usedIds.has(f.id) || arr.folders.some(c => c.parentId === f.id))
+          .map(f => ({ id: f.id, name: f.name, parentId: f.parentId })),
+        requests: chosen.map(({ r, folderId }) => ({
+          name: nameBy === 'path' ? `${r.method} ${asOp(r).path}` : r.name,
           method: r.method,
           url: r.url,
           headers: r.headers,
@@ -455,12 +342,14 @@ export function ScanModal() {
           authType: r.authType,
           /* Kept on the request so a later scan can tell an edit from a change. */
           scan: r.scan,
+          folderId,
         })),
       });
       addToast({
         type: 'success',
-        message: `${saved} request${saved === 1 ? '' : 's'} in ${name}`
-          + (createEnv && s.baseUrl?.url ? ` · environment ${name} is active` : ''),
+        title: target.kind === 'new' ? 'Collection created' : 'Requests added',
+        message: `${saved} request${saved === 1 ? '' : 's'} in ${destName}`
+          + (createEnv && s.baseUrl?.url ? ` · environment ${envName} is active` : ''),
       });
       s.close();
     } finally {
@@ -468,144 +357,190 @@ export function ScanModal() {
     }
   };
 
-  return (
-    <ModalView open onClose={s.close} title="Scan code for requests" size="xxl">
-      <div style={{ position: 'relative' }}>
-      {s.stage === 'source' && <SourceStep />}
-      {s.stage === 'scanning' && <ScanningStep />}
-      {s.stage === 'error' && (
-        <div style={{ padding: 28, textAlign: 'center' }}>
-          <p style={{ color: 'var(--color-warning)', fontSize: 13, margin: '0 0 6px' }}>
-            The scan could not be completed
-          </p>
-          <p style={{ color: 'var(--color-text-muted)', fontSize: 12, margin: '0 0 18px' }}>{s.error}</p>
-          <ButtonView label="Back" size="sm" variant="secondary"
-                      onClick={() => useScanStore.setState({ stage: 'source' })} />
-        </div>
-      )}
+  const steps = plan.length ? [...STEPS, 'Reconcile'] : [...STEPS];
+  const reachable = s.stage === 'review' ? (plan.length ? 3 : 2) : 0;
+  const goTo = (i: number) => {
+    if (i === 0) { useScanStore.setState({ stage: 'source' }); return; }
+    setStep(i);
+  };
+  const willWrite = plan.filter(r => planChosen.has(r.identity) && r.outcome !== 'orphaned').length;
 
-      {s.stage === 'review' && (
-        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <Summary />
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 400px', minHeight: 380, maxHeight: '56vh' }}>
-            <div style={{ overflowY: 'auto', borderRight: '1px solid var(--color-surface-border)' }}>
-              {s.requests.length === 0 && <FoundNothing />}
-              {groups.map(g => (
-                <div key={g.folder}>
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: 7, padding: '6px 12px',
-                    background: 'var(--color-surface)',
-                    borderBottom: '1px solid var(--color-surface-border)',
-                    fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5,
-                    color: 'var(--color-text-secondary)',
-                  }}>
-                    {g.folder}
-                    <span style={{ marginLeft: 'auto', color: 'var(--color-text-muted)' }}>{g.requests.length}</span>
-                  </div>
-                  {g.requests.map(r => (
-                    <Row
-                      key={r.scan.identity}
-                      r={r}
-                      chosen={s.chosen.has(r.scan.identity)}
-                      focused={s.focused === r.scan.identity}
-                      onToggle={() => s.toggle(r.scan.identity)}
-                      onFocus={() => s.focus(r.scan.identity)}
-                    />
-                  ))}
-                </div>
-              ))}
-
-              {s.unresolved.length > 0 && <UnresolvedGroup />}
-            </div>
-
-            <Detail r={focused} />
-          </div>
-
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
-            borderTop: '1px solid var(--color-surface-border)',
-          }}>
-            <span style={{ fontSize: 11.5, color: 'var(--color-text-muted)' }}>
-              {s.chosen.size} of {s.requests.length} selected
+  const enabled = detectorPrefs(useUiStateStore.getState().prefs[SCAN_DETECTORS_KEY]);
+  const footerLeft: ReactNode = step === 0
+    ? (enabled.length < DETECTOR_IDS.length ? `${enabled.length} of ${DETECTOR_IDS.length} parsers enabled in Settings` : 'Reads files. Writes nothing.')
+    : step === 1
+      ? (
+        <span className="dk-swi-chips">
+          <span>{onCount} of {total} selected · {s.filesWalked} files · {s.ms} ms</span>
+          {s.detected.map(d => (
+            <span key={d.id} className="dk-swi-chip is-found" style={{ ['--mk' as string]: DETECTOR_COLORS[d.id as DetectorId] ?? ACCENT, padding: '1px 8px' }}>
+              <span className="dk-swi-chip__dot" />{d.label}
             </span>
-            <span style={{ flex: 1 }} />
-            <ButtonView label="Cancel" size="sm" variant="secondary" onClick={s.close} />
-            <ButtonView
-              label="Choose where…"
-              size="sm" variant="secondary" accentColor={ACCENT} color={ACCENT}
-              disabled={s.chosen.size === 0}
-              onClick={() => setStep('destination')}
+          ))}
+        </span>
+      )
+      : step === 2 ? 'Nothing has been written yet.'
+        : (willWrite === 0 ? 'Nothing selected' : `${willWrite} to write · nothing is ever deleted`);
+
+  const footerRight = (
+    <div className="dk-swi-foot__btns">
+      {step === 0 && <ButtonView variant="ghost" size="sm" onClick={s.close}>Cancel</ButtonView>}
+      {step === 0 && (
+        <ButtonView variant="primary" size="sm" iconLeft={<SearchIcon size={12} />} onClick={s.run}
+          disabled={!s.dir.trim() || s.stage === 'scanning'} loading={s.stage === 'scanning'}>
+          {s.stage === 'error' ? 'Scan again' : 'Scan'}
+        </ButtonView>
+      )}
+      {step > 0 && <ButtonView variant="ghost" size="sm" onClick={() => goTo(step - 1)}>Back</ButtonView>}
+      {step === 1 && (
+        <ButtonView variant="primary" size="sm" onClick={() => setStep(2)} disabled={onCount === 0}>Next: Save to</ButtonView>
+      )}
+      {step === 2 && (
+        <ButtonView variant="primary" size="sm" onClick={proceed} disabled={writing || onCount === 0} loading={writing}>
+          {`Create ${onCount} request${onCount === 1 ? '' : 's'}`}
+        </ButtonView>
+      )}
+      {step === 3 && (
+        <ButtonView variant="primary" size="sm" onClick={applyPlan} disabled={writing || willWrite === 0} loading={writing}>Apply</ButtonView>
+      )}
+    </div>
+  );
+
+  return (
+    <ModalView
+      open
+      onClose={s.close}
+      size="xxl"
+      maxHeight="88vh"
+      noPadding
+      className="dk-swi-modal"
+      bodyStyle={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+      headerColor={ACCENT}
+      headerIcon={<span className="dk-swi-mark" style={{ ['--dk-tone' as string]: ACCENT }}><SearchIcon size={16} /></span>}
+      title="Scan code for requests"
+      subtitle="Reads the routes out of your source. Nothing is run, and nothing leaves this machine."
+      headerRight={<WizardSteps steps={steps} current={step} reachable={reachable} onStep={goTo} />}
+      footerLeft={<span className="dk-swi-foot">{footerLeft}</span>}
+      footerRight={footerRight}
+    >
+      <div className={`dk-swi${step === 0 ? ' dk-swi--fit' : ''}`}>
+        {step === 0 && <SourceStep />}
+
+        {step === 1 && (
+          s.requests.length === 0 ? <FoundNothing /> : (
+            <div className="dk-swi-organize" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(280px, 34%)' }}>
+              <div className="dk-swi-organize__main">
+                <div className="dk-swi-toolbar">
+                  <span className="dk-swi-muted">Group by</span>
+                  <SegmentedControlView size="sm" variant="rounded" value={groupBy} onChange={x => regroup(x as GroupBy)}
+                    options={[{ value: 'tag', label: 'Source file' }, { value: 'path', label: 'Path' }, { value: 'flat', label: 'Flat' }]} />
+                  <span className="dk-swi-muted">Name by</span>
+                  <SegmentedControlView size="sm" variant="rounded" value={nameBy} onChange={x => setNameBy(x as NameBy)}
+                    options={[{ value: 'summary', label: 'Method name' }, { value: 'path', label: 'Method + path' }]} />
+                  <span className="dk-swi-toolbar__end" style={{ alignItems: 'center', gap: 6 }}>
+                    <span onClick={e => e.stopPropagation()} style={{ display: 'inline-flex' }} title={onCount === total ? 'Select none' : 'Select all'}>
+                      <CheckboxView size="sm" checked={onCount === total && total > 0} indeterminate={onCount > 0 && onCount < total}
+                        onChange={() => setArr(a => setOn(a, new Set(a.requests.map(r => r.opId)), onCount !== total))} />
+                    </span>
+                    <IconButtonView size="md" icon={<FolderPlusIcon size={15} />} tooltip="New folder" onClick={() => setArr(a => addFolder(a, null).next)} />
+                  </span>
+                </div>
+                <ArrangeTree
+                  arr={arr}
+                  setArr={setArr}
+                  rootName={name}
+                  onRootName={setName}
+                  total={total}
+                  focusedId={s.focused}
+                  onFocus={id => s.focus(id)}
+                  renderRequest={a => {
+                    const r = byId.get(a.opId)!;
+                    const worst = worstProvenance(r);
+                    const op = asOp(r);
+                    return (
+                      <>
+                        <span className="dk-swi-method" style={{ color: METHOD_COLOR[r.method] }}>{r.method}</span>
+                        <span className="dk-swi-name">{requestName(op, nameBy)}</span>
+                        {nameBy !== 'path' && <code className="dk-swi-path">{op.path}</code>}
+                        <span className="dk-swi-marks" style={nameBy === 'path' ? { marginLeft: 'auto' } : undefined}>
+                          {isInternal(r) && <Mark p={{ kind: 'unknown', why: 'an internal path — listed, not selected' }} label="internal" />}
+                          {worst && <Mark p={worst[1]} label={worst[0] === 'path' ? worst[1].kind : `${worst[0]} ${worst[1].kind}`} />}
+                        </span>
+                      </>
+                    );
+                  }}
+                  footer={s.unresolved.length > 0 && <Unresolved />}
+                />
+              </div>
+              <Detail r={focused} />
+            </div>
+          )
+        )}
+
+        {step === 2 && (
+          <div className="dk-swi-pane dk-swi-save">
+            <section>
+              <DestinationPicker
+                target={target}
+                onTarget={setTarget}
+                newName={name}
+                onNewName={setName}
+                existingHint="The folders you arranged are made inside it. If it already holds requests from an earlier scan, the next step shows what would change before anything does."
+              />
+            </section>
+            <section>
+              <span className="dk-swi-eyebrow">Environment</span>
+              <label className="dk-swi-card dk-swi-env">
+                <CheckboxView size="sm" checked={createEnv} onChange={setCreateEnv} />
+                <div>
+                  <span>Create an environment named <b>{target.kind === 'new' ? destName : target.path[target.path.length - 1]}</b></span>
+                  <code className="dk-swi-small dk-swi-muted">baseUrl = {s.baseUrl?.url ?? 'http://localhost:8080'}</code>
+                  <span className="dk-swi-small dk-swi-muted">
+                    Every request is written against <span className="dk-swi-tok">{'{{baseUrl}}'}</span>. Without an environment holding it, the collection points at nothing until you make one.
+                  </span>
+                </div>
+              </label>
+              <span className="dk-swi-eyebrow" style={{ marginTop: 6 }}>In the sidebar</span>
+              <div className="dk-swi-dest">
+                <FolderOpenIcon size={15} className="dk-swi-folder" />
+                <b>{destName}</b>
+                <span className="dk-swi-count">{onCount} request{onCount === 1 ? '' : 's'}</span>
+              </div>
+              <div className="dk-swi-card dk-swi-preview">
+                {treeRows(arr, true).slice(0, 16).map(row => (row.kind === 'folder' ? (
+                  <div key={`f${row.folder.id}`} style={{ paddingLeft: 8 + row.depth * 16 }} className="dk-swi-prow">
+                    <FolderOpenIcon size={13} className="dk-swi-folder" /><b>{row.folder.name}</b><span className="dk-swi-count">{row.on}</span>
+                  </div>
+                ) : (
+                  <div key={`r${row.request.opId}`} style={{ paddingLeft: 12 + row.depth * 16 }} className="dk-swi-prow">
+                    <span className="dk-swi-method" style={{ color: METHOD_COLOR[byId.get(row.request.opId)!.method] }}>{byId.get(row.request.opId)!.method}</span>
+                    <span className="dk-swi-name">{requestName(asOp(byId.get(row.request.opId)!), nameBy)}</span>
+                  </div>
+                )))}
+                {treeRows(arr, true).length > 16 && <span className="dk-swi-muted dk-swi-small">+ {treeRows(arr, true).length - 16} more</span>}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <ScanReconcile
+              embedded
+              rows={plan}
+              chosen={planChosen}
+              onToggle={(identity) => setPlanChosen(prev => {
+                const next = new Set(prev);
+                if (next.has(identity)) next.delete(identity); else next.add(identity);
+                return next;
+              })}
+              collectionName={destName}
+              onBack={() => setStep(2)}
+              onApply={applyPlan}
+              applying={writing}
             />
           </div>
-        </div>
-      )}
-
-      {/*
-        Where it goes, as its own step.
-
-        It was three controls crammed into the review's footer, which left no
-        room to show the collection tree or the environment — so neither
-        existed, and the workspace was a word rather than a choice.
-      */}
-      {s.stage === 'review' && step === 'destination' && (
-        <div style={{
-          position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
-          background: 'var(--color-panel)',
-        }}>
-          <div style={{ padding: '16px 18px', overflowY: 'auto', flex: 1 }}>
-            <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 600 }}>
-              {s.chosen.size} request{s.chosen.size === 1 ? '' : 's'} — where should they go?
-            </p>
-            <p style={{ margin: '0 0 16px', fontSize: 12, color: 'var(--color-text-muted)' }}>
-              Nothing has been written yet.
-            </p>
-            <ScanDestination
-              destination={destination}
-              onDestination={setDestination}
-              envName={destination.kind === 'new' ? (destination.name || s.collectionName) : destination.name}
-              createEnv={createEnv}
-              onCreateEnv={setCreateEnv}
-              baseUrl={s.baseUrl?.url}
-              defaultName={s.collectionName}
-            />
-          </div>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
-            borderTop: '1px solid var(--color-surface-border)',
-          }}>
-            <ButtonView label="Back" size="sm" variant="secondary" onClick={() => setStep('review')} />
-            <span style={{ flex: 1 }} />
-            <ButtonView label="Cancel" size="sm" variant="secondary" onClick={s.close} />
-            <ButtonView
-              label={writing ? 'Creating…' : `Create ${s.chosen.size} request${s.chosen.size === 1 ? '' : 's'}`}
-              size="sm" variant="secondary" accentColor={ACCENT} color={ACCENT}
-              disabled={writing || s.chosen.size === 0}
-              onClick={proceed}
-            />
-          </div>
-        </div>
-      )}
-
-      {s.stage === 'review' && step === 'reconcile' && (
-        <div style={{
-          position: 'absolute', inset: 0, background: 'var(--color-panel)',
-        }}>
-          <ScanReconcile
-            rows={plan}
-            chosen={planChosen}
-            onToggle={(identity) => setPlanChosen(prev => {
-              const next = new Set(prev);
-              if (next.has(identity)) next.delete(identity); else next.add(identity);
-              return next;
-            })}
-            collectionName={destination.kind === 'existing' ? destination.name : s.collectionName}
-            onBack={() => setStep('destination')}
-            onApply={applyPlan}
-            applying={writing}
-          />
-        </div>
-      )}
+        )}
       </div>
     </ModalView>
   );
@@ -624,80 +559,49 @@ function withBlank(rows: { key: string; value: string; enabled: boolean }[]) {
   ];
 }
 
-function Summary() {
-  const s = useScanStore();
+/**
+ * A scan that found nothing, and why that might be.
+ *
+ * The usual reason is the folder. But a detector turned off in Settings
+ * produces exactly the same empty screen from a repository full of endpoints,
+ * so when the list is filtered the screen says so and offers the way back.
+ */
+function FoundNothing() {
+  const prefs = useUiStateStore(s => s.prefs);
+  const chosen = detectorPrefs(prefs[SCAN_DETECTORS_KEY]);
+  const off = DETECTOR_IDS.filter(id => !chosen.includes(id));
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-      padding: '10px 14px', borderBottom: '1px solid var(--color-surface-border)',
-      fontSize: 11.5, color: 'var(--color-text-muted)',
-    }}>
-      <span style={{ color: 'var(--color-text-primary)' }}>
-        {s.requests.length} endpoint{s.requests.length === 1 ? '' : 's'}
-      </span>
-      <span>· {s.filesWalked} files · {s.ms}ms</span>
-      {/* Each framework in its own colour, the same one the source screen lit. */}
-      {s.detected.map(d => {
-        const tone = DETECTOR_COLORS[d.id as DetectorId] ?? ACCENT;
-        return (
-          <span key={d.id} style={{
-            fontSize: 10, padding: '2px 8px', borderRadius: 999,
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-            color: tone,
-            background: `color-mix(in srgb, ${tone} 13%, transparent)`,
-            border: `1px solid color-mix(in srgb, ${tone} 28%, transparent)`,
-          }}>
-            <span style={{ width: 5, height: 5, borderRadius: 999, background: tone }} />
-            {d.label}
-          </span>
-        );
-      })}
-      <span style={{ flex: 1 }} />
-      {s.baseUrl && (
-        <span title="Every request is written against this as a collection variable"
-              style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 11 }}>
-          {'{{baseUrl}}'} = {s.baseUrl.url}
-        </span>
+    <div className="dk-swi-empty">
+      <h3>No endpoints here</h3>
+      <p className="dk-swi-muted">
+        Nothing in this folder declares a route that daakia recognises. If you pointed it at a
+        parent directory, try the service itself &mdash; the walk stops at the file cap, and a
+        repository&rsquo;s controllers can be deeper than that.
+      </p>
+      {off.length > 0 && (
+        <p className="dk-swi-warn">
+          {off.map(id => DETECTOR_LABELS[id]).join(', ')} {off.length === 1 ? 'is' : 'are'} turned off in
+          Settings &rarr; Code Scan, so this scan did not look for {off.length === 1 ? 'it' : 'them'}.{' '}
+          <button type="button" className="dk-swi-link" onClick={() => {
+            useUiStateStore.getState().setPref(SCAN_DETECTORS_KEY, '');
+            useScanStore.getState().run();
+          }}>Turn all back on and scan again</button>
+        </p>
       )}
-      <ButtonView label="Select all" size="xs" variant="secondary" onClick={() => s.toggleAll(true)} />
-      <ButtonView label="None" size="xs" variant="secondary" onClick={() => s.toggleAll(false)} />
     </div>
   );
 }
 
-function UnresolvedGroup() {
+/** Endpoints daakia can see exist and could not name — listed, not dropped. */
+function Unresolved() {
   const unresolved = useScanStore(s => s.unresolved);
   return (
-    <div>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 7, padding: '6px 12px',
-        background: 'var(--color-surface)',
-        borderBottom: '1px solid var(--color-surface-border)',
-        fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5,
-        color: 'var(--color-warning)',
-      }}>
-        Could not be read
-        <span style={{ marginLeft: 'auto' }}>{unresolved.length}</span>
-      </div>
+    <div className="dk-swi-unresolved">
+      <b>Could not be read · {unresolved.length}</b>
       {unresolved.map((u, i) => (
-        <div key={i} style={{
-          display: 'flex', alignItems: 'center', gap: 9, padding: '6px 12px 6px 34px',
-          borderBottom: '1px solid color-mix(in srgb, var(--color-surface-border) 55%, transparent)',
-          fontSize: 11.5,
-        }}>
-          <span style={{ fontFamily: 'var(--font-mono, monospace)', color: 'var(--color-text-secondary)' }}>
-            {u.expression}
-          </span>
-          <span style={{ flex: 1 }} />
-          <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono, monospace)' }}>
-            {u.source.file.split('/').pop()}:{u.source.line}
-          </span>
-        </div>
+        <div key={i}><code>{u.expression}</code><span>{u.source.file.split('/').pop()}:{u.source.line}</span></div>
       ))}
-      <div style={{ padding: '9px 12px 12px 34px', fontSize: 11, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
-        These are endpoints daakia can see exist and could not name — a path built at runtime, or a
-        constant it could not follow. They are listed rather than dropped so you know they are there.
-      </div>
+      <p className="dk-swi-muted dk-swi-small">A path built at runtime, or a constant it could not follow. Listed so you know they are there.</p>
     </div>
   );
 }
@@ -705,39 +609,29 @@ function UnresolvedGroup() {
 function Detail({ r }: { r?: ScannedRequest }) {
   if (!r) {
     return (
-      <div style={{ padding: 16, fontSize: 11.5, color: 'var(--color-text-muted)' }}>
-        Select an endpoint to see what was read and what was inferred.
-      </div>
+      <aside className="dk-swi-detail">
+        <span className="dk-swi-eyebrow">How daakia knows</span>
+        <p className="dk-swi-muted">Click a request to see what was read from the source and what was inferred.</p>
+      </aside>
     );
   }
   const prov = r.scan.provenance;
   return (
-    <div style={{ padding: '12px 14px', overflowY: 'auto' }}>
-      <Section title="Request" />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <Method m={r.method} />
-        <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 11, wordBreak: 'break-all' }}>
-          {r.url}
-        </span>
+    <aside className="dk-swi-detail">
+      <span className="dk-swi-eyebrow">Request</span>
+      <div className="dk-swi-dest">
+        <span className="dk-swi-method" style={{ color: METHOD_COLOR[r.method], width: 'auto' }}>{r.method}</span>
+        <code style={{ overflowWrap: 'anywhere' }}>{r.url}</code>
       </div>
 
       {r.params.length > 0 && (
         <>
-          <Section title="Query" />
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) auto',
-            columnGap: 10, rowGap: 3, marginBottom: 12,
-            fontFamily: 'var(--font-mono, monospace)', fontSize: 11, alignItems: 'baseline',
-          }}>
+          <span className="dk-swi-eyebrow">Query</span>
+          <div className="dk-swi-grid">
             {r.params.map(p => (
               <Fragment key={p.key}>
-                <span style={{ color: 'var(--color-text-muted)' }}>{p.key}</span>
-                <span style={{ overflowWrap: 'anywhere' }}>
-                  {p.value || <em style={{ color: 'var(--color-text-muted)' }}>empty</em>}
-                </span>
-                <span style={{ color: 'var(--color-text-muted)', fontSize: 10 }}>
-                  {p.enabled ? '' : 'optional'}
-                </span>
+                <span>{p.key}</span>
+                <span>{p.value || <em className="dk-swi-muted">empty</em>}{p.enabled ? '' : <span className="dk-swi-muted"> · optional</span>}</span>
               </Fragment>
             ))}
           </div>
@@ -746,18 +640,12 @@ function Detail({ r }: { r?: ScannedRequest }) {
 
       {r.headers.length > 0 && (
         <>
-          <Section title="Headers" />
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)',
-            columnGap: 10, rowGap: 3, marginBottom: 12,
-            fontFamily: 'var(--font-mono, monospace)', fontSize: 11, alignItems: 'baseline',
-          }}>
+          <span className="dk-swi-eyebrow">Headers</span>
+          <div className="dk-swi-grid">
             {r.headers.map(h => (
               <Fragment key={h.key}>
-                <span style={{ color: 'var(--color-text-muted)' }}>{h.key}</span>
-                <span style={{ overflowWrap: 'anywhere' }}>
-                  {h.value || <em style={{ color: 'var(--color-text-muted)' }}>empty</em>}
-                </span>
+                <span>{h.key}</span>
+                <span>{h.value || <em className="dk-swi-muted">empty</em>}</span>
               </Fragment>
             ))}
           </div>
@@ -766,62 +654,40 @@ function Detail({ r }: { r?: ScannedRequest }) {
 
       {r.bodyRaw && (
         <>
-          <Section title="Body" mark={prov.body} />
+          <span className="dk-swi-eyebrow">Body {prov.body && <Mark p={prov.body} />}</span>
           <Json text={r.bodyRaw} />
         </>
       )}
 
-      <Section title="How daakia knows" />
-      {/*
-        A grid, not a row of flexed spans.
-
-        Flexed, every marker sat at a different x because each label is a
-        different width, and the wrapped second line of a long explanation ran
-        back under the marker. Three columns — marker, field, why — give the
-        markers a rail to line up on and the text a column to wrap inside.
-      */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'auto auto minmax(0, 1fr)',
-        columnGap: 8, rowGap: 5, alignItems: 'baseline',
-        fontSize: 10.5, color: 'var(--color-text-muted)', lineHeight: 1.6,
-      }}>
+      <span className="dk-swi-eyebrow">How daakia knows</span>
+      <div className="dk-swi-how">
         {Object.entries(prov).map(([field, p]) => p && (
           <Fragment key={field}>
             <Mark p={p} />
-            <span style={{ color: 'var(--color-text-secondary)' }}>{field}</span>
+            <span>{field}</span>
             <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{describe(p)}</span>
           </Fragment>
         ))}
       </div>
-      <div style={{
-        marginTop: 10, paddingTop: 9, borderTop: '1px solid var(--color-surface-border)',
-        fontFamily: 'var(--font-mono, monospace)', fontSize: 10,
-        color: 'var(--color-text-muted)', overflowWrap: 'anywhere',
-      }}>{r.scan.source}</div>
-    </div>
+      <div className="dk-swi-src">{r.scan.source}</div>
+    </aside>
   );
 }
 
 /**
- * A generated body, highlighted the way the body editor will highlight it.
- *
- * It is going to become a request body in a moment, and seeing it in plain
- * grey here and coloured there makes the review feel like a different tool
- * from the thing it is feeding.
+ * A generated body, highlighted the way the body editor will highlight it —
+ * it is about to become one.
  */
 function Json({ text }: { text: string }) {
   const html = useMemo(() => {
     try {
       return hljs.highlight(text, { language: 'json' }).value;
     } catch {
-      /* A body that is not valid JSON is still worth showing — unhighlighted
-         rather than not at all. */
       return escapeHtml(text);
     }
   }, [text]);
   return (
-    <pre className="dk-hl" style={{ marginBottom: 12, maxHeight: 220 }}>
+    <pre className="dk-hl">
       <code dangerouslySetInnerHTML={{ __html: html }} />
     </pre>
   );
@@ -831,29 +697,19 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] ?? c));
 }
 
-function Section({ title, mark }: { title: string; mark?: Provenance }) {
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4,
-      fontSize: 9.5, letterSpacing: '.1em', textTransform: 'uppercase',
-      color: 'var(--color-text-muted)',
-    }}>
-      {title}
-      {mark && <Mark p={mark} />}
-    </div>
-  );
+/** Windows paths differ in case and slashes without being different folders. */
+function samePath(a: string, b: string): boolean {
+  const norm = (p: string) => p.trim().replace(/[\\/]+$/, '').replace(/\\/g, '/').toLowerCase();
+  return norm(a) === norm(b);
 }
 
 function SourceStep() {
   const s = useScanStore();
 
   /*
-    Look at the folder as it is typed, not when the field is left.
-
-    Waiting for blur meant somebody could paste a path, read "No framework
-    recognised there yet", and conclude the scan would find nothing — because
-    nothing had looked yet. The check is one manifest read, so it can afford to
-    run while they are still deciding.
+    Look at the folder as it is typed, not when the field is left — otherwise
+    somebody pastes a path, reads "nothing recognised", and concludes the scan
+    would find nothing because nothing had looked yet.
   */
   useEffect(() => {
     const dir = s.dir.trim();
@@ -866,6 +722,12 @@ function SourceStep() {
   const workspaces = useWorkspaceStore(w => w.workspaces);
   const activeId = useWorkspaceStore(w => w.activeId);
   const workspacePath = workspaces.find(w => w.id === activeId)?.path;
+  const suggestions: { name: string; path: string; from: 'editor' | 'workspace' }[] = [
+    ...s.editorFolders.map(f => ({ ...f, from: 'editor' as const })),
+    ...(workspacePath && !s.editorFolders.some(f => samePath(f.path, workspacePath))
+      ? [{ name: workspacePath.split(/[\\/]/).filter(Boolean).pop() ?? workspacePath, path: workspacePath, from: 'workspace' as const }]
+      : []),
+  ];
 
   const prefs = useUiStateStore(p => p.prefs);
   const enabled = detectorPrefs(prefs[SCAN_DETECTORS_KEY]);
@@ -873,282 +735,105 @@ function SourceStep() {
   const looked = !!s.dir.trim();
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {/* The pitch and the guarantee as one band, rather than a paragraph of grey. */}
-      <div style={{
-        display: 'flex', gap: 14, padding: '18px 20px 16px',
-        background: `linear-gradient(135deg,
-          color-mix(in srgb, ${ACCENT} 9%, transparent),
-          color-mix(in srgb, ${ACCENT} 2%, transparent) 60%,
-          transparent)`,
-        borderBottom: '1px solid var(--color-surface-border)',
-      }}>
-        <span style={{
-          width: 42, height: 42, borderRadius: 12, flexShrink: 0,
-          display: 'grid', placeItems: 'center',
-          background: `color-mix(in srgb, ${ACCENT} 15%, var(--color-surface))`,
-          border: `1px solid color-mix(in srgb, ${ACCENT} 30%, transparent)`,
-        }}>
-          <SearchIcon size={20} color={ACCENT} />
-        </span>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7, minWidth: 0 }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)' }}>
-            Point it at a repository
-          </span>
-          <span style={{ fontSize: 11.5, lineHeight: 1.55, color: 'var(--color-text-secondary)', maxWidth: '68ch' }}>
-            daakia reads the route declarations out of your source and turns them into a collection
-            you review before anything is saved.
-          </span>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 1 }}>
-            <Pill tone="var(--color-success)">Read-only</Pill>
-            <Pill tone="var(--color-success)">Nothing is run</Pill>
-            <Pill tone="var(--color-success)">Stays on this machine</Pill>
-          </div>
+    <div className="dk-swi-pane">
+      <label className="dk-swi-label" htmlFor="dk-scan-dir">Folder to scan</label>
+      <div className="dk-swi-urlrow">
+        <TextInputView
+          id="dk-scan-dir"
+          value={s.dir}
+          onChange={e => s.setDir(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && s.dir.trim()) s.run(); }}
+          placeholder={PLACEHOLDER_PATH}
+          iconLeft={<FolderOpenIcon size={14} />}
+          size="lg"
+          width="fullWidth"
+          autoFocus
+          spellCheck={false}
+        />
+        <ButtonView className="flex-shrink-0" variant="secondary" size="lg" iconLeft={<FolderOpenIcon size={13} />} onClick={s.pickFolder}>
+          Browse
+        </ButtonView>
+      </div>
+      {/*
+        The folders open in the editor first — the repository somebody wants
+        scanned is usually the one they are looking at — then the folder
+        this daakia workspace is tied to, if it has one.
+      */}
+      {suggestions.length > 0 && (
+        <div className="dk-swi-chips">
+          <span className="dk-swi-small dk-swi-muted">Open here</span>
+          {suggestions.map(f => (
+            <button
+              key={f.path}
+              type="button"
+              className={`dk-swi-chip${samePath(f.path, s.dir) ? ' is-on' : ''}`}
+              title={f.path}
+              onClick={() => { s.setDir(f.path); s.inspect(f.path); }}
+            >
+              <FolderOpenIcon size={12} />{f.name}
+              {f.from === 'workspace' && <span className="dk-swi-small dk-swi-muted">workspace</span>}
+            </button>
+          ))}
         </div>
+      )}
+      <div className="dk-swi-hints">
+        <span>Read-only. Nothing is run, and nothing leaves this machine.</span>
       </div>
 
-      <div style={{ padding: '16px 20px 6px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <Field label="Folder to scan">
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ flex: 1 }}>
-              <TextInputView
-                value={s.dir}
-                onChange={e => s.setDir(e.target.value)}
-                placeholder={PLACEHOLDER_PATH}
-                size="sm" width="fullWidth" accentColor={ACCENT}
-              />
-            </span>
-            <ButtonView label="Browse…" size="sm" variant="secondary"
-                        iconLeft={<FolderOpenIcon size={13} />} onClick={s.pickFolder} />
-          </div>
-          {workspacePath && workspacePath !== s.dir && (
-            <button
-              type="button"
-              onClick={() => { s.setDir(workspacePath); s.inspect(workspacePath); }}
-              style={{
-                alignSelf: 'flex-start', cursor: 'pointer', fontSize: 11,
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-                padding: '3px 9px', borderRadius: 999,
-                color: ACCENT,
-                background: `color-mix(in srgb, ${ACCENT} 11%, transparent)`,
-                border: `1px solid color-mix(in srgb, ${ACCENT} 26%, transparent)`,
-              }}
-            >
-              <FolderOpenIcon size={11} />
-              Use this workspace&rsquo;s folder
-            </button>
-          )}
-        </Field>
-
+      <div className="dk-swi-field">
+        <span className="dk-swi-eyebrow">{looked ? 'Recognised here' : 'What it looks for'}</span>
         {/*
-          All six, always — lit when this folder has one, dim when it does not,
-          and plainly marked when Settings has one turned off.
-
-          Listing only what was recognised meant an empty row said nothing at
-          all: not what daakia can find, and not that a parser was switched off
-          somewhere else and is the reason this repository looks empty.
+          All of them, always — lit when this folder has one, dim when it does
+          not, and plainly marked when Settings has one turned off, because a
+          parser switched off last month looks exactly like an empty repository.
         */}
-        <Field label={looked ? 'Recognised here' : 'What it looks for'}>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {DETECTOR_IDS.map(id => (
-              <FrameworkChip
+        <div className="dk-swi-chips">
+          {DETECTOR_IDS.map(id => {
+            const state = !enabled.includes(id) ? 'off' : found.has(id) ? 'found' : 'idle';
+            return (
+              <span
                 key={id}
-                id={id}
-                state={!enabled.includes(id) ? 'off' : found.has(id) ? 'found' : 'idle'}
-              />
-            ))}
-          </div>
-
-          {s.manifests.length > 0 && (
-            <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              by
-              {s.manifests.slice(0, 3).map(m => (
-                <code key={m} style={{ fontFamily: 'var(--font-mono, monospace)', color: 'var(--color-text-secondary)' }}>
-                  {m}
-                </code>
-              ))}
-            </span>
-          )}
-
-          {looked && s.detected.length === 0 && (
-            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', lineHeight: 1.5, maxWidth: '68ch' }}>
-              Nothing recognised there yet — daakia looks for a manifest
-              (<code style={{ fontFamily: 'var(--font-mono, monospace)' }}>pom.xml</code>,{' '}
-              <code style={{ fontFamily: 'var(--font-mono, monospace)' }}>build.gradle</code>,{' '}
-              <code style={{ fontFamily: 'var(--font-mono, monospace)' }}>package.json</code>) before it opens
-              a single source file. You can scan anyway.
-            </span>
-          )}
-        </Field>
-
-        {s.profiles.length > 0 && (
-          <Field label="Configuration profile">
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-              <Chip on={!s.profile} onClick={() => s.setProfile(undefined)}>application</Chip>
-              {s.profiles.map(p => (
-                <Chip key={p} on={s.profile === p} onClick={() => s.setProfile(p)}>{p}</Chip>
-              ))}
-              <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 4 }}>
-                Chosen, not merged — profiles disagree on purpose.
+                className={`dk-swi-chip${state === 'found' ? ' is-found' : ''}${state === 'off' ? ' is-off' : ''}`}
+                style={{ ['--mk' as string]: DETECTOR_COLORS[id] }}
+                title={state === 'off' ? 'Turned off in Settings → Code Scan' : undefined}
+              >
+                <span className="dk-swi-chip__dot" />
+                {state === 'off' ? <s>{DETECTOR_LABELS[id]}</s> : DETECTOR_LABELS[id]}
+                {state === 'found' && <CheckIcon size={11} />}
+                {state === 'off' && <span className="dk-swi-small">off</span>}
               </span>
-            </div>
-          </Field>
+            );
+          })}
+        </div>
+        {s.manifests.length > 0 && (
+          <span className="dk-swi-small dk-swi-muted">by {s.manifests.slice(0, 3).map(m => <code key={m} style={{ marginRight: 6 }}>{m}</code>)}</span>
+        )}
+        {looked && s.detected.length === 0 && (
+          <p className="dk-swi-note"><InfoCircleIcon size={13} />Nothing recognised there yet. daakia looks for a manifest (<code>pom.xml</code>, <code>build.gradle</code>, <code>package.json</code>) before it opens a source file. You can scan anyway.</p>
         )}
       </div>
 
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '12px 20px', marginTop: 8,
-        borderTop: '1px solid var(--color-surface-border)',
-      }}>
-        <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-          {enabled.length < DETECTOR_IDS.length
-            ? `${enabled.length} of ${DETECTOR_IDS.length} parsers enabled in Settings`
-            : 'Reads files. Writes nothing.'}
-        </span>
-        <span style={{ flex: 1 }} />
-        <ButtonView label="Cancel" size="sm" variant="secondary" onClick={s.close} />
-        <ButtonView label="Scan" size="sm" variant="secondary" accentColor={ACCENT} color={ACCENT}
-                    disabled={!s.dir.trim()} onClick={s.run} />
-      </div>
-    </div>
-  );
-}
-
-/** A stated fact, not a control — so it never looks clickable. */
-function Pill({ tone, children }: { tone: string; children: React.ReactNode }) {
-  return (
-    <span style={{
-      fontSize: 10, padding: '2px 8px', borderRadius: 999,
-      display: 'inline-flex', alignItems: 'center', gap: 4,
-      color: tone,
-      background: `color-mix(in srgb, ${tone} 12%, transparent)`,
-      border: `1px solid color-mix(in srgb, ${tone} 26%, transparent)`,
-    }}>
-      <span style={{ width: 4, height: 4, borderRadius: 999, background: tone }} />
-      {children}
-    </span>
-  );
-}
-
-/**
- * One framework, in its own colour.
- *
- * Three states rather than two: found here, not found here, and switched off
- * in Settings — which is a different thing and the one somebody needs told,
- * because a parser turned off last month looks exactly like a repository with
- * no endpoints in it.
- */
-function FrameworkChip({ id, state }: { id: DetectorId; state: 'found' | 'idle' | 'off' }) {
-  const tone = DETECTOR_COLORS[id];
-  const label = DETECTOR_LABELS[id];
-
-  if (state === 'off') {
-    return (
-      <span
-        title="Turned off in Settings → Code Scan"
-        style={{
-          fontSize: 11, padding: '3px 9px', borderRadius: 999,
-          display: 'inline-flex', alignItems: 'center', gap: 5,
-          color: 'var(--color-text-muted)',
-          border: '1px dashed var(--color-surface-border)',
-          opacity: 0.75,
-        }}
-      >
-        <span style={{ textDecoration: 'line-through' }}>{label}</span>
-        <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.04em' }}>off</span>
-      </span>
-    );
-  }
-
-  const found = state === 'found';
-  return (
-    <span style={{
-      fontSize: 11, padding: '3px 9px', borderRadius: 999,
-      display: 'inline-flex', alignItems: 'center', gap: 5,
-      color: found ? tone : 'var(--color-text-muted)',
-      background: found ? `color-mix(in srgb, ${tone} 14%, transparent)` : 'transparent',
-      border: `1px solid ${found
-        ? `color-mix(in srgb, ${tone} 34%, transparent)`
-        : 'var(--color-surface-border)'}`,
-      transition: 'color 140ms, background 140ms, border-color 140ms',
-    }}>
-      <span style={{
-        width: 6, height: 6, borderRadius: 999,
-        background: found ? tone : 'var(--color-surface-border)',
-        boxShadow: found ? `0 0 0 2px color-mix(in srgb, ${tone} 22%, transparent)` : undefined,
-      }} />
-      {label}
-      {found && <CheckIcon size={11} />}
-    </span>
-  );
-}
-
-function ScanningStep() {
-  const s = useScanStore();
-  return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center',
-      padding: '44px 20px 40px', gap: 4,
-    }}>
-      <div style={{
-        width: 64, height: 64, borderRadius: 17, display: 'grid', placeItems: 'center',
-        marginBottom: 12,
-        background: `color-mix(in srgb, ${ACCENT} 11%, var(--color-surface))`,
-        border: `1px solid color-mix(in srgb, ${ACCENT} 22%, transparent)`,
-      }}>
-        <SearchIcon size={26} color={ACCENT} />
-      </div>
-      <span style={{ fontSize: 13.5, fontWeight: 600 }}>Reading {s.dir.split(/[\\/]/).pop()}</span>
-      <span style={{ fontSize: 11.5, color: 'var(--color-text-muted)', textAlign: 'center', maxWidth: '62ch' }}>
-        Resolving custom annotations first, then the controllers that use them.
-      </span>
-
-      {/* The file it is on — the commonest scan failure is the wrong folder, and
-          the only other symptom is a short list at the end. */}
-      <div style={{
-        marginTop: 16, width: 'min(94%, 560px)',
-        background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)',
-        borderRadius: 7, padding: '11px 13px', display: 'flex', flexDirection: 'column', gap: 7,
-      }}>
-        <div style={{
-          fontFamily: 'var(--font-mono, monospace)', fontSize: 11,
-          background: 'var(--color-surface-hover)', borderRadius: 4, padding: '7px 11px',
-          whiteSpace: 'nowrap', overflowX: 'auto', color: 'var(--color-text-primary)',
-        }}>
-          <span style={{ color: ACCENT }}>›</span> {s.progress?.file ?? 'walking the tree…'}
+      {s.profiles.length > 0 && (
+        <div className="dk-swi-field">
+          <span className="dk-swi-eyebrow">Configuration profile</span>
+          <div className="dk-swi-chips">
+            <button type="button" className={`dk-swi-chip${!s.profile ? ' is-on' : ''}`} onClick={() => s.setProfile(undefined)}>application</button>
+            {s.profiles.map(p => (
+              <button type="button" key={p} className={`dk-swi-chip${s.profile === p ? ' is-on' : ''}`} onClick={() => s.setProfile(p)}>{p}</button>
+            ))}
+            <span className="dk-swi-small dk-swi-muted">Chosen, not merged — profiles disagree on purpose.</span>
+          </div>
         </div>
-        <div style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 10.5, color: 'var(--color-text-muted)' }}>
-          {s.progress?.filesWalked ?? 0} files · {s.progress?.found ?? 0} endpoints
+      )}
+
+      {s.stage === 'scanning' && (
+        <div className="dk-swi-card dk-swi-scanning">
+          <span><b>Reading {s.dir.split(/[\\/]/).pop()}</b> <span className="dk-swi-muted">· custom annotations first, then the controllers that use them</span></span>
+          <code>{s.progress?.file ?? 'walking the tree…'}</code>
+          <span className="dk-swi-small dk-swi-muted">{s.progress?.filesWalked ?? 0} files · {s.progress?.found ?? 0} endpoints</span>
         </div>
-      </div>
+      )}
+      {s.stage === 'error' && <p className="dk-swi-error" role="alert">The scan could not be completed. {s.error}</p>}
     </div>
   );
 }
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-      <span style={{
-        fontSize: 10.5, letterSpacing: '.07em', textTransform: 'uppercase',
-        color: 'var(--color-text-muted)',
-      }}>{label}</span>
-      {children}
-    </div>
-  );
-}
-
-function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button type="button" onClick={onClick} style={{
-      fontSize: 11.5, padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
-      color: on ? ACCENT : 'var(--color-text-muted)',
-      background: on ? `color-mix(in srgb, ${ACCENT} 14%, transparent)` : 'none',
-      border: `1px solid ${on ? `color-mix(in srgb, ${ACCENT} 30%, transparent)` : 'var(--color-surface-border)'}`,
-    }}>{children}</button>
-  );
-}
-
-/* Imported for the icon set's side effects on tree shaking; referenced so the
-   linter does not remove what the design calls for later. */
-void FolderOpenIcon; void RefreshIcon; void CopyButtonView;

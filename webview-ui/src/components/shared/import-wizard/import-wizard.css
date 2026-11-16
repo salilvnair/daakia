@@ -1,4 +1,4 @@
-/* Import from Swagger URL. Every colour is a theme token, so it follows the
+/* The import wizards (Swagger URL, Scan code) share this frame. Every colour is a theme token, so it follows the
    app's theme; nothing here restates a dui rule. */
 
 .dk-swi { display: flex; flex-direction: column; flex: none; height: min(600px, 68vh); color: var(--color-text-primary); font-size: 13px; }
@@ -16,7 +16,7 @@
 .dk-swi-eyebrow { font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); }
 .dk-swi-tok { font-family: var(--font-mono); font-size: 12px; color: var(--color-scratchpad); background: color-mix(in srgb, var(--color-scratchpad) 13%, transparent); border-radius: 4px; padding: 0 4px; }
 .dk-swi-card { border: 1px solid var(--color-surface-border); background: color-mix(in srgb, var(--color-panel) 60%, var(--color-surface)); border-radius: 10px; }
-.dk-swi-mark { width: 30px; height: 30px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; color: var(--color-success); background: color-mix(in srgb, var(--color-success) 14%, transparent); }
+.dk-swi-mark { width: 30px; height: 30px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; color: var(--dk-tone, var(--color-success)); background: color-mix(in srgb, var(--dk-tone, var(--color-success)) 14%, transparent); }
 .dk-swi-foot { font-size: 12px; color: var(--color-text-muted); }
 .dk-swi-foot__btns { display: flex; gap: 8px; }
 
@@ -91,7 +91,10 @@
 .dk-swi-method { flex: none; width: 50px; font: 600 10.5px var(--font-mono); letter-spacing: 0.02em; }
 .dk-swi-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dk-swi-dep { flex: none; font-size: 10.5px; color: var(--color-warning); border: 1px solid color-mix(in srgb, var(--color-warning) 40%, transparent); border-radius: 4px; padding: 0 5px; }
-.dk-swi-path { margin-left: auto; padding-left: 12px; color: var(--color-text-muted); white-space: nowrap; font-size: 11.5px !important; }
+.dk-swi-path { margin-left: auto; padding-left: 12px; color: var(--color-text-muted); white-space: nowrap; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 11.5px !important; }
+/* In a tree row the name keeps a readable width; the path gives way first. */
+.dk-swi-row .dk-swi-name { flex: 1 1 auto; min-width: 90px; }
+.dk-swi-toolbar > .dk-swi-muted { white-space: nowrap; }
 .dk-swi-droproot { margin: 8px 6px 0; height: 32px; border: 1px dashed var(--color-surface-border); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--color-text-muted); }
 .dk-swi-droproot.is-over { border-color: var(--color-primary-hover); color: var(--color-text-primary); background: color-mix(in srgb, var(--color-primary) 10%, transparent); }
 .dk-swi-aside { padding: 18px; display: flex; flex-direction: column; gap: 10px; background: color-mix(in srgb, var(--color-panel) 60%, transparent); overflow: auto; }
@@ -140,3 +143,71 @@
 @media (prefers-reduced-motion: reduce) { .dk-swi-found, .dk-swi-done { animation: none; } }
 .dk-swi-warn { color: var(--color-warning); }
 .dk-swi-toolbar__end { margin-left: auto; display: flex; }
+
+/* row extras: a focused row (the scan's detail panel follows it) and its marks */
+.dk-swi-row.is-focused { background: color-mix(in srgb, var(--color-primary) 10%, transparent); }
+.dk-swi-row--click { cursor: pointer; }
+.dk-swi-marks { display: flex; gap: 4px; flex: none; margin-left: 8px; }
+.dk-swi-mk { font: 10px var(--font-mono); letter-spacing: 0.03em; padding: 1px 6px; border-radius: 4px; white-space: nowrap; color: var(--mk); background: color-mix(in srgb, var(--mk) 13%, transparent); }
+
+/* save to: where it goes */
+.dk-swi-save { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 22px; align-content: start; }
+.dk-swi-save > section { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.dk-swi-field { display: flex; flex-direction: column; gap: 6px; }
+.dk-swi-ws { max-width: 280px; }
+.dk-swi-choices { display: flex; flex-direction: column; gap: 8px; }
+.dk-swi-choice { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--color-surface-border); background: var(--color-surface); transition: border-color 0.12s, background 0.12s; }
+.dk-swi-choice:not(.is-on) { cursor: pointer; }
+.dk-swi-choice:not(.is-on):hover { border-color: var(--color-input-border); }
+.dk-swi-choice.is-on { border-color: color-mix(in srgb, var(--color-primary) 70%, transparent); background: color-mix(in srgb, var(--color-primary) 7%, var(--color-surface)); }
+.dk-swi-choice__head { display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 0; color: var(--color-text-primary); font: inherit; text-align: left; cursor: inherit; }
+.dk-swi-choice__head b { font-size: 13px; font-weight: 600; }
+.dk-swi-radio { width: 16px; height: 16px; flex: none; border-radius: 50%; border: 1.5px solid var(--color-surface-border); display: inline-flex; align-items: center; justify-content: center; }
+.dk-swi-choice.is-on .dk-swi-radio { border-color: var(--color-primary); }
+.dk-swi-choice.is-on .dk-swi-radio::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--color-primary); }
+.dk-swi-picker { border: 1px solid var(--color-surface-border); border-radius: 8px; background: var(--color-input-bg); overflow: hidden; }
+.dk-swi-picker__search { display: flex; align-items: center; gap: 8px; padding: 0 10px; height: 32px; border-bottom: 1px solid var(--color-surface-border); color: var(--color-text-muted); }
+.dk-swi-picker__search input { flex: 1; min-width: 0; height: 100%; border: 0; background: none; outline: none; color: var(--color-text-primary); font: 12.5px var(--font-sans); }
+.dk-swi-picker__list { max-height: 210px; overflow: auto; scrollbar-width: thin; padding: 4px; }
+.dk-swi-picker__empty { padding: 10px; font-size: 12px; color: var(--color-text-muted); }
+.dk-swi-pick { display: flex; align-items: center; gap: 7px; height: 30px; padding-right: 6px; border-radius: 6px; cursor: pointer; font-size: 12.5px; color: var(--color-text-secondary); }
+.dk-swi-pick:hover { background: var(--color-item-hover-bg); }
+.dk-swi-pick.is-on { background: color-mix(in srgb, var(--color-primary) 13%, transparent); color: var(--color-text-primary); }
+.dk-swi-pick .dk-swi-name { flex: 1; }
+.dk-swi-pick .dk-swi-rowbtns { display: flex; gap: 2px; opacity: 0; }
+.dk-swi-pick:hover .dk-swi-rowbtns, .dk-swi-pick:focus-within .dk-swi-rowbtns { opacity: 1; }
+.dk-swi-pick__check { color: var(--color-primary); flex: none; }
+.dk-swi-newrow { display: flex; align-items: center; gap: 8px; padding: 4px 6px; }
+.dk-swi-newrow .dk-swi-input { height: 26px; font-family: var(--font-sans); }
+.dk-swi-env { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; }
+.dk-swi-env > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.dk-swi-dest { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12.5px; }
+
+/* scan: the source step, the detail panel */
+.dk-swi-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dk-swi-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--color-surface-border); color: var(--color-text-muted); background: none; }
+.dk-swi-chip.is-found { color: var(--mk); border-color: color-mix(in srgb, var(--mk) 38%, transparent); background: color-mix(in srgb, var(--mk) 13%, transparent); }
+.dk-swi-chip.is-off { border-style: dashed; opacity: 0.7; }
+button.dk-swi-chip { cursor: pointer; font-family: var(--font-sans); }
+button.dk-swi-chip.is-on { color: var(--color-text-primary); border-color: color-mix(in srgb, var(--color-primary) 60%, transparent); background: color-mix(in srgb, var(--color-primary) 13%, transparent); }
+.dk-swi-chip__dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.8; }
+.dk-swi-scanning { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; }
+.dk-swi-scanning code { display: block; padding: 8px 11px; border-radius: 6px; background: var(--color-surface-hover); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dk-swi-detail { padding: 18px; display: flex; flex-direction: column; gap: 6px; overflow: auto; scrollbar-width: thin; background: color-mix(in srgb, var(--color-panel) 60%, transparent); min-width: 0; }
+.dk-swi-detail .dk-swi-eyebrow { margin-top: 10px; display: flex; align-items: center; gap: 8px; }
+.dk-swi-detail .dk-swi-eyebrow:first-child { margin-top: 0; }
+.dk-swi-detail pre { margin: 0; max-height: 220px; overflow: auto; font-size: 11.5px; }
+.dk-swi-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 12px; font: 12px var(--font-mono); align-items: baseline; }
+.dk-swi-grid > :nth-child(odd) { color: var(--color-text-muted); }
+.dk-swi-grid > span { overflow-wrap: anywhere; }
+.dk-swi-how { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 6px 10px; align-items: baseline; font-size: 12px; color: var(--color-text-muted); line-height: 1.5; }
+.dk-swi-how > :nth-child(3n+2) { color: var(--color-text-secondary); }
+.dk-swi-src { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-surface-border); font: 11px var(--font-mono); color: var(--color-text-muted); overflow-wrap: anywhere; }
+.dk-swi-unresolved { margin: 10px 6px 0; padding: 10px 12px; border-radius: 8px; border: 1px dashed color-mix(in srgb, var(--color-warning) 45%, transparent); display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.dk-swi-unresolved > b { color: var(--color-warning); font-weight: 600; }
+.dk-swi-unresolved > div { display: flex; gap: 12px; }
+.dk-swi-unresolved code { color: var(--color-text-secondary); }
+.dk-swi-unresolved span { margin-left: auto; color: var(--color-text-muted); font: 11px var(--font-mono); }
+.dk-swi-empty { padding: 36px 24px; text-align: center; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.dk-swi-empty p { max-width: 56ch; }
+.dk-swi-baseurl { font: 12px var(--font-mono); color: var(--color-text-muted); white-space: nowrap; }

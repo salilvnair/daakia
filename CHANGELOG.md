@@ -4,6 +4,47 @@ All notable changes to the Daakia API Client extension are documented here.
 
 ---
 
+## [3.4.2] — 2026-11-15
+
+Scan code and the Swagger URL import as one wizard that ends in the same
+place, the folder open in VS Code found for you, Ask AI on GPT-5 and the
+o-series, and sharing a workspace one click away.
+
+### Added
+
+- **Save to, at the end of both imports.** Pick the workspace, then a new
+  collection or a collection or folder you already have. A Swagger import into
+  an existing collection arrives as a folder carrying the auth and variables,
+  which its requests inherit.
+- **Arrange a scan before it is written.** Drag requests between folders, nest
+  and rename folders, group by source file, path or flat, and name requests by
+  method name or method and path. How Daakia knows stays beside the request
+  you click.
+- **The folder open in VS Code**, filled in when Scan code for requests opens,
+  and every open folder (and the workspace's own) offered as one click.
+- **Share with team in the workspace Quick actions**, filled in while the
+  workspace is shared; click again to stop sharing.
+
+### Changed
+
+- **Scan code for requests and Import from Swagger URL are one wizard**: steps
+  along the top, the same buttons, the same folder tree and the same last step.
+- The workspace settings menu is wider, so each line reads on one line.
+
+### Fixed
+
+- **Ask AI on GPT-5 and the o-series.** OpenAI's reasoning models refuse
+  `max_tokens` and a temperature. Daakia sends `max_completion_tokens`, and
+  leaves `temperature` and `top_p` out for those models. An Azure deployment
+  with a name of its own is retried once without what the server refused, and
+  remembered.
+- Scanning into an existing folder no longer moves that folder to the top of
+  the collection tree.
+- A header row's name suggestions are no longer cut off by the dialog they are
+  in — the Swagger import's header table sliced them in half at its footer.
+
+---
+
 ## [3.4.1] — 2026-11-15
 
 Import from a Swagger URL, scratchpads for JSON, XML, YAML, SQL and text, Ask

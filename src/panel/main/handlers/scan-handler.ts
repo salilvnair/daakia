@@ -61,6 +61,34 @@ export async function handleScanPickFolder(
 }
 
 /**
+ * The folders open in the editor — the repository somebody most likely wants
+ * scanned is the one they are looking at.
+ *
+ * Every root of a multi-root workspace, in VS Code's order. Outside the editor
+ * (the browser dev server) there are none, and the folder the server was
+ * started in stands in, the way the GitHub panel guesses its repository.
+ */
+export function handleScanEditorFolders(
+  _msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): void {
+  let folders: { name: string; path: string }[] = [];
+  let inEditor = false;
+  try {
+    const open = vscode.workspace?.workspaceFolders;
+    inEditor = Array.isArray(open);
+    folders = (open ?? []).map(f => ({ name: f.name, path: f.uri.fsPath }));
+  } catch {
+    /* No editor API at all. */
+  }
+  if (!inEditor && !folders.length) {
+    const cwd = process.cwd();
+    folders = [{ name: cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd, path: cwd }];
+  }
+  postMessage({ type: 'scan:editorFolders', folders });
+}
+
+/**
  * What can be known about a folder without committing to a scan.
  *
  * Which detectors recognise it, and which profiles its configuration offers —
