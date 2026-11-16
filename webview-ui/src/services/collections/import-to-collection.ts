@@ -144,3 +144,58 @@ export async function importRequestsAsCollection(opts: {
 
   return rows.length;
 }
+
+/**
+ * Write requests the way an import wizard arranged them: nested folders, in
+ * order, into a new collection or inside one that already exists.
+ *
+ * `importRequestsAsCollection` knows one level of folders and always posts
+ * `createCollection` — which, given the id of a folder that already exists,
+ * is an upsert that moves that folder to the top of the tree. Going into an
+ * existing collection or folder must not touch it, so this never does.
+ *
+ * Folder ids are the wizard's own; each gets a real one here. Parents are made
+ * before their children whatever order they arrive in.
+ */
+export async function importArranged(opts: {
+  protocol: string;
+  into: { kind: 'new'; name: string } | { kind: 'existing'; id: string };
+  folders: { id: string; name: string; parentId: string | null }[];
+  requests: (Record<string, unknown> & { folderId: string | null })[];
+}): Promise<{ rootId: string; saved: number }> {
+  const pause = (ms: number) => new Promise(r => setTimeout(r, ms));
+  const rootId = opts.into.kind === 'existing' ? opts.into.id : crypto.randomUUID();
+  if (opts.into.kind === 'new') {
+    postMsg({ type: 'createCollection', id: rootId, name: opts.into.name, protocol: opts.protocol });
+    await pause(120);
+  }
+
+  const ids = new Map<string, string>();
+  const pending = [...opts.folders];
+  while (pending.length) {
+    const i = pending.findIndex(f => f.parentId === null || ids.has(f.parentId) || !opts.folders.some(x => x.id === f.parentId));
+    const [f] = pending.splice(i === -1 ? 0 : i, 1);
+    const id = crypto.randomUUID();
+    ids.set(f.id, id);
+    postMsg({
+      type: 'createFolder', id, name: f.name.trim() || 'Folder',
+      parentId: (f.parentId && ids.get(f.parentId)) || rootId, protocol: opts.protocol,
+    });
+    await pause(60);
+  }
+
+  for (const r of opts.requests) {
+    const row = toCollectionRequest(r);
+    postMsg({
+      type: 'saveRequestToCollection',
+      collectionId: (r.folderId && ids.get(r.folderId)) || rootId,
+      protocol: opts.protocol,
+      request: { ...row, data: JSON.stringify(row.data) },
+    });
+    await pause(50);
+  }
+
+  await pause(150);
+  postMsg({ type: 'getCollections', protocol: opts.protocol });
+  return { rootId, saved: opts.requests.length };
+}

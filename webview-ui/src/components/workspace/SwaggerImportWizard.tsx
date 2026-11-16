@@ -5,7 +5,8 @@
  *   2. Organize   drag requests and folders into the shape you want.
  *   3. Variables  one environment per server, {{baseUrl}} in every URL, each
  *                 auth scheme reading a secret variable, shared path params.
- *   4. Review     then create.
+ *   4. Save to    which workspace, and a new collection or one you have;
+ *                 then create.
  *
  * Nothing is created until the last step. The spec itself stays on the host
  * (see `openapi-url-handler.ts`); this holds the outline and the arrangement,
@@ -13,21 +14,23 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ModalView, ButtonView, SegmentedControlView, CheckboxView, ToggleSwitchView, IconButtonView, TextInputView,
+  ModalView, ButtonView, SegmentedControlView, ToggleSwitchView, IconButtonView, TextInputView,
 } from '@salilvnair/dui';
 import { KeyValueTable, type KeyValueRow } from '../shared/controls/KeyValueTable';
 import {
-  BracesIcon, CheckIcon, ChevronRightIcon, DragHandleIcon, FolderIcon, FolderPlusIcon, KeyIcon,
-  LinkIcon, LockIcon, PlusIcon, TrashIcon, InfoCircleIcon, CloseIcon, DownloadIcon,
+  BracesIcon, CheckIcon, FolderIcon, FolderPlusIcon, KeyIcon,
+  LinkIcon, LockIcon, PlusIcon, InfoCircleIcon, CloseIcon, DownloadIcon,
 } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useToastStore } from '../../store/toast-store';
 import {
-  arrange, requestName, moveInto, moveBefore, canDropInto, addFolder, unwrapFolder, renameFolder,
-  toggleOpen, setOn, requestsUnder, foldersInUse, treeRows,
-  type Arrangement, type Dragged, type GroupBy, type NameBy, type OutlineOp,
+  arrange, requestName, addFolder, foldersInUse, treeRows,
+  type Arrangement, type GroupBy, type NameBy, type OutlineOp,
 } from '../../services/openapi-url/arrange';
-import './swagger-import.css';
+import { WizardSteps } from '../shared/import-wizard/WizardSteps';
+import { ArrangeTree } from '../shared/import-wizard/ArrangeTree';
+import { DestinationPicker, targetLabel, type Target } from '../shared/import-wizard/DestinationPicker';
+import '../shared/import-wizard/import-wizard.css';
 
 interface OutlineScheme {
   name: string;
@@ -54,7 +57,7 @@ interface Fetched { specUrl: string; status: number; bytes: number; ms: number; 
 interface Env { id: string; name: string; fromSpec: boolean; values: Record<string, string> }
 interface PathVar { name: string; type: string; used: number; shared: boolean; value: string }
 
-const STEPS = ['Source', 'Organize', 'Variables', 'Review'] as const;
+const STEPS = ['Source', 'Organize', 'Variables', 'Save to'] as const;
 const METHOD_COLOR: Record<string, string> = {
   GET: 'var(--color-method-get)', POST: 'var(--color-method-post)', PUT: 'var(--color-method-put)',
   PATCH: 'var(--color-method-patch)', DELETE: 'var(--color-method-delete)', HEAD: 'var(--color-method-head)',
@@ -99,19 +102,18 @@ export function SwaggerImportWizard({ onClose }: { onClose: () => void }) {
   const [nameBy, setNameBy] = useState<NameBy>('summary');
   const [arr, setArr] = useState<Arrangement>({ folders: [], requests: [] });
   const [collectionName, setCollectionName] = useState('');
-  const dragged = useRef<Dragged | null>(null);
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [over, setOver] = useState<string | null>(null);
 
   // 3. Variables
   const [envs, setEnvs] = useState<Env[]>([]);
   const [pathVars, setPathVars] = useState<PathVar[]>([]);
 
-  // 4. Review
+  // 4. Save to
+  const [target, setTarget] = useState<Target>({ kind: 'new' });
   const [creating, setCreating] = useState(false);
-  const [done, setDone] = useState<{ name: string; requests: number; folders: number; envs: string[] } | null>(null);
+  const [done, setDone] = useState<{ name: string; where: string; requests: number; folders: number; envs: string[] } | null>(null);
 
   const pending = useRef<string>('');
+  const whereRef = useRef('');
 
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
@@ -134,9 +136,9 @@ export function SwaggerImportWizard({ onClose }: { onClose: () => void }) {
       if (msg.type === 'openapiUrl:imported') {
         setCreating(false);
         if (!msg.ok) { addToast({ type: 'error', title: 'Import failed', message: String(msg.error ?? 'The import failed.') }); return; }
-        const result = { name: String(msg.name), requests: Number(msg.requestCount), folders: Number(msg.folderCount), envs: (msg.environments as string[]) ?? [] };
+        const result = { name: String(msg.name), where: whereRef.current, requests: Number(msg.requestCount), folders: Number(msg.folderCount), envs: (msg.environments as string[]) ?? [] };
         setDone(result);
-        addToast({ type: 'success', title: 'Collection created', message: `${result.name} — ${result.requests} requests in ${result.folders} folders` });
+        addToast({ type: 'success', title: result.where ? 'Imported' : 'Collection created', message: `${result.name}${result.where ? ` in ${result.where}` : ''} — ${result.requests} requests in ${result.folders} folders` });
       }
     };
     window.addEventListener('message', onMsg);
@@ -162,39 +164,6 @@ export function SwaggerImportWizard({ onClose }: { onClose: () => void }) {
     setArr(arrange(outline.operations, by, new Map(arr.requests.map(r => [r.opId, r.on]))));
   };
 
-  // ── Drag and drop ──
-  const startDrag = (d: Dragged) => (e: React.DragEvent) => {
-    dragged.current = d;
-    e.dataTransfer.effectAllowed = 'move';
-    try { e.dataTransfer.setData('text/plain', d.id); } catch { /* some engines refuse custom data */ }
-    setTimeout(() => setDragId(d.id), 0);
-  };
-  const endDrag = () => { dragged.current = null; setDragId(null); setOver(null); };
-  const overTarget = (key: string, ok: () => boolean) => (e: React.DragEvent) => {
-    if (!dragged.current || !ok()) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (over !== key) setOver(key);
-  };
-  const leave = (key: string) => () => { if (over === key) setOver(null); };
-  /*
-    Read the dragged item before endDrag clears it: React runs the updater
-    later, and an updater reading the ref found null and threw — which took
-    the whole page down on the first drop.
-  */
-  const dropInto = (folderId: string | null) => (e: React.DragEvent) => {
-    e.preventDefault();
-    const d = dragged.current;
-    if (d) setArr(a => moveInto(a, d, folderId));
-    endDrag();
-  };
-  const dropBefore = (opId: string) => (e: React.DragEvent) => {
-    e.preventDefault();
-    const d = dragged.current;
-    if (d) setArr(a => moveBefore(a, d, opId));
-    endDrag();
-  };
-
   // ── Variables ──
   const varRows = useMemo(() => {
     const rows: { key: string; secret: boolean; from: string }[] = [
@@ -213,6 +182,7 @@ export function SwaggerImportWizard({ onClose }: { onClose: () => void }) {
     const rows = treeRows(arr, true);
     const plan = {
       collectionName,
+      parentId: target.kind === 'existing' ? target.id : null,
       folders: usedFolders.map(f => ({ id: f.id, name: f.name, parentId: f.parentId })),
       requests: rows.flatMap(r => (r.kind === 'request'
         ? [{ opId: r.request.opId, folderId: r.request.folderId, name: requestName(ops.get(r.request.opId)!, nameBy) }]
@@ -221,6 +191,7 @@ export function SwaggerImportWizard({ onClose }: { onClose: () => void }) {
       environments: envs.map(e => ({ name: e.name, values: e.values })),
     };
     pending.current = reqId();
+    whereRef.current = target.kind === 'existing' ? targetLabel(target, '') : '';
     setCreating(true);
     postMsg({ type: 'openapiUrl:import', reqId: pending.current, token, plan });
   };
@@ -235,26 +206,11 @@ export function SwaggerImportWizard({ onClose }: { onClose: () => void }) {
     outline ? `${total} operations found · nothing is created until the last step` : 'Paste a spec URL, or the Swagger UI page in front of it',
     `${onCount} of ${total} requests · ${usedFolders.length} folders`,
     `${envs.length} environment${envs.length === 1 ? '' : 's'} · ${pathVars.filter(p => p.shared).length} shared path parameters`,
-    `Creates 1 collection and ${envs.length} environment${envs.length === 1 ? '' : 's'}`,
+    `${target.kind === 'new' ? 'A new collection' : `A folder in ${targetLabel(target, '')}`} and ${envs.length} environment${envs.length === 1 ? '' : 's'}`,
   ][step];
 
   const stepper = (
-    <nav className="dk-swi-steps" aria-label="Steps">
-      {STEPS.map((label, i) => (
-        <span key={label} className="dk-swi-steps__item">
-          {i > 0 && <span className="dk-swi-steps__sep" />}
-          <button
-            type="button"
-            className={`dk-swi-step${i === step && !done ? ' is-current' : ''}${i < step || done ? ' is-past' : ''}`}
-            disabled={!outline || !!done}
-            aria-current={i === step ? 'step' : undefined}
-            onClick={() => setStep(i)}
-          >
-            <span className="dk-swi-step__n">{i < step || done ? <CheckIcon size={11} /> : i + 1}</span>{label}
-          </button>
-        </span>
-      ))}
-    </nav>
+    <WizardSteps steps={STEPS} current={step} reachable={outline ? 3 : 0} finished={!!done} onStep={setStep} />
   );
 
   return (
@@ -278,7 +234,7 @@ export function SwaggerImportWizard({ onClose }: { onClose: () => void }) {
         <div className="dk-swi-foot__btns">
           {step > 0 && <ButtonView variant="ghost" size="sm" onClick={() => setStep(step - 1)}>Back</ButtonView>}
           <ButtonView variant="primary" size="sm" onClick={next} disabled={!canNext || creating} loading={creating}>
-            {step === 3 ? 'Create collection' : `Next: ${STEPS[step + 1]}`}
+            {step === 3 ? (target.kind === 'new' ? 'Create collection' : 'Import here') : `Next: ${STEPS[step + 1]}`}
           </ButtonView>
         </div>
       )}
@@ -288,6 +244,7 @@ export function SwaggerImportWizard({ onClose }: { onClose: () => void }) {
           <div className="dk-swi-done">
             <span className="dk-swi-done__mark"><CheckIcon size={28} /></span>
             <h2>{done.name} is ready</h2>
+            {done.where && <p className="dk-swi-muted">In {done.where}</p>}
             <p>{done.requests} requests in {done.folders} folders · {done.envs.length} environment{done.envs.length === 1 ? '' : 's'} ({done.envs.join(', ')}).</p>
             <p className="dk-swi-muted">Pick one of those environments, fill in its secrets, and send.</p>
           </div>
@@ -402,73 +359,24 @@ export function SwaggerImportWizard({ onClose }: { onClose: () => void }) {
                       <IconButtonView size="md" icon={<FolderPlusIcon size={15} />} tooltip="New folder" onClick={() => setArr(a => addFolder(a, null).next)} />
                     </span>
                   </div>
-                  <div className="dk-swi-tree">
-                    <div className="dk-swi-root">
-                      <FolderIcon size={15} />
-                      <input className="dk-swi-fname dk-swi-fname--root" value={collectionName} onChange={e => setCollectionName(e.target.value)} aria-label="Collection name" />
-                      <span className="dk-swi-count">{onCount} of {total}</span>
-                    </div>
-                    {treeRows(arr).map(row => {
-                      const pad = 8 + row.depth * 22;
-                      if (row.kind === 'folder') {
-                        const f = row.folder;
-                        const key = `f:${f.id}`;
-                        const ids = new Set(requestsUnder(arr, f.id).map(r => r.opId));
-                        const all = row.total > 0 && row.on === row.total;
-                        return (
-                          <div
-                            key={key}
-                            className={`dk-swi-row${over === key ? ' is-over' : ''}${dragId === f.id ? ' is-dragging' : ''}`}
-                            style={{ paddingLeft: pad }}
-                            onDragOver={overTarget(key, () => canDropInto(arr, dragged.current!, f.id))}
-                            onDragLeave={leave(key)}
-                            onDrop={dropInto(f.id)}
-                          >
-                            <span className="dk-swi-grip" draggable onDragStart={startDrag({ kind: 'folder', id: f.id })} onDragEnd={endDrag} title="Drag to move"><DragHandleIcon size={13} /></span>
-                            <CheckboxView size="sm" checked={all} indeterminate={row.on > 0 && !all} onChange={() => setArr(a => setOn(a, ids, !all))} />
-                            <button type="button" className="dk-swi-caret" aria-expanded={f.open} aria-label={f.open ? 'Collapse' : 'Expand'} onClick={() => setArr(a => toggleOpen(a, f.id))}>
-                              <ChevronRightIcon size={12} style={{ transform: f.open ? 'rotate(90deg)' : undefined }} />
-                            </button>
-                            <FolderIcon size={14} className="dk-swi-folder" />
-                            <input className="dk-swi-fname" value={f.name} onChange={e => setArr(a => renameFolder(a, f.id, e.target.value))} aria-label="Folder name" />
-                            <span className="dk-swi-count">{row.on}/{row.total}</span>
-                            <span className="dk-swi-rowbtns">
-                              <IconButtonView size="sm" icon={<PlusIcon size={12} />} tooltip="New subfolder" onClick={() => setArr(a => addFolder(a, f.id).next)} />
-                              <IconButtonView size="sm" icon={<TrashIcon size={12} />} tooltip="Remove folder, keep its requests" onClick={() => setArr(a => unwrapFolder(a, f.id))} />
-                            </span>
-                          </div>
-                        );
-                      }
-                      const r = row.request;
+                  <ArrangeTree
+                    arr={arr}
+                    setArr={setArr}
+                    rootName={collectionName}
+                    onRootName={setCollectionName}
+                    total={total}
+                    renderRequest={r => {
                       const op = ops.get(r.opId)!;
-                      const key = `r:${r.opId}`;
                       return (
-                        <div
-                          key={key}
-                          className={`dk-swi-row${over === key ? ' is-before' : ''}${dragId === r.opId ? ' is-dragging' : ''}${r.on ? '' : ' is-off'}`}
-                          style={{ paddingLeft: pad + 22 }}
-                          onDragOver={overTarget(key, () => true)}
-                          onDragLeave={leave(key)}
-                          onDrop={dropBefore(r.opId)}
-                        >
-                          <span className="dk-swi-grip" draggable onDragStart={startDrag({ kind: 'request', id: r.opId })} onDragEnd={endDrag} title="Drag to move"><DragHandleIcon size={13} /></span>
-                          <CheckboxView size="sm" checked={r.on} onChange={on => setArr(a => setOn(a, new Set([r.opId]), on))} />
+                        <>
                           <span className="dk-swi-method" style={{ color: METHOD_COLOR[op.method] }}>{op.method}</span>
                           <span className="dk-swi-name">{requestName(op, nameBy)}</span>
                           {op.deprecated && <span className="dk-swi-dep">deprecated</span>}
                           <code className="dk-swi-path">{op.path}</code>
-                        </div>
+                        </>
                       );
-                    })}
-                    <div
-                      className={`dk-swi-droproot${over === 'root' ? ' is-over' : ''}`}
-                      onDragOver={overTarget('root', () => true)}
-                      onDragLeave={leave('root')}
-                      onDrop={dropInto(null)}
-                    >
-                      Drop here for the top level
-                    </div>
-                  </div>
+                    }}
+                  />
                 </div>
                 <aside className="dk-swi-aside">
                   <span className="dk-swi-eyebrow">Arrange it your way</span>
@@ -574,11 +482,24 @@ export function SwaggerImportWizard({ onClose }: { onClose: () => void }) {
             )}
 
             {step === 3 && outline && (
-              <div className="dk-swi-pane dk-swi-review">
+              <div className="dk-swi-pane dk-swi-save">
+                <section>
+                  <DestinationPicker
+                    target={target}
+                    onTarget={setTarget}
+                    newName={collectionName}
+                    onNewName={setCollectionName}
+                    existingHint={<>It arrives there as a folder named <b>{collectionName || outline.title}</b>, carrying the auth and variables a collection would. Folders inherit them.</>}
+                  />
+                </section>
                 <section>
                   <span className="dk-swi-eyebrow">Ready to create</span>
-                  <h2>{collectionName || outline.title}</h2>
-                  <dl className="dk-swi-kv dk-swi-card">
+                  <div className="dk-swi-dest">
+                    <FolderIcon size={15} className="dk-swi-folder" />
+                    {target.kind === 'existing' && <span className="dk-swi-muted">{targetLabel(target, '')} /</span>}
+                    <b>{collectionName || outline.title}</b>
+                  </div>
+                  <dl className="dk-swi-kv dk-swi-card" style={{ padding: 16 }}>
                     <div><dt>Requests</dt><dd>{onCount} of {total}, in {usedFolders.length} folders</dd></div>
                     <div><dt>Environments</dt><dd>{envs.map(e => e.name || 'Untitled').join(', ')}</dd></div>
                     <div><dt>Variables</dt><dd>{varRows.map(r => r.key).join(', ')}</dd></div>
@@ -594,8 +515,6 @@ export function SwaggerImportWizard({ onClose }: { onClose: () => void }) {
                     <div><dt>Auth</dt><dd>{outline.schemes.map(s => s.label.split(' · ')[0]).join(', ') || 'none'}</dd></div>
                     <div><dt>Bodies</dt><dd>JSON from each schema's examples</dd></div>
                   </dl>
-                </section>
-                <section>
                   <span className="dk-swi-eyebrow">In the sidebar</span>
                   <div className="dk-swi-card dk-swi-preview">
                     {treeRows(arr, true).slice(0, 18).map(row => (row.kind === 'folder' ? (

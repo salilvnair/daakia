@@ -48,7 +48,7 @@ const METHOD_COLOR: Record<string, string> = {
 };
 
 export function ScanReconcile({
-  rows, chosen, onToggle, collectionName, onBack, onApply, applying,
+  rows, chosen, onToggle, collectionName, onBack, onApply, applying, embedded,
 }: {
   rows: Reconciled[];
   /** Identities that will be written. */
@@ -58,6 +58,8 @@ export function ScanReconcile({
   onBack: () => void;
   onApply: () => void;
   applying: boolean;
+  /** Inside a wizard whose own footer carries Back and Apply. */
+  embedded?: boolean;
 }) {
   const counts = useMemo(() => summarise(rows), [rows]);
   const grouped = useMemo(() => {
@@ -121,7 +123,7 @@ export function ScanReconcile({
         ))}
       </div>
 
-      <div style={{
+      {!embedded && <div style={{
         display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
         borderTop: '1px solid var(--color-surface-border)',
       }}>
@@ -136,7 +138,7 @@ export function ScanReconcile({
           disabled={applying || willWrite === 0}
           onClick={onApply}
         />
-      </div>
+      </div>}
     </div>
   );
 }

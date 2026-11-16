@@ -288,6 +288,9 @@
 .ws-act--imp  { color: var(--color-info);          border-color: color-mix(in srgb, var(--color-info) 42%, transparent);          background: color-mix(in srgb, var(--color-info) 12%, transparent); }
 .ws-act--exp  { color: var(--color-warning);       border-color: color-mix(in srgb, var(--color-warning) 42%, transparent);       background: color-mix(in srgb, var(--color-warning) 12%, transparent); }
 .ws-act--env  { color: var(--color-success);       border-color: color-mix(in srgb, var(--color-success) 42%, transparent);       background: color-mix(in srgb, var(--color-success) 11%, transparent); }
+.ws-act--share  { color: var(--color-workspace); border-color: color-mix(in srgb, var(--color-workspace) 42%, transparent); background: color-mix(in srgb, var(--color-workspace) 11%, transparent); }
+/* Already shared: the same colour, filled, so it reads as a state you can switch off. */
+.ws-act--shared { color: var(--color-panel); border-color: var(--color-workspace); background: var(--color-workspace); }
 .ws-act:hover { filter: brightness(1.18); }
 
 .ws-facts { font-size: 12px; line-height: 1.6; }

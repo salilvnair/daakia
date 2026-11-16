@@ -2,7 +2,7 @@
  * MainPanel — core panel shell + message router.
  * All domain logic is delegated to handler modules in ./handlers/.
  */
-import { handleScanPickFolder, handleScanInspect, handleScanRun } from './handlers/scan-handler';
+import { handleScanPickFolder, handleScanInspect, handleScanRun, handleScanEditorFolders } from './handlers/scan-handler';
 import * as vscode from 'vscode';
 import { historyCap } from '../../services/history-cap';
 import {
@@ -818,6 +818,9 @@ export class MainPanel {
         break;
       case 'scan:inspect':
         void handleScanInspect(msg, this._post);
+        break;
+      case 'scan:editorFolders':
+        handleScanEditorFolders(msg, this._post);
         break;
       case 'scan:run':
         void handleScanRun(msg, this._post);

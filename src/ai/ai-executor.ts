@@ -41,6 +41,55 @@ export function buildAiRequest(payload: AiRequestPayload): BuiltRequest {
   }
 }
 
+/*
+  OpenAI's reasoning models — the o-series and every gpt-5 — refuse
+  `max_tokens` outright ("Use 'max_completion_tokens' instead") and refuse a
+  temperature or top_p other than the default. The rest of the
+  OpenAI-compatible world (DeepSeek, Groq, Ollama, Mistral…) only knows
+  `max_tokens`. So: OpenAI itself always gets `max_completion_tokens`, which it
+  takes for every chat model; elsewhere a model named like a reasoning model
+  gets it too (Azure deployments are usually named after the model).
+
+  A deployment can be called anything, so the name is only a guess. When the
+  guess is wrong the server says so in a 400, `learnQuirk` records what it
+  objected to for that endpoint and model, and the request goes again —
+  once, and every later request to the same model is right the first time.
+*/
+interface OpenAiQuirks { completionTokens?: boolean; noSampling?: boolean }
+
+const learnedQuirks = new Map<string, OpenAiQuirks>();
+
+function quirkKey(payload: AiRequestPayload): string {
+  return `${payload.provider}|${payload.baseUrl || ''}|${payload.model}`;
+}
+
+const REASONING_MODEL = /^(o\d|gpt-5)(?!.*-chat)/i;
+
+export function openAiQuirks(payload: AiRequestPayload): OpenAiQuirks {
+  const reasoning = REASONING_MODEL.test(payload.model || '');
+  const learned = learnedQuirks.get(quirkKey(payload)) || {};
+  return {
+    completionTokens: payload.provider === 'openai' || reasoning || !!learned.completionTokens,
+    noSampling: reasoning || !!learned.noSampling,
+  };
+}
+
+/** What a 400 tells us to change, or null when it is some other complaint. */
+export function quirkFromError(message: string): OpenAiQuirks | null {
+  if (/max_tokens/.test(message) && /max_completion_tokens/.test(message)) return { completionTokens: true };
+  if (/\b(temperature|top_p)\b/.test(message) && /unsupported|not supported|does not support/i.test(message)) return { noSampling: true };
+  return null;
+}
+
+/** Records the quirk; false when it was already known, so there is nothing new to retry with. */
+export function learnQuirk(payload: AiRequestPayload, quirk: OpenAiQuirks): boolean {
+  const before = openAiQuirks(payload);
+  if ((quirk.completionTokens && before.completionTokens) || (quirk.noSampling && before.noSampling)) return false;
+  const key = quirkKey(payload);
+  learnedQuirks.set(key, { ...learnedQuirks.get(key), ...quirk });
+  return true;
+}
+
 function buildOpenAiRequest(payload: AiRequestPayload, baseUrl: string, endpoint: string): BuiltRequest {
   const url = `${baseUrl}${endpoint}`;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -84,14 +133,17 @@ function buildOpenAiRequest(payload: AiRequestPayload, baseUrl: string, endpoint
       return msg;
     });
 
+  const quirks = openAiQuirks(payload);
   const body: Record<string, unknown> = {
     model: payload.model,
     messages,
-    temperature: payload.settings.temperature,
-    max_tokens: payload.settings.maxTokens,
-    top_p: payload.settings.topP,
     stream: payload.settings.stream,
   };
+  body[quirks.completionTokens ? 'max_completion_tokens' : 'max_tokens'] = payload.settings.maxTokens;
+  if (!quirks.noSampling) {
+    body.temperature = payload.settings.temperature;
+    body.top_p = payload.settings.topP;
+  }
 
   if (payload.settings.frequencyPenalty) body.frequency_penalty = payload.settings.frequencyPenalty;
   if (payload.settings.presencePenalty) body.presence_penalty = payload.settings.presencePenalty;
@@ -310,6 +362,14 @@ export function executeAiRequest(options: ExecuteOptions): void {
             duration: Date.now() - startTime,
           },
         };
+
+        const quirk = statusCode === 400 && payload.provider !== 'anthropic' && payload.provider !== 'google'
+          ? quirkFromError(message) : null;
+        if (quirk && !signal?.aborted && learnQuirk(payload, quirk)) {
+          console.warn('[AI Request] retrying with', JSON.stringify(quirk), 'after:', message);
+          executeAiRequest(options);
+          return;
+        }
 
         console.error('[AI Error]', JSON.stringify(diagnostics, null, 2));
         onError({ tabId: payload.tabId, message, code: String(statusCode), diagnostics });

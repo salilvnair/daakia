@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useLayoutEffect, type ReactNode, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { HTTP_REQUEST_HEADERS, SENSITIVE_HEADERS, HEADER_VALUE_SUGGESTIONS } from './http-headers';
 import { ConfirmDialog } from '../modals/ConfirmDialog';
 import { TrashIcon, BulkEditIcon, PlusIcon, CheckCircleFilledIcon, EyeIcon, EyeOffIcon } from '../../../icons';
@@ -264,6 +265,55 @@ interface RowProps {
   onRemove: (idx: number) => void;
 }
 
+/*
+  The suggestion list used to hang off its input with `position: absolute`, so
+  any scrolling or clipping box around the table cut it off — in the Swagger
+  import wizard the modal's body sliced it in half at the footer. It is drawn
+  on the page body instead, fixed against the input, above every modal layer,
+  and opens upward when there is no room below.
+*/
+const MENU_MAX_HEIGHT = 200;
+
+function SuggestionMenu({ anchor, menuRef, children }: {
+  anchor: RefObject<HTMLInputElement | null>;
+  menuRef: RefObject<HTMLDivElement | null>;
+  children: ReactNode;
+}) {
+  const [box, setBox] = useState<{ left: number; width: number; top?: number; bottom?: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const place = () => {
+      const el = anchor.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const below = window.innerHeight - r.bottom;
+      const up = below < MENU_MAX_HEIGHT + 8 && r.top > below;
+      setBox(up
+        ? { left: r.left, width: r.width, bottom: window.innerHeight - r.top + 2 }
+        : { left: r.left, width: r.width, top: r.bottom + 2 });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [anchor]);
+
+  if (!box) return null;
+  return createPortal(
+    <div
+      ref={menuRef}
+      style={{ position: 'fixed', zIndex: 10000, maxHeight: MENU_MAX_HEIGHT, ...box }}
+      className="overflow-y-auto bg-[var(--color-surface)] border border-[var(--color-surface-border)] rounded-md shadow-lg"
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
 function KeyValueRow({ row, idx, showDescription, placeholder, autocompleteKeys, maskSensitive, onUpdate, onRemove }: RowProps) {
   const [keyFocused, setKeyFocused] = useState(false);
   const [filterText, setFilterText] = useState('');
@@ -407,10 +457,7 @@ function KeyValueRow({ row, idx, showDescription, placeholder, autocompleteKeys,
         />
         {/* Autocomplete dropdown */}
         {showDropdown && (
-          <div
-            ref={dropdownRef}
-            className="absolute top-full left-0 z-50 w-full max-h-[200px] overflow-y-auto bg-[var(--color-surface)] border border-[var(--color-surface-border)] rounded-md shadow-lg mt-0.5"
-          >
+          <SuggestionMenu anchor={keyInputRef} menuRef={dropdownRef}>
             {suggestions.map((header, i) => (
               <button
                 key={header}
@@ -422,7 +469,7 @@ function KeyValueRow({ row, idx, showDescription, placeholder, autocompleteKeys,
                 {header}
               </button>
             ))}
-          </div>
+          </SuggestionMenu>
         )}
       </div>
 
@@ -441,10 +488,7 @@ function KeyValueRow({ row, idx, showDescription, placeholder, autocompleteKeys,
         />
         {/* Value autocomplete dropdown */}
         {showValueDropdown && (
-          <div
-            ref={valueDropdownRef}
-            className="absolute top-full left-0 z-50 w-full max-h-[200px] overflow-y-auto bg-[var(--color-surface)] border border-[var(--color-surface-border)] rounded-md shadow-lg mt-0.5"
-          >
+          <SuggestionMenu anchor={valueInputRef} menuRef={valueDropdownRef}>
             {valueSuggestions.map((val, i) => (
               <button
                 key={val}
@@ -456,7 +500,7 @@ function KeyValueRow({ row, idx, showDescription, placeholder, autocompleteKeys,
                 {val}
               </button>
             ))}
-          </div>
+          </SuggestionMenu>
         )}
         {isSensitive && (
           <button

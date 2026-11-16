@@ -29,7 +29,7 @@
  * (logged, not a crash) — add handlers here the same way as the mock-server
  * block below when needed.
  */
-import { handleScanPickFolder, handleScanInspect, handleScanRun } from '../src/panel/main/handlers/scan-handler';
+import { handleScanPickFolder, handleScanInspect, handleScanRun, handleScanEditorFolders } from '../src/panel/main/handlers/scan-handler';
 import {
   getSqliteStatus, getDbPath, getHistory, clearHistory, deleteHistoryById, getSetting, setSetting, getCookies,
   getAllPrompts, upsertPrompt, resetPrompt,
@@ -647,6 +647,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'scan:inspect':
       await handleScanInspect(msg, post);
+      break;
+    case 'scan:editorFolders':
+      handleScanEditorFolders(msg, post);
       break;
     case 'scan:run':
       await handleScanRun(msg, post);

@@ -231,6 +231,16 @@ export function WorkspacePage() {
               disabled={!canEditCollections} onClick={() => { setSub('collections'); setCreateColl(n => n + 1); }} />
             <Action tone="env" icon={<GlobeIcon size={12} />} label="New environment"
               onClick={() => { setSub('environments'); setCreateEnv(n => n + 1); }} />
+            {/* Sharing one click away, not behind the gear. A teammate's
+                workspace is theirs to share, so it is not offered there. */}
+            {active && !readOnly && (
+              <Action tone={active.shared === 1 ? 'shared' : 'share'} icon={<UsersIcon size={12} />}
+                label={active.shared === 1 ? 'Shared with team' : 'Share with team'}
+                title={active.shared === 1
+                  ? 'Teammates on your Git Sync repo get a read-only copy. Click to stop sharing.'
+                  : 'Teammates on your Git Sync repo get a read-only copy on their next sync.'}
+                onClick={() => setShared(active.id, active.shared !== 1)} />
+            )}
           </div>
 
           <div className="ws-caps">This workspace</div>
@@ -419,11 +429,14 @@ function WorkspaceHeader({
         open={overflow && !readOnly}
         onClose={() => setOverflow(false)}
         align="right"
-        width="md"
+        /* Wide enough that each description is one line, not three. */
+        width={340}
         items={[
           {
             id: 'share', label: active?.shared === 1 ? 'Stop sharing' : 'Share with team',
-            description: 'Teammates on the same Git Sync repo import a read-only copy',
+            description: active?.shared === 1
+              ? 'Teammates stop getting it on their next sync'
+              : 'Teammates on your Git Sync repo get a read-only copy',
             icon: <UsersIcon size={14} />, iconColor: 'var(--color-info)',
             onClick: () => { setOverflow(false); onToggleShared(); },
           },
@@ -538,12 +551,12 @@ function Stat({ n, label, tone }: { n: number; label: string; tone: string }) {
   );
 }
 
-function Action({ tone, icon, label, onClick, disabled = false }: {
-  tone: string; icon: React.ReactNode; label: string; onClick: () => void; disabled?: boolean;
+function Action({ tone, icon, label, onClick, disabled = false, title }: {
+  tone: string; icon: React.ReactNode; label: string; onClick: () => void; disabled?: boolean; title?: string;
 }) {
   return (
     <button type="button" className={`ws-act ws-act--${tone}`} onClick={onClick}
-            disabled={disabled} title={disabled ? READ_ONLY_REASON : undefined}>
+            disabled={disabled} title={disabled ? READ_ONLY_REASON : title}>
       {icon}{label}
     </button>
   );
