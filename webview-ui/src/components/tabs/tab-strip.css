@@ -54,52 +54,109 @@
 .dk-tabcount:hover, .dk-tabcount.is-open { background: var(--color-surface-hover); color: var(--color-text-primary); }
 .dk-tabcount:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
 
-/* ── Group chip ── */
-.dk-tabgroup-chip {
+/* ── Group chip: a label only — a filled pill with the name, or a dot ── */
+.dk-tgchip {
   --tg: var(--color-info);
   flex: none;
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 22px;
-  margin: 0 4px 0 8px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--tg) 20%, transparent);
-  color: var(--tg);
-  font: 600 11.5px var(--font-sans, system-ui);
+  gap: 5px;
+  height: 20px;
+  margin: 0 6px 0 8px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--tg);
+  color: var(--color-panel);
+  font: 650 11.5px var(--font-sans, system-ui);
+  letter-spacing: 0.01em;
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
-  transition: background 0.12s, box-shadow 0.12s;
+  transition: filter 0.12s, box-shadow 0.12s, transform 0.12s;
 }
-.dk-tabgroup-chip:hover { background: color-mix(in srgb, var(--tg) 30%, transparent); }
-.dk-tabgroup-chip.is-unnamed { padding: 0 7px; }
-.dk-tabgroup-chip.is-over { box-shadow: 0 0 0 2px var(--tg); }
-.dk-tabgroup-chip:focus-visible { outline: 2px solid var(--tg); outline-offset: 2px; }
-.dk-tabgroup-chip__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tg); flex: none; }
-.dk-tabgroup-chip__name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
-.dk-tabgroup-chip__count {
-  min-width: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--tg) 45%, transparent);
-  color: var(--color-text-primary);
-  font: 600 10px var(--font-mono, ui-monospace, monospace);
-  text-align: center;
-  line-height: 16px;
-}
-.dk-tabgroup-chip__input {
-  width: 120px;
-  height: 18px;
-  padding: 0 4px;
-  border: 0;
+.dk-tgchip:hover { filter: brightness(1.08); }
+.dk-tgchip:active { transform: scale(0.97); }
+.dk-tgchip.is-dot { width: 14px; height: 14px; padding: 0; margin: 0 6px 0 10px; border-radius: 50%; justify-content: center; }
+.dk-tgchip.is-dot.is-collapsed { width: auto; height: 20px; padding: 0 7px 0 5px; border-radius: 999px; }
+.dk-tgchip__dot { display: none; }
+.dk-tgchip.is-dot.is-collapsed .dk-tgchip__dot { display: block; width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--color-panel) 70%, transparent); }
+.dk-tgchip__name { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+.dk-tgchip__count {
+  padding: 0 5px;
   border-radius: 4px;
+  background: color-mix(in srgb, var(--color-panel) 22%, transparent);
+  font: 700 10px var(--font-mono, ui-monospace, monospace);
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.dk-tgchip.is-over, .dk-tgchip.is-editing { box-shadow: 0 0 0 2px var(--color-panel), 0 0 0 4px var(--tg); }
+.dk-tgchip:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-panel), 0 0 0 4px var(--tg); }
+
+/* ── The panel that edits a group ── */
+.dk-tgpanel {
+  --tg: var(--color-info);
+  position: fixed;
+  z-index: 9998;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  background: var(--color-elevated);
+  border: 1px solid var(--color-elevated-border);
+  border-radius: 12px;
+  box-shadow: 0 18px 44px -14px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.25);
+  font-family: var(--font-sans, system-ui);
+  animation: fadeSlideIn 110ms ease-out;
+}
+.dk-tgpanel__name {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--color-input-border);
+  border-radius: 8px;
   background: var(--color-input-bg);
   color: var(--color-text-primary);
-  font: 500 11.5px var(--font-sans, system-ui);
-  outline: 1px solid var(--tg);
+  font-size: 13px;
+  font-weight: 500;
+  outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
 }
+.dk-tgpanel__name:focus { border-color: var(--tg); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tg) 22%, transparent); }
+.dk-tgpanel__swatches { display: flex; justify-content: space-between; padding: 10px 2px 6px; }
+.dk-tgpanel__swatch {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--sw);
+  color: var(--color-panel);
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.dk-tgpanel__swatch:hover { transform: scale(1.1); }
+.dk-tgpanel__swatch.is-on { box-shadow: 0 0 0 2px var(--color-elevated), 0 0 0 4px var(--sw); }
+.dk-tgpanel__swatch:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-elevated), 0 0 0 4px var(--color-primary); }
+.dk-tgpanel__sep { height: 1px; margin: 6px -10px 4px; background: var(--color-elevated-border); }
+.dk-tgpanel__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--color-text-primary);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.dk-tgpanel__item svg { color: var(--color-text-muted); flex: none; }
+.dk-tgpanel__item:hover, .dk-tgpanel__item:focus-visible { background: var(--color-item-hover-bg); outline: none; }
+.dk-tgpanel__item.is-danger, .dk-tgpanel__item.is-danger svg { color: var(--color-error); }
+.dk-tgpanel__item.is-danger:hover { background: color-mix(in srgb, var(--color-error) 9%, transparent); }
 
 /* ── All-tabs list ── */
 .dk-alltabs {
@@ -168,5 +225,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .dk-tabstrip { scroll-behavior: auto; }
-  .dk-alltabs, .dk-tabcard { animation: none; }
+  .dk-alltabs, .dk-tabcard, .dk-tgpanel { animation: none; }
+  .dk-tgchip, .dk-tgpanel__swatch { transition: none; }
 }

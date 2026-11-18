@@ -1,20 +1,19 @@
 /**
- * A tab group's chip on the strip: its colour and name, in front of its tabs.
+ * A tab group's chip on the strip, and the panel that edits it — Chrome's
+ * and Edge's design.
  *
- * Click folds the group to just the chip and a count, and opens it again.
- * Double-click renames it in place; a new group arrives already renaming.
- * Right-click for the rest: colour, a new tab in the group, ungroup, close.
+ * The chip is only a label: a filled pill in the group's colour with its
+ * name, or a dot when it has none. Click folds the group to the chip and a
+ * count. Everything else — the name, the colour, the actions — lives in a
+ * small panel under the chip: it opens by itself on a group just made, on a
+ * double-click, a right-click, or F2.
  */
 import { useEffect, useRef, useState } from 'react';
-import { ContextMenu, type ContextMenuItem } from '../shared';
-import { RenameIcon, PlusIcon, CloseCircleIcon, ChevronRightIcon, LayersIcon } from '../../icons';
+import { createPortal } from 'react-dom';
+import { PlusIcon, CloseCircleIcon, ChevronRightIcon, LayersIcon, CheckIcon } from '../../icons';
 import { GROUP_COLORS, type TabGroup } from '../../services/tabs/tab-groups';
 
 const COLOR_NAMES = ['Blue', 'Amber', 'Green', 'Pink', 'Violet', 'Cyan', 'Red', 'Grey'];
-
-const Dot = ({ color }: { color: string }) => (
-  <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: color }} />
-);
 
 export function TabGroupChip({
   group, count, editing, onEditDone, onToggle, onRename, onRecolor, onNewTab, onUngroup, onCloseGroup,
@@ -22,7 +21,7 @@ export function TabGroupChip({
 }: {
   group: TabGroup;
   count: number;
-  /** Arrives renaming — a group just made. */
+  /** Arrives with its panel open — a group just made. */
   editing: boolean;
   onEditDone: () => void;
   onToggle: () => void;
@@ -38,100 +37,143 @@ export function TabGroupChip({
   onDragLeave: () => void;
   onDrop: (e: React.DragEvent) => void;
 }) {
-  const [renaming, setRenaming] = useState(editing);
-  const [value, setValue] = useState(group.name);
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const chipRef = useRef<HTMLDivElement>(null);
+  const [panel, setPanel] = useState<DOMRect | null>(null);
+  const open = () => { if (chipRef.current) setPanel(chipRef.current.getBoundingClientRect()); };
+  const close = () => { setPanel(null); onEditDone(); };
 
-  useEffect(() => { if (editing) { setValue(group.name); setRenaming(true); } }, [editing, group.name]);
-  useEffect(() => { if (renaming) inputRef.current?.select(); }, [renaming]);
+  useEffect(() => { if (editing) open(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [editing]);
 
-  const finish = (commit: boolean) => {
-    if (commit) onRename(value);
-    setRenaming(false);
-    onEditDone();
-  };
-
-  /* The colours offered: the eight, plus the group's own when a protocol group wears its protocol's. */
-  const colors = GROUP_COLORS.includes(group.color) ? GROUP_COLORS : [group.color, ...GROUP_COLORS];
-  const items: ContextMenuItem[] = [
-    { id: 'rename', label: 'Rename group', icon: <RenameIcon size={13} />, iconColor: 'var(--color-ctx-rename)' },
-    {
-      id: 'color', label: 'Colour', icon: <Dot color={group.color} />,
-      submenu: colors.map(c => ({
-        id: c,
-        label: GROUP_COLORS.includes(c) ? COLOR_NAMES[GROUP_COLORS.indexOf(c)] : 'Protocol colour',
-        icon: <Dot color={c} />,
-        checked: c === group.color,
-      })),
-    },
-    { id: 'new-tab', label: 'New tab in group', icon: <PlusIcon size={13} />, iconColor: group.color },
-    { id: 'toggle', label: group.collapsed ? 'Expand group' : 'Collapse group', icon: <ChevronRightIcon size={13} />, iconColor: 'var(--color-text-muted)' },
-    { id: 'sep', label: '', separator: true },
-    { id: 'ungroup', label: 'Ungroup', icon: <LayersIcon size={13} />, iconColor: 'var(--color-text-muted)' },
-    { id: 'close', label: count === 1 ? 'Close group and its tab' : `Close group and its ${count} tabs`, icon: <CloseCircleIcon size={13} />, danger: true },
-  ];
-
-  const onSelect = (id: string, subId?: string) => {
-    if (id === 'rename') { setValue(group.name); setRenaming(true); }
-    else if (id === 'color' && subId) onRecolor(subId);
-    else if (id === 'new-tab') onNewTab();
-    else if (id === 'toggle') onToggle();
-    else if (id === 'ungroup') onUngroup();
-    else if (id === 'close') onCloseGroup();
-  };
-
+  const named = !!group.name;
   return (
     <>
       <div
-        className={`dk-tabgroup-chip${group.collapsed ? ' is-collapsed' : ''}${isOver ? ' is-over' : ''}${group.name || renaming ? '' : ' is-unnamed'}`}
+        ref={chipRef}
+        className={`dk-tgchip${named ? '' : ' is-dot'}${group.collapsed ? ' is-collapsed' : ''}${isOver ? ' is-over' : ''}${panel ? ' is-editing' : ''}`}
         style={{ '--tg': group.color } as React.CSSProperties}
         role="button"
         tabIndex={0}
         aria-expanded={!group.collapsed}
         aria-label={`${group.name || 'Unnamed group'}, ${count} tab${count === 1 ? '' : 's'}, ${group.collapsed ? 'folded' : 'open'}`}
-        title={`${group.name || 'Group'} · ${count} tab${count === 1 ? '' : 's'} — click to ${group.collapsed ? 'open' : 'fold'}, double-click to rename`}
-        draggable={!renaming}
+        title={`${group.name || 'Group'} · ${count} tab${count === 1 ? '' : 's'}\nClick to ${group.collapsed ? 'open' : 'fold'} · double-click or right-click to edit`}
+        draggable
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
-        onClick={() => { if (!renaming) onToggle(); }}
-        onDoubleClick={e => { e.preventDefault(); setValue(group.name); setRenaming(true); }}
-        onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY }); }}
+        onClick={onToggle}
+        onDoubleClick={e => { e.preventDefault(); open(); }}
+        onContextMenu={e => { e.preventDefault(); e.stopPropagation(); open(); }}
         onKeyDown={e => {
-          if (renaming) return;
           if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); }
-          if (e.key === 'F2') setRenaming(true);
+          if (e.key === 'F2') { e.preventDefault(); open(); }
         }}
       >
-        <span className="dk-tabgroup-chip__dot" />
-        {renaming ? (
-          <input
-            ref={inputRef}
-            className="dk-tabgroup-chip__input"
-            value={value}
-            placeholder="Name this group"
-            aria-label="Group name"
-            onChange={e => setValue(e.target.value)}
-            onClick={e => e.stopPropagation()}
-            onKeyDown={e => {
-              e.stopPropagation();
-              if (e.key === 'Enter') finish(true);
-              if (e.key === 'Escape') finish(false);
-            }}
-            onBlur={() => finish(true)}
-            autoFocus
-          />
-        ) : group.name ? (
-          <span className="dk-tabgroup-chip__name">{group.name}</span>
-        ) : null}
-        {group.collapsed && !renaming && <span className="dk-tabgroup-chip__count">{count}</span>}
+        {named ? <span className="dk-tgchip__name">{group.name}</span> : <span className="dk-tgchip__dot" />}
+        {group.collapsed && <span className="dk-tgchip__count">{count}</span>}
       </div>
-      {menu && (
-        <ContextMenu items={items} position={menu} onSelect={onSelect} onClose={() => setMenu(null)} />
+      {panel && (
+        <GroupPanel
+          group={group}
+          count={count}
+          anchor={panel}
+          onRename={onRename}
+          onRecolor={onRecolor}
+          onClose={close}
+          actions={{
+            newTab: () => { close(); onNewTab(); },
+            toggle: () => { close(); onToggle(); },
+            ungroup: () => { close(); onUngroup(); },
+            closeGroup: () => { close(); onCloseGroup(); },
+          }}
+        />
       )}
     </>
+  );
+}
+
+/** The panel under a chip: name, colour, and what to do with the group. */
+function GroupPanel({ group, count, anchor, onRename, onRecolor, onClose, actions }: {
+  group: TabGroup;
+  count: number;
+  anchor: DOMRect;
+  onRename: (name: string) => void;
+  onRecolor: (color: string) => void;
+  onClose: () => void;
+  actions: { newTab: () => void; toggle: () => void; ungroup: () => void; closeGroup: () => void };
+}) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [name, setName] = useState(group.name);
+
+  /* The name is kept as it is typed, so closing the panel any way keeps it. */
+  useEffect(() => { if (name !== group.name) onRename(name); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [name]);
+
+  useEffect(() => {
+    const away = (e: MouseEvent) => { if (boxRef.current && !boxRef.current.contains(e.target as Node)) onClose(); };
+    document.addEventListener('mousedown', away);
+    return () => document.removeEventListener('mousedown', away);
+  }, [onClose]);
+
+  const colors = GROUP_COLORS.includes(group.color) ? GROUP_COLORS : [group.color, ...GROUP_COLORS];
+  const width = 248;
+  const left = Math.max(8, Math.min(anchor.left, window.innerWidth - width - 8));
+
+  return createPortal(
+    <div
+      ref={boxRef}
+      className="dk-tgpanel"
+      style={{ left, top: anchor.bottom + 8, width, '--tg': group.color } as React.CSSProperties}
+      role="dialog"
+      aria-label="Edit tab group"
+      onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } }}
+    >
+      <input
+        className="dk-tgpanel__name"
+        value={name}
+        placeholder="Name this group"
+        aria-label="Group name"
+        autoFocus
+        spellCheck={false}
+        onChange={e => setName(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onClose(); } }}
+      />
+      <div className="dk-tgpanel__swatches" role="radiogroup" aria-label="Group colour">
+        {colors.map(c => {
+          const on = c === group.color;
+          const label = GROUP_COLORS.includes(c) ? COLOR_NAMES[GROUP_COLORS.indexOf(c)] : 'Protocol colour';
+          return (
+            <button
+              key={c}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              aria-label={label}
+              title={label}
+              className={`dk-tgpanel__swatch${on ? ' is-on' : ''}`}
+              style={{ '--sw': c } as React.CSSProperties}
+              onClick={() => onRecolor(c)}
+            >
+              {on && <CheckIcon size={10} strokeWidth={3} />}
+            </button>
+          );
+        })}
+      </div>
+      <div className="dk-tgpanel__sep" />
+      <button type="button" className="dk-tgpanel__item" onClick={actions.newTab}>
+        <PlusIcon size={13} /> New tab in group
+      </button>
+      <button type="button" className="dk-tgpanel__item" onClick={actions.toggle}>
+        <ChevronRightIcon size={13} style={{ transform: group.collapsed ? undefined : 'rotate(90deg)' }} />
+        {group.collapsed ? 'Expand group' : 'Collapse group'}
+      </button>
+      <button type="button" className="dk-tgpanel__item" onClick={actions.ungroup}>
+        <LayersIcon size={13} /> Ungroup
+      </button>
+      <button type="button" className="dk-tgpanel__item is-danger" onClick={actions.closeGroup}>
+        <CloseCircleIcon size={13} /> {count === 1 ? 'Close group and its tab' : `Close group and its ${count} tabs`}
+      </button>
+    </div>,
+    document.body,
   );
 }

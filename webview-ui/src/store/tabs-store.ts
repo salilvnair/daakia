@@ -1272,29 +1272,33 @@ function joinProtocolGroup(tabs: RequestTab[], groups: TabGroup[], tab: RequestT
 const CLOSED_KEPT = 20;
 useTabsStore.subscribe((s, prev) => {
   if (s.tabs === prev.tabs && s.tabGroups === prev.tabGroups && s.activeTabId === prev.activeTabId) return;
+  /* Everything below lands in one write, and every part always runs: an early
+     return here once left emptied groups behind whenever a tab closed. */
+  const patch: Partial<TabsState> = {};
+
   /* What closed, for Reopen closed tab: whatever the way it went. An empty
      scratchpad home is not worth bringing back. */
   if (s.tabs !== prev.tabs) {
     const now = new Set(s.tabs.map(t => t.id));
     const gone = prev.tabs.filter(t => !now.has(t.id) && !(t.type === 'scratchpad' && !t.scratchpadId))
       .map(t => ({ ...t, response: null, loading: false }));
-    if (gone.length) {
-      useTabsStore.setState(st => ({ closedTabs: [...gone.reverse(), ...st.closedTabs.filter(c => !now.has(c.id))].slice(0, CLOSED_KEPT) }));
-      return;
-    }
+    if (gone.length) patch.closedTabs = [...gone.reverse(), ...s.closedTabs.filter(c => !now.has(c.id))].slice(0, CLOSED_KEPT);
   }
   if (s.activeTabId !== prev.activeTabId && s.activeTabId) {
     const live = new Set(s.tabs.map(t => t.id));
-    const recentTabIds = [s.activeTabId, ...s.recentTabIds.filter(id => id !== s.activeTabId && live.has(id))];
-    useTabsStore.setState({ recentTabIds });
-    return;
+    patch.recentTabIds = [s.activeTabId, ...s.recentTabIds.filter(id => id !== s.activeTabId && live.has(id))];
   }
-  if (s.tabGroups.length === 0 && !s.tabs.some(t => t.groupId)) return;
-  const r = normalize(s.tabs, s.tabGroups);
-  const sameOrder = r.tabs.length === s.tabs.length && r.tabs.every((t, i) => t === s.tabs[i]);
-  const active = r.tabs.find(t => t.id === s.activeTabId);
-  const openActive = active?.groupId && r.groups.find(g => g.id === active.groupId)?.collapsed;
-  const groups = openActive ? r.groups.map(g => (g.id === active!.groupId ? { ...g, collapsed: false } : g)) : r.groups;
-  if (sameOrder && groups.length === s.tabGroups.length && !openActive) return;
-  useTabsStore.setState({ tabs: sameOrder ? s.tabs : r.tabs, tabGroups: groups });
+
+  /* The group rules: emptied groups go, groups stay together, and the active
+     tab is never inside a folded group. */
+  if (s.tabGroups.length > 0 || s.tabs.some(t => t.groupId)) {
+    const r = normalize(s.tabs, s.tabGroups);
+    const sameOrder = r.tabs.length === s.tabs.length && r.tabs.every((t, i) => t === s.tabs[i]);
+    const active = r.tabs.find(t => t.id === s.activeTabId);
+    const openActive = !!active?.groupId && !!r.groups.find(g => g.id === active.groupId)?.collapsed;
+    const groups = openActive ? r.groups.map(g => (g.id === active!.groupId ? { ...g, collapsed: false } : g)) : r.groups;
+    if (!sameOrder) patch.tabs = r.tabs;
+    if (groups.length !== s.tabGroups.length || openActive) patch.tabGroups = groups;
+  }
+  if (Object.keys(patch).length) useTabsStore.setState(patch);
 });
