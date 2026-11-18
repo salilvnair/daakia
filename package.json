@@ -348,7 +348,8 @@
     "demo-video": "npm run demo-video:record && npm run demo-video:compose",
     "showcase": "npm run demo-video && npm run demo-video:gif:short",
     "rank": "node scripts/marketplace-rank.js",
-    "mock:ai": "node scripts/mock-ai-server.js"
+    "mock:ai": "node scripts/mock-ai-server.js",
+    "mock:openapi": "node scripts/mock-openapi-server.js"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.14.4",

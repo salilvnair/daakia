@@ -54,43 +54,52 @@
 .dk-tabcount:hover, .dk-tabcount.is-open { background: var(--color-surface-hover); color: var(--color-text-primary); }
 .dk-tabcount:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
 
-/* ── Group chip: a label only — a filled pill with the name, or a dot ── */
+/* ── Group chip: a label only — a soft tint of the group's colour with its
+      name, or a dot. The text mixes the colour with the theme's own text
+      colour, so it is light on dark and dark on light without a solid fill
+      shouting from the strip. ── */
 .dk-tgchip {
   --tg: var(--color-info);
+  --tg-ink: color-mix(in srgb, var(--tg) 62%, var(--color-text-primary));
   flex: none;
   display: flex;
   align-items: center;
-  gap: 5px;
-  height: 20px;
+  gap: 6px;
+  height: 22px;
   margin: 0 6px 0 8px;
-  padding: 0 8px;
-  border-radius: 6px;
-  background: var(--tg);
-  color: var(--color-panel);
-  font: 650 11.5px var(--font-sans, system-ui);
+  padding: 0 9px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--tg) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tg) 32%, transparent);
+  color: var(--tg-ink);
+  font: 600 11.5px var(--font-sans, system-ui);
   letter-spacing: 0.01em;
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
-  transition: filter 0.12s, box-shadow 0.12s, transform 0.12s;
+  transition: background 0.12s, border-color 0.12s;
 }
-.dk-tgchip:hover { filter: brightness(1.08); }
-.dk-tgchip:active { transform: scale(0.97); }
-.dk-tgchip.is-dot { width: 14px; height: 14px; padding: 0; margin: 0 6px 0 10px; border-radius: 50%; justify-content: center; }
-.dk-tgchip.is-dot.is-collapsed { width: auto; height: 20px; padding: 0 7px 0 5px; border-radius: 999px; }
+.dk-tgchip:hover { background: color-mix(in srgb, var(--tg) 24%, transparent); border-color: color-mix(in srgb, var(--tg) 45%, transparent); }
+.dk-tgchip.is-dot { width: 12px; height: 12px; padding: 0; margin: 0 7px 0 10px; border: 0; border-radius: 50%; background: var(--tg); justify-content: center; }
+.dk-tgchip.is-dot:hover { background: var(--tg); filter: brightness(1.12); }
+.dk-tgchip.is-dot.is-collapsed { width: auto; height: 22px; padding: 0 8px 0 7px; border-radius: 7px; background: color-mix(in srgb, var(--tg) 16%, transparent); border: 1px solid color-mix(in srgb, var(--tg) 32%, transparent); }
 .dk-tgchip__dot { display: none; }
-.dk-tgchip.is-dot.is-collapsed .dk-tgchip__dot { display: block; width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--color-panel) 70%, transparent); }
+.dk-tgchip.is-dot.is-collapsed .dk-tgchip__dot { display: block; width: 7px; height: 7px; border-radius: 50%; background: var(--tg); }
 .dk-tgchip__name { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
 .dk-tgchip__count {
+  min-width: 16px;
   padding: 0 5px;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--color-panel) 22%, transparent);
-  font: 700 10px var(--font-mono, ui-monospace, monospace);
-  line-height: 14px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--tg) 28%, transparent);
+  color: var(--tg-ink);
+  font: 600 10px var(--font-mono, ui-monospace, monospace);
+  line-height: 15px;
+  text-align: center;
   font-variant-numeric: tabular-nums;
 }
-.dk-tgchip.is-over, .dk-tgchip.is-editing { box-shadow: 0 0 0 2px var(--color-panel), 0 0 0 4px var(--tg); }
-.dk-tgchip:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-panel), 0 0 0 4px var(--tg); }
+.dk-tgchip.is-over, .dk-tgchip.is-editing { border-color: var(--tg); background: color-mix(in srgb, var(--tg) 24%, transparent); }
+.dk-tgchip.is-dot.is-over, .dk-tgchip.is-dot.is-editing { box-shadow: 0 0 0 2px color-mix(in srgb, var(--tg) 40%, transparent); }
+.dk-tgchip:focus-visible { outline: 1px solid var(--tg); outline-offset: 2px; }
 
 /* ── The panel that edits a group ── */
 .dk-tgpanel {
@@ -121,23 +130,29 @@
   transition: border-color 0.12s, box-shadow 0.12s;
 }
 .dk-tgpanel__name:focus { border-color: var(--tg); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tg) 22%, transparent); }
-.dk-tgpanel__swatches { display: flex; justify-content: space-between; padding: 10px 2px 6px; }
+.dk-tgpanel__swatches { position: relative; display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 2px 6px; }
 .dk-tgpanel__swatch {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: 0;
   border-radius: 50%;
   background: var(--sw);
-  color: var(--color-panel);
+  color: #fff;
   cursor: pointer;
   transition: transform 0.12s, box-shadow 0.12s;
 }
 .dk-tgpanel__swatch:hover { transform: scale(1.1); }
 .dk-tgpanel__swatch.is-on { box-shadow: 0 0 0 2px var(--color-elevated), 0 0 0 4px var(--sw); }
 .dk-tgpanel__swatch:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-elevated), 0 0 0 4px var(--color-primary); }
+.dk-tgpanel__swatch--any {
+  background: conic-gradient(from 0deg, #ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #ec4899, #ef4444);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-elevated) 35%, transparent);
+}
+/* The native picker, out of sight; the rainbow swatch opens it. */
+.dk-tgpanel__picker { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
 .dk-tgpanel__sep { height: 1px; margin: 6px -10px 4px; background: var(--color-elevated-border); }
 .dk-tgpanel__item {
   display: flex;
@@ -153,7 +168,7 @@
   text-align: left;
   cursor: pointer;
 }
-.dk-tgpanel__item svg { color: var(--color-text-muted); flex: none; }
+.dk-tgpanel__item svg { flex: none; }
 .dk-tgpanel__item:hover, .dk-tgpanel__item:focus-visible { background: var(--color-item-hover-bg); outline: none; }
 .dk-tgpanel__item.is-danger, .dk-tgpanel__item.is-danger svg { color: var(--color-error); }
 .dk-tgpanel__item.is-danger:hover { background: color-mix(in srgb, var(--color-error) 9%, transparent); }

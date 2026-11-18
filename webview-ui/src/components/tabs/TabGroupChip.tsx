@@ -115,8 +115,22 @@ function GroupPanel({ group, count, anchor, onRename, onRecolor, onClose, action
     return () => document.removeEventListener('mousedown', away);
   }, [onClose]);
 
-  const colors = GROUP_COLORS.includes(group.color) ? GROUP_COLORS : [group.color, ...GROUP_COLORS];
-  const width = 248;
+  /* The eight, then the group's own when it wears something else — its
+     protocol's colour, or one picked from the full palette. */
+  const custom = !GROUP_COLORS.includes(group.color);
+  const colors = custom ? [...GROUP_COLORS, group.color] : GROUP_COLORS;
+  const pickerRef = useRef<HTMLInputElement>(null);
+  /* The native picker wants a hex; a group in a theme variable starts it at that colour as drawn. */
+  const startHex = () => {
+    if (/^#[0-9a-f]{6}$/i.test(group.color)) return group.color;
+    const probe = document.createElement('span');
+    probe.style.color = group.color;
+    document.body.appendChild(probe);
+    const rgb = getComputedStyle(probe).color.match(/\d+/g)?.slice(0, 3).map(Number) ?? [59, 130, 246];
+    probe.remove();
+    return `#${rgb.map(n => n.toString(16).padStart(2, '0')).join('')}`;
+  };
+  const width = 286;
   const left = Math.max(8, Math.min(anchor.left, window.innerWidth - width - 8));
 
   return createPortal(
@@ -141,7 +155,7 @@ function GroupPanel({ group, count, anchor, onRename, onRecolor, onClose, action
       <div className="dk-tgpanel__swatches" role="radiogroup" aria-label="Group colour">
         {colors.map(c => {
           const on = c === group.color;
-          const label = GROUP_COLORS.includes(c) ? COLOR_NAMES[GROUP_COLORS.indexOf(c)] : 'Protocol colour';
+          const label = GROUP_COLORS.includes(c) ? COLOR_NAMES[GROUP_COLORS.indexOf(c)] : c.startsWith('var(') ? 'Protocol colour' : `Custom ${c}`;
           return (
             <button
               key={c}
@@ -158,17 +172,33 @@ function GroupPanel({ group, count, anchor, onRename, onRecolor, onClose, action
             </button>
           );
         })}
+        {/* Any colour at all: the system palette. */}
+        <button
+          type="button"
+          className="dk-tgpanel__swatch dk-tgpanel__swatch--any"
+          aria-label="Pick any colour"
+          title="Pick any colour"
+          onClick={() => { const el = pickerRef.current; if (el) { el.value = startHex(); el.click(); } }}
+        />
+        <input
+          ref={pickerRef}
+          type="color"
+          className="dk-tgpanel__picker"
+          tabIndex={-1}
+          aria-hidden="true"
+          onChange={e => onRecolor(e.target.value)}
+        />
       </div>
       <div className="dk-tgpanel__sep" />
       <button type="button" className="dk-tgpanel__item" onClick={actions.newTab}>
-        <PlusIcon size={13} /> New tab in group
+        <PlusIcon size={13} style={{ color: 'var(--color-success)' }} /> New tab in group
       </button>
       <button type="button" className="dk-tgpanel__item" onClick={actions.toggle}>
-        <ChevronRightIcon size={13} style={{ transform: group.collapsed ? undefined : 'rotate(90deg)' }} />
+        <ChevronRightIcon size={13} style={{ color: 'var(--color-info)', transform: group.collapsed ? undefined : 'rotate(90deg)' }} />
         {group.collapsed ? 'Expand group' : 'Collapse group'}
       </button>
       <button type="button" className="dk-tgpanel__item" onClick={actions.ungroup}>
-        <LayersIcon size={13} /> Ungroup
+        <LayersIcon size={13} style={{ color: 'var(--color-warning)' }} /> Ungroup
       </button>
       <button type="button" className="dk-tgpanel__item is-danger" onClick={actions.closeGroup}>
         <CloseCircleIcon size={13} /> {count === 1 ? 'Close group and its tab' : `Close group and its ${count} tabs`}

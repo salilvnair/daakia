@@ -145,6 +145,8 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
   /* A group just made, whose chip arrives renaming. */
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [allTabsAnchor, setAllTabsAnchor] = useState<DOMRect | null>(null);
+  /* The strip's own menu: right-click the empty strip or +. */
+  const [stripMenu, setStripMenu] = useState<{ x: number; y: number } | null>(null);
   const [confirmCloseGroupId, setConfirmCloseGroupId] = useState<string | null>(null);
   /* The hover card: which tab, where, after a moment's rest. */
   const [hoverCard, setHoverCard] = useState<{ id: string; rect: DOMRect } | null>(null);
@@ -854,7 +856,8 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
           const r = e.currentTarget.getBoundingClientRect();
           setNewScratchMenu({ x: r.left, y: r.bottom + 2 });
         }}
-        title={`New ${protocolLabel} request or scratchpad`}
+        title={`New ${protocolLabel} request or scratchpad — right-click for tab groups`}
+        onContextMenu={(e) => { e.preventDefault(); setStripMenu({ x: e.clientX, y: e.clientY }); }}
       >
         <PlusIcon size={16} />
       </button>
@@ -866,7 +869,8 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
         onDragLeave={() => { if (overKey === 'end') setOverKey(null); }}
         onDrop={dropAtEnd}
         onDoubleClick={() => newTabLikeActive()}
-        title="Double-click for a new tab"
+        onContextMenu={(e) => { e.preventDefault(); setStripMenu({ x: e.clientX, y: e.clientY }); }}
+        title="Double-click for a new tab, right-click for tab groups"
       />
 
       {/* Every tab in a searchable list — Chrome's Tab Search. */}
@@ -1026,6 +1030,45 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
         danger
         onConfirm={() => { closeTabGroup(confirmCloseGroupId); setConfirmCloseGroupId(null); }}
         onCancel={() => setConfirmCloseGroupId(null)}
+      />
+    )}
+
+    {/* The strip's menu: tabs and groups without picking a tab first. */}
+    {stripMenu && (
+      <ContextMenu
+        items={[
+          { id: 'new-tab', label: 'New tab', icon: <PlusIcon size={13} />, iconColor: requestAccentColor },
+          { id: 'new-group', label: 'New tab group', icon: <PlusSquareIcon size={13} />, iconColor: 'var(--color-info)' },
+          { id: 'sep1', label: '', separator: true },
+          {
+            id: 'group-by', label: 'Group tabs', icon: <LayersIcon size={13} />, iconColor: 'var(--color-primary)',
+            submenu: [
+              { id: 'protocol', label: 'By protocol' },
+              { id: 'host', label: 'By host' },
+              { id: 'collection', label: 'By collection' },
+            ],
+          },
+          ...(tabGroups.length ? [{ id: 'ungroup-all', label: 'Ungroup all', icon: <LayersIcon size={13} />, iconColor: 'var(--color-text-muted)' }] : []),
+          { id: 'sep2', label: '', separator: true },
+          { id: 'reopen', label: 'Reopen closed tab', icon: <RefreshIcon size={13} />, iconColor: 'var(--color-success)', disabled: closedTabs.length === 0 },
+          { id: 'all-tabs', label: 'Search all tabs', icon: <SearchIcon size={13} />, iconColor: 'var(--color-info)', shortcut: 'Alt+L' },
+        ]}
+        position={stripMenu}
+        onSelect={(id, subId) => {
+          setStripMenu(null);
+          if (id === 'new-tab') newTabLikeActive();
+          else if (id === 'new-group') {
+            /* A group needs a tab: a new one, like the tab in front, in a new group named in place. */
+            newTabLikeActive();
+            const tabId = useTabsStore.getState().activeTabId;
+            if (tabId) setEditingGroupId(createTabGroup([tabId]));
+          }
+          else if (id === 'group-by' && subId) groupTabsBy(subId as GroupBy, collectionName);
+          else if (id === 'ungroup-all') ungroupAllTabs();
+          else if (id === 'reopen') reopenClosedTab();
+          else if (id === 'all-tabs') setAllTabsAnchor(countRef.current?.getBoundingClientRect() ?? null);
+        }}
+        onClose={() => setStripMenu(null)}
       />
     )}
 
