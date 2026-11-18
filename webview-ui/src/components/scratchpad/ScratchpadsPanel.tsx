@@ -6,7 +6,7 @@
  * land in the default folder unless they are made from a folder's own menu.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ButtonView, IconButtonView, InfoPopupView, TextInputView } from '@salilvnair/dui';
+import { ButtonView, CheckboxView, IconButtonView, InfoPopupView, TextInputView } from '@salilvnair/dui';
 import { ConfirmDialog, ContextMenu, type ContextMenuItem } from '../shared';
 import {
   useScratchpadStore, SCRATCHPAD_TYPES, SCRATCHPAD_TYPE_ORDER, scratchpadFileName, folderPath, folderAndDescendants,
@@ -18,11 +18,12 @@ import { copyText } from '../../utils/clipboard';
 import {
   ScratchpadIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon, ChevronRightIcon, ChevronDownIcon, PlusIcon,
   RenameIcon, CopyIcon, TrashIcon, MoreHorizontalIcon, CollapseAllIcon, FolderTransferIcon, ExternalLinkIcon,
-  CodeBracketsIcon, StarIcon, SearchIcon, ClipboardIcon, ExpandAllIcon, HelpCircleIcon, MoreVerticalIcon,
+  CodeBracketsIcon, StarIcon, SearchIcon, ClipboardIcon, ExpandAllIcon, HelpCircleIcon, MoreVerticalIcon, CheckIcon,
 } from '../../icons';
 import { buildScratchpadTree } from './scratchpad-tree';
 import { relativeTime } from './scratchpad-format';
 import './scratchpad.css';
+import '../rest/sidebar/collections-tree.css';
 
 const DRAG_TYPE = 'application/x-daakia-scratchpad';
 
@@ -35,6 +36,12 @@ type Menu =
   | { kind: 'folder'; id: string; x: number; y: number };
 
 type Renaming = { kind: 'file' | 'folder'; id: string; value: string } | null;
+
+type Dragged = { kind: 'file' | 'folder'; id: string };
+
+/* A folder taken out to the top level — the rule the collections tree keeps.
+   The tree's stylesheet holds the strip; the scratchpad's accent colours it. */
+const TOP_LEVEL = '__top__';
 
 function typeIcon(type: ScratchpadType) {
   const t = SCRATCHPAD_TYPES[type];
@@ -62,9 +69,72 @@ export function ScratchpadsPanel() {
   const [renaming, setRenaming] = useState<Renaming>(null);
   const [dropId, setDropId] = useState<string | null>(null);
   const [undoFor, setUndoFor] = useState<string | null>(null);
-  const dragId = useRef<string | null>(null);
+  /* What is on the move: the ref for the drag events, which must not wait for
+     a render; the state for what the tree draws while it moves. */
+  const dragId = useRef<Dragged | null>(null);
+  const [dragging, setDragging] = useState<Dragged | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
   const [confirmEmpty, setConfirmEmpty] = useState<ScratchpadFolder | null>(null);
+
+  /* Select and delete, from the More menu — the collections tree's, and like
+     it a ticked folder carries everything inside it. */
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set());
+  const [confirmBulk, setConfirmBulk] = useState(false);
+  const [confirmAll, setConfirmAll] = useState(false);
+  /* Everything: every scratchpad and every folder, the default one emptied
+     rather than removed — the collections panel's Delete all. */
+  const deleteAll = () => {
+    setConfirmAll(false);
+    stopSelecting();
+    const { files: n, folders: m } = store().deleteMany(files.map(f => f.id), folders.filter(f => !f.parentId).map(f => f.id));
+    useToastStore.getState().addToast({ type: 'info', message: `Deleted ${[n ? plural(n, 'scratchpad') : '', m ? plural(m, 'folder') : ''].filter(Boolean).join(' and ') || 'nothing'}.` });
+  };
+  const stopSelecting = () => { setSelecting(false); setPicked(new Set()); setConfirmBulk(false); };
+  const togglePick = (id: string) => setPicked(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  /* Every folder a tick reaches: the ticked ones and all below them. */
+  const coveredFolders = useMemo(
+    () => new Set(folders.filter(f => picked.has(f.id)).flatMap(f => folderAndDescendants(folders, f.id))),
+    [folders, picked],
+  );
+  /** Ticked because a folder above it is, and not to be unticked alone. */
+  const folderCovered = (f: ScratchpadFolder) => !!f.parentId && coveredFolders.has(f.parentId);
+  const bulkPlan = useMemo(() => {
+    const topFolders = folders.filter(f => picked.has(f.id) && !(f.parentId && coveredFolders.has(f.parentId)));
+    const ownFiles = files.filter(f => picked.has(f.id) && !coveredFolders.has(f.folderId));
+    const innerFolders = coveredFolders.size - topFolders.length;
+    const innerFiles = files.filter(f => coveredFolders.has(f.folderId)).length;
+    return { topFolders, ownFiles, innerFolders, innerFiles, keepsDefault: coveredFolders.has(defaultFolderId) };
+  }, [folders, files, picked, coveredFolders, defaultFolderId]);
+  const pickedCount = bulkPlan.topFolders.length + bulkPlan.ownFiles.length;
+  const topLevel = folders.filter(f => !f.parentId);
+  const allPicked = topLevel.length > 0 && topLevel.every(f => picked.has(f.id));
+  const deleteSelected = () => {
+    const { files: n, folders: m } = store().deleteMany(bulkPlan.ownFiles.map(f => f.id), bulkPlan.topFolders.map(f => f.id));
+    stopSelecting();
+    useToastStore.getState().addToast({ type: 'info', message: `Deleted ${[n ? plural(n, 'scratchpad') : '', m ? plural(m, 'folder') : ''].filter(Boolean).join(' and ') || 'nothing'}.` });
+  };
+  useEffect(() => {
+    if (!selecting || confirmBulk) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') stopSelecting(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selecting, confirmBulk]);
+  const pickBox = (id: string, covered: boolean) => (
+    <span className="coll-pick" onClick={e => e.stopPropagation()}>
+      <CheckboxView
+        checked={covered || picked.has(id)}
+        disabled={covered}
+        size="xs"
+        accentColor="var(--color-scratchpad)"
+        onChange={() => togglePick(id)}
+      />
+    </span>
+  );
   /* Date headings that are closed, by `<folder id>::<heading>[::<inner>]`. Open unless closed. */
   const [collapsedDates, setCollapsedDates] = useState<ReadonlySet<string>>(() => new Set());
   const toggleDate = (key: string) => setCollapsedDates(prev => {
@@ -120,6 +190,17 @@ export function ScratchpadsPanel() {
   const [, tick] = useState(0);
 
   useEffect(() => { useScratchpadStore.getState().load(); }, []);
+
+  /* The New collection shortcut, with a scratchpad in front: a folder here,
+     named in place like one made from the menu. */
+  const newFolderRef = useRef<(parentId: string | null) => void>(() => {});
+  useEffect(() => {
+    const onAsk = (e: MessageEvent) => {
+      if ((e.data as { type?: string })?.type === 'scratchpads:new-folder') newFolderRef.current(null);
+    };
+    window.addEventListener('message', onAsk);
+    return () => window.removeEventListener('message', onAsk);
+  }, []);
   useEffect(() => {
     const t = setInterval(() => tick(n => n + 1), 60_000);
     return () => clearInterval(t);
@@ -159,6 +240,7 @@ export function ScratchpadsPanel() {
     const f = store().createFolder(parentId);
     setRenaming({ kind: 'folder', id: f.id, value: f.name });
   };
+  newFolderRef.current = newFolder;
 
   const removeFile = (f: Scratchpad) => {
     store().remove(f.id);
@@ -206,6 +288,11 @@ export function ScratchpadsPanel() {
       return [
         { id: 'new-folder', label: 'New folder', icon: <FolderPlusIcon size={13} />, iconColor: 'var(--color-warning)' },
         { id: 'reveal', label: 'Reveal open scratchpad', icon: <ExternalLinkIcon size={13} />, iconColor: 'var(--color-info)', disabled: !activeScratchId },
+        ...(files.length || folders.length > 1 ? [
+          { id: 'sep', label: '', separator: true },
+          { id: 'select-delete', label: 'Select and delete', icon: <CheckIcon size={13} />, danger: true },
+          { id: 'delete-all', label: 'Delete all scratchpads', icon: <TrashIcon size={13} />, danger: true },
+        ] : []),
       ];
     }
     if (menu.kind === 'file') {
@@ -256,6 +343,8 @@ export function ScratchpadsPanel() {
     if (m.kind === 'more') {
       if (id === 'new-folder') newFolder(null);
       else if (id === 'reveal' && activeScratchId) store().reveal(activeScratchId);
+      else if (id === 'select-delete') { setRenaming(null); setPicked(new Set()); setSelecting(true); }
+      else if (id === 'delete-all') setConfirmAll(true);
       return;
     }
     if (m.kind === 'new') {
@@ -286,21 +375,55 @@ export function ScratchpadsPanel() {
     else if (id === 'delete') deleteFolder(folder);
   };
 
-  /* ── drag and drop ── */
+  /* ── drag and drop ──
+     The collections tree's rules: a scratchpad or a whole folder drops onto
+     any folder (or anything inside it) with no question asked, a folder never
+     into itself or its own subfolders, and a nested folder comes out to the
+     top level on the strip that shows while it is on the move. */
+
+  const endDrag = () => { dragId.current = null; setDragging(null); setDropId(null); };
+
+  /** May this item land in this folder? */
+  const accepts = (d: Dragged | null, folderId: string) => {
+    if (!d) return false;
+    if (d.kind === 'file') return files.find(f => f.id === d.id)?.folderId !== folderId;
+    return folders.find(f => f.id === d.id)?.parentId !== folderId && !folderAndDescendants(folders, d.id).includes(folderId);
+  };
 
   const dragOver = (folderId: string) => (e: React.DragEvent) => {
     if (!dragId.current) return;
+    e.stopPropagation();
+    if (!accepts(dragId.current, folderId)) { if (dropId) setDropId(null); return; }
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     if (dropId !== folderId) setDropId(folderId);
   };
   const drop = (folderId: string) => (e: React.DragEvent) => {
     e.preventDefault();
-    const id = dragId.current ?? e.dataTransfer.getData(DRAG_TYPE);
-    dragId.current = null;
-    setDropId(null);
-    if (id) store().move(id, folderId);
+    e.stopPropagation();
+    const d = dragId.current;
+    endDrag();
+    if (!d || !accepts(d, folderId)) return;
+    if (d.kind === 'file') store().move(d.id, folderId);
+    else store().moveFolder(d.id, folderId);
   };
+  const dropToTop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const d = dragId.current;
+    endDrag();
+    if (d?.kind === 'folder') store().moveFolder(d.id, null);
+  };
+  const startDrag = (e: React.DragEvent, d: Dragged) => {
+    e.stopPropagation();
+    dragId.current = d;
+    e.dataTransfer.setData(DRAG_TYPE, d.id);
+    e.dataTransfer.effectAllowed = 'move';
+    /* After the browser has taken its drag picture: changing the tree in the
+       same tick can cancel the drag. */
+    setTimeout(() => setDragging(d), 0);
+  };
+  const draggedFolder = dragging?.kind === 'folder' ? folders.find(f => f.id === dragging.id) : undefined;
 
   const renameInput = (kind: 'file' | 'folder', suffix?: string) => (
     <>
@@ -391,7 +514,7 @@ export function ScratchpadsPanel() {
             description="Scratch files that save themselves as you type. They belong to no workspace and are always here."
             items={[
               { code: '+ New', description: 'A JSON, XML, YAML, SQL or text scratchpad, or a folder' },
-              { code: 'Drag & Drop', description: 'Move a scratchpad into another folder' },
+              { code: 'Drag & Drop', description: 'Move a scratchpad or a folder into another folder, or a folder out to the top' },
               { code: 'Right-click', description: 'Rename, duplicate, move, change type, delete' },
               { code: 'Ctrl+Win+K', description: 'Type json, sql… to open or make one' },
             ]}
@@ -405,6 +528,32 @@ export function ScratchpadsPanel() {
           />
         </div>
       </div>
+
+      {/* Select and delete: the collections tree's bar, in the scratchpad's colour. */}
+      {selecting && (
+        <div className="coll-select-bar" role="toolbar" aria-label="Select and delete" style={{ '--coll-accent': 'var(--color-scratchpad)' } as React.CSSProperties}>
+          <CheckboxView
+            checked={allPicked}
+            indeterminate={picked.size > 0 && !allPicked}
+            size="sm"
+            accentColor="var(--color-scratchpad)"
+            label={pickedCount ? `${pickedCount} selected` : 'Select all'}
+            onChange={() => setPicked(allPicked ? new Set() : new Set(topLevel.map(f => f.id)))}
+          />
+          <span className="flex-1" />
+          <ButtonView size="sm" variant="ghost" onClick={stopSelecting}>Cancel</ButtonView>
+          <ButtonView
+            size="sm"
+            variant="ghost"
+            accentColor="var(--color-error)"
+            iconLeft={<TrashIcon size={14} />}
+            disabled={!pickedCount}
+            onClick={() => setConfirmBulk(true)}
+          >
+            Delete
+          </ButtonView>
+        </div>
+      )}
 
       <div className="dk-scratch-tree" role="tree" aria-label="Scratchpads">
         {!loaded && <div className="dk-scratch-tree__note">Loading…</div>}
@@ -420,36 +569,40 @@ export function ScratchpadsPanel() {
                 key={`d:${f.id}`}
                 role="treeitem"
                 aria-expanded={row.expanded}
-                className={`dk-scratch-tree__row dk-scratch-tree__row--folder${dropId === f.id ? ' dk-scratch-tree__row--drop' : ''}`}
+                className={`dk-scratch-tree__row dk-scratch-tree__row--folder${dropId === f.id ? ' dk-scratch-tree__row--drop' : ''}${selecting && coveredFolders.has(f.id) ? ' coll-row--picked' : ''}`}
                 style={{ paddingLeft: 6 + row.depth * 14 }}
                 onClick={() => !isRenaming && store().setFolderOpen(f.id, !row.expanded)}
-                onDoubleClick={() => startRenameFolder(f)}
+                onDoubleClick={() => !selecting && startRenameFolder(f)}
                 onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setMenu({ kind: 'folder', id: f.id, ...at(e) }); }}
+                draggable={!isRenaming && !selecting}
+                onDragStart={e => startDrag(e, { kind: 'folder', id: f.id })}
+                onDragEnd={endDrag}
                 onDragOver={dragOver(f.id)}
                 onDragLeave={() => { if (dropId === f.id) setDropId(null); }}
                 onDrop={drop(f.id)}
                 onKeyDown={e => { if (e.key === 'F2') startRenameFolder(f); }}
                 tabIndex={0}
               >
+                {selecting && pickBox(f.id, folderCovered(f))}
                 <ChevronRightIcon size={11} className="dk-scratch-tree__chevron" style={{ transform: row.expanded ? 'rotate(90deg)' : undefined }} />
                 {row.expanded
-                  ? <FolderOpenIcon size={14} style={{ color: 'var(--color-warning)', flexShrink: 0 }} />
-                  : <FolderIcon size={14} style={{ color: 'var(--color-warning)', flexShrink: 0 }} />}
+                  ? <FolderOpenIcon size={14} style={{ color: 'var(--color-scratchpad)', flexShrink: 0 }} />
+                  : <FolderIcon size={14} style={{ color: 'var(--color-scratchpad)', flexShrink: 0 }} />}
                 {isRenaming ? renameInput('folder') : (
                   <>
                     <span className="dk-scratch-tree__name">{f.name}</span>
                     {f.id === defaultFolderId && <span className="dk-scratch-tree__default" title="New scratchpads go here">default</span>}
                     <span className="flex-1" />
-                    {row.count > 3 && treeButtons(() => expandFolderTree(f.id), () => collapseFolderTree(f.id))}
+                    {!selecting && row.count > 3 && treeButtons(() => expandFolderTree(f.id), () => collapseFolderTree(f.id))}
                     <span className="dk-scratch-tree__count">{row.count}</span>
-                    <button
+                    {!selecting && <button
                       type="button"
                       className="dk-scratch-tree__act"
                       aria-label="Folder actions"
                       onClick={e => { e.stopPropagation(); setMenu({ kind: 'folder', id: f.id, ...at(e, true) }); }}
                     >
                       <MoreHorizontalIcon size={13} />
-                    </button>
+                    </button>}
                   </>
                 )}
               </div>
@@ -486,14 +639,19 @@ export function ScratchpadsPanel() {
               key={`f:${p.id}`}
               role="treeitem"
               aria-selected={activeScratchId === p.id}
-              className={`dk-scratch-tree__row${activeScratchId === p.id ? ' dk-scratch-tree__row--active' : ''}`}
-              style={{ paddingLeft: 24 + (row.depth - 1) * 14 }}
-              draggable={!isRenaming}
-              onDragStart={e => { dragId.current = p.id; e.dataTransfer.setData(DRAG_TYPE, p.id); e.dataTransfer.effectAllowed = 'move'; }}
-              onDragEnd={() => { dragId.current = null; setDropId(null); }}
+              className={`dk-scratch-tree__row${activeScratchId === p.id && !selecting ? ' dk-scratch-tree__row--active' : ''}${selecting && (picked.has(p.id) || coveredFolders.has(p.folderId)) ? ' coll-row--picked' : ''}`}
+              style={{ paddingLeft: (selecting ? 6 : 24) + (row.depth - 1) * 14 }}
+              draggable={!isRenaming && !selecting}
+              onDragStart={e => startDrag(e, { kind: 'file', id: p.id })}
+              onDragEnd={endDrag}
               onDragOver={dragOver(p.folderId)}
               onDrop={drop(p.folderId)}
-              onClick={() => !isRenaming && store().open(p.id)}
+              /* In select mode a click ticks the row rather than opening it. */
+              onClick={() => {
+                if (isRenaming) return;
+                if (selecting) { if (!coveredFolders.has(p.folderId)) togglePick(p.id); return; }
+                store().open(p.id);
+              }}
               onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setMenu({ kind: 'file', id: p.id, ...at(e) }); }}
               onKeyDown={e => {
                 if (isRenaming) return;
@@ -504,11 +662,13 @@ export function ScratchpadsPanel() {
               tabIndex={0}
               title={`${folderPath(folders, p.folderId)} / ${scratchpadFileName(p)}`}
             >
+              {selecting && pickBox(p.id, coveredFolders.has(p.folderId))}
               {typeIcon(p.type)}
               {isRenaming ? renameInput('file', `.${SCRATCHPAD_TYPES[p.type].ext}`) : (
                 <>
                   <span className="dk-scratch-tree__name dk-scratch-tree__name--file">{scratchpadFileName(p)}</span>
                   <span className="dk-scratch-tree__ago">{relativeTime(p.updatedAt)}</span>
+                  {!selecting && <>
                   <button
                     type="button"
                     className="dk-scratch-tree__act"
@@ -525,11 +685,24 @@ export function ScratchpadsPanel() {
                   >
                     <MoreHorizontalIcon size={13} />
                   </button>
+                  </>}
                 </>
               )}
             </div>
           );
         })}
+        {/* Only while a folder is on the move and has somewhere to come out of. */}
+        {draggedFolder?.parentId && (
+          <div
+            className={`coll-droptop${dropId === TOP_LEVEL ? ' is-over' : ''}`}
+            style={{ '--coll-accent': 'var(--color-scratchpad)' } as React.CSSProperties}
+            onDragOver={e => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; if (dropId !== TOP_LEVEL) setDropId(TOP_LEVEL); }}
+            onDragLeave={() => { if (dropId === TOP_LEVEL) setDropId(null); }}
+            onDrop={dropToTop}
+          >
+            Drop here to make it a folder of its own
+          </div>
+        )}
         {loaded && files.length === 0 && !query.trim() && (
           <div className="dk-scratch-tree__note">
             Nothing here yet. Press New, or type <b>json</b> in the command palette.
@@ -545,8 +718,41 @@ export function ScratchpadsPanel() {
       )}
 
       <div className="dk-scratch-panel__foot">
-        Drag a scratchpad onto a folder to move it. New ones go to <b>{defaultName}</b>.
+        Drag a scratchpad or a folder onto a folder to move it. New ones go to <b>{defaultName}</b>.
       </div>
+
+      {confirmBulk && (() => {
+        const { topFolders, ownFiles, innerFolders, innerFiles, keepsDefault } = bulkPlan;
+        const what = [topFolders.length ? plural(topFolders.length, 'folder') : '', ownFiles.length ? plural(ownFiles.length, 'scratchpad') : ''].filter(Boolean).join(' and ');
+        const along = [innerFolders ? plural(innerFolders, 'subfolder') : '', innerFiles ? plural(innerFiles, 'scratchpad') : ''].filter(Boolean).join(' and ');
+        return (
+          <ConfirmDialog
+            title={`Delete ${what}?`}
+            message={[
+              along ? `Everything inside ${topFolders.length === 1 ? 'it goes too' : 'them goes too'}: ${along}.` : '',
+              keepsDefault ? `"${defaultName}" itself stays, emptied, as the folder new scratchpads go to.` : '',
+              'This cannot be undone.',
+            ].filter(Boolean).join(' ')}
+            confirmLabel="Delete"
+            onConfirm={deleteSelected}
+            onCancel={() => setConfirmBulk(false)}
+          />
+        );
+      })()}
+
+      {confirmAll && (() => {
+        const otherFolders = folders.filter(f => f.id !== defaultFolderId).length;
+        const what = [files.length ? plural(files.length, 'scratchpad') : '', otherFolders ? plural(otherFolders, 'folder') : ''].filter(Boolean).join(' and ');
+        return (
+          <ConfirmDialog
+            title="Delete all scratchpads?"
+            message={`${what ? `${what} will be deleted. ` : ''}"${defaultName}" stays, empty, as the folder new scratchpads go to. This cannot be undone.`}
+            confirmLabel="Delete all"
+            onConfirm={deleteAll}
+            onCancel={() => setConfirmAll(false)}
+          />
+        );
+      })()}
 
       {confirmEmpty && (() => {
         const c = contentsOf(confirmEmpty);

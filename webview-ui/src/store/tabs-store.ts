@@ -1,3 +1,8 @@
+import {
+  normalize, createGroup, moveToGroup, groupBy, autoGroupFor, ungroup, ungroupAll, moveGroup,
+  type TabGroup, type GroupBy,
+} from '../services/tabs/tab-groups';
+import { logUiEvent } from './ui-audit-store';
 import { create } from 'zustand';
 import type { ExecutionSettings } from '../components/shared/settings/execution-settings';
 import type { KeyValueRow } from '../components/shared';
@@ -187,6 +192,8 @@ export interface RequestTab {
   collectionId?: string; // which collection this request belongs to
   requestId?: string; // which collection_request row
   pinned?: boolean; // pinned tabs stick to the left
+  /** The tab group it is in — see services/tabs/tab-groups.ts. */
+  groupId?: string;
   // Request progress stages (shown during loading)
   requestProgress?: RequestProgressStage[];
   // WebSocket-specific fields
@@ -596,6 +603,12 @@ interface TabsState {
   tabs: RequestTab[];
   activeTabId: string;
   activeProtocol: Protocol;
+  /** Chrome-style tab groups, in no particular order: the strip's order comes from the tabs. */
+  tabGroups: TabGroup[];
+  /** The last tabs closed, newest first, as they were — for Reopen closed tab. Not saved. */
+  closedTabs: RequestTab[];
+  /** Tab ids, most recently in front first — the tab list's Recently used. */
+  recentTabIds: string[];
   previousTabId: string;
 
   // Actions
@@ -670,7 +683,26 @@ interface TabsState {
   closeSavedTabs: () => void;
   pinTab: (id: string) => void;
   unpinTab: (id: string) => void;
-  hydrateSnapshot: (tabs: RequestTab[], activeTabId: string, activeProtocol: Protocol) => void;
+  hydrateSnapshot: (tabs: RequestTab[], activeTabId: string, activeProtocol: Protocol, tabGroups?: TabGroup[]) => void;
+  /** A new group around these tabs. Returns its id. */
+  createTabGroup: (tabIds: string[], name?: string) => string;
+  /** Into a group, at its end — or out of every group with null. */
+  moveTabToGroup: (tabId: string, groupId: string | null) => void;
+  renameTabGroup: (groupId: string, name: string) => void;
+  recolorTabGroup: (groupId: string, color: string) => void;
+  /** Fold or open a group; with no second argument, the other way round. */
+  toggleTabGroup: (groupId: string, collapsed?: boolean) => void;
+  ungroupTabGroup: (groupId: string) => void;
+  closeTabGroup: (groupId: string) => void;
+  /** Group similar tabs; `nameOf` names a group from its key (a collection id → its name). */
+  groupTabsBy: (by: GroupBy, nameOf?: (key: string) => string) => void;
+  /** Bring back a closed tab — the most recent with no id — as it was. */
+  reopenClosedTab: (id?: string) => void;
+  ungroupAllTabs: () => void;
+  /** Move a whole group to just before a tab, or to the end with null. */
+  moveTabGroup: (groupId: string, beforeTabId: string | null) => void;
+  /** Drag and drop: put a tab just before another (or last), in the group it lands in. */
+  dropTab: (tabId: string, beforeTabId: string | null, groupId: string | null) => void;
 }
 
 export const useTabsStore = create<TabsState>((set, get) => {
@@ -679,16 +711,16 @@ export const useTabsStore = create<TabsState>((set, get) => {
     activeTabId: '',
     activeProtocol: 'rest' as Protocol,
     previousTabId: '',
+    tabGroups: [],
+    closedTabs: [],
+    recentTabIds: [],
 
     addTab: (partial) => {
       const { activeEnvId } = useEnvStore.getState();
       const envId = activeEnvId && activeEnvId !== GLOBAL_ENV_ID ? activeEnvId : null;
       const { activeProtocol } = get();
       const tab = createDefaultTab({ envId, protocol: activeProtocol, ...partial });
-      set(s => ({
-        tabs: [...s.tabs, tab],
-        activeTabId: tab.id,
-      }));
+      set(s => ({ ...joinProtocolGroup([...s.tabs, tab], s.tabGroups, tab), activeTabId: tab.id }));
     },
 
     clearSettingsTarget: () => set({ settingsTarget: undefined }),
@@ -764,7 +796,7 @@ export const useTabsStore = create<TabsState>((set, get) => {
       }
       const tab = createDefaultTab({ type: 'scratchpad', name });
       tab.scratchpadId = scratchpadId;
-      set(s => ({ tabs: [...s.tabs, tab], activeTabId: tab.id, previousTabId: activeTabId }));
+      set(s => ({ ...joinProtocolGroup([...s.tabs, tab], s.tabGroups, tab), activeTabId: tab.id, previousTabId: activeTabId }));
     },
 
     openScratchpadHome: () => {
@@ -772,7 +804,7 @@ export const useTabsStore = create<TabsState>((set, get) => {
       const home = tabs.find(t => t.type === 'scratchpad' && !t.scratchpadId);
       if (home) { set({ activeTabId: home.id, previousTabId: activeTabId }); return; }
       const tab = createDefaultTab({ type: 'scratchpad', name: 'Scratchpads' });
-      set(s => ({ tabs: [...s.tabs, tab], activeTabId: tab.id, previousTabId: activeTabId }));
+      set(s => ({ ...joinProtocolGroup([...s.tabs, tab], s.tabGroups, tab), activeTabId: tab.id, previousTabId: activeTabId }));
     },
 
     openDk8sTab: () => {
@@ -1112,7 +1144,7 @@ export const useTabsStore = create<TabsState>((set, get) => {
       });
     },
 
-    hydrateSnapshot: (tabs, activeTabId, activeProtocol) => {
+    hydrateSnapshot: (tabs, activeTabId, activeProtocol, tabGroups = []) => {
       // Restore tabs without response data (response is too large to persist).
       // Strip GQL connection state — the socket is gone after a reload, so always start fresh.
       // A Doctor tab saved before the analyzers moved into dk8s would restore
@@ -1125,12 +1157,148 @@ export const useTabsStore = create<TabsState>((set, get) => {
         }
         return base;
       });
+      const grouped = normalize(restored, tabGroups);
       set({
-        tabs: restored,
+        tabs: grouped.tabs,
+        tabGroups: grouped.groups,
         // The dropped tab may have been the active one.
         activeTabId: restored.some(t => t.id === activeTabId) ? activeTabId : (restored[0]?.id ?? ''),
         activeProtocol,
       });
     },
+
+    // ── Tab groups. The rules are pure functions in services/tabs/tab-groups.ts. ──
+
+    createTabGroup: (tabIds, name) => {
+      const r = createGroup(get().tabs, get().tabGroups, tabIds, { name });
+      set({ tabs: r.tabs, tabGroups: r.groups });
+      logUiEvent('tab.group.create', { tabs: tabIds.length });
+      return r.groupId;
+    },
+    moveTabToGroup: (tabId, groupId) => {
+      const r = moveToGroup(get().tabs, get().tabGroups, tabId, groupId);
+      set({ tabs: r.tabs, tabGroups: r.groups });
+    },
+    renameTabGroup: (groupId, name) => set(s => ({ tabGroups: s.tabGroups.map(g => (g.id === groupId ? { ...g, name: name.trim() } : g)) })),
+    recolorTabGroup: (groupId, color) => set(s => ({ tabGroups: s.tabGroups.map(g => (g.id === groupId ? { ...g, color } : g)) })),
+    toggleTabGroup: (groupId, collapsed) => {
+      const g = get().tabGroups.find(x => x.id === groupId);
+      if (!g) return;
+      const next = collapsed ?? !g.collapsed;
+      const s = get();
+      /* Folding the group the active tab is in moves to the nearest tab outside it,
+         as Chrome does: the active tab is never hidden. */
+      const active = s.tabs.find(t => t.id === s.activeTabId);
+      let activeTabId = s.activeTabId;
+      if (next && active?.groupId === groupId) {
+        const at = s.tabs.indexOf(active);
+        const outside = [...s.tabs.slice(at + 1), ...s.tabs.slice(0, at).reverse()].find(t => t.groupId !== groupId);
+        if (outside) activeTabId = outside.id;
+        else return; // nothing else to show: a group holding every tab stays open
+      }
+      set({ tabGroups: s.tabGroups.map(x => (x.id === groupId ? { ...x, collapsed: next } : x)), activeTabId });
+      logUiEvent('tab.group.toggle', { collapsed: next });
+    },
+    ungroupTabGroup: (groupId) => {
+      const r = ungroup(get().tabs, get().tabGroups, groupId);
+      set({ tabs: r.tabs, tabGroups: r.groups });
+      logUiEvent('tab.group.ungroup', { all: false });
+    },
+    closeTabGroup: (groupId) => {
+      const s = get();
+      const gone = new Set(s.tabs.filter(t => t.groupId === groupId && !t.pinned).map(t => t.id));
+      const tabs = s.tabs.filter(t => !gone.has(t.id));
+      const activeTabId = gone.has(s.activeTabId) ? (tabs[0]?.id ?? '') : s.activeTabId;
+      set({ tabs, tabGroups: s.tabGroups.filter(g => g.id !== groupId), activeTabId });
+    },
+    groupTabsBy: (by, nameOf) => {
+      const r = groupBy(get().tabs, get().tabGroups, by, nameOf);
+      set({ tabs: r.tabs, tabGroups: r.groups });
+      logUiEvent('tab.group.create', { by, groups: r.groups.length });
+    },
+    reopenClosedTab: (id) => {
+      const s = get();
+      const tab = id ? s.closedTabs.find(t => t.id === id) : s.closedTabs[0];
+      if (!tab) return;
+      const closedTabs = s.closedTabs.filter(t => t !== tab);
+      /* Its group, if that is still here; otherwise loose — or into a matching auto group. */
+      const back = { ...tab, groupId: s.tabGroups.some(g => g.id === tab.groupId) ? tab.groupId : undefined };
+      if (s.tabs.some(t => t.id === back.id)) { set({ closedTabs, activeTabId: back.id }); return; }
+      const joined = back.groupId
+        ? (() => { const r = moveToGroup([...s.tabs, back], s.tabGroups, back.id, back.groupId!); return { tabs: r.tabs, tabGroups: r.groups }; })()
+        : joinProtocolGroup([...s.tabs, back], s.tabGroups, back);
+      set({ ...joined, closedTabs, activeTabId: back.id });
+      logUiEvent('tab.reopen', {});
+    },
+    ungroupAllTabs: () => {
+      const r = ungroupAll(get().tabs);
+      set({ tabs: r.tabs, tabGroups: r.groups });
+      logUiEvent('tab.group.ungroup', { all: true });
+    },
+    moveTabGroup: (groupId, beforeTabId) => {
+      const r = moveGroup(get().tabs, get().tabGroups, groupId, beforeTabId);
+      set({ tabs: r.tabs, tabGroups: r.groups });
+    },
+    dropTab: (tabId, beforeTabId, groupId) => {
+      const s = get();
+      const tab = s.tabs.find(t => t.id === tabId);
+      if (!tab || tabId === beforeTabId) return;
+      const without = s.tabs.filter(t => t.id !== tabId);
+      const at = beforeTabId ? without.findIndex(t => t.id === beforeTabId) : without.length;
+      const moved = { ...tab, groupId: tab.pinned ? undefined : (groupId ?? undefined) };
+      const r = normalize([...without.slice(0, at === -1 ? without.length : at), moved, ...without.slice(at === -1 ? without.length : at)], s.tabGroups);
+      set({ tabs: r.tabs, tabGroups: r.groups });
+    },
   };
+});
+
+/**
+ * A new tab joins the group Group tabs made for its protocol, host or
+ * collection, at that group's end. Only those collect tabs by themselves: a
+ * group made by hand holds what was put in it.
+ */
+function joinProtocolGroup(tabs: RequestTab[], groups: TabGroup[], tab: RequestTab): { tabs: RequestTab[]; tabGroups: TabGroup[] } {
+  const groupId = tab.pinned ? undefined : autoGroupFor(tab, groups);
+  if (!groupId) return { tabs, tabGroups: groups };
+  const r = moveToGroup(tabs, groups, tab.id, groupId);
+  return { tabs: r.tabs, tabGroups: r.groups };
+}
+
+/*
+  Whatever changed the tabs — a close, close others, a pin — the group rules
+  hold afterwards: an emptied group goes, a pinned tab leaves its group, and a
+  group never splits. The active tab is never inside a folded group.
+*/
+const CLOSED_KEPT = 20;
+useTabsStore.subscribe((s, prev) => {
+  if (s.tabs === prev.tabs && s.tabGroups === prev.tabGroups && s.activeTabId === prev.activeTabId) return;
+  /* Everything below lands in one write, and every part always runs: an early
+     return here once left emptied groups behind whenever a tab closed. */
+  const patch: Partial<TabsState> = {};
+
+  /* What closed, for Reopen closed tab: whatever the way it went. An empty
+     scratchpad home is not worth bringing back. */
+  if (s.tabs !== prev.tabs) {
+    const now = new Set(s.tabs.map(t => t.id));
+    const gone = prev.tabs.filter(t => !now.has(t.id) && !(t.type === 'scratchpad' && !t.scratchpadId))
+      .map(t => ({ ...t, response: null, loading: false }));
+    if (gone.length) patch.closedTabs = [...gone.reverse(), ...s.closedTabs.filter(c => !now.has(c.id))].slice(0, CLOSED_KEPT);
+  }
+  if (s.activeTabId !== prev.activeTabId && s.activeTabId) {
+    const live = new Set(s.tabs.map(t => t.id));
+    patch.recentTabIds = [s.activeTabId, ...s.recentTabIds.filter(id => id !== s.activeTabId && live.has(id))];
+  }
+
+  /* The group rules: emptied groups go, groups stay together, and the active
+     tab is never inside a folded group. */
+  if (s.tabGroups.length > 0 || s.tabs.some(t => t.groupId)) {
+    const r = normalize(s.tabs, s.tabGroups);
+    const sameOrder = r.tabs.length === s.tabs.length && r.tabs.every((t, i) => t === s.tabs[i]);
+    const active = r.tabs.find(t => t.id === s.activeTabId);
+    const openActive = !!active?.groupId && !!r.groups.find(g => g.id === active.groupId)?.collapsed;
+    const groups = openActive ? r.groups.map(g => (g.id === active!.groupId ? { ...g, collapsed: false } : g)) : r.groups;
+    if (!sameOrder) patch.tabs = r.tabs;
+    if (groups.length !== s.tabGroups.length || openActive) patch.tabGroups = groups;
+  }
+  if (Object.keys(patch).length) useTabsStore.setState(patch);
 });

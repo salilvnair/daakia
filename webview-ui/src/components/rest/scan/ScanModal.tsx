@@ -453,6 +453,11 @@ export function ScanModal() {
                   total={total}
                   focusedId={s.focused}
                   onFocus={id => s.focus(id)}
+                  describe={a => {
+                    const r = byId.get(a.opId)!;
+                    const op = asOp(r);
+                    return { method: r.method, text: `${requestName(op, nameBy)} ${op.path}` };
+                  }}
                   renderRequest={a => {
                     const r = byId.get(a.opId)!;
                     const worst = worstProvenance(r);

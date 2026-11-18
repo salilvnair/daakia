@@ -8,6 +8,8 @@ import '@salilvnair/convengine-chat/style.css';
 import { installDaakiaBridges } from './ai/DaakiaVsCodeBridge';
 import { installKeyboardListener } from './services/keyboard';
 import { installPasteBridge } from './services/keyboard/paste-bridge';
+import { newTabLikeActive, newScratchpadOfChosenType } from './services/keyboard/new-tab-like-active';
+import { useScanStore } from './store/scan-store';
 import { installExportToasts } from './components/k8s/export-toasts';
 
 // Install bridges before any React render so ConvEngineChat fetch/EventSource is ready
@@ -405,10 +407,10 @@ export default function App() {
     }
   }, 'Save request');
 
-  // Ctrl+N — New tab
+  // Ctrl+N — another of whatever is in front: a REST tab on REST, a scratchpad on a scratchpad.
   useKeyboardShortcut('app.new-tab', { key: 'n', ctrlKey: true }, (e) => {
     e.preventDefault();
-    useTabsStore.getState().addTab();
+    newTabLikeActive();
   }, 'New tab');
 
   // Ctrl+W — Close current tab
@@ -438,6 +440,119 @@ export default function App() {
     e.preventDefault();
     setPaletteOpen(prev => !prev);
   }, 'Command palette');
+
+  /*
+    The rest of the app, each on a rebindable shortcut (Settings → Keymap).
+
+    Alt+letter, like Alt+B and Alt+/ above: VS Code binds next to nothing
+    there. Not F, E, S, V, G, R, T or H, which open VS Code's own menus on
+    Windows, and not Ctrl+Alt, which is AltGr on many keyboards — where it
+    types @, € or a bracket.
+  */
+  const openSection = (section: SidebarSection) => { setSidebarSection(section); setSidebarOpen(true); };
+  const collectionsSection = (protocol: string) => `${PROTOCOL_SIDEBAR_PREFIX[protocol] ?? ''}collections` as SidebarSection;
+
+  useKeyboardShortcut('app.new-scratchpad', { key: 'n', altKey: true }, (e) => {
+    e.preventDefault();
+    newScratchpadOfChosenType();
+  }, 'New scratchpad');
+
+  useKeyboardShortcut('app.new-collection', { key: 'c', altKey: true }, (e) => {
+    e.preventDefault();
+    const st = useTabsStore.getState();
+    const front = st.tabs.find(t => t.id === st.activeTabId);
+    /* A scratchpad in front: its tree's own kind of collection, a folder. */
+    if (front?.type === 'scratchpad') { window.postMessage({ type: 'scratchpads:new-folder' }, '*'); return; }
+    /* The collections panel only shows beside a request tab. */
+    if (front?.type !== 'request') st.switchProtocol(st.activeProtocol);
+    openSection(collectionsSection(useTabsStore.getState().activeProtocol));
+    setTimeout(() => window.postMessage({ type: 'collections:new' }, '*'), 80);
+  }, 'New collection');
+
+  useKeyboardShortcut('app.duplicate-tab', { key: 'd', altKey: true }, (e) => {
+    e.preventDefault();
+    const { activeTabId: id, duplicateTab } = useTabsStore.getState();
+    if (id) duplicateTab(id);
+  }, 'Duplicate tab');
+
+  const stepTab = (by: number) => {
+    const { tabs: t, activeTabId: id, setActiveTab } = useTabsStore.getState();
+    if (t.length < 2) return;
+    const at = t.findIndex(x => x.id === id);
+    setActiveTab(t[(at + by + t.length) % t.length].id);
+  };
+  useKeyboardShortcut('app.next-tab', { key: ']', altKey: true }, (e) => { e.preventDefault(); stepTab(1); }, 'Next tab');
+  useKeyboardShortcut('app.prev-tab', { key: '[', altKey: true }, (e) => { e.preventDefault(); stepTab(-1); }, 'Previous tab');
+
+  /* Chrome's Tab Search: every tab, searchable, with the recently closed. */
+  useKeyboardShortcut('app.all-tabs', { key: 'l', altKey: true }, (e) => {
+    e.preventDefault();
+    window.dispatchEvent(new Event('daakia:all-tabs'));
+  }, 'All tabs');
+
+  useKeyboardShortcut('app.reopen-tab', { key: 't', altKey: true, shiftKey: true }, (e) => {
+    e.preventDefault();
+    useTabsStore.getState().reopenClosedTab();
+  }, 'Reopen closed tab');
+
+  useKeyboardShortcut('app.fold-tab-group', { key: '.', altKey: true }, (e) => {
+    e.preventDefault();
+    const st = useTabsStore.getState();
+    const groupId = st.tabs.find(t => t.id === st.activeTabId)?.groupId;
+    if (groupId) st.toggleTabGroup(groupId, true);
+  }, 'Fold the tab group in front');
+
+  useKeyboardShortcut('app.close-other-tabs', { key: 'w', altKey: true, shiftKey: true }, (e) => {
+    e.preventDefault();
+    const { activeTabId: id, closeOtherTabs } = useTabsStore.getState();
+    if (id) closeOtherTabs(id);
+  }, 'Close other tabs');
+
+  useKeyboardShortcut('app.open-workspace', { key: 'w', altKey: true }, (e) => {
+    e.preventDefault();
+    useTabsStore.getState().openWorkspaceTab();
+  }, 'Open workspace');
+
+  useKeyboardShortcut('app.open-settings', { key: ',', altKey: true }, (e) => {
+    e.preventDefault();
+    useTabsStore.getState().openSettingsTab();
+  }, 'Open settings');
+
+  useKeyboardShortcut('app.open-environments', { key: 'e', altKey: true, shiftKey: true }, (e) => {
+    e.preventDefault();
+    openSection('environments');
+  }, 'Show environments');
+
+  useKeyboardShortcut('app.open-history', { key: 'y', altKey: true }, (e) => {
+    e.preventDefault();
+    const p = useTabsStore.getState().activeProtocol;
+    openSection(`${PROTOCOL_SIDEBAR_PREFIX[p] ?? ''}history` as SidebarSection);
+  }, 'Show history');
+
+  useKeyboardShortcut('app.open-scratchpads', { key: 'p', altKey: true }, (e) => {
+    e.preventDefault();
+    useTabsStore.getState().openScratchpadHome();
+  }, 'Open scratchpads');
+
+  useKeyboardShortcut('app.scan-code', { key: 'k', altKey: true }, (e) => {
+    e.preventDefault();
+    useScanStore.getState().openScan();
+  }, 'Scan code for requests');
+
+  useKeyboardShortcut('app.daakia-ai', { key: 'a', altKey: true }, (e) => {
+    e.preventDefault();
+    useTabsStore.getState().openDaakiaAiTab();
+  }, 'Open Daakia AI');
+
+  useKeyboardShortcut('app.mock-server', { key: 'm', altKey: true }, (e) => {
+    e.preventDefault();
+    useTabsStore.getState().openMockServerTab();
+  }, 'Open mock servers');
+
+  useKeyboardShortcut('app.open-wiki', { key: 'i', altKey: true }, (e) => {
+    e.preventDefault();
+    useTabsStore.getState().openDaakiaWikiTab();
+  }, 'Open the wiki');
 
   // Right-click context menu is handled by <RightClickMenu /> component
 
@@ -601,7 +716,7 @@ export default function App() {
   // Save workspace snapshot — flush function shared by the debounced autosave
   // and the immediate flush-on-hide/unload listeners below.
   const flushWorkspaceSnapshot = useCallback(() => {
-    const { tabs: allTabs, activeTabId: atId, activeProtocol: ap } = useTabsStore.getState();
+    const { tabs: allTabs, activeTabId: atId, activeProtocol: ap, tabGroups: groups } = useTabsStore.getState();
     // Only save request tabs (strip response data to keep snapshot small)
     const tabSnapshot = allTabs.map(t => ({ ...t, response: null, loading: false }));
     // Include breakpoint state for persistence across sessions
@@ -612,6 +727,7 @@ export default function App() {
         tabs: tabSnapshot,
         activeTabId: atId,
         activeProtocol: ap,
+        tabGroups: groups,
         sidebarSection,
         sidebarOpen,
         sidebarWidth,
@@ -637,7 +753,9 @@ export default function App() {
     channel down before a postMessage sent from `pagehide` is ever delivered.
     There is no ordering guarantee to lean on, so the fix is not to need one.
   */
-  const tabSignature = tabs.map(t => t.id).join(',');
+  /* A tab's group is part of which tabs exist: grouping is saved at once too. */
+  const tabGroups = useTabsStore(s => s.tabGroups);
+  const tabSignature = tabs.map(t => `${t.id}:${t.groupId ?? ''}`).join(',') + '|' + tabGroups.map(g => `${g.id}:${g.name}:${g.color}:${g.collapsed}`).join(',');
   const prevSignature = useRef(tabSignature);
 
   useEffect(() => {

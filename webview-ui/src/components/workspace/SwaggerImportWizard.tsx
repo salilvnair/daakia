@@ -365,6 +365,10 @@ export function SwaggerImportWizard({ onClose }: { onClose: () => void }) {
                     rootName={collectionName}
                     onRootName={setCollectionName}
                     total={total}
+                    describe={r => {
+                      const op = ops.get(r.opId)!;
+                      return { method: op.method, text: `${requestName(op, nameBy)} ${op.path} ${op.operationId} ${op.summary ?? ''}` };
+                    }}
                     renderRequest={r => {
                       const op = ops.get(r.opId)!;
                       return (

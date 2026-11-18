@@ -14,7 +14,8 @@ import { useTabsStore, type RequestTab } from '../../store/tabs-store';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { useToastStore } from '../../store/toast-store';
 import { copyText } from '../../utils/clipboard';
-import { CheckIcon, ChevronDownIcon, ChevronRightIcon, CopyIcon, WrapLinesIcon, CodeBracketsIcon, ScratchpadIcon } from '../../icons';
+import { CheckIcon, ChevronDownIcon, ChevronRightIcon, WrapLinesIcon, CodeBracketsIcon, ScratchpadIcon } from '../../icons';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 import { relativeTime, canFormat, formatScratchpad } from './scratchpad-format';
 import './scratchpad.css';
 
@@ -32,6 +33,7 @@ export function ScratchpadTab({ tab }: { tab: RequestTab }) {
   const wrap = useUiStateStore(s => s.prefs[WRAP_PREF]) === 'true';
   const [typeMenu, setTypeMenu] = useState<{ x: number; y: number } | null>(null);
   const [, tick] = useState(0);
+  const { copied, flash } = useCopyTick();
 
   useEffect(() => { useScratchpadStore.getState().load(); }, []);
   /* "Saved · 2 min ago" has to move on by itself. */
@@ -109,10 +111,9 @@ export function ScratchpadTab({ tab }: { tab: RequestTab }) {
   };
 
   const copy = async () => {
-    const ok = await copyText(pad.content);
-    useToastStore.getState().addToast(ok
-      ? { type: 'success', message: `Copied ${scratchpadFileName(pad)}` }
-      : { type: 'error', message: 'The clipboard refused the copy. Select the text and press Ctrl+C.' });
+    /* The button says it copied — the shared green tick — so a toast as well is the same news twice. */
+    if (await copyText(pad.content)) flash();
+    else useToastStore.getState().addToast({ type: 'error', message: 'The clipboard refused the copy. Select the text and press Ctrl+C.' });
   };
 
   return (
@@ -151,8 +152,8 @@ export function ScratchpadTab({ tab }: { tab: RequestTab }) {
             <CodeBracketsIcon size={13} /> Format
           </button>
         )}
-        <button type="button" className="dk-scratch__tool dk-scratch__tool--icon" onClick={copy} title="Copy contents" aria-label="Copy contents">
-          <CopyIcon size={13} />
+        <button type="button" className="dk-scratch__tool dk-scratch__tool--icon" onClick={copy} title={copied ? 'Copied' : 'Copy contents'} aria-label="Copy contents">
+          <CopyGlyph copied={copied} size={13} />
         </button>
         <button
           type="button"

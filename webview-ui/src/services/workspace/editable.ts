@@ -49,7 +49,7 @@ export const READ_ONLY_REASON = 'Read-only: this workspace is shared by a teamma
  * to forget one. Disabling a parent disables its whole submenu.
  */
 export const COLLECTION_EDIT_IDS: ReadonlySet<string> = new Set([
-  'new-request', 'new-folder', 'rename', 'duplicate', 'delete', 'properties', 'delete-all',
+  'new-request', 'new-folder', 'rename', 'duplicate', 'delete', 'properties', 'delete-all', 'select-delete',
   'import', 'scan-code', 'ai-organize', 'ai-extract-env',
 ]);
 

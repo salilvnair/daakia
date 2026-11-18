@@ -2,7 +2,7 @@
   "name": "daakia",
   "displayName": "Daakia — REST API Client",
   "description": "REST client and API client for VS Code — REST, GraphQL, gRPC, SOAP, WebSocket, SSE and MQTT — with a Kubernetes dashboard (k8s pods, logs, shell), a GitHub dashboard for issues, mock servers, and AI you can switch off. An alternative to Postman, Thunder Client, Insomnia, Bruno and Hoppscotch.",
-  "version": "3.4.2",
+  "version": "3.4.4",
   "license": "MIT",
   "publisher": "salilvnair",
   "repository": {
@@ -348,7 +348,8 @@
     "demo-video": "npm run demo-video:record && npm run demo-video:compose",
     "showcase": "npm run demo-video && npm run demo-video:gif:short",
     "rank": "node scripts/marketplace-rank.js",
-    "mock:ai": "node scripts/mock-ai-server.js"
+    "mock:ai": "node scripts/mock-ai-server.js",
+    "mock:openapi": "node scripts/mock-openapi-server.js"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.14.4",

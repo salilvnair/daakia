@@ -3,7 +3,9 @@
  * Feature 6B.13 — Cookie manager
  */
 import { useState, useEffect } from 'react';
-import { TrashIcon, PlusIcon, CopyIcon } from '../../icons';
+import { TrashIcon, PlusIcon } from '../../icons';
+import { copyText } from '../../utils/clipboard';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 import { postMsg } from '../../vscode';
 import { useToastStore } from '../../store/toast-store';
 import { ModalView, ButtonView, TextInputView, MultilineInputView } from '@salilvnair/dui';
@@ -61,6 +63,7 @@ export function CookieManager({ onClose }: Props) {
   const [cookies, setCookies] = useState<CookieEntry[]>([]);
   const [filter, setFilter] = useState('');
   const [showImport, setShowImport] = useState(false);
+  const exportTick = useCopyTick();
   const [importText, setImportText] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
   const addToast = useToastStore(s => s.addToast);
@@ -114,8 +117,10 @@ export function CookieManager({ onClose }: Props) {
 
   const exportCookies = () => {
     const text = toNetscapeCookies(filtered);
-    navigator.clipboard.writeText(text);
-    addToast({ type: 'success', message: 'Cookies copied to clipboard (Netscape format)' });
+    void copyText(text).then(ok => {
+      if (ok) { exportTick.flash(); addToast({ type: 'success', message: 'Cookies copied to clipboard (Netscape format)' }); }
+      else addToast({ type: 'error', message: 'The clipboard refused the copy.' });
+    });
   };
 
   const importCookies = () => {
@@ -139,7 +144,7 @@ export function CookieManager({ onClose }: Props) {
       onClose={onClose}
       footerLeft={
         <div className="flex items-center gap-2">
-          <ButtonView size="sm" accentColor="var(--color-text-muted)" iconLeft={<CopyIcon size={10} />} onClick={exportCookies}>
+          <ButtonView size="sm" accentColor="var(--color-text-muted)" iconLeft={<CopyGlyph copied={exportTick.copied} size={10} />} onClick={exportCookies}>
             Export
           </ButtonView>
           <ButtonView size="sm" accentColor="var(--color-text-muted)" onClick={() => setShowImport(true)}>

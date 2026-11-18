@@ -19,6 +19,13 @@ export const SHORTCUT_CATALOG: ShortcutMeta[] = [
   { id: 'app.command-palette',      label: 'Command Palette',          category: 'General' },
   { id: 'app.toggle-sidebar',       label: 'Toggle sidebar',           category: 'General' },
   { id: 'app.toggle-split',         label: 'Toggle split layout',      category: 'General' },
+  { id: 'app.open-workspace',       label: 'Open workspace',           category: 'General' },
+  { id: 'app.open-settings',        label: 'Open settings',            category: 'General' },
+  { id: 'app.open-environments',    label: 'Show environments',        category: 'General' },
+  { id: 'app.open-history',         label: 'Show history',             category: 'General' },
+  { id: 'app.daakia-ai',            label: 'Open Daakia AI',           category: 'General' },
+  { id: 'app.mock-server',          label: 'Open mock servers',        category: 'General' },
+  { id: 'app.open-wiki',            label: 'Open the wiki',            category: 'General' },
 
   // ── Request ──
   { id: 'app.send-request',         label: 'Send request',             category: 'Request' },
@@ -26,11 +33,25 @@ export const SHORTCUT_CATALOG: ShortcutMeta[] = [
   { id: 'app.focus-url',            label: 'Focus URL bar',            category: 'Request' },
 
   // ── Tabs ──
-  { id: 'app.new-tab',              label: 'New tab',                  category: 'Tabs' },
+  { id: 'app.new-tab',              label: 'New tab, like the one in front', category: 'Tabs' },
   { id: 'app.close-tab',            label: 'Close tab',                category: 'Tabs' },
+  { id: 'app.duplicate-tab',        label: 'Duplicate tab',            category: 'Tabs' },
+  { id: 'app.next-tab',             label: 'Next tab',                 category: 'Tabs' },
+  { id: 'app.prev-tab',             label: 'Previous tab',             category: 'Tabs' },
+  { id: 'app.close-other-tabs',     label: 'Close other tabs',         category: 'Tabs' },
+  { id: 'app.all-tabs',             label: 'All tabs (search, recently closed)', category: 'Tabs' },
+  { id: 'app.reopen-tab',           label: 'Reopen closed tab',        category: 'Tabs' },
+  { id: 'app.fold-tab-group',       label: 'Fold the tab group in front', category: 'Tabs' },
+
+  // ── Scratchpads ──
+  { id: 'app.new-scratchpad',       label: 'New scratchpad',           category: 'Scratchpads' },
+  { id: 'app.open-scratchpads',     label: 'Open scratchpads',         category: 'Scratchpads' },
 
   // ── Collections ──
+  { id: 'app.new-collection',       label: 'New collection',           category: 'Collections' },
+  { id: 'app.search-collections',   label: 'Search all collections',   category: 'Collections' },
   { id: 'app.import-collection',    label: 'Import collection',        category: 'Collections' },
+  { id: 'app.scan-code',            label: 'Scan code for requests',   category: 'Collections' },
 
   // ── Mock Server ──
   { id: 'mock.toggle-log',          label: 'Toggle request log',       category: 'Mock Server' },
@@ -44,7 +65,7 @@ export const SHORTCUT_CATALOG: ShortcutMeta[] = [
   { id: 'debug.stepOut',            label: 'Step out',                 category: 'Debugger' },
 ];
 
-export const CATEGORY_ORDER = ['General', 'Request', 'Tabs', 'Collections', 'Mock Server', 'Debugger', 'Other'];
+export const CATEGORY_ORDER = ['General', 'Request', 'Tabs', 'Scratchpads', 'Collections', 'Mock Server', 'Debugger', 'Other'];
 
 /**
  * Editing shortcuts handled natively by the focused input/editor rather than by our global

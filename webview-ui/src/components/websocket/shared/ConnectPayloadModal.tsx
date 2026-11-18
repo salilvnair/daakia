@@ -17,7 +17,9 @@
  */
 import { useState, useEffect } from 'react';
 import { ModalView, ButtonView, SelectInputView, IconButtonView, EditorView, type EditorLanguage } from '@salilvnair/dui';
-import { SendIcon, WandIcon, CopyIcon } from '../../../icons';
+import { SendIcon, WandIcon } from '../../../icons';
+import { copyText } from '../../../utils/clipboard';
+import { useCopyTick, CopyGlyph } from '../../shared/CopyTick';
 import { KeyValueTable, type KeyValueRow } from '../../shared';
 
 const FORM_TYPE = 'application/x-www-form-urlencoded';
@@ -137,6 +139,7 @@ export function ConnectPayloadModal({
   // immediately re-parsed out of existence. Local state lets a blank row exist while you
   // type into it; only completed pairs reach the wire string.
   const [formRows, setFormRows] = useState<KeyValueRow[]>([]);
+  const bodyCopy = useCopyTick();
 
   // Seed on entering form mode (not on every body change, which would clobber typing).
   useEffect(() => {
@@ -233,7 +236,8 @@ export function ConnectPayloadModal({
           {canPrettify && (
             <div className="ml-auto flex items-center gap-1">
               <IconButtonView icon={<WandIcon size={14} />} size="md" tooltip="Prettify" onClick={handlePrettify} />
-              <IconButtonView icon={<CopyIcon size={14} />} size="md" tooltip="Copy" onClick={() => navigator.clipboard?.writeText(body)} />
+              <IconButtonView icon={<CopyGlyph copied={bodyCopy.copied} size={14} />} size="md" tooltip={bodyCopy.copied ? 'Copied' : 'Copy'}
+                              onClick={() => { void copyText(body).then(ok => { if (ok) bodyCopy.flash(); }); }} />
             </div>
           )}
         </div>

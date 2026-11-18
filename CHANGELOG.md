@@ -4,6 +4,104 @@ All notable changes to the Daakia API Client extension are documented here.
 
 ---
 
+## [3.4.4] — 2026-11-18
+
+Tab groups, a tab bar that copes with a hundred tabs, Ctrl+N that makes
+another of whatever is in front, filters in both imports, and a shortcut for
+nearly everything.
+
+### Added
+
+- **Tab groups**, as Chrome and Edge have them. A group is a coloured chip in
+  front of its tabs, which carry its colour along their bottom edge. Click
+  the chip to fold the group to the chip and a count. Double-click,
+  right-click or F2 opens a panel for its name, its colour (eight, or any
+  from the colour picker) and New tab in group, Collapse, Ungroup and Close
+  group. Add a tab to a new or existing group from its right-click menu, or
+  right-click the empty strip or + for New tab group. Drag tabs in and out,
+  or drag a whole group by its chip.
+- **Group tabs by protocol, host or collection** in one click, from a tab's
+  menu, the strip's menu or the command palette. A tab opened later joins its
+  matching group by itself. Groups are saved with each workspace's tabs.
+- **A list of every tab** (Alt+L, or the count beside the arrows): recently
+  used first, then each group, then recently closed. Type to search names and
+  URLs.
+- **Reopen closed tab** (Alt+Shift+T, or from the list). The last 20 closed
+  tabs are kept, unsaved changes included.
+- **Hover card** on a request tab: its full URL, last status and time,
+  environment and collection.
+- **Filters in Scan code and Import from Swagger URL**: a search box, a chip
+  per method with counts, and Check all / Uncheck all for what the filter
+  shows.
+- **Shortcuts for the rest of the app**, every one rebindable in Settings →
+  Keymap: New scratchpad (Alt+N, with the type to make chosen beside it, JSON
+  unless changed), New collection, Duplicate tab, Next and Previous tab,
+  Close other tabs, Workspace, Settings, Environments, History, Scratchpads,
+  Scan code, Daakia AI, Mock servers, the wiki, and folding the group in
+  front.
+- **Clear all** on a stack of two or more notifications, with how many there
+  are.
+- Command palette: Group tabs by protocol, host or collection, Ungroup all,
+  Reopen closed tab and Search all tabs.
+
+### Changed
+
+- **Ctrl+N opens another of whatever is in front**: a REST tab on REST, a
+  GraphQL tab on GraphQL, SSE on SSE, and on a scratchpad a new scratchpad of
+  the same type. It used to make a request in the last protocol used whatever
+  was in front.
+- **The tab strip scrolls instead of squeezing.** Tabs stop at 120px wide;
+  full-height arrows sit at the ends while it overflows, and holding one keeps
+  scrolling. The wheel scrolls sideways, the edge with more fades, and the tab
+  in front always scrolls into view. + stays right after the last tab and
+  holds at the edge once the strip is full.
+- Pinned tabs show only their icon. Middle-click closes a tab, and
+  double-clicking the empty strip opens one.
+
+---
+
+## [3.4.3] — 2026-11-16
+
+New collections named where they will appear, folders that drag anywhere
+without a question, select and delete in every tree, and the green tick on
+every copy button.
+
+### Added
+
+- **Select and delete**, in the More menu of every protocol's collections and
+  of the scratchpads. Rows get a checkbox in the tree's colour; a ticked folder
+  carries everything inside it. Collections go to the Bin; scratchpads, which
+  have no Bin, say so before they go.
+- **Delete all scratchpads**, in the scratchpads' More menu. The default folder
+  stays, empty, for new scratchpads to go to.
+- **Scratchpad folders drag** into other folders and out to the top level.
+
+### Changed
+
+- **New collection, folder and request are named in the tree**, in a row
+  where they will appear, instead of a popup. Enter or clicking away creates
+  it; Escape leaves nothing behind. The row stays until the item exists, and a
+  create that goes unanswered comes back with the name still in it.
+- **Dragging a folder asks nothing.** It drops into another folder directly,
+  never into itself or one of its own subfolders, and a strip shown while it
+  moves takes it out to the top level.
+- **The workspace page's New collection** picks a protocol from a row of chips
+  instead of a dialog, and each protocol row has its own add button.
+- **Folder icons take the tree's colour**: each protocol's own in its
+  collections, violet in the scratchpads.
+- **Delete items in menus are red, icon and all.**
+- **Every copy button turns into the green tick** when it copies — the
+  scratchpad's, GraphQL subscription events, the terminal's copy screen, cookie
+  Export, the Git Sync ID, the WebSocket connect payload and the response
+  headers' Copy all, which had a toast or nothing.
+
+### Fixed
+
+- The Overview's New collection and New environment quick actions open what
+  they say. They switched tabs and did nothing else.
+
+---
+
 ## [3.4.2] — 2026-11-15
 
 Scan code and the Swagger URL import as one wizard that ends in the same

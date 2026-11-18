@@ -211,3 +211,16 @@ button.dk-swi-chip.is-on { color: var(--color-text-primary); border-color: color
 .dk-swi-empty { padding: 36px 24px; text-align: center; display: flex; flex-direction: column; gap: 8px; align-items: center; }
 .dk-swi-empty p { max-width: 56ch; }
 .dk-swi-baseurl { font: 12px var(--font-mono); color: var(--color-text-muted); white-space: nowrap; }
+
+/* Filter bar over the tree: search, Check all / Uncheck all, a chip per method. */
+.dk-swi-filter { position: sticky; top: -8px; z-index: 2; margin: -8px -10px 6px; padding: 10px 10px 8px; display: flex; flex-direction: column; gap: 8px; background: var(--color-panel); border-bottom: 1px solid var(--color-surface-border); }
+.dk-swi-filter__row { display: flex; align-items: center; gap: 6px; }
+.dk-swi-filter__row > :first-child { flex: 1; min-width: 0; }
+.dk-swi-filter__chips { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.dk-swi-chip { --chip: var(--color-text-secondary); display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: 999px; border: 1px solid var(--color-surface-border); background: transparent; color: var(--chip); font: 600 10.5px var(--font-mono); letter-spacing: 0.02em; cursor: pointer; }
+.dk-swi-chip span { font-weight: 500; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.dk-swi-chip:hover { background: var(--color-item-hover-bg); }
+.dk-swi-chip.is-on { border-color: var(--chip); background: color-mix(in srgb, var(--chip) 14%, transparent); }
+.dk-swi-chip:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+.dk-swi-filter__note { font-size: 11px; color: var(--color-text-muted); margin-left: 4px; }
+.dk-swi-filter__none { padding: 14px 10px; font-size: 12px; color: var(--color-text-muted); }

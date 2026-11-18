@@ -87,7 +87,7 @@ function ToastItem({ toast, onGone, style, behind, measure }: {
 }
 
 export function ToastContainer() {
-  const { toasts, dismissToast } = useToastStore();
+  const { toasts, dismissToast, clearToasts } = useToastStore();
   const [open, setOpen] = useState(false);
   const [frontH, setFrontH] = useState(0);
   const frontRef = useRef<HTMLDivElement | null>(null);
@@ -114,6 +114,13 @@ export function ToastContainer() {
       onFocus={() => setOpen(true)}
       onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOpen(false); }}
     >
+      {/* A pile gets iOS's header: how many, and one click to clear them all. */}
+      {toasts.length > 1 && (
+        <div className="dk-toasts__head">
+          <span className="dk-toasts__n">{toasts.length} notifications</span>
+          <button type="button" className="dk-toasts__clear" onClick={clearToasts}>Clear all</button>
+        </div>
+      )}
       {ordered.map((t, i) => {
         if (fanned) return <ToastItem key={t.id} toast={t} onGone={dismissToast} measure={i === 0 ? el => { frontRef.current = el; } : undefined} />;
         if (i === 0) return <ToastItem key={t.id} toast={t} onGone={dismissToast} measure={el => { frontRef.current = el; }} style={{ zIndex: 10 }} />;

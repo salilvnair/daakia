@@ -705,25 +705,51 @@
 
 /* ── New collection ─────────────────────────────────────────────────────── */
 
-.ws-new-coll { display: flex; flex-direction: column; gap: 12px; }
-.ws-new-coll-label {
-  font-size: 10px;
+/* Which protocol, asked in a strip at the top of the page; the name is then
+   typed in that protocol's own tree. */
+.ws-new-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  padding: 9px 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--color-surface-border);
+  background: color-mix(in srgb, var(--color-workspace) 8%, transparent);
+}
+.ws-new-strip__icon { color: var(--color-workspace); flex-shrink: 0; }
+.ws-new-strip__label {
+  font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--color-text-muted);
+  white-space: nowrap;
 }
-.ws-new-coll-protocols { display: flex; flex-wrap: wrap; gap: 6px; }
-/* Chips rather than a dropdown: seven options, the same seven as the rail, each
-   in the colour it has there — so the choice is recognised rather than read. */
+.ws-new-strip__chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
+.ws-sec-empty .ws-new-strip { align-self: stretch; }
+
+/* Each chip in the colour that protocol has on the rail. */
 .ws-proto {
   padding: 4px 11px;
   border-radius: 6px;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
-  color: var(--color-text-muted);
+  color: var(--ws-proto-accent, var(--color-text-muted));
   background: transparent;
-  border: 1px solid var(--color-surface-border);
+  border: 1px solid color-mix(in srgb, var(--ws-proto-accent, var(--color-text-muted)) 40%, transparent);
 }
-.ws-proto:hover { color: var(--color-text-primary); }
+.ws-proto:hover,
+.ws-proto:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--ws-proto-accent, var(--color-text-muted)) 16%, transparent);
+  border-color: var(--ws-proto-accent, var(--color-text-muted));
+}
+
+/* A protocol row's heading, and its new-collection button beside it. */
+.ws-proto-headrow { display: flex; align-items: center; flex-shrink: 0; }
+.ws-proto-headrow .ws-proto-head { flex: 1; min-width: 0; }
+.ws-proto-add { padding-right: 8px; opacity: 0; transition: opacity 0.12s; }
+.ws-proto-headrow:hover .ws-proto-add,
+.ws-proto-add:focus-within { opacity: 1; }

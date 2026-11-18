@@ -136,13 +136,26 @@ interface ScratchpadState {
   createFolder: (parentId: string | null, name?: string) => ScratchpadFolder;
   renameFolder: (id: string, name: string) => void;
   /**
+   * Put a folder, with everything in it, inside another — or at the top level
+   * when `parentId` is null. Refused when the target is the folder itself or
+   * one of its own subfolders, which would cut the branch off the tree.
+   */
+  moveFolder: (id: string, parentId: string | null) => void;
+  /**
    * Delete a folder. Any folder but the default goes with its subfolders, and
    * what was in them moves to the default folder. The default folder is never
    * removed: deleting it deletes what is inside it and leaves it empty.
    */
   deleteFolder: (id: string) => { moved: number; deleted: number };
+  /**
+   * Select and delete: these scratchpads, and these folders with everything in
+   * them — unlike deleteFolder, nothing moves to the default folder. The
+   * default folder itself stays (emptied, and brought to the top level if
+   * what held it went), so new scratchpads still have somewhere to go.
+   */
+  deleteMany: (fileIds: string[], folderIds: string[]) => { files: number; folders: number };
   setDefaultFolder: (id: string) => void;
-  setFolderOpen: (id: string, open: boolean) => void;
+  setFolderOpen:(id: string, open: boolean) => void;
   /** Open or close several folders at once — a folder's own expand / collapse all. */
   setFoldersOpen: (ids: string[], open: boolean) => void;
   /** Unfold every folder above a scratchpad, so its row is on screen. */
@@ -353,6 +366,20 @@ export const useScratchpadStore = create<ScratchpadState>((set, get) => {
       sendFolder(next);
     },
 
+    moveFolder: (id, parentId) => {
+      const s = get();
+      const cur = s.folders.find(f => f.id === id);
+      if (!cur || cur.parentId === parentId) return;
+      if (parentId && (!s.folders.some(f => f.id === parentId) || folderAndDescendants(s.folders, id).includes(parentId))) return;
+      const siblings = s.folders.filter(f => f.parentId === parentId && f.id !== id);
+      const next = { ...cur, parentId, sortOrder: siblings.reduce((m, f) => Math.max(m, f.sortOrder), 0) + 1 };
+      const openFolders = parentId ? { ...s.openFolders, [parentId]: true } : s.openFolders;
+      set({ folders: s.folders.map(f => (f.id === id ? next : f)), openFolders });
+      if (parentId) persistOpen(openFolders);
+      sendFolder(next);
+      logUiEvent('scratchpad.folder.move', {});
+    },
+
     deleteFolder: (id) => {
       const s = get();
       if (!s.folders.some(f => f.id === id)) return { moved: 0, deleted: 0 };
@@ -384,6 +411,35 @@ export const useScratchpadStore = create<ScratchpadState>((set, get) => {
       postMsg({ type: 'scratchpads:deleteFolders', ids: all });
       logUiEvent('scratchpad.folder.delete', { moved: inside.length, deleted: 0 });
       return { moved: inside.length, deleted: 0 };
+    },
+
+    deleteMany: (fileIds, folderIds) => {
+      const s = get();
+      const covered = new Set(folderIds.filter(id => s.folders.some(f => f.id === id)).flatMap(id => folderAndDescendants(s.folders, id)));
+      const goneFolders = [...covered].filter(id => id !== s.defaultFolderId);
+      const goneFiles = new Set([
+        ...fileIds.filter(id => s.files.some(f => f.id === id)),
+        ...s.files.filter(f => covered.has(f.folderId)).map(f => f.id),
+      ]);
+      for (const id of goneFiles) {
+        const t = pending.get(id);
+        if (t) { clearTimeout(t); pending.delete(id); }
+        postMsg({ type: 'scratchpads:delete', id });
+      }
+      /* The default folder outlives a parent that went: up to the top level. */
+      const def = s.folders.find(f => f.id === s.defaultFolderId);
+      const lift = def && def.parentId && goneFolders.includes(def.parentId) ? { ...def, parentId: null } : null;
+      set(st => ({
+        files: st.files.filter(f => !goneFiles.has(f.id)),
+        folders: st.folders.filter(f => !goneFolders.includes(f.id)).map(f => (lift && f.id === lift.id ? lift : f)),
+        lastDeleted: st.lastDeleted && goneFiles.has(st.lastDeleted.id) ? null : st.lastDeleted,
+      }));
+      if (lift) sendFolder(lift);
+      if (goneFolders.length) postMsg({ type: 'scratchpads:deleteFolders', ids: goneFolders });
+      leaveDeletedTabs(goneFiles);
+      if (goneFolders.length) logUiEvent('scratchpad.folder.delete', { moved: 0, deleted: goneFiles.size, folders: goneFolders.length, bulk: true });
+      else if (goneFiles.size) logUiEvent('scratchpad.delete', { count: goneFiles.size, bulk: true });
+      return { files: goneFiles.size, folders: goneFolders.length };
     },
 
     setDefaultFolder: (id) => {

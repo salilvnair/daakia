@@ -1,0 +1,114 @@
+/*
+ * The collections tree's own pieces: the row a new thing is named in, and the
+ * marks a drag leaves. All of them take the protocol's colour from
+ * --coll-accent, which the panel sets, so a GraphQL tree does not light up in
+ * REST's indigo.
+ */
+
+/* ── A new collection, folder or request, named where it will appear ── */
+.coll-draft {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding-right: 8px;
+  margin: 1px 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--coll-accent, var(--color-primary)) 10%, transparent);
+}
+
+.coll-draft__input {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--coll-accent, var(--color-primary));
+  border-radius: 4px;
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  outline: none;
+}
+
+.coll-draft__input:focus {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--coll-accent, var(--color-primary)) 25%, transparent);
+}
+
+.coll-draft__hint {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border: 1px solid var(--color-surface-border);
+  border-radius: 3px;
+  color: var(--color-text-muted);
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
+}
+
+/* Sent, waiting for the tree to come back with it. */
+.coll-draft.is-pending .coll-draft__input {
+  border-color: color-mix(in srgb, var(--coll-accent, var(--color-primary)) 45%, transparent);
+  color: var(--color-text-secondary);
+  box-shadow: none;
+  cursor: progress;
+}
+
+.coll-draft.is-pending {
+  animation: coll-draft-wait 1.1s ease-in-out infinite alternate;
+}
+
+@keyframes coll-draft-wait {
+  from { background: color-mix(in srgb, var(--coll-accent, var(--color-primary)) 6%, transparent); }
+  to   { background: color-mix(in srgb, var(--coll-accent, var(--color-primary)) 14%, transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coll-draft.is-pending { animation: none; }
+}
+
+/* ── Select and delete ── */
+
+/* The strip over the tree while rows are being ticked. */
+.coll-select-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--color-surface-border);
+  background: color-mix(in srgb, var(--coll-accent, var(--color-primary)) 7%, transparent);
+}
+
+.coll-pick {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.coll-row--picked {
+  background: color-mix(in srgb, var(--coll-accent, var(--color-primary)) 12%, transparent);
+}
+
+/* ── Drag and drop ── */
+
+/* A folder a dragged item will go into. */
+.coll-row--drop {
+  background: color-mix(in srgb, var(--coll-accent, var(--color-primary)) 18%, transparent);
+  box-shadow: inset 0 0 0 1px var(--coll-accent, var(--color-primary));
+}
+
+/* Where a folder comes out to the top level. Shown only while one is on the move. */
+.coll-droptop {
+  margin: 6px 4px 8px;
+  padding: 9px 10px;
+  border: 1px dashed color-mix(in srgb, var(--coll-accent, var(--color-primary)) 50%, transparent);
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.coll-droptop.is-over {
+  border-style: solid;
+  border-color: var(--coll-accent, var(--color-primary));
+  background: color-mix(in srgb, var(--coll-accent, var(--color-primary)) 14%, transparent);
+  color: var(--color-text-primary);
+}

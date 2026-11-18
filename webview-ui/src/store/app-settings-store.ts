@@ -38,6 +38,8 @@ export interface GeneralAppSettings {
   proxy: ProxySettings;
   /** User keyboard-shortcut rebinds, applied over each feature's registered default. */
   keymap: KeymapOverrides;
+  /** What the New scratchpad shortcut makes — chosen beside it in Settings → Keymap. */
+  newScratchpadType: 'json' | 'xml' | 'yml' | 'sql' | 'txt';
 }
 
 const DEFAULTS: GeneralAppSettings = {
@@ -53,6 +55,7 @@ const DEFAULTS: GeneralAppSettings = {
   encoding: 'enable',
   proxy: { mode: 'none' },
   keymap: {},
+  newScratchpadType: 'json',
 };
 
 interface AppSettingsState {

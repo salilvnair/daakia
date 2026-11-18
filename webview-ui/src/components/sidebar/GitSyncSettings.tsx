@@ -20,7 +20,9 @@ import { ButtonView, TextInputView, CheckboxView, SelectInputView, ToggleSwitchV
 import { postMsg } from '../../vscode';
 import { useToastStore } from '../../store/toast-store';
 
-import { GitHubIcon, CheckCircleFilledIcon, WarningTriangleIcon, XCircleIcon, GitBranchIcon, ArrowUpIcon, ArrowDownIcon, UploadIcon, DownloadIcon, RefreshIcon, UsersIcon, CopyIcon, LayoutGridIcon } from '../../icons';
+import { GitHubIcon, CheckCircleFilledIcon, WarningTriangleIcon, XCircleIcon, GitBranchIcon, ArrowUpIcon, ArrowDownIcon, UploadIcon, DownloadIcon, RefreshIcon, UsersIcon, LayoutGridIcon } from '../../icons';
+import { copyText } from '../../utils/clipboard';
+import { useCopyTick, CopyGlyph } from '../shared/CopyTick';
 
 const ACCENT = 'var(--color-settings)';
 
@@ -97,6 +99,7 @@ export function GitSyncSettings() {
   const [dirtySettings, setDirtySettings] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [identity, setIdentity] = useState<SyncIdentity | null>(null);
+  const idCopy = useCopyTick();
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [linking, setLinking] = useState(false);
   const [linkId, setLinkId] = useState('');
@@ -195,9 +198,9 @@ export function GitSyncSettings() {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[12px] font-semibold text-[var(--color-text-primary)]">{identity.name}</span>
             <code className="text-[11px] px-2 py-0.5 rounded" style={{ background: 'color-mix(in srgb, var(--color-text-primary) 6%, transparent)', color: 'var(--color-text-secondary)' }}>{identity.id}</code>
-            <ButtonView size="sm" variant="ghost" accentColor={ACCENT} iconLeft={<CopyIcon size={11} />}
-              onClick={() => { void navigator.clipboard?.writeText(identity.id); addToast({ type: 'success', message: 'Sync ID copied.' }); }}>
-              Copy
+            <ButtonView size="sm" variant="ghost" accentColor={ACCENT} iconLeft={<CopyGlyph copied={idCopy.copied} size={11} />}
+              onClick={() => { void copyText(identity.id).then(ok => { if (ok) idCopy.flash(); else addToast({ type: 'error', message: 'The clipboard refused the copy.' }); }); }}>
+              {idCopy.copied ? 'Copied' : 'Copy'}
             </ButtonView>
             {!linking && (
               <ButtonView size="sm" variant="ghost" accentColor={ACCENT} onClick={() => setLinking(true)}>

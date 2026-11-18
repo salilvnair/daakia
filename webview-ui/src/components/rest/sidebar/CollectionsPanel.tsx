@@ -8,11 +8,12 @@ import type { Protocol, RequestTab } from '../../../store/tabs-store';
 import { getDisplayMethod } from '../../../services/request/request-service';
 import { useScrollRestore } from '../../../hooks/useScrollRestore';
 import { useSidebarDataStore } from '../../../store/sidebar-data-store';
+import { useToastStore } from '../../../store/toast-store';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import { useAiPromptTemplatesStore } from '../../../store/prompt-template';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
 import { SwaggerImportWizard } from '../../workspace/SwaggerImportWizard';
-import { NewItemModal, ConfirmDialog, RunCollectionModal, CollectionPropertiesModal, ExportResponseOptionModal, ImportExportIcon, type CollectionProperties } from '../../shared';
+import { ConfirmDialog, RunCollectionModal, CollectionPropertiesModal, ExportResponseOptionModal, ImportExportIcon, type CollectionProperties } from '../../shared';
 import { findNodeById, findParentOfRequest, findRequestById, filterTree, collectAllIds, hasAnyRequests, openCollectionRequest, useStarredIds, toggleStar, starFirst, type CollectionTreeNode, type CollectionRequest } from '../../../services/collections';
 import { METHOD_COLORS, getProtocolAccent } from '../../../colors';
 import { PlusIcon, FolderIcon, FolderOpenIcon, PlayIcon, DocumentIcon, ServerIcon, RenameIcon, CopyIcon, SettingsIcon, TrashIcon, ExternalLinkIcon, PlusSquareIcon, ChevronRightIcon, MoreVerticalIcon, FilePlusIcon, FolderPlusIcon, FolderImportIcon, FolderExportIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, SparkleIcon, CloseCircleIcon, SearchIcon, HelpCircleIcon, SortIcon, CheckIcon, ExpandAllIcon, CollapseAllIcon, StarIcon, BracesIcon, FileTextIcon, BookOpenIcon } from '../../../icons';
@@ -41,9 +42,10 @@ import { AiSmartTestSuiteModal } from '../../ai/AiSmartTestSuiteModal';
 import { InsomniaImportModal } from '../../power/InsomniaImportModal';
 import { useWorkspaceEditable } from '../../../store/workspace-store';
 import { lockEdits, COLLECTION_EDIT_IDS, READ_ONLY_REASON } from '../../../services/workspace/editable';
-import { IconButtonView, ContextMenuView, TextInputView, InfoPopupView, ModalView, ButtonView, UptimeMonitorIcon, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
+import { IconButtonView, ContextMenuView, TextInputView, InfoPopupView, ModalView, ButtonView, CheckboxView, UptimeMonitorIcon, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
 import { logUiEvent } from '../../../store/ui-audit-store';
 import { sendAiRequest } from '../../../services/ai/ai-client';
+import './collections-tree.css';
 
 // ────────────── Main Component ──────────────
 
@@ -56,6 +58,91 @@ function sortTreeAlpha(nodes: CollectionTreeNode[]): CollectionTreeNode[] {
       children: sortTreeAlpha(n.children),
       requests: [...n.requests].sort((a, b) => a.name.localeCompare(b.name)),
     }));
+}
+
+/** A collection, folder or request being named in the tree, not yet created. */
+interface Draft {
+  kind: 'collection' | 'folder' | 'request';
+  parentId: string | null;
+  value: string;
+  /** Sent, and waiting for the tree to come back with this id in it. */
+  pendingId?: string;
+  /** Bumped when a create comes back unanswered, so the row is a fresh one. */
+  attempt?: number;
+}
+
+/** How long a create may go unanswered before the row is handed back. */
+const CREATE_ANSWER_MS = 5000;
+
+/** The drop target id of the strip that takes a folder out to the top level. */
+const TOP_LEVEL = '__top__';
+
+/** "New Folder", or "New Folder 2" when there is one already beside it. */
+function freeName(base: string, taken: string[]): string {
+  const names = new Set(taken.map(n => n.trim().toLowerCase()));
+  if (!names.has(base.toLowerCase())) return base;
+  let n = 2;
+  while (names.has(`${base} ${n}`.toLowerCase())) n++;
+  return `${base} ${n}`;
+}
+
+/**
+ * The row a new thing is named in, where it will appear.
+ *
+ * Enter or clicking away creates it; Escape, or an empty name, does not. The
+ * guard is for the blur that follows Enter: a second create would make two.
+ *
+ * After Enter the row stays, read-only, until the tree comes back with the new
+ * item in it. It used to vanish on the keypress, so a create the host never
+ * answered looked exactly like one that worked and then disappeared.
+ */
+function DraftRow({ draft, depth, accent, onChange, onCommit, onCancel }: {
+  draft: Draft;
+  depth: number;
+  accent: string;
+  onChange: (value: string) => void;
+  onCommit: () => void;
+  onCancel: () => void;
+}) {
+  const done = useRef(false);
+  const rowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { rowRef.current?.scrollIntoView({ block: 'nearest' }); }, []);
+  const finish = (commit: boolean) => {
+    if (done.current) return;
+    done.current = true;
+    if (commit) onCommit(); else onCancel();
+  };
+  const isRequest = draft.kind === 'request';
+  const pending = !!draft.pendingId;
+  return (
+    <div
+      ref={rowRef}
+      className={`coll-draft${pending ? ' is-pending' : ''}`}
+      aria-busy={pending || undefined}
+      style={{ paddingLeft: isRequest ? 20 + depth * 12 : 8 + depth * 12, '--coll-accent': accent } as React.CSSProperties}
+    >
+      {isRequest
+        ? <FilePlusIcon size={13} className="shrink-0" style={{ color: accent }} />
+        : <FolderPlusIcon size={14} className="shrink-0" style={{ color: accent }} />}
+      <input
+        autoFocus
+        className="coll-draft__input"
+        value={draft.value}
+        readOnly={pending}
+        aria-label={isRequest ? 'New request name' : draft.kind === 'folder' ? 'New folder name' : 'New collection name'}
+        onFocus={e => e.currentTarget.select()}
+        onChange={e => onChange(e.target.value)}
+        onKeyDown={e => {
+          e.stopPropagation();
+          if (e.key === 'Enter') finish(true);
+          if (e.key === 'Escape') finish(false);
+        }}
+        onBlur={() => finish(true)}
+        onClick={e => e.stopPropagation()}
+      />
+      <span className="coll-draft__hint">{pending ? 'Creating' : 'Enter'}</span>
+    </div>
+  );
 }
 
 /** Realtime transports, which get a tree each but share one Protocol. */
@@ -72,7 +159,10 @@ function ProtocolHeaderIcon({ protocol }: { protocol: string }) {
   return <ProtocolRestBadge size={size} />;
 }
 
-export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
+/** Asks already answered, so a remount does not start another. */
+const answeredCreates = new Set<string>();
+
+export function CollectionsPanel({ protocol = 'rest', createSignal = 0, startCreate }: {
   protocol?: string;
   /**
    * Bump this to open the create dialog from outside.
@@ -83,6 +173,13 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
    * it was handed to.
    */
   createSignal?: number;
+  /**
+   * A one-off ask to start a new collection, by id. Honoured once whether this
+   * panel was already on screen or is being mounted by the ask — the workspace
+   * page opens a protocol's row and asks in the same breath, and a counter
+   * takes its value at mount as the baseline and so never fires there.
+   */
+  startCreate?: string;
 }) {
   const cachedTree = useSidebarDataStore(s => s.getCollections(protocol));
   const isLoaded = useSidebarDataStore(s => s.isCollectionsLoaded(protocol));
@@ -106,11 +203,20 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
   const [infoOpen, setInfoOpen] = useState(false);
   const infoAnchorRef = useRef<HTMLDivElement>(null);
 
-  // Modal state
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalTitle, setModalTitle] = useState('');
-  const [modalParentId, setModalParentId] = useState<string | null>(null);
-  const [modalMode, setModalMode] = useState<'collection' | 'folder' | 'request'>('collection');
+  /*
+    Something being created, drawn as a row in the tree with its name selected
+    — the scratchpad's way, not a dialog. A dialog took the new thing out of the
+    place it was going to live, and asked for a name before showing where.
+    Nothing is written until the name is confirmed; Escape leaves no trace.
+  */
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  /* Select and delete, from the More menu: the ids ticked. A ticked folder
+     carries everything inside it, the way deleting it does. */
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set());
+  const [confirmBulk, setConfirmBulk] = useState(false);
 
   // Rename state
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -124,10 +230,6 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
   // Drag and drop state
   const [dragItem, setDragItem] = useState<{ id: string; type: 'collection' | 'request'; parentId: string | null } | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: string; position: 'before' | 'inside' | 'after' } | null>(null);
-  const [moveFolderConfirm, setMoveFolderConfirm] = useState<{
-    dragId: string; dragName: string; dragParentId: string | null;
-    targetId: string; targetName: string; position: 'before' | 'inside' | 'after';
-  } | null>(null);
 
   // Runner modal state
   const [runnerCollectionId, setRunnerCollectionId] = useState<string | null>(null);
@@ -399,10 +501,9 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
   // ── Actions ──
 
   const openNewCollection = () => {
-    setModalMode('collection');
-    setModalTitle('New Collection');
-    setModalParentId(null);
-    setModalOpen(true);
+    if (!canEdit) return;
+    setSearch('');
+    setDraft({ kind: 'collection', parentId: null, value: freeName('New Collection', tree.map(n => n.name)) });
   };
 
   /* The caller asks for this panel's own New dialog rather than reimplementing
@@ -411,6 +512,13 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
      Only a *change* counts. `> 0` fires on mount as well, and the value is
      already above zero once the button has been used, so a tab switch reopened
      the dialog with nobody having asked. */
+  const openNewRef = useRef(openNewCollection);
+  openNewRef.current = openNewCollection;
+  useEffect(() => {
+    if (!startCreate || answeredCreates.has(startCreate)) return;
+    answeredCreates.add(startCreate);
+    openNewRef.current();
+  }, [startCreate]);
   const seenCreate = useRef(createSignal);
   useEffect(() => {
     if (createSignal === seenCreate.current) return;
@@ -423,7 +531,12 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
      reimplementing the create flow, so there is one of them. */
   useEffect(() => {
     const onAsk = (e: MessageEvent) => {
-      if ((e.data as { type?: string })?.type === 'collections:new') openNewCollection();
+      if ((e.data as { type?: string })?.type !== 'collections:new') return;
+      /* Only the panel on screen. Hidden copies stay mounted — the workspace
+         page's, another protocol's — and an autofocused row in one of those
+         would take the caret from the one being looked at. */
+      if (!rootRef.current || rootRef.current.offsetParent === null) return;
+      openNewRef.current();
     };
     window.addEventListener('message', onAsk);
     return () => window.removeEventListener('message', onAsk);
@@ -434,23 +547,70 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
     setShowDeleteAllConfirm(false);
   };
 
+  /* A folder or request is drafted inside its parent, so the parent opens. */
   const openNewFolder = (parentId: string) => {
-    setModalMode('folder');
-    setModalTitle('New Folder');
-    setModalParentId(parentId);
-    setModalOpen(true);
+    if (!canEdit) return;
+    const parent = findNodeById(tree, parentId);
+    setExpandedIds(prev => new Set([...prev, parentId]));
+    setDraft({ kind: 'folder', parentId, value: freeName('New Folder', parent?.children.map(c => c.name) ?? []) });
   };
 
   const openNewRequest = (parentId: string) => {
-    setModalMode('request');
-    setModalTitle('New Request');
-    setModalParentId(parentId);
-    setModalOpen(true);
+    if (!canEdit) return;
+    const parent = findNodeById(tree, parentId);
+    setExpandedIds(prev => new Set([...prev, parentId]));
+    setDraft({ kind: 'request', parentId, value: freeName('New Request', parent?.requests.map(r => r.name) ?? []) });
   };
 
-  const handleModalSave = (name: string) => {
+  const renderDraft = (depth: number) => draft && (
+    <DraftRow
+      key={`draft:${draft.kind}:${draft.parentId ?? ''}:${draft.attempt ?? 0}`}
+      draft={draft}
+      depth={depth}
+      accent={getProtocolAccent(protocol as any)}
+      onChange={value => setDraft(d => (d ? { ...d, value } : d))}
+      onCommit={() => commitDraft(draft)}
+      onCancel={() => setDraft(null)}
+    />
+  );
+
+  /* An empty name is a change of mind, not a request for "Untitled". */
+  const commitDraft = (d: Draft) => {
+    const name = d.value.trim();
+    if (!name) { setDraft(null); return; }
+    const id = createNamed(d.kind, d.parentId, name);
+    setDraft({ ...d, value: name, pendingId: id });
+  };
+
+  /* The row goes when the tree has the new item in it — not before. */
+  useEffect(() => {
+    if (!draft?.pendingId) return;
+    const id = draft.pendingId;
+    const arrived = draft.kind === 'request' ? !!findRequestById(tree, id) : !!findNodeById(tree, id);
+    if (arrived) setDraft(null);
+  }, [tree, draft]);
+
+  /* Nothing came back: the host is not answering, or refused without a word.
+     Hand the row back with the name still in it, rather than lose it. */
+  useEffect(() => {
+    if (!draft?.pendingId) return;
+    const id = draft.pendingId;
+    const timer = setTimeout(() => {
+      setDraft(d => (d?.pendingId === id ? { ...d, pendingId: undefined, attempt: (d.attempt ?? 0) + 1 } : d));
+      const what = draft.kind === 'request' ? 'request' : draft.kind === 'folder' ? 'folder' : 'collection';
+      useToastStore.getState().addToast({
+        type: 'error',
+        message: `The ${what} "${draft.value}" was not created. Daakia's backend did not answer. Press Enter to try again.`,
+      });
+    }, CREATE_ANSWER_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft?.pendingId]);
+
+  const createNamed = (kind: Draft['kind'], parentId: string | null, name: string): string => {
     const id = crypto.randomUUID();
-    if (modalMode === 'request') {
+    const modalParentId = parentId;
+    if (kind === 'request') {
       /*
         The label this protocol's requests carry — GQL, GRPC, SOAP, AI, MCP,
         WS/SSE/SIO/MQTT, or the HTTP verb for REST. Derived by the same
@@ -500,7 +660,7 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
       postCollMsg({ type: 'createCollection', id, name, parentId: modalParentId });
       setExpandedIds(prev => new Set([...prev, id]));
     }
-    setModalOpen(false);
+    return id;
   };
 
   const handleRename = (id: string) => {
@@ -526,7 +686,62 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
     setDeleteTarget(null);
   };
 
-  const handleOpenRequest = (req: CollectionRequest, forceNewTab = false) => {
+  const stopSelecting = () => { setSelecting(false); setPicked(new Set()); setConfirmBulk(false); };
+  const togglePick = (id: string) => setPicked(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  /* What a delete of the ticked rows sends: each ticked folder that is not
+     already inside a ticked one, and each ticked request outside them. The
+     rest is counted, so the confirmation can say what goes along. */
+  const bulkPlan = useMemo(() => {
+    const folders: CollectionTreeNode[] = [];
+    const requests: CollectionRequest[] = [];
+    let innerFolders = 0;
+    let innerRequests = 0;
+    const walk = (nodes: CollectionTreeNode[], covered: boolean) => {
+      for (const n of nodes) {
+        const takes = !covered && picked.has(n.id);
+        if (takes) folders.push(n); else if (covered) innerFolders++;
+        const inside = covered || takes;
+        for (const r of n.requests) {
+          if (inside) innerRequests++;
+          else if (picked.has(r.id)) requests.push(r);
+        }
+        walk(n.children, inside);
+      }
+    };
+    walk(tree, false);
+    return { folders, requests, innerFolders, innerRequests };
+  }, [tree, picked]);
+  const pickedCount = bulkPlan.folders.length + bulkPlan.requests.length;
+  const allPicked = tree.length > 0 && tree.every(n => picked.has(n.id));
+
+  const deleteSelected = () => {
+    for (const f of bulkPlan.folders) {
+      logUiEvent('collection.delete', { id: f.id });
+      postCollMsg({ type: 'deleteCollection', id: f.id });
+    }
+    for (const r of bulkPlan.requests) {
+      logUiEvent('collection.delete', { id: r.id, type: 'request' });
+      postCollMsg({ type: 'deleteRequestFromCollection', requestId: r.id });
+    }
+    stopSelecting();
+  };
+
+  /* Escape leaves select mode, unless the confirmation is up and takes it. */
+  useEffect(() => {
+    if (!selecting || confirmBulk) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') stopSelecting(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selecting, confirmBulk]);
+
+  const selection = selecting ? { picked, toggle: togglePick, accent: getProtocolAccent(protocol as any) } : null;
+
+  const handleOpenRequest =(req: CollectionRequest, forceNewTab = false) => {
     openCollectionRequest(req, forceNewTab, protocol);
   };
 
@@ -556,9 +771,16 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
   };
 
   const handleDragOver = (e: React.DragEvent, targetId: string, targetType: 'collection' | 'request') => {
-    e.preventDefault();
     e.stopPropagation();
     if (!dragItem || dragItem.id === targetId) return;
+    /* A folder cannot go inside itself, or inside anything inside it: the
+       host would write a parent loop and the folder would vanish from the tree. */
+    if (dragItem.type === 'collection') {
+      const dragged = findNodeById(tree, dragItem.id);
+      if (dragged && collectAllIds([dragged]).has(targetId)) { if (dropTarget) setDropTarget(null); return; }
+    }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
 
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const y = e.clientY - rect.top;
@@ -582,9 +804,11 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
     setDropTarget(null);
   };
 
-  const executeFolderMove = useCallback((confirm: typeof moveFolderConfirm) => {
-    if (!confirm) return;
-    const { dragId, dragParentId, targetId, position } = confirm;
+  /*
+    Folders move on the drop, the way scratchpads do. A "Move folder?" dialog
+    after every drag asked about the one thing the drag had already said.
+  */
+  const executeFolderMove = (dragId: string, dragParentId: string | null, targetId: string, position: 'before' | 'inside' | 'after') => {
     if (position === 'inside') {
       postCollMsg({ type: 'moveCollection', id: dragId, newParentId: targetId });
     } else {
@@ -602,8 +826,17 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
       siblingIds.splice(insertIdx, 0, dragId);
       postCollMsg({ type: 'reorderCollections', ids: siblingIds });
     }
-    setMoveFolderConfirm(null);
-  }, [tree]);
+    if (position === 'inside') setExpandedIds(prev => new Set([...prev, targetId]));
+  };
+
+  /* Out of every folder: a folder dropped here becomes a collection of its own. */
+  const dropToTop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const d = dragItem;
+    setDragItem(null);
+    setDropTarget(null);
+    if (d?.type === 'collection' && d.parentId) postCollMsg({ type: 'moveCollection', id: d.id, newParentId: null });
+  };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -616,12 +849,12 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
     setDropTarget(null);
 
     if (dragType === 'collection') {
-      const dragNode = findNodeById(tree, dragId);
-      const targetNode = findNodeById(tree, targetId);
-      setMoveFolderConfirm({
-        dragId, dragName: dragNode?.name ?? dragId, dragParentId,
-        targetId, targetName: targetNode?.name ?? targetId, position,
-      });
+      /* A folder dropped on a request goes into that request's folder. */
+      if (findNodeById(tree, targetId)) executeFolderMove(dragId, dragParentId, targetId, position);
+      else {
+        const owner = findParentOfRequest(tree, targetId);
+        if (owner && owner.id !== dragId) executeFolderMove(dragId, dragParentId, owner.id, 'inside');
+      }
       return;
     } else {
       // Dragging a request
@@ -735,7 +968,7 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
       { id: 'sep4', label: '', separator: true },
       { id: 'properties', label: 'Properties', shortcut: 'P', icon: <SettingsIcon size={13} style={{ color: 'var(--color-text-muted)' }} />, onClick: () => { propertiesRequestedRef.current = true; setPropertiesTarget({ id: targetId, name: targetName, properties: { headers: [], authType: 'none', authData: {}, variables: [], preRequestScript: '', postResponseScript: '' } }); postMsg({ type: 'getCollectionProperties', id: targetId }); close(); } },
       { id: 'sep5', label: '', separator: true },
-      { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon size={13} />, onClick: () => { setDeleteTarget({ id: targetId, type: 'collection', name: targetName }); close(); } },
+      { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon size={13} style={{ color: 'var(--color-error)' }} />, onClick: () => { setDeleteTarget({ id: targetId, type: 'collection', name: targetName }); close(); } },
     ];
     setContextMenu({ position: { x: e.clientX, y: e.clientY }, items });
   };
@@ -843,7 +1076,7 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
   }, [aiSearchResultIds, aiSearchActive]);
 
   return (
-    <div className="flex flex-col h-full">
+    <div ref={rootRef} className="flex flex-col h-full" style={{ '--coll-accent': getProtocolAccent(protocol as any) } as React.CSSProperties}>
       {/* Header label */}
       <div className="px-4 py-3 border-b border-[var(--color-surface-border)] text-[13px] text-[var(--color-text-secondary)] flex items-center gap-2">
         <span className="flex-shrink-0" style={{ color: getProtocolAccent(protocol as any) }}>
@@ -1048,18 +1281,51 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
               },
               ...(tree.length > 0 ? [
                 { id: 'scan-sep', label: '', separator: true },
-                { id: 'delete-all', label: 'Delete all collections', danger: true, shortcut: 'D', icon: <TrashIcon size={14} />, onClick: () => { setShowDeleteAllConfirm(true); setHeaderMenu(null); } },
+                {
+                  id: 'select-delete', label: 'Select and delete', shortcut: 'S', danger: true,
+                  description: 'Tick folders and requests, then delete them together',
+                  icon: <CheckIcon size={14} style={{ color: 'var(--color-error)' }} />,
+                  onClick: () => { setDraft(null); setPicked(new Set()); setSelecting(true); setHeaderMenu(null); },
+                },
+                { id: 'delete-all', label: 'Delete all collections', danger: true, shortcut: 'D', icon: <TrashIcon size={14} style={{ color: 'var(--color-error)' }} />, onClick: () => { setShowDeleteAllConfirm(true); setHeaderMenu(null); } },
               ] as DuiContextMenuItem[] : []),
             ] as DuiContextMenuItem[], canEdit, COLLECTION_EDIT_IDS)}
           />
         </div>
       </div>
 
+      {/* Select and delete: the tick for everything, the count, and the two ways out. */}
+      {selecting && (
+        <div className="coll-select-bar" role="toolbar" aria-label="Select and delete">
+          <CheckboxView
+            checked={allPicked}
+            indeterminate={picked.size > 0 && !allPicked}
+            size="sm"
+            accentColor={getProtocolAccent(protocol as any)}
+            label={pickedCount ? `${pickedCount} selected` : 'Select all'}
+            onChange={() => setPicked(allPicked ? new Set() : new Set(tree.map(n => n.id)))}
+          />
+          <span className="flex-1" />
+          <ButtonView size="sm" variant="ghost" onClick={stopSelecting}>Cancel</ButtonView>
+          {/* Plain, like "+ New": an icon and a word in the colour, no fill. */}
+          <ButtonView
+            size="sm"
+            variant="ghost"
+            accentColor="var(--color-error)"
+            iconLeft={<TrashIcon size={14} />}
+            disabled={!pickedCount}
+            onClick={() => setConfirmBulk(true)}
+          >
+            Delete
+          </ButtonView>
+        </div>
+      )}
+
       {/* Tree */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto [scrollbar-gutter:stable] px-1" data-context-menu="collection-tree" onContextMenu={(e) => e.preventDefault()}>
         {!isLoaded ? (
           <SidebarSkeleton rows={7} />
-        ) : filteredTree.length === 0 ? (
+        ) : filteredTree.length === 0 && !draft ? (
           <div className="flex flex-col items-center justify-center h-full px-4 text-center">
             <FolderIcon size={40} strokeWidth={1} className="text-[var(--color-text-muted)] opacity-40 mb-3" />
             <p className="text-[12px] text-[var(--color-text-muted)] mb-3">No collections yet</p>
@@ -1075,12 +1341,15 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
               New Collection
             </ButtonView>
           </div>
-        ) : (
-          sortedTree.map(node => (
+        ) : (<>
+          {sortedTree.map(node => (
             <TreeNode
               key={node.id}
               node={node}
               depth={0}
+              draft={draft}
+              renderDraft={renderDraft}
+              selection={selection}
               expandedIds={expandedIds}
               toggleExpand={toggleExpand}
               renamingId={renamingId}
@@ -1109,19 +1378,21 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
               onDrop={handleDrop}
               onDragEnd={handleDragEnd}
             />
-          ))
-        )}
+          ))}
+          {draft?.parentId === null && renderDraft(0)}
+          {/* Only while a folder is on the move and has somewhere to come out of. */}
+          {dragItem?.type === 'collection' && dragItem.parentId && (
+            <div
+              className={`coll-droptop${dropTarget?.id === TOP_LEVEL ? ' is-over' : ''}`}
+              onDragOver={e => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; if (dropTarget?.id !== TOP_LEVEL) setDropTarget({ id: TOP_LEVEL, position: 'inside' }); }}
+              onDragLeave={handleDragLeave}
+              onDrop={dropToTop}
+            >
+              Drop here to make it a collection of its own
+            </div>
+          )}
+        </>)}
       </div>
-
-      {/* New item modal */}
-      <NewItemModal
-        open={modalOpen}
-        title={modalTitle}
-        placeholder={modalMode === 'request' ? 'Request name' : modalMode === 'folder' ? 'Folder name' : 'Collection name'}
-        onSave={handleModalSave}
-        onCancel={() => setModalOpen(false)}
-        accentColor={getProtocolAccent(protocol as any)}
-      />
 
       {/* Delete confirmation */}
       {deleteTarget && (
@@ -1134,43 +1405,6 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
           onCancel={() => setDeleteTarget(null)}
         />
       )}
-
-      {/* Move folder confirmation */}
-      <ModalView
-        open={!!moveFolderConfirm}
-        onClose={() => setMoveFolderConfirm(null)}
-        title="Move folder"
-        size="sm"
-        footerRight={
-          <div style={{ display: 'flex', gap: 8 }}>
-            <ButtonView variant="secondary" size="sm" onClick={() => setMoveFolderConfirm(null)}>
-              Cancel
-            </ButtonView>
-            <ButtonView
-              variant="primary"
-              size="sm"
-              accentColor={getProtocolAccent(protocol as any)}
-              onClick={() => executeFolderMove(moveFolderConfirm)}
-            >
-              Move
-            </ButtonView>
-          </div>
-        }
-      >
-        {moveFolderConfirm && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <p style={{ fontSize: 13, color: 'var(--color-text-primary)', margin: 0 }}>
-              {moveFolderConfirm.position === 'inside'
-                ? <>Move <strong>"{moveFolderConfirm.dragName}"</strong> into <strong>"{moveFolderConfirm.targetName}"</strong>?</>
-                : <>Reorder <strong>"{moveFolderConfirm.dragName}"</strong> to a new position?</>
-              }
-            </p>
-            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
-              All requests and sub-folders inside this folder will move with it.
-            </p>
-          </div>
-        )}
-      </ModalView>
 
       {/* Collection runner */}
       <RunCollectionModal
@@ -1229,7 +1463,7 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
               setReqContextMenu(null);
             } },
             { id: 'sep2', label: '', separator: true },
-            { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon size={13} />, onClick: () => { setDeleteTarget({ id: reqContextMenu.req.id, type: 'request', name: reqContextMenu.req.name }); setReqContextMenu(null); } },
+            { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon size={13} style={{ color: 'var(--color-error)' }} />, onClick: () => { setDeleteTarget({ id: reqContextMenu.req.id, type: 'request', name: reqContextMenu.req.name }); setReqContextMenu(null); } },
           ] as DuiContextMenuItem[], canEdit, COLLECTION_EDIT_IDS)}
         />
       )}
@@ -1249,6 +1483,23 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
           onClose={() => setPropertiesTarget(null)}
         />
       )}
+
+      {confirmBulk && (() => {
+        const { folders, requests, innerFolders, innerRequests } = bulkPlan;
+        const n = (k: number, word: string) => `${k} ${word}${k === 1 ? '' : 's'}`;
+        const what = [folders.length ? n(folders.length, 'folder') : '', requests.length ? n(requests.length, 'request') : ''].filter(Boolean).join(' and ');
+        const along = [innerFolders ? n(innerFolders, 'subfolder') : '', innerRequests ? n(innerRequests, 'request') : ''].filter(Boolean).join(' and ');
+        return (
+          <ConfirmDialog
+            title={`Delete ${what}?`}
+            message={`${along ? `Everything inside ${folders.length === 1 ? 'it goes too' : 'them goes too'}: ${along}. ` : ''}${folders.length + requests.length === 1 ? 'It goes' : 'They go'} to the Bin, where ${folders.length + requests.length === 1 ? 'it' : 'they'} can be restored.`}
+            confirmLabel="Delete"
+            danger
+            onConfirm={deleteSelected}
+            onCancel={() => setConfirmBulk(false)}
+          />
+        );
+      })()}
 
       {showDeleteAllConfirm && (
         <ConfirmDialog
@@ -1451,9 +1702,33 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
 
 // ────────────── Recursive Tree Node ──────────────
 
+interface TreeSelection { picked: ReadonlySet<string>; toggle: (id: string) => void; accent: string }
+
+/** A row's tick. Its own click, so ticking a folder does not also fold it. */
+function PickBox({ selection, id, covered }: { selection: TreeSelection; id: string; covered?: boolean }) {
+  return (
+    <span className="coll-pick" onClick={e => e.stopPropagation()}>
+      <CheckboxView
+        checked={!!covered || selection.picked.has(id)}
+        disabled={covered}
+        size="xs"
+        accentColor={selection.accent}
+        onChange={() => selection.toggle(id)}
+      />
+    </span>
+  );
+}
+
 interface TreeNodeProps {
   node: CollectionTreeNode;
   depth: number;
+  /** A folder or request being named, drawn inside the folder it goes in. */
+  draft: Draft | null;
+  renderDraft: (depth: number) => React.ReactNode;
+  /** Select mode: the ticked ids, and the tree's accent for the boxes. */
+  selection: TreeSelection | null;
+  /** Inside a ticked folder: ticked by it, and not to be unticked alone. */
+  covered?: boolean;
   expandedIds: Set<string>;
   toggleExpand: (id: string) => void;
   renamingId: string | null;
@@ -1486,7 +1761,7 @@ interface TreeNodeProps {
 }
 
 function TreeNode({
-  node, depth, expandedIds, toggleExpand,
+  node, depth, draft, renderDraft, selection, covered, expandedIds, toggleExpand,
   renamingId, renameValue, setRenameValue, renameRef, handleRename, startRename, setRenamingId,
   onDelete, onDeleteRequest, onNewFolder, onNewRequest, onOpenRequest, onRunCollection,
   onExpandSubtree, onCollapseSubtree,
@@ -1497,16 +1772,19 @@ function TreeNode({
   const totalItems = node.children.length + node.requests.length;
   const isDragOver = dropTarget?.id === node.id;
   const dropPosition = isDragOver ? dropTarget.position : null;
+  const picked = !!selection && (covered || selection.picked.has(node.id));
+  /* Everything below a ticked folder is ticked by it. */
+  const childCovered = !!covered || (!!selection && selection.picked.has(node.id));
 
   return (
     <div className="mb-0.5">
       {/* Drop indicator - before */}
       {dropPosition === 'before' && (
-        <div className="h-0.5 bg-[var(--color-primary)] rounded mx-2" />
+        <div className="h-0.5 bg-[var(--coll-accent,var(--color-primary))] rounded mx-2" />
       )}
       {/* Folder row */}
       <div
-        draggable
+        draggable={!selection}
         onDragStart={(e) => onDragStart(e, node.id, 'collection', node.parent_id)}
         onDragOver={(e) => onDragOver(e, node.id, 'collection')}
         onDragLeave={onDragLeave}
@@ -1516,20 +1794,21 @@ function TreeNode({
         onContextMenu={(e) => onCollectionContextMenu(e, node)}
         data-context-menu="collection"
         className={`px-2 py-1.5 rounded-md hover:bg-[var(--color-item-hover-bg)] cursor-pointer group flex items-center gap-1.5 ${
-          dropPosition === 'inside' ? 'ring-1 ring-[var(--color-primary)] bg-[var(--color-item-hover-bg)]' : ''
-        } ${dragItem?.id === node.id ? 'opacity-40' : ''}`}
+          dropPosition === 'inside' ? 'coll-row--drop' : ''
+        } ${dragItem?.id === node.id ? 'opacity-40' : ''} ${picked ? 'coll-row--picked' : ''}`}
         style={{ paddingLeft: `${8 + depth * 12}px` }}
       >
+        {selection && <PickBox selection={selection} id={node.id} covered={covered} />}
         {/* Chevron */}
         <ChevronRightIcon
           size={12}
           className={`text-[var(--color-text-muted)] shrink-0 transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`}
         />
-        {/* Folder icon */}
+        {/* Folder icon, in the tree's own accent, as the scratchpad's folders are */}
         {isExpanded ? (
-          <FolderOpenIcon size={14} className="text-[var(--color-text-muted)] shrink-0" />
+          <FolderOpenIcon size={14} className="text-[var(--coll-accent,var(--color-primary))] shrink-0" />
         ) : (
-          <FolderIcon size={14} className="text-[var(--color-text-muted)] shrink-0" />
+          <FolderIcon size={14} className="text-[var(--coll-accent,var(--color-primary))] shrink-0" />
         )}
         {/* Name or rename input */}
         {renamingId === node.id ? (
@@ -1551,7 +1830,7 @@ function TreeNode({
             sideways when the row is hovered — which means they hold their
             width all the time. With the count to their left it floated a
             hundred pixels short of the row's edge, against a blank strip. */}
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        {!selection && <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <ActionBtn title="Add Request" onClick={(e) => { e.stopPropagation(); onNewRequest(node.id); }}>
             <FilePlusIcon size={13} />
           </ActionBtn>
@@ -1580,7 +1859,7 @@ function TreeNode({
           <ActionBtn title="More Options" onClick={(e) => onCollectionContextMenu(e, node)}>
             <MoreVerticalIcon size={13} />
           </ActionBtn>
-        </div>
+        </div>}
 
         {/* Item count, at the row's edge. */}
         {totalItems > 0 && (
@@ -1592,7 +1871,7 @@ function TreeNode({
 
       {/* Drop indicator - after */}
       {dropPosition === 'after' && !isExpanded && (
-        <div className="h-0.5 bg-[var(--color-primary)] rounded mx-2" />
+        <div className="h-0.5 bg-[var(--coll-accent,var(--color-primary))] rounded mx-2" />
       )}
 
       {/* Children */}
@@ -1605,6 +1884,10 @@ function TreeNode({
               key={child.id}
               node={child}
               depth={depth + 1}
+              draft={draft}
+              renderDraft={renderDraft}
+              selection={selection}
+              covered={childCovered}
               expandedIds={expandedIds}
               toggleExpand={toggleExpand}
               renamingId={renamingId}
@@ -1634,28 +1917,31 @@ function TreeNode({
               onDragEnd={onDragEnd}
             />
           ))}
+          {draft?.kind === 'folder' && draft.parentId === node.id && renderDraft(depth + 1)}
           {/* Requests */}
           {node.requests.map(req => {
             const isReqDragOver = dropTarget?.id === req.id;
             const reqDropPos = isReqDragOver ? dropTarget.position : null;
             return (
               <div key={req.id}>
-                {reqDropPos === 'before' && <div className="h-0.5 bg-[var(--color-primary)] rounded mx-2" />}
+                {reqDropPos === 'before' && <div className="h-0.5 bg-[var(--coll-accent,var(--color-primary))] rounded mx-2" />}
                 <div
-                  draggable
+                  draggable={!selection}
                   onDragStart={(e) => onDragStart(e, req.id, 'request', node.id)}
                   onDragOver={(e) => onDragOver(e, req.id, 'request')}
                   onDragLeave={onDragLeave}
                   onDrop={onDrop}
                   onDragEnd={onDragEnd}
-                  onClick={() => onOpenRequest(req)}
+                  /* In select mode a click ticks the row rather than opening it. */
+                  onClick={() => (selection ? (!childCovered && selection.toggle(req.id)) : onOpenRequest(req))}
                   onContextMenu={(e) => onRequestContextMenu(e, req)}
                   data-context-menu="request"
                   className={`flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[var(--color-item-hover-bg)] cursor-pointer group/req ${
                     dragItem?.id === req.id ? 'opacity-40' : ''
-                  }`}
-                  style={{ paddingLeft: `${20 + (depth + 1) * 12}px` }}
+                  } ${selection && (childCovered || selection.picked.has(req.id)) ? 'coll-row--picked' : ''}`}
+                  style={{ paddingLeft: `${(selection ? 8 : 20) + (depth + 1) * 12}px` }}
                 >
+                  {selection && <PickBox selection={selection} id={req.id} covered={childCovered} />}
                   <span
                     className="text-[9px] font-bold shrink-0 w-[30px] text-left uppercase tracking-wide"
                     style={{ color: METHOD_COLORS[req.method] || 'var(--color-muted-fallback)' }}
@@ -1685,26 +1971,27 @@ function TreeNode({
                   {/* Two at most: a row is one line, and a wrapping strip of
                       chips pushes every request under it down the list. */}
                   <RequestTags data={req.data} />
-                  <span className="opacity-0 group-hover/req:opacity-100">
+                  {!selection && <span className="opacity-0 group-hover/req:opacity-100">
                     <IconButtonView
                       icon={<MoreVerticalIcon size={11} />}
                       size="sm"
                       tooltip="More Options"
                       onClick={(e) => { e.stopPropagation(); onRequestContextMenu(e, req); }}
                     />
-                  </span>
+                  </span>}
                 </div>
-                {reqDropPos === 'after' && <div className="h-0.5 bg-[var(--color-primary)] rounded mx-2" />}
+                {reqDropPos === 'after' && <div className="h-0.5 bg-[var(--coll-accent,var(--color-primary))] rounded mx-2" />}
               </div>
             );
           })}
+          {draft?.kind === 'request' && draft.parentId === node.id && renderDraft(depth + 1)}
         </div>
         </div>
       </div>
 
       {/* Drop indicator - after (when expanded, at end) */}
       {dropPosition === 'after' && isExpanded && (
-        <div className="h-0.5 bg-[var(--color-primary)] rounded mx-2" />
+        <div className="h-0.5 bg-[var(--coll-accent,var(--color-primary))] rounded mx-2" />
       )}
     </div>
   );

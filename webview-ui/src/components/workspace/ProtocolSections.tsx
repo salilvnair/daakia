@@ -22,8 +22,8 @@
  * sidebar cache instead, which is already fetched for every protocol, so a
  * heading can say how much is inside without the inside existing yet.
  */
-import { useEffect, useRef, useState } from 'react';
-import { ModalView, ButtonView } from '@salilvnair/dui';
+import { useEffect, useState } from 'react';
+import { ButtonView, IconButtonView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { useWorkspaceEditable } from '../../store/workspace-store';
 import { READ_ONLY_REASON } from '../../services/workspace/editable';
@@ -34,22 +34,28 @@ import { getProtocolAccent } from '../../colors/daakia-colors';
 import { CollectionsPanel } from '../rest/sidebar/CollectionsPanel';
 import { HistoryPanel } from '../rest/sidebar/HistoryPanel';
 import { EnvironmentsPanel } from '../rest/sidebar/EnvironmentsPanel';
-import { ChevronRightIcon, ChevronDownIcon, CollectionsFolderIcon, ClockIcon, PlusIcon } from '../../icons';
+import { ChevronRightIcon, ChevronDownIcon, CollectionsFolderIcon, ClockIcon, PlusIcon, FolderPlusIcon, CloseIcon } from '../../icons';
 import type { Protocol } from '../../store/tabs-store';
 import './workspace.css';
 
+/** The last ask each page answered, kept across its mounts. */
+const answeredSignals = new Map<string, number>();
+
 /**
- * Call `onAsk` when `signal` changes — never on mount.
+ * Call `onAsk` once for each new value of `signal`.
  *
  * The naive `if (signal > 0)` fires on every mount, and the value is already
- * above zero once the button has been used, so a tab switch reopened the dialog
- * with nobody having asked. The value present at mount is the baseline.
+ * above zero once the button has been used, so a tab switch reopened the
+ * dialog with nobody having asked. Taking the value at mount as the baseline
+ * fixed that and broke the Overview's New collection and New environment: one
+ * click switches to the tab and bumps the counter, so the page mounts already
+ * holding the new value and never fired. What has been answered is remembered
+ * per page instead, outside any one mount.
  */
-function useCreateSignal(signal: number, onAsk: () => void) {
-  const seen = useRef(signal);
+function useCreateSignal(page: string, signal: number, onAsk: () => void) {
   useEffect(() => {
-    if (signal === seen.current) return;
-    seen.current = signal;
+    if (signal === (answeredSignals.get(page) ?? 0)) return;
+    answeredSignals.set(page, signal);
     onAsk();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signal]);
@@ -80,9 +86,12 @@ function countRequests(node: TreeNode): number {
 
 // ── The protocol row ─────────────────────────────────────────────────────────
 
-function ProtocolRow({ label, accent, count, open, onToggle, children }: {
+function ProtocolRow({ label, accent, count, open, onToggle, onAdd, children }: {
   label: string; accent: string; count: number;
-  open: boolean; onToggle: () => void; children: React.ReactNode;
+  open: boolean; onToggle: () => void;
+  /** A new collection in this protocol, named in its own tree. */
+  onAdd?: () => void;
+  children: React.ReactNode;
 }) {
   return (
     /* The row re-points --color-accent at its own protocol, so everything
@@ -95,16 +104,24 @@ function ProtocolRow({ label, accent, count, open, onToggle, children }: {
        not render itself. */
     <div className={`ws-proto-sec${open ? ' ws-proto-sec--open' : ''}`}
          style={{ '--color-accent': accent } as React.CSSProperties}>
-      <button type="button" className="ws-proto-head" onClick={onToggle}>
-        {open ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
-        <span className="ws-proto-name" style={{ color: accent }}>{label}</span>
-        <span
-          className="ws-proto-n"
-          style={{ color: accent, background: `color-mix(in srgb, ${accent} 15%, transparent)` }}
-        >
-          {count}
-        </span>
-      </button>
+      <div className="ws-proto-headrow">
+        <button type="button" className="ws-proto-head" onClick={onToggle}>
+          {open ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
+          <span className="ws-proto-name" style={{ color: accent }}>{label}</span>
+          <span
+            className="ws-proto-n"
+            style={{ color: accent, background: `color-mix(in srgb, ${accent} 15%, transparent)` }}
+          >
+            {count}
+          </span>
+        </button>
+        {onAdd && (
+          <span className="ws-proto-add">
+            <IconButtonView size="sm" icon={<FolderPlusIcon size={13} style={{ color: accent }} />}
+                            tooltip={`New ${label} collection`} onClick={onAdd} />
+          </span>
+        )}
+      </div>
 
       {/* Mounted only while open — see the note at the top of the file. */}
       {open && <div className="ws-proto-body">{children}</div>}
@@ -116,14 +133,17 @@ function ProtocolRow({ label, accent, count, open, onToggle, children }: {
  * The shell both tabs share: fetch every protocol for the counts, draw a row
  * per protocol that has something, and put the real panel inside the open one.
  */
-function ProtocolSections({ kind, counts, panel, empty, extra }: {
+function ProtocolSections({ kind, counts, present, panel, empty, extra, onAdd }: {
   kind: 'collections' | 'history';
   counts: (p: Protocol) => number;
+  /** Whether a protocol gets a row. Something in it, unless told otherwise. */
+  present?: (p: Protocol) => boolean;
   panel: (p: Protocol) => React.ReactNode;
   empty: React.ReactNode;
   extra?: React.ReactNode;
+  onAdd?: (p: Protocol) => void;
 }) {
-  const withData = PROTOCOLS.filter(p => counts(p.id) > 0);
+  const withData = PROTOCOLS.filter(p => (present ? present(p.id) : counts(p.id) > 0));
 
   /* Which row is open survives leaving the tab: this component unmounts on a
      tab switch, so React state alone reopened whatever you had just collapsed.
@@ -167,6 +187,7 @@ function ProtocolSections({ kind, counts, panel, empty, extra }: {
             count={counts(p.id)}
             open={open === p.id}
             onToggle={() => choose(open === p.id ? '' : p.id)}
+            onAdd={onAdd ? () => onAdd(p.id) : undefined}
           >
             {panel(p.id)}
           </ProtocolRow>
@@ -179,8 +200,11 @@ function ProtocolSections({ kind, counts, panel, empty, extra }: {
 // ── Collections ──────────────────────────────────────────────────────────────
 
 export function WorkspaceCollections({ createSignal = 0 }: { createSignal?: number }) {
-  const [creating, setCreating] = useState(false);
+  const [choosing, setChoosing] = useState(false);
+  /* Which protocol was asked for a new collection, and a fresh id per ask. */
+  const [ask, setAsk] = useState<{ protocol: Protocol; id: string } | null>(null);
   const store = useSidebarDataStore();
+  const setPref = useUiStateStore(s => s.setPref);
 
   /* One fetch per protocol, because the sidebar cache is keyed by protocol and
      a single call would land every protocol's tree under whichever one asked.
@@ -190,49 +214,55 @@ export function WorkspaceCollections({ createSignal = 0 }: { createSignal?: numb
   }, []);
 
   const canEdit = useWorkspaceEditable('collections');
-  useCreateSignal(createSignal, () => { if (canEdit) setCreating(true); });
+  useCreateSignal('collections', createSignal, () => { if (canEdit) setChoosing(true); });
 
   const counts = (p: Protocol) =>
     ((store.getCollections(p) ?? []) as unknown as TreeNode[])
       .reduce((n, t) => n + countRequests(t), 0);
 
+  /*
+    Open that protocol's row and name the collection in its own tree — the
+    sidebar's way, the scratchpad's way. A dialog that asked for a name and a
+    protocol, then put the collection somewhere off screen, was a form about a
+    thing rather than the thing.
+  */
+  const start = (p: Protocol) => {
+    setChoosing(false);
+    setPref('workspace.collections.open', p);
+    setAsk({ protocol: p, id: crypto.randomUUID() });
+  };
+
   return (
     <ProtocolSections
       kind="collections"
       counts={counts}
-      panel={p => <CollectionsPanel protocol={p} />}
+      /* A collection with nothing in it yet still has a row — and so does the
+         protocol one was just asked for, before the host has written it. */
+      present={p => (store.getCollections(p) ?? []).length > 0 || ask?.protocol === p}
+      panel={p => <CollectionsPanel protocol={p} startCreate={ask?.protocol === p ? ask.id : undefined} />}
+      onAdd={canEdit ? start : undefined}
       empty={
         <>
           <CollectionsFolderIcon size={26} />
           <p>No collections saved in this workspace yet.</p>
-          {/* An empty state that names the next action beats one that only
-              reports the absence — and this dialog asks which protocol, which
-              is the question the sidebar never has to ask because it is already
-              showing one. */}
-          <ButtonView
-            variant="primary"
-            size="sm"
-            iconLeft={<PlusIcon size={13} />}
-            accentColor="var(--color-workspace)"
-            onClick={() => setCreating(true)}
-            disabled={!canEdit}
-            title={canEdit ? undefined : READ_ONLY_REASON}
-          >
-            New Collection
-          </ButtonView>
+          {/* Asks which protocol, which is the question the sidebar never has
+              to ask because it is already showing one. */}
+          {!choosing && (
+            <ButtonView
+              variant="primary"
+              size="sm"
+              iconLeft={<PlusIcon size={13} />}
+              accentColor="var(--color-workspace)"
+              onClick={() => setChoosing(true)}
+              disabled={!canEdit}
+              title={canEdit ? undefined : READ_ONLY_REASON}
+            >
+              New Collection
+            </ButtonView>
+          )}
         </>
       }
-      extra={
-        <NewCollectionModal
-          open={creating}
-          onClose={() => setCreating(false)}
-          onCreate={(name, protocol) => {
-            postMsg({ type: 'createCollection', id: crypto.randomUUID(), name, parentId: null, protocol });
-            setCreating(false);
-            window.setTimeout(() => postMsg({ type: 'getCollections', protocol }), 250);
-          }}
-        />
-      }
+      extra={choosing ? <ProtocolChooser onPick={start} onClose={() => setChoosing(false)} /> : null}
     />
   );
 }
@@ -270,6 +300,15 @@ export function WorkspaceEnvironments({ createSignal = 0 }: { createSignal?: num
   const stored = useUiStateStore(s => s.prefs['workspace.environments.open']);
   const open = stored !== 'closed';
   const environments = useEnvStore(s => s.environments);
+  /* Bumped after the panel is on screen, so the panel sees it change. */
+  const [panelAsk, setPanelAsk] = useState(0);
+  useCreateSignal('environments', createSignal, () => {
+    /* A closed row has no panel yet: open it, and ask once the panel is there. */
+    if (!open) {
+      setPref('workspace.environments.open', 'open');
+      window.setTimeout(() => setPanelAsk(n => n + 1), 0);
+    } else setPanelAsk(n => n + 1);
+  });
 
   useEffect(() => { postMsg({ type: 'getEnvironments' }); }, []);
 
@@ -283,7 +322,7 @@ export function WorkspaceEnvironments({ createSignal = 0 }: { createSignal?: num
           open={open}
           onToggle={() => setPref('workspace.environments.open', open ? 'closed' : 'open')}
         >
-          <EnvironmentsPanel createSignal={createSignal} />
+          <EnvironmentsPanel createSignal={panelAsk} />
         </ProtocolRow>
       </div>
     </div>
@@ -293,79 +332,44 @@ export function WorkspaceEnvironments({ createSignal = 0 }: { createSignal?: num
 // ── Creating one ─────────────────────────────────────────────────────────────
 
 /**
- * Name and protocol together.
+ * Which protocol a new collection is for, asked in the page rather than over it.
  *
- * The sidebar never asks which protocol, because it is already showing one. On
- * a screen showing all of them there is nothing to infer, and defaulting to
- * REST is how a GraphQL collection ends up filed under REST and invisible from
- * the row it belongs to.
+ * The sidebar never asks, because it is already showing one. On a screen
+ * showing all of them there is nothing to infer, and defaulting to REST is how
+ * a GraphQL collection ends up filed under REST and invisible from the row it
+ * belongs to. The name is asked next, in that protocol's tree.
  */
-function NewCollectionModal({ open, onClose, onCreate }: {
-  open: boolean;
-  onClose: () => void;
-  onCreate: (name: string, protocol: Protocol) => void;
-}) {
-  const [name, setName] = useState('');
-  const [protocol, setProtocol] = useState<Protocol>('rest');
-
-  useEffect(() => { if (open) { setName(''); setProtocol('rest'); } }, [open]);
-
-  const save = () => { if (name.trim()) onCreate(name.trim(), protocol); };
+function ProtocolChooser({ onPick, onClose }: { onPick: (p: Protocol) => void; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   return (
-    <ModalView
-      open={open}
-      onClose={onClose}
-      title="New Collection"
-      headerColor={getProtocolAccent(protocol)}
-      size="sm"
-      elevated
-      footerRight={
-        <ButtonView size="sm" variant="primary" disabled={!name.trim()}
-                    accentColor={getProtocolAccent(protocol)} onClick={save}>
-          Create
-        </ButtonView>
-      }
-    >
-      <div
-        className="ws-new-coll"
-        style={{ '--ws-input-accent': getProtocolAccent(protocol) } as React.CSSProperties}
-      >
-        <input
-          autoFocus
-          className="ws-url-input"
-          value={name}
-          placeholder="Collection name"
-          onChange={e => setName(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') save(); }}
-        />
-
-        <div className="ws-new-coll-label">Protocol</div>
-        {/* Chips rather than a dropdown: seven options, the same seven as the
-            rail, each in the colour it has there — so the choice is recognised
-            rather than read. */}
-        <div className="ws-new-coll-protocols">
-          {PROTOCOLS.map(p => {
-            const accent = getProtocolAccent(p.id);
-            const on = protocol === p.id;
-            return (
-              <button
-                key={p.id}
-                type="button"
-                className={`ws-proto${on ? ' ws-proto--on' : ''}`}
-                style={on ? {
-                  color: accent,
-                  borderColor: `color-mix(in srgb, ${accent} 55%, transparent)`,
-                  background: `color-mix(in srgb, ${accent} 14%, transparent)`,
-                } : undefined}
-                onClick={() => setProtocol(p.id)}
-              >
-                {p.label}
-              </button>
-            );
-          })}
-        </div>
+    <div className="ws-new-strip" role="group" aria-label="New collection in">
+      <FolderPlusIcon size={14} className="ws-new-strip__icon" />
+      <span className="ws-new-strip__label">New collection in</span>
+      {/* Chips rather than a dropdown: seven options, the same seven as the
+          rail, each in the colour it has there — so the choice is recognised
+          rather than read. */}
+      <div className="ws-new-strip__chips">
+        {PROTOCOLS.map(p => {
+          const accent = getProtocolAccent(p.id);
+          return (
+            <button
+              key={p.id}
+              type="button"
+              className="ws-proto"
+              style={{ '--ws-proto-accent': accent } as React.CSSProperties}
+              onClick={() => onPick(p.id)}
+            >
+              {p.label}
+            </button>
+          );
+        })}
       </div>
-    </ModalView>
+      <IconButtonView size="sm" icon={<CloseIcon size={12} />} tooltip="Cancel" onClick={onClose} />
+    </div>
   );
 }

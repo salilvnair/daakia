@@ -193,7 +193,7 @@ function SubmenuFlyout({ items, anchorRect, onSelect, onCloseAll, keepOpenOnSele
             </span>
             {item.icon && (
               <span className="w-4 h-4 flex items-center justify-center shrink-0"
-                style={{ color: item.iconColor || 'var(--color-text-muted)' }}>
+                style={{ color: item.iconColor || (item.danger ? 'var(--color-error)' : 'var(--color-text-muted)') }}>
                 {item.icon}
               </span>
             )}
@@ -392,7 +392,7 @@ export function ContextMenu({ items: given, position, onSelect, onClose }: Conte
             )}
             {item.icon && (
               <span className="w-4 h-4 flex items-center justify-center shrink-0"
-                style={{ color: item.iconColor || 'var(--color-text-muted)' }}>
+                style={{ color: item.iconColor || (item.danger ? 'var(--color-error)' : 'var(--color-text-muted)') }}>
                 {item.icon}
               </span>
             )}

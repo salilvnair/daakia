@@ -49,6 +49,38 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '3.4.4',
+    date: '2026-11-18',
+    headline: 'Tab groups, a tab bar that copes with a hundred tabs, Ctrl+N that makes another of whatever is in front, filters in both imports, and a shortcut for nearly everything.',
+    lines: [
+      { kind: 'feature', area: 'Tabs', text: 'Tab groups, as in Chrome and Edge: a coloured chip in front of its tabs that folds the group to a count. Double-click or right-click it for its name, its colour (eight, or any from the colour picker), New tab in group, Ungroup and Close group. Add tabs from their right-click menu, or right-click the empty strip for New tab group; drag tabs in and out, or a whole group by its chip.' },
+      { kind: 'feature', area: 'Tabs', text: 'Group tabs by protocol, host or collection in one click; a tab opened later joins its matching group by itself. Groups are saved with each workspace\'s tabs.' },
+      { kind: 'feature', area: 'Tabs', text: 'A list of every tab (Alt+L, or the count beside the arrows): recently used, then each group, then recently closed. Type to search names and URLs.' },
+      { kind: 'feature', area: 'Tabs', text: 'Reopen closed tab (Alt+Shift+T, or from the list) brings back any of the last 20, unsaved changes included. A hover card on a request tab shows its URL, last status and time, environment and collection.' },
+      { kind: 'change', area: 'Tabs', text: 'The tab strip scrolls instead of squeezing: tabs stop at 120px, full-height arrows (hold to keep going), the wheel scrolls sideways, and the tab in front always scrolls into view. + stays after the last tab. Pinned tabs show only their icon; middle-click closes, double-click the empty strip opens.' },
+      { kind: 'change', area: 'Tabs', text: 'Ctrl+N opens another of whatever is in front: REST on REST, GraphQL on GraphQL, SSE on SSE, and a scratchpad of the same type on a scratchpad.' },
+      { kind: 'feature', area: 'Import', text: 'Scan code and Import from Swagger URL have a search box, a chip per method with counts, and Check all / Uncheck all for what the filter shows.' },
+      { kind: 'feature', area: 'Keymap', text: 'Shortcuts for the rest of the app, all rebindable: New scratchpad (Alt+N, with its type chosen beside it), New collection, Duplicate tab, Next and Previous tab, Workspace, Settings, Environments, History, Scan code, Daakia AI, Mock servers and more.' },
+      { kind: 'feature', area: 'UI', text: 'A stack of two or more notifications shows how many, and Clear all. The command palette can group tabs, ungroup them, reopen a closed tab and search all tabs.' },
+    ],
+  },
+  {
+    version: '3.4.3',
+    date: '2026-11-16',
+    headline: 'New collections named where they will appear, folders that drag anywhere without a question, select and delete in every tree, and the green tick on every copy button.',
+    lines: [
+      { kind: 'change', area: 'Collections', text: 'New collection, folder and request are named in a row in the tree, where they will appear, instead of a popup. Enter or clicking away creates it; Escape leaves nothing behind. The row stays until the item exists, and a create that goes unanswered comes back with the name still in it.' },
+      { kind: 'change', area: 'Collections', text: 'Dragging a folder asks nothing: it drops into another folder directly, never into itself or one of its own subfolders, and a strip shown while it moves takes it out to the top level.' },
+      { kind: 'feature', area: 'Collections', text: 'Select and delete, in the More menu of every protocol: checkboxes in the tree\'s colour, a ticked folder carries everything inside it, and what goes goes to the Bin.' },
+      { kind: 'feature', area: 'Scratchpads', text: 'Select and delete and Delete all scratchpads, in the More menu. A folder takes its contents with it; the default folder stays, empty. Scratchpads have no Bin, and the confirmation says so.' },
+      { kind: 'feature', area: 'Scratchpads', text: 'Folders drag into other folders and out to the top level, as collections do.' },
+      { kind: 'change', area: 'Workspace', text: 'New collection on the workspace page picks a protocol from a row of chips instead of a dialog, and each protocol row has its own add button.' },
+      { kind: 'change', area: 'UI', text: 'Folder icons take the tree\'s colour — each protocol\'s own, violet in the scratchpads — and Delete items in menus are red, icon and all.' },
+      { kind: 'change', area: 'UI', text: 'Every copy button turns into the green tick when it copies: the scratchpad\'s, GraphQL subscription events, the terminal\'s copy screen, cookie Export, the Git Sync ID, the WebSocket connect payload and the response headers\' Copy all.' },
+      { kind: 'fix', area: 'Workspace', text: 'The Overview\'s New collection and New environment quick actions open what they say; they switched tabs and did nothing else.' },
+    ],
+  },
+  {
     version: '3.4.2',
     date: '2026-11-15',
     headline: 'Scan code and the Swagger URL import as one wizard that ends in the same place, the folder open in VS Code found for you, Ask AI on GPT-5 and the o-series, and sharing a workspace one click away.',
