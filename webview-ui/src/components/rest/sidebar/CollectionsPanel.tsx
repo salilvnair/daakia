@@ -210,6 +210,7 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0, startCre
     Nothing is written until the name is confirmed; Escape leaves no trace.
   */
   const [draft, setDraft] = useState<Draft | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   /* Select and delete, from the More menu: the ids ticked. A ticked folder
      carries everything inside it, the way deleting it does. */
@@ -530,7 +531,12 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0, startCre
      reimplementing the create flow, so there is one of them. */
   useEffect(() => {
     const onAsk = (e: MessageEvent) => {
-      if ((e.data as { type?: string })?.type === 'collections:new') openNewRef.current();
+      if ((e.data as { type?: string })?.type !== 'collections:new') return;
+      /* Only the panel on screen. Hidden copies stay mounted — the workspace
+         page's, another protocol's — and an autofocused row in one of those
+         would take the caret from the one being looked at. */
+      if (!rootRef.current || rootRef.current.offsetParent === null) return;
+      openNewRef.current();
     };
     window.addEventListener('message', onAsk);
     return () => window.removeEventListener('message', onAsk);
@@ -1070,7 +1076,7 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0, startCre
   }, [aiSearchResultIds, aiSearchActive]);
 
   return (
-    <div className="flex flex-col h-full" style={{ '--coll-accent': getProtocolAccent(protocol as any) } as React.CSSProperties}>
+    <div ref={rootRef} className="flex flex-col h-full" style={{ '--coll-accent': getProtocolAccent(protocol as any) } as React.CSSProperties}>
       {/* Header label */}
       <div className="px-4 py-3 border-b border-[var(--color-surface-border)] text-[13px] text-[var(--color-text-secondary)] flex items-center gap-2">
         <span className="flex-shrink-0" style={{ color: getProtocolAccent(protocol as any) }}>

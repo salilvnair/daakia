@@ -20,6 +20,7 @@ import {
   Dk8sIcon, StethoscopeIcon, RefreshIcon, LayoutGridIcon, TableIcon, IssueOpenedIcon,
   CheckCircleIcon, DownloadIcon,
 } from '../../../icons';
+import { collectionName } from '../../../services/tabs/collection-name';
 import './CommandPaletteView.css';
 
 interface PaletteItem {
@@ -391,6 +392,18 @@ export function CommandPaletteView({ open, onClose, onOpenSidebarSection }: Comm
       items: [
         { id: 'action-import-collection', icon: <FolderImportIcon size={15} />, label: 'Import Collection', keywords: ['postman', 'openapi', 'har', 'bruno'], run: () => postMsg({ type: 'importCollectionRequest' }) },
         { id: 'action-new-environment', icon: <LayersIcon size={15} />, label: 'New Environment', keywords: ['env', 'variables', 'create'], run: () => { openSection('collections')(); useEnvStore.getState().addEnvironment(); } },
+      ],
+    },
+    {
+      /* The tab bar's own commands: groups, the closed list, every tab. */
+      heading: 'Tabs',
+      items: [
+        { id: 'tabs-group-protocol', iconColor: 'var(--color-primary)', icon: <LayersIcon size={15} />, label: 'Group Tabs by Protocol', keywords: ['tab groups', 'rest', 'soap', 'graphql', 'organize', 'similar'], run: () => useTabsStore.getState().groupTabsBy('protocol') },
+        { id: 'tabs-group-host', iconColor: 'var(--color-primary)', icon: <LayersIcon size={15} />, label: 'Group Tabs by Host', keywords: ['tab groups', 'server', 'domain', 'organize', 'similar'], run: () => useTabsStore.getState().groupTabsBy('host') },
+        { id: 'tabs-group-collection', iconColor: 'var(--color-primary)', icon: <LayersIcon size={15} />, label: 'Group Tabs by Collection', keywords: ['tab groups', 'folder', 'organize', 'similar'], run: () => useTabsStore.getState().groupTabsBy('collection', collectionName) },
+        { id: 'tabs-ungroup-all', iconColor: 'var(--color-text-muted)', icon: <LayersIcon size={15} />, label: 'Ungroup All Tabs', keywords: ['tab groups', 'remove groups', 'clear'], run: () => useTabsStore.getState().ungroupAllTabs() },
+        { id: 'tabs-reopen', iconColor: 'var(--color-success)', icon: <RefreshIcon size={15} />, label: 'Reopen Closed Tab', keywords: ['undo close', 'restore', 'recently closed'], run: () => useTabsStore.getState().reopenClosedTab() },
+        { id: 'tabs-all', iconColor: 'var(--color-info)', icon: <SearchIcon size={15} />, label: 'Search All Tabs', keywords: ['tab list', 'open tabs', 'recently used', 'find tab'], run: () => window.dispatchEvent(new Event('daakia:all-tabs')) },
       ],
     },
   ], [activeProtocol]);

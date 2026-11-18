@@ -1,12 +1,19 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, Fragment } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
-import type { Protocol } from '../../store/tabs-store';
+import type { Protocol, RequestTab } from '../../store/tabs-store';
+import { stripPieces, type TabGroup, type GroupBy } from '../../services/tabs/tab-groups';
+import { newTabLikeActive } from '../../services/keyboard/new-tab-like-active';
+import { collectionName } from '../../services/tabs/collection-name';
+import { TabGroupChip } from './TabGroupChip';
+import { AllTabsMenu, type ListedTab } from './AllTabsMenu';
+import { TabHoverCard } from './TabHoverCard';
+import './tab-strip.css';
 import { useEnvStore, GLOBAL_ENV_ID } from '../../store/env-store';
 import { selectedEnvId } from './env-selector';
 import { getProtocolAccent } from '../../colors';
 import { COLLECTION_PROTOCOL_LABELS } from '../../services/collections';
 import { MethodBadge, ConfirmDialog, ContextMenu, type ContextMenuItem, type ContextMenuSubItem } from '../shared';
-import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, DaakiaMarkIcon, FilterIcon, BookOpenIcon, Dk8sIcon, SearchIcon, IssueOpenedIcon, StethoscopeIcon, LayoutGridIcon, PinIcon, UnpinIcon, ClockIcon, ScratchpadIcon } from '../../icons';
+import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, DaakiaMarkIcon, FilterIcon, BookOpenIcon, Dk8sIcon, SearchIcon, IssueOpenedIcon, StethoscopeIcon, LayoutGridIcon, PinIcon, UnpinIcon, ClockIcon, ScratchpadIcon, ChevronDownIcon, PlusSquareIcon, RefreshIcon } from '../../icons';
 import { IconButtonView, StateMachineIcon, SelectInputView, type SelectOption } from '@salilvnair/dui';
 import { logUiEvent } from '../../store/ui-audit-store';
 import { useScratchpadStore, SCRATCHPAD_TYPES, SCRATCHPAD_TYPE_ORDER, type ScratchpadType } from '../../store/scratchpad-store';
@@ -100,7 +107,12 @@ function FilterBar({ filter, onClear, onClearOne }: { filter: Set<Protocol>; onC
 // ─── TabBar ───────────────────────────────────────────────────────────────────
 
 export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps) {
-  const { tabs: allTabs, activeTabId, activeProtocol, setActiveTab, closeTab, addTab, updateTab, duplicateTab, closeOtherTabs, closeAllTabs, closeTabsToRight, closeTabsToLeft, closeSavedTabs, pinTab, unpinTab, reorderTabs } = useTabsStore();
+  const { tabs: allTabs, activeTabId, activeProtocol, setActiveTab, closeTab, addTab, updateTab, duplicateTab, closeOtherTabs, closeAllTabs, closeTabsToRight, closeTabsToLeft, closeSavedTabs, pinTab, unpinTab } = useTabsStore();
+  const tabGroups = useTabsStore(s => s.tabGroups);
+  const closedTabs = useTabsStore(s => s.closedTabs);
+  const recentTabIds = useTabsStore(s => s.recentTabIds);
+  const { createTabGroup, moveTabToGroup, renameTabGroup, recolorTabGroup, toggleTabGroup, ungroupTabGroup, closeTabGroup,
+    groupTabsBy, ungroupAllTabs, moveTabGroup, dropTab, reopenClosedTab } = useTabsStore.getState();
   const { environments, activeEnvId, setActiveEnvironment, requestEditEnv } = useEnvStore();
 
   // Tab protocol filter — Set of protocols to show (empty = show all)
@@ -125,8 +137,19 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef<HTMLInputElement>(null);
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  /* What is being dragged — a tab or a whole group — and what it is over. */
+  type Dragged = { kind: 'tab' | 'group'; id: string };
+  const dragRef = useRef<Dragged | null>(null);
+  const [dragging, setDragging] = useState<Dragged | null>(null);
+  const [overKey, setOverKey] = useState<string | null>(null);
+  /* A group just made, whose chip arrives renaming. */
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [allTabsAnchor, setAllTabsAnchor] = useState<DOMRect | null>(null);
+  const [confirmCloseGroupId, setConfirmCloseGroupId] = useState<string | null>(null);
+  /* The hover card: which tab, where, after a moment's rest. */
+  const [hoverCard, setHoverCard] = useState<{ id: string; rect: DOMRect } | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoverOff = () => { if (hoverTimer.current) clearTimeout(hoverTimer.current); hoverTimer.current = null; setHoverCard(null); };
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -150,12 +173,61 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
     ro.observe(el);
     return () => { el.removeEventListener('scroll', checkScroll); ro.disconnect(); };
   }, [checkScroll, tabs.length]);
+  /* Folding a group changes how wide the strip is without the strip resizing. */
+  useEffect(() => { checkScroll(); }, [checkScroll, tabs, tabGroups]);
 
-  const scrollTabs = (dir: 'left' | 'right') => {
+  /* The wheel scrolls the strip sideways, as in Firefox and VS Code. */
+  useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollBy({ left: dir === 'left' ? -150 : 150, behavior: 'smooth' });
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || el.scrollWidth <= el.clientWidth) return;
+      e.preventDefault();
+      el.scrollLeft += e.deltaY;
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
+  /* The tab in front is always on screen — after a click in the list, a shortcut, Ctrl+N. */
+  /* After layout, and clear of the 28px fade — scrollIntoView ran before the
+     last of a burst of new tabs was laid out, and stopped under the fade. */
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      const strip = scrollRef.current;
+      const el = strip?.querySelector<HTMLElement>(`[data-tab-id="${activeTabId}"]`);
+      if (!strip || !el) return;
+      const FADE = 32;
+      const left = el.getBoundingClientRect().left - strip.getBoundingClientRect().left + strip.scrollLeft;
+      const right = left + el.offsetWidth;
+      if (left < strip.scrollLeft + FADE) strip.scrollTo({ left: Math.max(0, left - FADE) });
+      else if (right > strip.scrollLeft + strip.clientWidth - FADE) strip.scrollTo({ left: right - strip.clientWidth + FADE });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [activeTabId, tabGroups, tabs.length]);
+
+  const scrollTabs = (dir: 'left' | 'right', step = 180) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir === 'left' ? -step : step, behavior: 'smooth' });
   };
+  /* Hold an arrow to keep going. */
+  const holdTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const holdStart = (dir: 'left' | 'right') => {
+    scrollTabs(dir);
+    if (holdTimer.current) clearInterval(holdTimer.current);
+    holdTimer.current = setInterval(() => scrollTabs(dir, 120), 160);
+  };
+  const holdStop = () => { if (holdTimer.current) clearInterval(holdTimer.current); holdTimer.current = null; };
+  useEffect(() => () => holdStop(), []);
+  useEffect(() => {
+    const onKey = (e: Event) => { if ((e as CustomEvent).type) setAllTabsAnchor(countRef.current?.getBoundingClientRect() ?? null); };
+    window.addEventListener('daakia:all-tabs', onKey);
+    return () => window.removeEventListener('daakia:all-tabs', onKey);
+  }, []);
+  const countRef = useRef<HTMLButtonElement>(null);
+
+
   const customEnvs = environments.filter(e => e.id !== GLOBAL_ENV_ID);
   const envOptions: SelectOption[] = customEnvs.map(e => ({ value: e.id, label: e.name }));
 
@@ -242,6 +314,30 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
  if (isRequest || isScratch) items.push({ id: isPinned ? 'unpin': 'pin', label: isPinned ? 'Unpin': 'Pin', shortcut: isPinned ? 'U': 'P', icon: isPinned ? <UnpinIcon size={13} /> : <PinIcon size={13} />, iconColor: 'var(--color-ctx-pin)'});
     if (isScratch) items.push({ id: 'reveal', label: 'Reveal in Scratchpads', icon: <ScratchpadIcon size={13} />, iconColor: 'var(--color-scratchpad)' });
 
+    /* Tab groups, as in Chrome: into a new one, into one there is, or out. */
+    items.push({ id: 'sep-group', label: '', separator: true });
+    if (tab && !isPinned) {
+      items.push({ id: 'group-new', label: 'Add to new group', icon: <PlusSquareIcon size={13} />, iconColor: 'var(--color-info)' });
+      const others = tabGroups.filter(g => g.id !== tab.groupId);
+      if (others.length) {
+        items.push({
+          id: 'group-add', label: tab.groupId ? 'Move to group' : 'Add to group', icon: <LayersIcon size={13} />, iconColor: 'var(--color-info)',
+          submenu: others.map(g => ({ id: g.id, label: g.name || 'Unnamed group', icon: <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: g.color }} /> })),
+        });
+      }
+      if (tab.groupId) items.push({ id: 'group-remove', label: 'Remove from group', icon: <CloseSquareIcon size={13} />, iconColor: 'var(--color-text-muted)' });
+    }
+    items.push({
+      id: 'group-by', label: 'Group tabs', icon: <LayersIcon size={13} />, iconColor: 'var(--color-primary)',
+      submenu: [
+        { id: 'protocol', label: 'By protocol' },
+        { id: 'host', label: 'By host' },
+        { id: 'collection', label: 'By collection' },
+      ],
+    });
+    if (tabGroups.length) items.push({ id: 'ungroup-all', label: 'Ungroup all', icon: <LayersIcon size={13} />, iconColor: 'var(--color-text-muted)' });
+    if (closedTabs.length) items.push({ id: 'reopen', label: 'Reopen closed tab', icon: <RefreshIcon size={13} />, iconColor: 'var(--color-success)' });
+
     if (hasRequestTabs && uniqueProtocols.length >= 1) {
       items.push({ id: 'sep-filter', label: '', separator: true });
       items.push({
@@ -278,7 +374,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
     if (hasMultipleTabs) items.push({ id: 'close-all', label: 'Close All', shortcut: 'A', icon: <CloseAllIcon size={13} />, iconColor: 'var(--color-ctx-close-all)', danger: true });
     return items;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contextMenu?.tabId, contextMenu, tabProtocolFilter, tabs, allTabs]);
+  }, [contextMenu?.tabId, contextMenu, tabProtocolFilter, tabs, allTabs, tabGroups, closedTabs]);
 
   // Context menu actions
   const handleContextMenu = (e: React.MouseEvent, tabId: string) => {
@@ -308,6 +404,12 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
         setContextMenu(null);
         break;
       }
+      case 'group-new': { const gid = createTabGroup([tabId]); setEditingGroupId(gid); setContextMenu(null); break; }
+      case 'group-add': if (subId) moveTabToGroup(tabId, subId); setContextMenu(null); break;
+      case 'group-remove': moveTabToGroup(tabId, null); setContextMenu(null); break;
+      case 'group-by': if (subId) groupTabsBy(subId as GroupBy, collectionName); setContextMenu(null); break;
+      case 'ungroup-all': ungroupAllTabs(); setContextMenu(null); break;
+      case 'reopen': reopenClosedTab(); setContextMenu(null); break;
       case 'pin': pinTab(tabId); setContextMenu(null); break;
       case 'unpin': unpinTab(tabId); setContextMenu(null); break;
       case 'close': handleClose(tabId); setContextMenu(null); break;
@@ -416,40 +518,251 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
     return () => document.removeEventListener('keydown', handler);
   }, [contextMenu]);
 
-  // Drag and drop
-  const handleDragStart = (e: React.DragEvent, idx: number) => {
-    setDragIdx(idx);
+  // Drag and drop — tabs, and whole groups by their chip.
+  const startDrag = (e: React.DragEvent, d: Dragged) => {
+    hoverOff();
+    dragRef.current = d;
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', String(idx));
+    e.dataTransfer.setData('text/plain', d.id);
+    setTimeout(() => setDragging(d), 0);
   };
-
-  const handleDragOver = (e: React.DragEvent, idx: number) => {
+  const endDrag = () => { dragRef.current = null; setDragging(null); setOverKey(null); };
+  const over = (key: string) => (e: React.DragEvent) => {
+    if (!dragRef.current) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    setDragOverIdx(idx);
+    if (overKey !== key) setOverKey(key);
   };
-
-  const handleDrop = (e: React.DragEvent, toIdx: number) => {
+  /* Dropped on a tab: just before it, and in whatever group it is in. */
+  const dropOnTab = (target: RequestTab) => (e: React.DragEvent) => {
     e.preventDefault();
-    if (dragIdx !== null && dragIdx !== toIdx) {
-      // Convert filtered indices to full store indices
-      const fromTab = tabs[dragIdx];
-      const toTab = tabs[toIdx];
-      if (fromTab && toTab) {
-        const fullFromIdx = allTabs.findIndex(t => t.id === fromTab.id);
-        const fullToIdx = allTabs.findIndex(t => t.id === toTab.id);
-        if (fullFromIdx !== -1 && fullToIdx !== -1) {
-          reorderTabs(fullFromIdx, fullToIdx);
-        }
-      }
-    }
-    setDragIdx(null);
-    setDragOverIdx(null);
+    const d = dragRef.current;
+    endDrag();
+    if (!d || d.id === target.id) return;
+    if (d.kind === 'tab') dropTab(d.id, target.id, target.pinned ? null : (target.groupId ?? null));
+    else moveTabGroup(d.id, target.id);
+  };
+  /* Dropped on a chip: a tab joins the group at its end; a group goes before it. */
+  const dropOnChip = (g: TabGroup, first: RequestTab) => (e: React.DragEvent) => {
+    e.preventDefault();
+    const d = dragRef.current;
+    endDrag();
+    if (!d) return;
+    if (d.kind === 'tab') moveTabToGroup(d.id, g.id);
+    else if (d.id !== g.id) moveTabGroup(d.id, first.id);
+  };
+  /* Dropped past the last tab: to the end, out of every group. */
+  const dropAtEnd = (e: React.DragEvent) => {
+    e.preventDefault();
+    const d = dragRef.current;
+    endDrag();
+    if (!d) return;
+    if (d.kind === 'tab') dropTab(d.id, null, null);
+    else moveTabGroup(d.id, null);
   };
 
-  const handleDragEnd = () => {
-    setDragIdx(null);
-    setDragOverIdx(null);
+  /** The mark in front of a tab's name: method, protocol, or the page it is. */
+  const badgeFor = (tab: RequestTab) => {
+    const isScratch = tab.type === 'scratchpad';
+    const scratch = isScratch ? scratchFiles.find(f => f.id === tab.scratchpadId) : undefined;
+    if (tab.type === 'settings') return <SettingsIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-settings)' }} />;
+    if (tab.type === 'mock-server') return <ServerIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-mock-server)' }} />;
+    if (tab.type === 'state-machine') return <StateMachineIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-sm-tab, #f59e0b)' }} />;
+    if (tab.type === 'daakia-ai') return <span className="flex-shrink-0 inline-flex"><DaakiaMarkIcon size={13} tint="var(--color-ai-accent, #D97757)" /></span>;
+    if (tab.type === 'wiki') return <BookOpenIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-wiki)' }} />;
+    if (tab.type === 'dk8s' || tab.type === 'dk8s-logfile' || tab.type === 'dk8s-payload') return <Dk8sIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />;
+    if (tab.type === 'dk8s-results') return <SearchIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />;
+    if (tab.type === 'dk8s-window') return <ClockIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />;
+    if (tab.type === 'dkgh') return <IssueOpenedIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dkgh)' }} />;
+    if (tab.type === 'workspace') return <LayoutGridIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-workspace)' }} />;
+    if (isScratch) {
+      return scratch
+        ? <span className="inline-block font-mono font-bold text-[9.5px] leading-none flex-shrink-0" style={{ color: SCRATCHPAD_TYPES[scratch.type].color }}>{SCRATCHPAD_TYPES[scratch.type].badge}</span>
+        : <ScratchpadIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-scratchpad)' }} />;
+    }
+    const mark = (label: string, color: string) => <span className="inline-block font-mono font-bold text-[10px] leading-none flex-shrink-0" style={{ color }}>{label}</span>;
+    if (tab.protocol === 'graphql') return mark('GQL', 'var(--color-protocol-graphql)');
+    if (tab.protocol === 'websocket') {
+      const rt = tab.authData?.['rt_protocol'] || 'websocket';
+      const b: Record<string, [string, string]> = { websocket: ['WS', 'var(--color-protocol-websocket)'], sse: ['SSE', 'var(--color-protocol-sse)'], socketio: ['SIO', 'var(--color-protocol-socketio)'], mqtt: ['MQTT', 'var(--color-protocol-mqtt)'] };
+      const [l, c] = b[rt] || b.websocket;
+      return mark(l, c);
+    }
+    if (tab.protocol === 'grpc') return mark('gRPC', 'var(--color-protocol-grpc)');
+    if (tab.protocol === 'soap') return mark('SOAP', 'var(--color-protocol-soap)');
+    if (tab.protocol === 'ai') return mark('AI', 'var(--color-protocol-ai)');
+    if (tab.protocol === 'mcp') return mark('MCP', 'var(--color-protocol-mcp)');
+    return <MethodBadge method={tab.method} compact />;
+  };
+  const tabLabel = (tab: RequestTab) => (tab.type === 'settings' ? 'Settings' : tab.type === 'mock-server' ? 'Mock Server' : tab.type === 'state-machine' ? 'State Machine' : (tab.name || tab.url || 'Untitled'));
+
+  /* The list wants every tab, filter or not: it is how you find what the filter hides. */
+  const listed = (t: RequestTab): ListedTab => ({ id: t.id, name: tabLabel(t), groupId: t.groupId, pinned: t.pinned, searchText: `${tabLabel(t)} ${t.url ?? ''} ${t.method ?? ''}` });
+  const closeGroupAsked = (groupId: string) => {
+    if (allTabs.some(t => t.groupId === groupId && t.dirty)) setConfirmCloseGroupId(groupId);
+    else closeTabGroup(groupId);
+  };
+  /* A new tab in a group: another like the group's first, then into the group. */
+  const newTabInGroup = (g: TabGroup, first: RequestTab) => {
+    setActiveTab(first.id);
+    newTabLikeActive();
+    const id = useTabsStore.getState().activeTabId;
+    if (id !== first.id) moveTabToGroup(id, g.id);
+  };
+
+  const renderTab = (tab: RequestTab, group?: TabGroup) => {
+      const isActive = tab.id === activeTabId;
+      const isSettings = tab.type === 'settings';
+      const isMockServer = tab.type === 'mock-server';
+      const isDaakiaAi = tab.type === 'daakia-ai';
+      const isStateMachine = tab.type === 'state-machine';
+      const isWiki = tab.type === 'wiki';
+      const isDk8s = tab.type === 'dk8s';
+      /* A search result wears dk8s's colour and a magnifier: it belongs to
+         dk8s, and it is not the pods. */
+      const isDk8sResults = tab.type === 'dk8s-results';
+      /* A downloaded pod log: dk8s's colour, and a page icon — it is a document. */
+      const isDk8sLogFile = tab.type === 'dk8s-logfile' || tab.type === 'dk8s-payload';
+      /* The minutes around a hit: dk8s's colour, and a clock — it is a stretch of time. */
+      const isDk8sWindow = tab.type === 'dk8s-window';
+      const isDkgh = tab.type === 'dkgh';
+      const isWorkspace = tab.type === 'workspace';
+      const isScratch = tab.type === 'scratchpad';
+      const scratch = isScratch ? scratchFiles.find(f => f.id === tab.scratchpadId) : undefined;
+      const SM_ACCENT = 'var(--color-sm-tab, #f59e0b)';
+      const tabAccent = isSettings ? 'var(--color-settings)' : isMockServer ? 'var(--color-mock-server)' : isDaakiaAi ? 'var(--color-ai-accent, #D97757)' : isStateMachine ? SM_ACCENT : isWiki ? 'var(--color-wiki)' : isDk8s || isDk8sResults || isDk8sLogFile || isDk8sWindow ? 'var(--color-dk8s)' : isDkgh ? 'var(--color-dkgh)' : isWorkspace ? 'var(--color-workspace)' : isScratch ? 'var(--color-scratchpad)' : (tab.protocol ? getProtocolAccent(tab.protocol) : requestAccentColor);
+      const isDragOver = overKey === tab.id && dragging?.id !== tab.id;
+      return (
+        <div
+          key={tab.id}
+          draggable
+          onDragStart={(e) => startDrag(e, { kind: 'tab', id: tab.id })}
+          onDragOver={over(tab.id)}
+          onDrop={dropOnTab(tab)}
+          onDragEnd={endDrag}
+          onContextMenu={(e) => handleContextMenu(e, tab.id)}
+          data-context-menu="tab"
+          data-tab-id={tab.id}
+          style={{
+            ...(isActive ? { backgroundColor: `color-mix(in srgb, ${tabAccent} 2%, transparent)` } : {}),
+            /* The group's colour along the bottom edge, as in Chrome. */
+            ...(group ? { boxShadow: `inset 0 -2px 0 ${group.color}` } : {}),
+          }}
+          onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); hoverOff(); }}
+          onAuxClick={(e) => { if (e.button === 1 && !tab.pinned) { e.preventDefault(); handleClose(tab.id); } }}
+          onMouseEnter={(e) => {
+            if (tab.type !== 'request' || dragRef.current) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            if (hoverTimer.current) clearTimeout(hoverTimer.current);
+            hoverTimer.current = setTimeout(() => setHoverCard({ id: tab.id, rect }), 600);
+          }}
+          onMouseLeave={hoverOff}
+          className={`group flex items-center gap-2 h-full px-3 border-r border-[var(--color-panel-border)] cursor-pointer select-none transition-colors relative ${
+            renamingTabId === tab.id
+              ? 'min-w-[220px] max-w-[320px] flex-shrink-0'
+              : tab.pinned ? 'w-[40px] justify-center !px-0 flex-shrink-0' : 'max-w-[200px] min-w-[120px] flex-shrink-0'
+          } ${
+            isActive
+              ? ''
+              : 'bg-[var(--color-panel)] hover:bg-[var(--color-surface-hover)]'
+          } ${isDragOver ? 'border-l-2 border-l-[var(--color-primary)]' : ''} ${dragging?.id === tab.id ? 'opacity-50' : ''}`}
+          onClick={() => setActiveTab(tab.id)}
+          onDoubleClick={isScratch ? () => startRename(tab.id) : undefined}
+          title={isScratch ? `${tab.name} — double-click to rename` : tab.pinned ? tabLabel(tab) : undefined}
+        >
+          {/* Active top-line indicator — absolutely positioned div, immune to overflow clipping */}
+          {isActive && (
+            <div className="absolute top-0 left-0 right-0 h-[2px] z-10" style={{ backgroundColor: tabAccent }} />
+          )}
+          {isSettings ? (
+            <SettingsIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-settings)' }} />
+          ) : isMockServer ? (
+            <ServerIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-mock-server)' }} />
+          ) : isStateMachine ? (
+            <StateMachineIcon size={13} className="flex-shrink-0" style={{ color: SM_ACCENT }} />
+          ) : isDaakiaAi ? (
+            <span className="flex-shrink-0 inline-flex"><DaakiaMarkIcon size={13} tint={tabAccent} /></span>
+          ) : isWiki ? (
+            <BookOpenIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-wiki)' }} />
+          ) : isDk8s ? (
+            <Dk8sIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />
+          ) : isDk8sResults ? (
+            <SearchIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />
+          ) : isDk8sLogFile ? (
+            <Dk8sIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />
+          ) : isDk8sWindow ? (
+            <ClockIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />
+          ) : isDkgh ? (
+            <IssueOpenedIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dkgh)' }} />
+          ) : isWorkspace ? (
+            <LayoutGridIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-workspace)' }} />
+          ) : isScratch ? (
+            scratch
+              ? <span className="inline-block font-mono font-bold text-[9.5px] leading-none flex-shrink-0" style={{ color: SCRATCHPAD_TYPES[scratch.type].color }}>{SCRATCHPAD_TYPES[scratch.type].badge}</span>
+              : <ScratchpadIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-scratchpad)' }} />
+          ) : tab.protocol === 'graphql' ? (
+            <span className="inline-block font-mono font-bold text-[10px] leading-none text-[var(--color-protocol-graphql)] flex-shrink-0">GQL</span>
+          ) : tab.protocol === 'websocket' ? (
+            (() => {
+              const rtProto = tab.authData?.['rt_protocol'] || 'websocket';
+              const badgeMap: Record<string, { label: string; color: string }> = {
+                websocket: { label: 'WS', color: 'var(--color-protocol-websocket)' },
+                sse: { label: 'SSE', color: 'var(--color-protocol-sse)' },
+                socketio: { label: 'SIO', color: 'var(--color-protocol-socketio)' },
+                mqtt: { label: 'MQTT', color: 'var(--color-protocol-mqtt)' },
+              };
+              const b = badgeMap[rtProto] || badgeMap.websocket;
+              return <span className="inline-block font-mono font-bold text-[10px] leading-none flex-shrink-0" style={{ color: b.color }}>{b.label}</span>;
+            })()
+          ) : tab.protocol === 'grpc' ? (
+            <span className="inline-block font-mono font-bold text-[10px] leading-none text-[var(--color-protocol-grpc)] flex-shrink-0">gRPC</span>
+          ) : tab.protocol === 'soap' ? (
+            <span className="inline-block font-mono font-bold text-[10px] leading-none text-[var(--color-protocol-soap)] flex-shrink-0">SOAP</span>
+          ) : tab.protocol === 'ai' ? (
+            <span className="inline-block font-mono font-bold text-[10px] leading-none text-[var(--color-protocol-ai)] flex-shrink-0">AI</span>
+          ) : tab.protocol === 'mcp' ? (
+            <span className="inline-block font-mono font-bold text-[10px] leading-none text-[var(--color-protocol-mcp)] flex-shrink-0">MCP</span>
+          ) : (
+            <MethodBadge method={tab.method} compact />
+          )}
+          {!tab.pinned && <span className="flex-1 truncate-text text-[12px] text-[var(--color-text-primary)]">
+            {renamingTabId === tab.id ? (
+              <input
+                ref={renameInputRef}
+                type="text"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onBlur={finishRename}
+                onKeyDown={(e) => { if (e.key === 'Enter') finishRename(); if (e.key === 'Escape') setRenamingTabId(null); }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full bg-[var(--color-input-bg)] border border-[var(--color-primary)] rounded px-1 text-[12px] text-[var(--color-text-primary)] outline-none"
+              />
+            ) : (
+              isSettings ? 'Settings' : isMockServer ? 'Mock Server' : isStateMachine ? 'State Machine' : (tab.name || tab.url || 'Untitled')
+            )}
+          </span>}
+          {!isSettings && !isMockServer && !isDaakiaAi && tab.dirty && !tab.pinned && (
+            <span
+              className="w-2 h-2 rounded-full flex-shrink-0"
+              style={{ backgroundColor: tab.protocol === 'websocket' ? (() => { const rt = tab.authData?.['rt_protocol'] || 'websocket'; return rt === 'sse' ? 'var(--color-protocol-sse)' : rt === 'socketio' ? 'var(--color-protocol-socketio)' : rt === 'mqtt' ? 'var(--color-protocol-mqtt)' : 'var(--color-protocol-websocket)'; })() : tabAccent }}
+            />
+          )}
+          {tab.pinned ? null : (
+            <button
+              type="button"
+              className={`flex items-center justify-center w-[18px] h-[18px] rounded cursor-pointer transition-all self-center mt-px ${
+                isSettings || isMockServer || tab.type === 'scratchpad'
+                  ? 'text-[var(--color-error)] hover:bg-[var(--color-icon-hover-bg)]'
+                  : 'opacity-0 group-hover:opacity-100 text-[var(--color-error)] hover:bg-[var(--color-icon-hover-bg)]'
+              }`}
+              onClick={(e) => { e.stopPropagation(); handleClose(tab.id); }}
+              title="Close tab"
+            >
+              <CloseIcon size={18} />
+            </button>
+          )}
+        </div>
+      );
   };
 
   return (
@@ -462,190 +775,112 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
     />
 
     <div className="flex items-center h-[38px] flex-shrink-0 bg-[var(--color-panel)] border-b border-[var(--color-panel-border)]">
-      {/* Scroll left arrow */}
-      {canScrollLeft && (
+      {/* Pinned tabs, as their icon only, ahead of everything and never scrolled away. */}
+      {tabs.filter(t => t.pinned).map(t => renderTab(t))}
+
+      {/* Full-height arrows while the strip overflows; hold one to keep going. */}
+      {(canScrollLeft || canScrollRight) && (
         <button
           type="button"
-          className="flex items-center justify-center w-6 h-full text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] cursor-pointer flex-shrink-0 transition-colors"
-          onClick={() => scrollTabs('left')}
+          className={`dk-tabnav${canScrollLeft ? '' : ' is-end'}`}
+          onPointerDown={() => canScrollLeft && holdStart('left')}
+          onPointerUp={holdStop}
+          onPointerLeave={holdStop}
+          aria-label="Scroll tabs left"
           title="Scroll tabs left"
         >
-          <ChevronLeftIcon size={12} />
+          <ChevronLeftIcon size={15} />
         </button>
       )}
 
       {/* Tabs */}
-      <div ref={scrollRef} className="flex items-center h-full flex-1 min-w-0 overflow-x-auto scrollbar-none">
-        {tabs.map((tab, idx) => {
-          const isActive = tab.id === activeTabId;
-          const isSettings = tab.type === 'settings';
-          const isMockServer = tab.type === 'mock-server';
-          const isDaakiaAi = tab.type === 'daakia-ai';
-          const isStateMachine = tab.type === 'state-machine';
-          const isWiki = tab.type === 'wiki';
-          const isDk8s = tab.type === 'dk8s';
-          /* A search result wears dk8s's colour and a magnifier: it belongs to
-             dk8s, and it is not the pods. */
-          const isDk8sResults = tab.type === 'dk8s-results';
-          /* A downloaded pod log: dk8s's colour, and a page icon — it is a document. */
-          const isDk8sLogFile = tab.type === 'dk8s-logfile' || tab.type === 'dk8s-payload';
-          /* The minutes around a hit: dk8s's colour, and a clock — it is a stretch of time. */
-          const isDk8sWindow = tab.type === 'dk8s-window';
-          const isDkgh = tab.type === 'dkgh';
-          const isWorkspace = tab.type === 'workspace';
-          const isScratch = tab.type === 'scratchpad';
-          const scratch = isScratch ? scratchFiles.find(f => f.id === tab.scratchpadId) : undefined;
-          const SM_ACCENT = 'var(--color-sm-tab, #f59e0b)';
-          const tabAccent = isSettings ? 'var(--color-settings)' : isMockServer ? 'var(--color-mock-server)' : isDaakiaAi ? 'var(--color-ai-accent, #D97757)' : isStateMachine ? SM_ACCENT : isWiki ? 'var(--color-wiki)' : isDk8s || isDk8sResults || isDk8sLogFile || isDk8sWindow ? 'var(--color-dk8s)' : isDkgh ? 'var(--color-dkgh)' : isWorkspace ? 'var(--color-workspace)' : isScratch ? 'var(--color-scratchpad)' : (tab.protocol ? getProtocolAccent(tab.protocol) : requestAccentColor);
-          const isDragOver = dragOverIdx === idx && dragIdx !== idx;
+      <div
+        ref={scrollRef}
+        className={`dk-tabstrip flex items-center h-full min-w-0 overflow-x-auto scrollbar-none${canScrollLeft ? ' fade-l' : ''}${canScrollRight ? ' fade-r' : ''}`}
+      >
+        {stripPieces(tabs.filter(t => !t.pinned), tabGroups).map(piece => {
+          if (piece.kind === 'tab') return renderTab(piece.tab);
+          const g = piece.group;
+          const first = piece.tabs[0];
           return (
-            <div
-              key={tab.id}
-              draggable
-              onDragStart={(e) => handleDragStart(e, idx)}
-              onDragOver={(e) => handleDragOver(e, idx)}
-              onDrop={(e) => handleDrop(e, idx)}
-              onDragEnd={handleDragEnd}
-              onContextMenu={(e) => handleContextMenu(e, tab.id)}
-              data-context-menu="tab"
-              style={isActive ? { backgroundColor: `color-mix(in srgb, ${tabAccent} 2%, transparent)` } : undefined}
-              className={`group flex items-center gap-2 h-full px-3 border-r border-[var(--color-panel-border)] cursor-pointer select-none transition-colors relative ${
-                renamingTabId === tab.id
-                  ? 'min-w-[220px] max-w-[320px] flex-shrink-0'
-                  : 'max-w-[200px] min-w-[80px]'
-              } ${
-                isActive
-                  ? ''
-                  : 'bg-[var(--color-panel)] hover:bg-[var(--color-surface-hover)]'
-              } ${isDragOver ? 'border-l-2 border-l-[var(--color-primary)]' : ''} ${dragIdx === idx ? 'opacity-50' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
-              onDoubleClick={isScratch ? () => startRename(tab.id) : undefined}
-              title={isScratch ? `${tab.name} — double-click to rename` : undefined}
-            >
-              {/* Active top-line indicator — absolutely positioned div, immune to overflow clipping */}
-              {isActive && (
-                <div className="absolute top-0 left-0 right-0 h-[2px] z-10" style={{ backgroundColor: tabAccent }} />
-              )}
-              {isSettings ? (
-                <SettingsIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-settings)' }} />
-              ) : isMockServer ? (
-                <ServerIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-mock-server)' }} />
-              ) : isStateMachine ? (
-                <StateMachineIcon size={13} className="flex-shrink-0" style={{ color: SM_ACCENT }} />
-              ) : isDaakiaAi ? (
-                <span className="flex-shrink-0 inline-flex"><DaakiaMarkIcon size={13} tint={tabAccent} /></span>
-              ) : isWiki ? (
-                <BookOpenIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-wiki)' }} />
-              ) : isDk8s ? (
-                <Dk8sIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />
-              ) : isDk8sResults ? (
-                <SearchIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />
-              ) : isDk8sLogFile ? (
-                <Dk8sIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />
-              ) : isDk8sWindow ? (
-                <ClockIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />
-              ) : isDkgh ? (
-                <IssueOpenedIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dkgh)' }} />
-              ) : isWorkspace ? (
-                <LayoutGridIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-workspace)' }} />
-              ) : isScratch ? (
-                scratch
-                  ? <span className="inline-block font-mono font-bold text-[9.5px] leading-none flex-shrink-0" style={{ color: SCRATCHPAD_TYPES[scratch.type].color }}>{SCRATCHPAD_TYPES[scratch.type].badge}</span>
-                  : <ScratchpadIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-scratchpad)' }} />
-              ) : tab.protocol === 'graphql' ? (
-                <span className="inline-block font-mono font-bold text-[10px] leading-none text-[var(--color-protocol-graphql)] flex-shrink-0">GQL</span>
-              ) : tab.protocol === 'websocket' ? (
-                (() => {
-                  const rtProto = tab.authData?.['rt_protocol'] || 'websocket';
-                  const badgeMap: Record<string, { label: string; color: string }> = {
-                    websocket: { label: 'WS', color: 'var(--color-protocol-websocket)' },
-                    sse: { label: 'SSE', color: 'var(--color-protocol-sse)' },
-                    socketio: { label: 'SIO', color: 'var(--color-protocol-socketio)' },
-                    mqtt: { label: 'MQTT', color: 'var(--color-protocol-mqtt)' },
-                  };
-                  const b = badgeMap[rtProto] || badgeMap.websocket;
-                  return <span className="inline-block font-mono font-bold text-[10px] leading-none flex-shrink-0" style={{ color: b.color }}>{b.label}</span>;
-                })()
-              ) : tab.protocol === 'grpc' ? (
-                <span className="inline-block font-mono font-bold text-[10px] leading-none text-[var(--color-protocol-grpc)] flex-shrink-0">gRPC</span>
-              ) : tab.protocol === 'soap' ? (
-                <span className="inline-block font-mono font-bold text-[10px] leading-none text-[var(--color-protocol-soap)] flex-shrink-0">SOAP</span>
-              ) : tab.protocol === 'ai' ? (
-                <span className="inline-block font-mono font-bold text-[10px] leading-none text-[var(--color-protocol-ai)] flex-shrink-0">AI</span>
-              ) : tab.protocol === 'mcp' ? (
-                <span className="inline-block font-mono font-bold text-[10px] leading-none text-[var(--color-protocol-mcp)] flex-shrink-0">MCP</span>
-              ) : (
-                <MethodBadge method={tab.method} compact />
-              )}
-              <span className="flex-1 truncate-text text-[12px] text-[var(--color-text-primary)]">
-                {renamingTabId === tab.id ? (
-                  <input
-                    ref={renameInputRef}
-                    type="text"
-                    value={renameValue}
-                    onChange={(e) => setRenameValue(e.target.value)}
-                    onBlur={finishRename}
-                    onKeyDown={(e) => { if (e.key === 'Enter') finishRename(); if (e.key === 'Escape') setRenamingTabId(null); }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-full bg-[var(--color-input-bg)] border border-[var(--color-primary)] rounded px-1 text-[12px] text-[var(--color-text-primary)] outline-none"
-                  />
-                ) : (
-                  isSettings ? 'Settings' : isMockServer ? 'Mock Server' : isStateMachine ? 'State Machine' : (tab.name || tab.url || 'Untitled')
-                )}
-              </span>
-              {!isSettings && !isMockServer && !isDaakiaAi && tab.dirty && !tab.pinned && (
-                <span
-                  className="w-2 h-2 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: tab.protocol === 'websocket' ? (() => { const rt = tab.authData?.['rt_protocol'] || 'websocket'; return rt === 'sse' ? 'var(--color-protocol-sse)' : rt === 'socketio' ? 'var(--color-protocol-socketio)' : rt === 'mqtt' ? 'var(--color-protocol-mqtt)' : 'var(--color-protocol-websocket)'; })() : tabAccent }}
-                />
-              )}
-              {tab.pinned ? (
-                <span className="flex-shrink-0 text-[11px]"></span>
-              ) : (
-                <button
-                  type="button"
-                  className={`flex items-center justify-center w-[18px] h-[18px] rounded cursor-pointer transition-all self-center mt-px ${
-                    isSettings || isMockServer || tab.type === 'scratchpad'
-                      ? 'text-[var(--color-error)] hover:bg-[var(--color-icon-hover-bg)]'
-                      : 'opacity-0 group-hover:opacity-100 text-[var(--color-error)] hover:bg-[var(--color-icon-hover-bg)]'
-                  }`}
-                  onClick={(e) => { e.stopPropagation(); handleClose(tab.id); }}
-                  title="Close tab"
-                >
-                  <CloseIcon size={18} />
-                </button>
-              )}
-            </div>
+            <Fragment key={`g:${g.id}`}>
+              <TabGroupChip
+                group={g}
+                count={allTabs.filter(t => t.groupId === g.id).length}
+                editing={editingGroupId === g.id}
+                onEditDone={() => setEditingGroupId(null)}
+                onToggle={() => toggleTabGroup(g.id)}
+                onRename={name => renameTabGroup(g.id, name)}
+                onRecolor={c => recolorTabGroup(g.id, c)}
+                onNewTab={() => newTabInGroup(g, first)}
+                onUngroup={() => ungroupTabGroup(g.id)}
+                onCloseGroup={() => closeGroupAsked(g.id)}
+                isOver={overKey === `g:${g.id}`}
+                onDragStart={e => startDrag(e, { kind: 'group', id: g.id })}
+                onDragEnd={endDrag}
+                onDragOver={over(`g:${g.id}`)}
+                onDragLeave={() => { if (overKey === `g:${g.id}`) setOverKey(null); }}
+                onDrop={dropOnChip(g, first)}
+              />
+              {!g.collapsed && piece.tabs.map(t => renderTab(t, g))}
+            </Fragment>
           );
         })}
-
-        {/* Add tab button — right after tabs */}
-        <button
-          type="button"
-          className="flex items-center justify-center w-9 h-full text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] cursor-pointer flex-shrink-0 transition-colors"
-          style={{ color: requestAccentColor }}
-          onClick={(e) => {
-            /* Always a menu: a request in the protocol you are in, or a scratchpad. */
-            const r = e.currentTarget.getBoundingClientRect();
-            setNewScratchMenu({ x: r.left, y: r.bottom + 2 });
-          }}
-          title={`New ${protocolLabel} request or scratchpad`}
-        >
-          <PlusIcon size={16} />
-        </button>
       </div>
 
-      {/* Scroll right arrow */}
-      {canScrollRight && (
+      {(canScrollLeft || canScrollRight) && (
         <button
           type="button"
-          className="flex items-center justify-center w-6 h-full text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] cursor-pointer flex-shrink-0 transition-colors"
-          onClick={() => scrollTabs('right')}
+          className={`dk-tabnav dk-tabnav--r${canScrollRight ? '' : ' is-end'}`}
+          onPointerDown={() => canScrollRight && holdStart('right')}
+          onPointerUp={holdStop}
+          onPointerLeave={holdStop}
+          aria-label="Scroll tabs right"
           title="Scroll tabs right"
         >
-          <ChevronRightIcon size={12} />
+          <ChevronRightIcon size={15} />
         </button>
       )}
+
+
+      {/* + right after the last tab, as it always was; once the tabs overflow
+          it stays at the strip's edge instead of scrolling away. */}
+      <button
+        type="button"
+        className="dk-tabplus flex items-center justify-center w-9 h-full text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] cursor-pointer flex-shrink-0 transition-colors"
+        style={{ color: requestAccentColor }}
+        onClick={(e) => {
+          /* Always a menu: a request in the protocol you are in, or a scratchpad. */
+          const r = e.currentTarget.getBoundingClientRect();
+          setNewScratchMenu({ x: r.left, y: r.bottom + 2 });
+        }}
+        title={`New ${protocolLabel} request or scratchpad`}
+      >
+        <PlusIcon size={16} />
+      </button>
+
+      {/* The rest of the strip: drop here for the end, double-click for a new tab. */}
+      <div
+        className={`dk-tabstrip__end${overKey === 'end' ? ' is-over' : ''}`}
+        onDragOver={over('end')}
+        onDragLeave={() => { if (overKey === 'end') setOverKey(null); }}
+        onDrop={dropAtEnd}
+        onDoubleClick={() => newTabLikeActive()}
+        title="Double-click for a new tab"
+      />
+
+      {/* Every tab in a searchable list — Chrome's Tab Search. */}
+      <button
+        ref={countRef}
+        type="button"
+        className={`dk-tabcount${allTabsAnchor ? ' is-open' : ''}`}
+        onClick={e => setAllTabsAnchor(allTabsAnchor ? null : e.currentTarget.getBoundingClientRect())}
+        title="All tabs (Alt+L)"
+        aria-label={`All ${allTabs.length} tabs`}
+      >
+        <ChevronDownIcon size={12} />
+        <span>{allTabs.length}</span>
+      </button>
 
       {/* Per-tab environment selector — far right */}
       {activeTab && activeTab.type === 'request' && (
@@ -750,6 +985,47 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
           setConfirmCloseProtocol(null);
         }}
         onCancel={() => setConfirmCloseProtocol(null)}
+      />
+    )}
+
+    {allTabsAnchor && (
+      <AllTabsMenu
+        anchor={allTabsAnchor}
+        tabs={allTabs.map(listed)}
+        groups={tabGroups}
+        recentIds={recentTabIds}
+        closed={closedTabs.map(listed)}
+        activeTabId={activeTabId}
+        renderBadge={id => { const t = allTabs.find(x => x.id === id) ?? closedTabs.find(x => x.id === id); return t ? badgeFor(t) : null; }}
+        onPick={id => { setActiveTab(id); setAllTabsAnchor(null); }}
+        onCloseTab={id => handleClose(id)}
+        onReopen={id => { reopenClosedTab(id); setAllTabsAnchor(null); }}
+        onDismiss={() => setAllTabsAnchor(null)}
+      />
+    )}
+
+    {hoverCard && (() => {
+      const t = allTabs.find(x => x.id === hoverCard.id);
+      if (!t) return null;
+      return (
+        <TabHoverCard
+          tab={t}
+          anchor={hoverCard.rect}
+          badge={badgeFor(t)}
+          envName={environments.find(e => e.id === t.envId)?.name}
+          collectionName={t.collectionId ? collectionName(t.collectionId) : undefined}
+        />
+      );
+    })()}
+
+    {confirmCloseGroupId && (
+      <ConfirmDialog
+        title="Unsaved Changes"
+        message="Some tabs in this group have unsaved changes. Close the group anyway?"
+        confirmLabel="Discard & Close Group"
+        danger
+        onConfirm={() => { closeTabGroup(confirmCloseGroupId); setConfirmCloseGroupId(null); }}
+        onCancel={() => setConfirmCloseGroupId(null)}
       />
     )}
 

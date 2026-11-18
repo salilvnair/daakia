@@ -1,0 +1,172 @@
+/*
+ * The tab strip: arrows that are there while it overflows, a fade at the edge
+ * that has more, group chips, the all-tabs list and the hover card.
+ * Every colour is a theme token.
+ */
+
+/* ── Arrows: full height, fixed at the ends of the strip ── */
+.dk-tabnav {
+  flex: none;
+  width: 30px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-right: 1px solid var(--color-panel-border);
+  background: var(--color-panel);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, opacity 0.12s;
+}
+.dk-tabnav--r { border-right: 0; border-left: 1px solid var(--color-panel-border); }
+.dk-tabnav:hover:not(.is-end) { background: var(--color-surface-hover); color: var(--color-accent, var(--color-primary)); }
+.dk-tabnav.is-end { color: var(--color-text-muted); opacity: 0.35; cursor: default; }
+.dk-tabnav:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+
+/* ── The scroller: a fade on the side that has more ── */
+.dk-tabstrip { scroll-behavior: smooth; }
+.dk-tabstrip.fade-l { -webkit-mask-image: linear-gradient(to right, transparent 0, #000 28px); mask-image: linear-gradient(to right, transparent 0, #000 28px); }
+.dk-tabstrip.fade-r { -webkit-mask-image: linear-gradient(to left, transparent 0, #000 28px); mask-image: linear-gradient(to left, transparent 0, #000 28px); }
+.dk-tabstrip.fade-l.fade-r {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%);
+}
+.dk-tabstrip__end { flex: 1 0 24px; align-self: stretch; min-width: 24px; }
+.dk-tabstrip__end.is-over { box-shadow: inset 2px 0 0 var(--color-primary); }
+
+/* ── The count that opens the all-tabs list ── */
+.dk-tabcount {
+  flex: none;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  border: 0;
+  border-left: 1px solid var(--color-panel-border);
+  background: none;
+  color: var(--color-text-muted);
+  font: 600 11px var(--font-mono, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.dk-tabcount:hover, .dk-tabcount.is-open { background: var(--color-surface-hover); color: var(--color-text-primary); }
+.dk-tabcount:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+
+/* ── Group chip ── */
+.dk-tabgroup-chip {
+  --tg: var(--color-info);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  margin: 0 4px 0 8px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tg) 20%, transparent);
+  color: var(--tg);
+  font: 600 11.5px var(--font-sans, system-ui);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s, box-shadow 0.12s;
+}
+.dk-tabgroup-chip:hover { background: color-mix(in srgb, var(--tg) 30%, transparent); }
+.dk-tabgroup-chip.is-unnamed { padding: 0 7px; }
+.dk-tabgroup-chip.is-over { box-shadow: 0 0 0 2px var(--tg); }
+.dk-tabgroup-chip:focus-visible { outline: 2px solid var(--tg); outline-offset: 2px; }
+.dk-tabgroup-chip__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tg); flex: none; }
+.dk-tabgroup-chip__name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.dk-tabgroup-chip__count {
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tg) 45%, transparent);
+  color: var(--color-text-primary);
+  font: 600 10px var(--font-mono, ui-monospace, monospace);
+  text-align: center;
+  line-height: 16px;
+}
+.dk-tabgroup-chip__input {
+  width: 120px;
+  height: 18px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+  font: 500 11.5px var(--font-sans, system-ui);
+  outline: 1px solid var(--tg);
+}
+
+/* ── All-tabs list ── */
+.dk-alltabs {
+  position: fixed;
+  z-index: 9998;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-elevated);
+  border: 1px solid var(--color-elevated-border);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  font-family: var(--font-sans, system-ui);
+  animation: fadeSlideIn 100ms ease-out;
+}
+.dk-alltabs__search { display: flex; align-items: center; gap: 8px; margin: 8px; padding: 0 10px; height: 30px; border: 1px solid var(--color-input-border); border-radius: 7px; background: var(--color-input-bg); color: var(--color-text-muted); }
+.dk-alltabs__search:focus-within { border-color: var(--color-primary); }
+.dk-alltabs__search input { flex: 1; min-width: 0; border: 0; background: none; color: var(--color-text-primary); font-size: 12.5px; outline: none; }
+.dk-alltabs__list { overflow-y: auto; padding: 0 6px 8px; scrollbar-width: thin; }
+.dk-alltabs__head { display: flex; align-items: center; gap: 6px; padding: 8px 8px 3px; font: 600 10px var(--font-mono, ui-monospace, monospace); text-transform: uppercase; letter-spacing: 0.07em; color: var(--color-text-muted); }
+.dk-alltabs__dot { width: 7px; height: 7px; border-radius: 50%; }
+.dk-alltabs__n { margin-left: auto; font-variant-numeric: tabular-nums; opacity: 0.8; }
+.dk-alltabs__row { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 6px 0 8px; border-radius: 6px; cursor: pointer; font-size: 12.5px; color: var(--color-text-primary); }
+.dk-alltabs__row.is-cursor { background: var(--color-item-hover-bg); }
+/* The tab in front: its name a little heavier, with a dot after it. */
+.dk-alltabs__row.is-active .dk-alltabs__name { font-weight: 600; }
+.dk-alltabs__row.is-active .dk-alltabs__name::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 8px;
+  border-radius: 50%;
+  background: var(--color-accent, var(--color-primary));
+  vertical-align: middle;
+}
+.dk-alltabs__row.is-closed { color: var(--color-text-secondary); }
+.dk-alltabs__badge { flex: none; min-width: 32px; display: inline-flex; align-items: center; }
+.dk-alltabs__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk-alltabs__close, .dk-alltabs__reopen { flex: none; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 5px; background: none; color: var(--color-text-muted); opacity: 0; cursor: pointer; }
+.dk-alltabs__row.is-cursor .dk-alltabs__close, .dk-alltabs__row.is-cursor .dk-alltabs__reopen { opacity: 1; }
+.dk-alltabs__close:hover { color: var(--color-error); background: var(--color-icon-hover-bg); }
+.dk-alltabs__reopen { color: var(--color-success); }
+.dk-alltabs__none { padding: 12px 8px; font-size: 12px; color: var(--color-text-muted); }
+
+/* ── Hover card ── */
+.dk-tabcard {
+  position: fixed;
+  z-index: 9997;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 12px;
+  background: var(--color-elevated);
+  border: 1px solid var(--color-elevated-border);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  font-family: var(--font-sans, system-ui);
+  animation: fadeSlideIn 120ms ease-out;
+}
+.dk-tabcard__title { font-size: 12.5px; font-weight: 600; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk-tabcard__url { display: flex; align-items: baseline; gap: 6px; font: 500 11px var(--font-mono, ui-monospace, monospace); color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.dk-tabcard__badge { flex: none; }
+.dk-tabcard__meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font: 500 11px var(--font-mono, ui-monospace, monospace); color: var(--color-text-muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  .dk-tabstrip { scroll-behavior: auto; }
+  .dk-alltabs, .dk-tabcard { animation: none; }
+}

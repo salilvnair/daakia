@@ -190,6 +190,17 @@ export function ScratchpadsPanel() {
   const [, tick] = useState(0);
 
   useEffect(() => { useScratchpadStore.getState().load(); }, []);
+
+  /* The New collection shortcut, with a scratchpad in front: a folder here,
+     named in place like one made from the menu. */
+  const newFolderRef = useRef<(parentId: string | null) => void>(() => {});
+  useEffect(() => {
+    const onAsk = (e: MessageEvent) => {
+      if ((e.data as { type?: string })?.type === 'scratchpads:new-folder') newFolderRef.current(null);
+    };
+    window.addEventListener('message', onAsk);
+    return () => window.removeEventListener('message', onAsk);
+  }, []);
   useEffect(() => {
     const t = setInterval(() => tick(n => n + 1), 60_000);
     return () => clearInterval(t);
@@ -229,6 +240,7 @@ export function ScratchpadsPanel() {
     const f = store().createFolder(parentId);
     setRenaming({ kind: 'folder', id: f.id, value: f.name });
   };
+  newFolderRef.current = newFolder;
 
   const removeFile = (f: Scratchpad) => {
     store().remove(f.id);

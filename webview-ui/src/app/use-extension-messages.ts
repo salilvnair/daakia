@@ -13,6 +13,7 @@ import { nameForStage, screenForStage } from '../store/ai-audit-events';
 import { showAiFailure, showSilentFailure } from './ai-failure-toast';
 import { useTabsStore } from '../store/tabs-store';
 import { ranLocally } from '../services/keyboard';
+import { newTabLikeActive } from '../services/keyboard/new-tab-like-active';
 import { useScratchpadStore } from '../store/scratchpad-store';
 import { useToastStore } from '../store/toast-store';
 import { useEnvStore } from '../store/env-store';
@@ -412,7 +413,7 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
         case 'newRequest': {
           // The echo of a key the webview already handled — see ranLocally.
           if (ranLocally('app.new-tab')) break;
-          useTabsStore.getState().addTab();
+          newTabLikeActive();
           break;
         }
         case 'sendRequest': {
@@ -620,7 +621,7 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
           break;
         }
         case 'workspaceSnapshot': {
-          const snapshot = msg.data as { tabs?: unknown[]; activeTabId?: string; activeProtocol?: string; sidebarSection?: string; sidebarOpen?: boolean; sidebarWidth?: number; breakpoints?: Record<string, number[]>; disabledBreakpoints?: Record<string, number[]>; conditions?: Record<string, Record<number, string>> } | null;
+          const snapshot = msg.data as { tabs?: unknown[]; tabGroups?: unknown[]; activeTabId?: string; activeProtocol?: string; sidebarSection?: string; sidebarOpen?: boolean; sidebarWidth?: number; breakpoints?: Record<string, number[]>; disabledBreakpoints?: Record<string, number[]>; conditions?: Record<string, Record<number, string>> } | null;
           // Only restore into a fresh app: a snapshot arriving after the user
           // has started working must not overwrite what they are doing.
           if (snapshot && useTabsStore.getState().tabs.length === 0) {
@@ -635,7 +636,7 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
             if (snapshot.sidebarWidth) setSidebarWidth(snapshot.sidebarWidth);
 
             if (snapshot.tabs && snapshot.tabs.length > 0) {
-              useTabsStore.getState().hydrateSnapshot(snapshot.tabs as any[], snapshot.activeTabId || '', snapshot.activeProtocol as any || 'rest');
+              useTabsStore.getState().hydrateSnapshot(snapshot.tabs as any[], snapshot.activeTabId || '', snapshot.activeProtocol as any || 'rest', (snapshot.tabGroups as any[]) ?? []);
               // Restore breakpoints from snapshot
               if (snapshot.breakpoints || snapshot.disabledBreakpoints || snapshot.conditions) {
                 useDebugStore.setState({

@@ -150,6 +150,10 @@ const BASE_AUDIT_EVENT_DEFS: AuditEventDef[] = [
   { id: 'env.delete_variable',  module: 'Environment', button: 'Delete Var',     action: 'delete', description: 'Delete environment variable',   color: 'var(--color-success)', defaultEnabled: false },
 
   // ── Tab ────────────────────────────────────────────────────────────────────
+  { id: 'tab.group.create',     module: 'Tabs', button: 'New tab group', action: 'create', description: 'Group tabs, by hand or by protocol', color: 'var(--color-text-secondary)', defaultEnabled: false },
+  { id: 'tab.group.toggle',     module: 'Tabs', button: 'Fold tab group', action: 'update', description: 'Fold or open a tab group',          color: 'var(--color-text-secondary)', defaultEnabled: false },
+  { id: 'tab.group.ungroup',    module: 'Tabs', button: 'Ungroup',       action: 'update', description: 'Ungroup one tab group, or all',     color: 'var(--color-text-secondary)', defaultEnabled: false },
+  { id: 'tab.reopen',           module: 'Tabs', button: 'Reopen closed tab', action: 'create', description: 'Bring back a closed tab',    color: 'var(--color-text-secondary)', defaultEnabled: false },
   { id: 'tab.new',              module: 'Tabs', button: 'New Tab',     action: 'create', description: 'Create new request tab',         color: 'var(--color-text-secondary)', defaultEnabled: false },
   { id: 'tab.close',            module: 'Tabs', button: 'Close Tab',   action: 'close',  description: 'Close request tab',              color: 'var(--color-text-secondary)', defaultEnabled: false },
   { id: 'tab.duplicate',        module: 'Tabs', button: 'Duplicate',   action: 'create', description: 'Duplicate current request tab',  color: 'var(--color-text-secondary)', defaultEnabled: false },

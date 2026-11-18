@@ -7,7 +7,8 @@
  * needs to know a shortcut was rebound.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ButtonView } from '@salilvnair/dui';
+import { ButtonView, SelectInputView } from '@salilvnair/dui';
+import { SCRATCHPAD_TYPES, SCRATCHPAD_TYPE_ORDER, type ScratchpadType } from '../../store/scratchpad-store';
 import { useAppSettingsStore } from '../../store/app-settings-store';
 import {
   getRegisteredShortcuts, setKeymapOverrides,
@@ -20,6 +21,8 @@ import { KeyboardIcon, RefreshIcon, TrashIcon, WarningTriangleIcon } from '../..
 
 const ACCENT = 'var(--color-settings)';
 
+const SCRATCHPAD_OPTIONS = SCRATCHPAD_TYPE_ORDER.map(k => ({ value: k, label: SCRATCHPAD_TYPES[k].label, color: SCRATCHPAD_TYPES[k].color }));
+
 interface Row {
   id: string;
   label: string;
@@ -31,6 +34,7 @@ interface Row {
 
 export function KeymapSettings() {
   const keymap = useAppSettingsStore(s => s.settings.keymap) ?? {};
+  const scratchType = useAppSettingsStore(s => s.settings.newScratchpadType) ?? 'json';
   const save = useAppSettingsStore(s => s.save);
   const [query, setQuery] = useState('');
   const [capturingId, setCapturingId] = useState<string | null>(null);
@@ -182,6 +186,18 @@ export function KeymapSettings() {
                         </span>
                       )}
                     </span>
+
+                    {/* What New scratchpad makes — JSON unless changed here. */}
+                    {r.id === 'app.new-scratchpad' && (
+                      <SelectInputView
+                        options={SCRATCHPAD_OPTIONS}
+                        value={scratchType}
+                        onChange={v => save({ newScratchpadType: v as ScratchpadType })}
+                        size="sm"
+                        width={96}
+                        accentColor="var(--color-scratchpad)"
+                      />
+                    )}
 
                     {capturing ? (
                       <div
