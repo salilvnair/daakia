@@ -5,6 +5,7 @@ import { KeyValueTableView, IconButtonView, type KeyValueTableRow, type PinnedKe
 import { SparkleIcon } from '../../../icons';
 import { AiHeaderSuggest, type AiHeaderSuggestHandle } from '../../ai/AiHeaderSuggest';
 import { computeAuthRows } from './requestUtils';
+import { BulkEditAssist } from '../../shared/controls/BulkEditAssist';
 
 type Tab = ReturnType<typeof useTabsStore.getState>['tabs'][0];
 
@@ -36,38 +37,40 @@ export function HeadersTab({ tab, cookieJarRows }: HeadersTabProps) {
 
   return (
     <>
-      <KeyValueTableView
-        highlightVars
-        rows={tab.headers as KeyValueTableRow[]}
-        onChange={(rows) => updateTab(tab.id, { headers: rows as typeof tab.headers })}
-        placeholder={{ key: 'Header', value: 'Value' }}
-        maskSensitive
-        autocompleteKeys
-        showDescription
-        label="Headers"
-        pinnedTopRows={pinnedRows.length > 0 ? pinnedRows : undefined}
-        onPinnedRemove={(id) => {
-          if (id.startsWith('auth-')) {
-            updateTab(tab.id, { authType: 'none' as typeof tab.authType, authData: {} });
+      <BulkEditAssist suggest="headers">
+        <KeyValueTableView
+          highlightVars
+          rows={tab.headers as KeyValueTableRow[]}
+          onChange={(rows) => updateTab(tab.id, { headers: rows as typeof tab.headers })}
+          placeholder={{ key: 'Header', value: 'Value' }}
+          maskSensitive
+          autocompleteKeys
+          showDescription
+          label="Headers"
+          pinnedTopRows={pinnedRows.length > 0 ? pinnedRows : undefined}
+          onPinnedRemove={(id) => {
+            if (id.startsWith('auth-')) {
+              updateTab(tab.id, { authType: 'none' as typeof tab.authType, authData: {} });
+            }
+          }}
+          toolbarExtra={
+            aiEnabled('headerAutocomplete') ? (
+              <IconButtonView
+                icon={<SparkleIcon size={13} />}
+                size="md"
+                tooltip="Suggest headers"
+                accentColor="var(--color-protocol-ai)"
+                disabled={aiHeaderLoading}
+                onClick={() => {
+                  setAiHeaderLoading(true);
+                  aiHeaderSuggestRef.current?.trigger();
+                  setTimeout(() => setAiHeaderLoading(false), 300);
+                }}
+              />
+            ) : undefined
           }
-        }}
-        toolbarExtra={
-          aiEnabled('headerAutocomplete') ? (
-            <IconButtonView
-              icon={<SparkleIcon size={13} />}
-              size="md"
-              tooltip="Suggest headers"
-              accentColor="var(--color-protocol-ai)"
-              disabled={aiHeaderLoading}
-              onClick={() => {
-                setAiHeaderLoading(true);
-                aiHeaderSuggestRef.current?.trigger();
-                setTimeout(() => setAiHeaderLoading(false), 300);
-              }}
-            />
-          ) : undefined
-        }
-      />
+        />
+      </BulkEditAssist>
       <AiHeaderSuggest
         ref={aiHeaderSuggestRef}
         tabId={tab.id}
@@ -76,10 +79,15 @@ export function HeadersTab({ tab, cookieJarRows }: HeadersTabProps) {
         bodyContentType={tab.bodyContentType}
         authType={tab.authType}
         existingHeaders={tab.headers}
-        onAddHeader={(key, value) => {
+        onAddHeaders={(pairs) => {
+          /* All at once: one write, or each pair would start again from the rows before the click. */
           const rows = tab.headers.filter(r => r.key || r.value);
-          const newRow = { id: crypto.randomUUID(), key, value, description: '', enabled: true };
-          updateTab(tab.id, { headers: [...rows, newRow] });
+          for (const { key, value } of pairs) {
+            const at = rows.findIndex(r => r.key.toLowerCase() === key.toLowerCase());
+            if (at >= 0) rows[at] = { ...rows[at], value, enabled: true };
+            else rows.push({ id: crypto.randomUUID(), key, value, description: '', enabled: true });
+          }
+          updateTab(tab.id, { headers: rows });
         }}
       />
     </>

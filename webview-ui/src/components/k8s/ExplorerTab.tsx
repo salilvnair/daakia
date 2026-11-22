@@ -89,6 +89,12 @@ interface Hits {
   capped: boolean;
   command: string;
   error?: string;
+  /** The pod's python walked it, or `find` did — see the host's pod-search-py. */
+  engine?: 'python' | 'find';
+  /** Network and FUSE volumes the python walk left out. */
+  skipped?: { path: string; fs: string }[];
+  scanned?: number;
+  ms?: number;
 }
 
 import { ACCENT, AI, INFO } from './tone';
@@ -551,6 +557,12 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
       show: e => fileLike(e) && e.badge !== 'binary' && e.badge !== 'too large',
     },
     {
+      /* A search hit is a path; this is the folder it lives in, with the file picked out. */
+      id: 'reveal', label: 'Show in its folder',
+      icon: <FolderOpenIcon size={IconSize.action} />,
+      show: e => mode === 'search' && !dirLike(e),
+    },
+    {
       id: 'save', label: 'Save to disk',
       icon: <DownloadIcon size={IconSize.action} />,
       show: e => fileLike(e),
@@ -562,9 +574,24 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
     },
   ];
 
+  /*
+    From a search hit to where it lives: the file list, at its folder, with
+    the file selected and flashed — the way Quick Search lands on a file.
+  */
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const reveal = (full: string) => {
+    setMode('files');
+    void go(parentOf(full));
+    setSelected(full);
+    setFlash(full);
+    clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(undefined), 2600);
+  };
+
   const onAction = (id: string, e: FileBrowserEntry) => {
     const full = (e as FileBrowserEntry & { fullPath?: string }).fullPath ?? e.name;
     if (id === 'open') setOpen({ path: full, name: e.name, size: e.size });
+    else if (id === 'reveal') reveal(full);
     else if (id === 'save') postMsg({ type: 'files:download', ...target, path: full, name: e.name });
     else if (id === 'saveDir') postMsg({ type: 'files:downloadDir', ...target, path: full, name: e.name });
   };
@@ -595,6 +622,10 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
       ...(can('open') ? [{
         id: 'open', label: 'Open as text',
         icon: <ExternalLinkIcon size={IconSize.action} />, iconColor: ACCENT,
+      }] : []),
+      ...(mode === 'search' && !dirLike(e) ? [{
+        id: 'reveal', label: 'Show in its folder',
+        icon: <FolderOpenIcon size={IconSize.action} />, iconColor: 'var(--color-warning)',
       }] : []),
       ...(dirLike(e) ? [{
         id: 'go', label: 'Open folder',
@@ -1251,7 +1282,8 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
                       { key: <LayersIcon size={IconSize.action} />,
                         text: 'the walk stops at the depth beside the box — raise it to look deeper' },
                       { key: <FolderIcon size={IconSize.action} />,
-                        text: searchFrom === 'pod' ? 'the whole pod was searched, except /proc, /sys and /dev'
+                        text: searchFrom === 'pod'
+                          ? `the whole pod was searched, except /proc, /sys and /dev${hits.skipped?.length ? ` and the network volumes ${hits.skipped.map(v => v.path).join(', ')}` : ''}`
                           : 'only the folder above was searched — Whole pod starts at /' },
                       { key: <CodeBracketsIcon size={IconSize.action} />,
                         text: 'a name matches part of the filename, as find -name does; a regex matches the path' },
@@ -1272,7 +1304,7 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
                       variant="medallion"
                       icon={<SearchIcon size={IconSize.medallion} />}
                       title="Find a file in this pod"
-                      message="One `find`, from / or from the folder above. Hits show as they are found; Enter runs it."
+                      message="From / or from the folder above, walked by the pod's own python when it has one, else by find. Hits show as they are found; Enter runs it."
                       accentColor={ACCENT}
                       /*
                         Plain words as keys, not chips.
@@ -1302,7 +1334,19 @@ export function ExplorerTab({ context, namespace, pod, container, containers, on
                   {' '}· capped — narrow the pattern or the start path to see the rest
                 </span>
               )}
-              {' · '}<span style={{ opacity: 0.75 }}>{hits.command}</span>
+              {hits.engine === 'python' && !searching && (
+                <span style={{ opacity: 0.75 }}>
+                  {' '}· walked by the pod&rsquo;s python{hits.scanned !== undefined ? `, ${hits.scanned.toLocaleString()} entries` : ''}
+                  {hits.ms !== undefined ? ` in ${(hits.ms / 1000).toFixed(1)} s` : ''}
+                </span>
+              )}
+              {!!hits.skipped?.length && (
+                <span style={{ color: 'var(--color-warning)' }}
+                      title="Network and FUSE volumes are slow to walk, so a search from above them leaves them out. Start the search inside one to include it.">
+                  {' '}· left out {hits.skipped.map(v => `${v.path} (${v.fs})`).join(', ')} — search inside to include
+                </span>
+              )}
+              {hits.engine !== 'python' && <>{' · '}<span style={{ opacity: 0.75 }}>{hits.command}</span></>}
             </>
           )}
         />

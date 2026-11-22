@@ -148,13 +148,16 @@ export function GrpcRequestConfig() {
                 bodyContentType="application/grpc"
                 authType={activeTab.authType}
                 existingHeaders={(activeTab.grpcMetadata || []).map(m => ({ id: m.id, key: m.key, value: m.value, enabled: m.enabled }))}
-                onAddHeader={(key, value) => {
+                onAddHeaders={(pairs) => {
                   const rows = [...(activeTab.grpcMetadata || [])];
-                  const empty = rows.findIndex(r => !r.key);
-                  if (empty >= 0) {
-                    rows[empty] = { ...rows[empty], key, value, enabled: true };
-                  } else {
-                    rows.push({ id: crypto.randomUUID(), key, value, description: '', enabled: true });
+                  /* All at once: one write, or each pair would start again from the rows before the click. */
+                  for (const { key, value } of pairs) {
+                    const at = rows.findIndex(r => !r.key || r.key.toLowerCase() === key.toLowerCase());
+                    if (at >= 0) {
+                      rows[at] = { ...rows[at], key, value, enabled: true };
+                    } else {
+                      rows.push({ id: crypto.randomUUID(), key, value, description: '', enabled: true });
+                    }
                   }
                   updateTab(activeTab.id, { grpcMetadata: rows, dirty: true });
                 }}

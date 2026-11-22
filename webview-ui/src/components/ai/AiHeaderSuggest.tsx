@@ -12,7 +12,9 @@ import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHand
 import { useTabsStore } from '../../store/tabs-store';
 import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import type { KeyValueRow } from '../shared';
-import { CloseIcon, PlusIcon } from '../../icons';
+import { CloseIcon, PlusIcon, SparkleIcon } from '../../icons';
+import { IconButtonView } from '@salilvnair/dui';
+import './ai-header-suggest.css';
 import { postMsg } from '../../vscode';
 import { sendAiRequest } from '../../services/ai/ai-client';
 
@@ -36,7 +38,8 @@ interface Props {
   bodyContentType: string;
   authType: string;
   existingHeaders: KeyValueRow[];
-  onAddHeader: (key: string, value: string) => void;
+  /** Every pair in one call: the caller writes them in a single update. */
+  onAddHeaders: (pairs: { key: string; value: string }[]) => void;
 }
 
 // ─── JSON parser — strips markdown fences if present ─────────────────────────
@@ -65,7 +68,7 @@ function parseSuggestions(raw: string): HeaderSuggestion[] {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export const AiHeaderSuggest = forwardRef<AiHeaderSuggestHandle, Props>(function AiHeaderSuggest(
-  { tabId, method, url, bodyContentType, authType, existingHeaders, onAddHeader }: Props,
+  { tabId, method, url, bodyContentType, authType, existingHeaders, onAddHeaders }: Props,
   ref,
 ) {
   const [suggestions, setSuggestions] = useState<HeaderSuggestion[]>([]);
@@ -163,27 +166,21 @@ export const AiHeaderSuggest = forwardRef<AiHeaderSuggestHandle, Props>(function
     });
   }, [method, url, bodyContentType, authType, existingHeaders, activeTab, resolve]);
 
-  // ── Add a single suggestion ───────────────────────────────────────────────
+  // ── Add one, or all ──────────────────────────────────────────────────────
 
-  const handleAdd = useCallback((s: HeaderSuggestion) => {
-    onAddHeader(s.key, s.value);
-    setDismissed(prev => new Set(prev).add(s.key));
-  }, [onAddHeader]);
+  const close = useCallback(() => { setVisible(false); setSuggestions([]); setError(''); }, []);
 
-  // ── Add all suggestions at once ───────────────────────────────────────────
-
-  const handleAddAll = useCallback(() => {
-    const toAdd = suggestions.filter(s => !dismissed.has(s.key));
-    toAdd.forEach(s => onAddHeader(s.key, s.value));
-    setDismissed(prev => {
-      const next = new Set(prev);
-      toAdd.forEach(s => next.add(s.key));
-      return next;
-    });
-  }, [suggestions, dismissed, onAddHeader]);
+  const add = useCallback((list: HeaderSuggestion[]) => {
+    if (!list.length) return;
+    onAddHeaders(list.map(s => ({ key: s.key, value: s.value })));
+    const next = new Set(dismissed);
+    list.forEach(s => next.add(s.key));
+    setDismissed(next);
+    /* Nothing left to offer: the panel has done its job. */
+    if (suggestions.every(s => next.has(s.key))) close();
+  }, [onAddHeaders, dismissed, suggestions, close]);
 
   const visibleSuggestions = suggestions.filter(s => !dismissed.has(s.key));
-  const allAdded = suggestions.length > 0 && visibleSuggestions.length === 0;
 
   useImperativeHandle(ref, () => ({ trigger: triggerSuggest, loading }), [triggerSuggest, loading]);
 
@@ -192,99 +189,52 @@ export const AiHeaderSuggest = forwardRef<AiHeaderSuggestHandle, Props>(function
   if (!visible && !loading) return null;
 
   return (
-    <div className="mb-2">
-      {/* Inline status row */}
-      <div className="flex items-center gap-2 px-1 mb-1.5">
-        {/* Loading indicator */}
-        {loading && (
-          <div className="flex gap-0.5 items-center">
-            {[0, 120, 240].map(d => (
-              <span key={d} className="w-[4px] h-[4px] rounded-full animate-pulse" style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
-            ))}
-            <span className="text-[11px] ml-1.5" style={{ color: ACCENT }}>Suggesting…</span>
-          </div>
-        )}
-
-        {/* Error */}
-        {error && !loading && (
-          <span className="text-[10px] text-[var(--color-error)] truncate max-w-[280px]">{error}</span>
-        )}
-
-        {/* "Add all" */}
-        {visibleSuggestions.length > 1 && !loading && (
-          <button
-            type="button"
-            onClick={handleAddAll}
-            className="text-[10px] cursor-pointer transition-colors"
-            style={{ color: ACCENT }}
-          >
-            Add all ({visibleSuggestions.length})
+    <div className="dk-aihs" role="region" aria-label="Suggested headers">
+      <div className="dk-aihs__head">
+        <SparkleIcon size={13} className="dk-aihs__spark" />
+        <span className="dk-aihs__title">{loading ? 'Asking for headers' : 'Suggested headers'}</span>
+        {!loading && visibleSuggestions.length > 0 && <span className="dk-aihs__count">{visibleSuggestions.length}</span>}
+        {loading && <span className="dk-aihs__dots" aria-hidden="true"><i /><i /><i /></span>}
+        <span className="dk-aihs__spacer" />
+        {!loading && visibleSuggestions.length > 1 && (
+          <button type="button" className="dk-aihs__all" onClick={() => add(visibleSuggestions)}>
+            <PlusIcon size={11} /> Add all {visibleSuggestions.length}
           </button>
         )}
-
-        {/* Dismiss */}
-        {(suggestions.length > 0 || allAdded || error) && !loading && (
-          <button
-            type="button"
-            onClick={() => { setVisible(false); setSuggestions([]); setError(''); }}
-            className="ml-auto w-[18px] h-[18px] flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer transition-opacity"
-            title="Dismiss"
-          >
-            <CloseIcon size={10} />
-          </button>
+        {!loading && error && (
+          <button type="button" className="dk-aihs__all" onClick={triggerSuggest}>Try again</button>
         )}
+        <IconButtonView size="xs" icon={<CloseIcon size={11} />} tooltip="Dismiss" aria-label="Dismiss suggestions" onClick={close} />
       </div>
 
-      {/* Suggestion chips */}
-      {visible && visibleSuggestions.length > 0 && !loading && (
-        <div className="flex flex-wrap gap-1.5 px-1 mb-2">
-          {visibleSuggestions.map(s => (
-            <SuggestionChip key={s.key} suggestion={s} onAdd={handleAdd} />
+      {error && !loading && <div className="dk-aihs__error">{error}</div>}
+
+      {loading && (
+        <div className="dk-aihs__list">
+          {[62, 48, 70].map(w => (
+            <div key={w} className="dk-aihs__row is-ghost"><span className="dk-aihs__shimmer" style={{ width: `${w}%` }} /></div>
           ))}
-          {allAdded && (
-            <span className="text-[11px] text-[var(--color-text-muted)] italic">All suggestions added ✓</span>
-          )}
         </div>
       )}
 
-      {/* Loading skeleton chips */}
-      {loading && (
-        <div className="flex flex-wrap gap-1.5 px-1 mb-2">
-          {[80, 120, 100, 90].map(w => (
-            <div
-              key={w}
-              className="h-[24px] rounded-full animate-pulse"
-              style={{ width: w, backgroundColor: `color-mix(in srgb, ${ACCENT} 12%, var(--color-surface-border))` }}
-            />
+      {!loading && visibleSuggestions.length > 0 && (
+        <div className="dk-aihs__list">
+          {visibleSuggestions.map(s => (
+            <button
+              key={s.key}
+              type="button"
+              className="dk-aihs__row"
+              title={`Add ${s.key}: ${s.value}`}
+              onClick={() => add([s])}
+            >
+              <span className="dk-aihs__key">{s.key}</span>
+              <span className="dk-aihs__value">{s.value}</span>
+              {s.reason && <span className="dk-aihs__why">{s.reason}</span>}
+              <span className="dk-aihs__add"><PlusIcon size={11} /> Add</span>
+            </button>
           ))}
         </div>
       )}
     </div>
   );
 });
-
-// ─── Single suggestion chip ───────────────────────────────────────────────────
-
-function SuggestionChip({ suggestion, onAdd }: { suggestion: HeaderSuggestion; onAdd: (s: HeaderSuggestion) => void }) {
-  const [hovered, setHovered] = useState(false);
-
-  return (
-    <button
-      type="button"
-      onClick={() => onAdd(suggestion)}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className="relative flex items-center gap-1.5 h-[24px] pl-2.5 pr-2 rounded-full text-[11px] font-mono cursor-pointer transition-all border"
-      style={{
-        borderColor: `color-mix(in srgb, ${ACCENT} ${hovered ? '45%' : '25%'}, transparent)`,
-        backgroundColor: hovered ? `color-mix(in srgb, ${ACCENT} 14%, transparent)` : `color-mix(in srgb, ${ACCENT} 7%, transparent)`,
-        color: hovered ? ACCENT : 'var(--color-text-primary)',
-      }}
-      title={suggestion.reason || `Add ${suggestion.key}: ${suggestion.value}`}
-    >
-      <PlusIcon size={9} style={{ color: ACCENT, flexShrink: 0 }} />
-      <span style={{ color: hovered ? ACCENT : 'var(--color-text-muted)' }}>{suggestion.key}:</span>
-      <span className="max-w-[140px] truncate">{suggestion.value}</span>
-    </button>
-  );
-}

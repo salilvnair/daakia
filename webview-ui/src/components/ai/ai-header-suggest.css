@@ -1,0 +1,140 @@
+/* Suggested headers — AiHeaderSuggest.tsx. A quiet panel in the AI colour, one row per header. */
+
+.dk-aihs {
+  --aihs: var(--color-protocol-ai);
+  margin: 6px 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--aihs) 24%, var(--color-surface-border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--aihs) 4%, var(--color-panel, transparent));
+  overflow: hidden;
+  animation: fadeSlideIn 120ms ease-out;
+}
+
+.dk-aihs__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 6px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--aihs) 14%, transparent);
+}
+.dk-aihs__spark { color: var(--aihs); flex-shrink: 0; }
+.dk-aihs__title { font-size: 12px; font-weight: 600; color: var(--color-text-primary); }
+.dk-aihs__count {
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--aihs);
+  background: color-mix(in srgb, var(--aihs) 14%, transparent);
+}
+.dk-aihs__spacer { flex: 1; }
+
+.dk-aihs__all {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--aihs) 35%, transparent);
+  background: color-mix(in srgb, var(--aihs) 10%, transparent);
+  color: var(--aihs);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms;
+}
+.dk-aihs__all:hover {
+  background: color-mix(in srgb, var(--aihs) 18%, transparent);
+  border-color: color-mix(in srgb, var(--aihs) 55%, transparent);
+}
+
+.dk-aihs__error {
+  padding: 8px 10px;
+  font-size: 11.5px;
+  color: var(--color-error);
+}
+
+.dk-aihs__list { display: flex; flex-direction: column; padding: 4px; }
+
+.dk-aihs__row {
+  display: grid;
+  grid-template-columns: minmax(110px, max-content) minmax(0, 1fr) minmax(0, 1.2fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 100ms;
+}
+.dk-aihs__row:hover,
+.dk-aihs__row:focus-visible {
+  background: color-mix(in srgb, var(--aihs) 9%, transparent);
+  outline: none;
+}
+.dk-aihs__key {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--aihs) 70%, var(--color-text-primary));
+  white-space: nowrap;
+}
+.dk-aihs__value,
+.dk-aihs__why {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dk-aihs__value { font-family: var(--font-mono, monospace); font-size: 12px; color: var(--color-text-primary); }
+.dk-aihs__why { font-size: 11.5px; color: var(--color-text-muted); }
+.dk-aihs__add {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--aihs);
+  opacity: 0;
+  transition: opacity 100ms;
+}
+.dk-aihs__row:hover .dk-aihs__add,
+.dk-aihs__row:focus-visible .dk-aihs__add { opacity: 1; }
+
+/* Waiting: three soft bars where the rows will be. */
+.dk-aihs__row.is-ghost { cursor: default; display: flex; }
+.dk-aihs__row.is-ghost:hover { background: transparent; }
+.dk-aihs__shimmer {
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--aihs) 10%, transparent) 0%,
+    color-mix(in srgb, var(--aihs) 22%, transparent) 50%,
+    color-mix(in srgb, var(--aihs) 10%, transparent) 100%);
+  background-size: 200% 100%;
+  animation: dk-aihs-shimmer 1.2s linear infinite;
+}
+@keyframes dk-aihs-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+.dk-aihs__dots { display: inline-flex; gap: 3px; margin-left: 2px; }
+.dk-aihs__dots i {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: var(--aihs);
+  animation: dk-aihs-dot 1s ease-in-out infinite;
+}
+.dk-aihs__dots i:nth-child(2) { animation-delay: 150ms; }
+.dk-aihs__dots i:nth-child(3) { animation-delay: 300ms; }
+@keyframes dk-aihs-dot { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .dk-aihs, .dk-aihs__shimmer, .dk-aihs__dots i { animation: none; }
+}

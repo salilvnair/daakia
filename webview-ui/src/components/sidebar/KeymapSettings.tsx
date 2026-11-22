@@ -27,6 +27,7 @@ interface Row {
   id: string;
   label: string;
   category: string;
+  field?: boolean;
   defaultCombo: KeyCombo | null;
   activeCombo: KeyCombo | null;
   customized: boolean;
@@ -86,7 +87,9 @@ export function KeymapSettings() {
   /** Another shortcut already bound to the combo being captured. */
   const conflict = useMemo(() => {
     if (!captured || !capturingId) return null;
-    return rows.find(r => r.id !== capturingId && combosEqual(r.activeCombo, captured)) ?? null;
+    // A field's own shortcut (Ctrl+Enter in a bulk box) lives beside the global one on purpose.
+    const capturingField = !!rows.find(r => r.id === capturingId)?.field;
+    return rows.find(r => r.id !== capturingId && !!r.field === capturingField && combosEqual(r.activeCombo, captured)) ?? null;
   }, [captured, capturingId, rows]);
 
   // Live capture. Listens in the CAPTURE phase and swallows the event so the shortcut being

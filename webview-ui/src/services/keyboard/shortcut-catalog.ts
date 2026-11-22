@@ -12,6 +12,8 @@ export interface ShortcutMeta {
   id: string;
   label: string;
   category: string;
+  /** Handled by a focused field, not the window: may share a combo with a global shortcut. */
+  field?: boolean;
 }
 
 export const SHORTCUT_CATALOG: ShortcutMeta[] = [
@@ -31,6 +33,7 @@ export const SHORTCUT_CATALOG: ShortcutMeta[] = [
   { id: 'app.send-request',         label: 'Send request',             category: 'Request' },
   { id: 'app.save-request',         label: 'Save request',             category: 'Request' },
   { id: 'app.focus-url',            label: 'Focus URL bar',            category: 'Request' },
+  { id: 'kv.bulk-done',             label: 'Bulk edit: done, back to rows (in the bulk box)', category: 'Request', field: true },
 
   // ── Tabs ──
   { id: 'app.new-tab',              label: 'New tab, like the one in front', category: 'Tabs' },

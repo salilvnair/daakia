@@ -49,6 +49,19 @@ export interface Release {
  */
 export const RELEASES: Release[] = [
   {
+    version: '3.4.5',
+    date: '2026-11-21',
+    headline: 'Headers bulk edit that finishes your lines like a URL bar, Add all that adds all, a connectivity test that can POST or just open a port, and a pod file search that walks with the pod\'s own python.',
+    lines: [
+      { kind: 'feature', area: 'Headers', text: 'Bulk edit suggests as you type, like the URL bar: whole Key: value lines under the caret, your own headers first, then values for the header before the colon. Arrows, Enter or Tab, Escape; Ctrl+Space asks again.' },
+      { kind: 'feature', area: 'Headers', text: 'Ctrl+Enter or a click outside the table turns bulk edit back into rows, without sending the request. Rebindable in the Keymap as "Bulk edit: done, back to rows".' },
+      { kind: 'fix', area: 'AI', text: 'Add all on suggested headers adds all of them — it added only the last — in REST, GraphQL, SOAP and gRPC. The suggestions are a panel of rows with the reason for each, and it closes once everything is added.' },
+      { kind: 'feature', area: 'dk8s', text: 'Connectivity test sends any method with headers and a body, and shows the start of the response; a box skips the certificate check for an internal https service.' },
+      { kind: 'feature', area: 'dk8s', text: 'Connectivity test can open a TCP connection to host:port — a database, a broker, a cache — optionally with a TLS handshake, or just resolve a name with the pod\'s own DNS.' },
+      { kind: 'change', area: 'dk8s', text: 'Pod file search walks with the pod\'s python when it has one: one process, no ls per hit, about six times faster with many hits, and network volumes left out unless the search starts inside one — the results say which. A hit can be shown in its folder.' },
+    ],
+  },
+  {
     version: '3.4.4',
     date: '2026-11-18',
     headline: 'Tab groups, a tab bar that copes with a hundred tabs, Ctrl+N that makes another of whatever is in front, filters in both imports, and a shortcut for nearly everything.',

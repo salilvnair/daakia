@@ -68,4 +68,50 @@ describe('the connectivity test', () => {
     expect(posted.find(m => m.type === 'py:conn')).toMatchObject({ url: 'http://wiremock:8080/__admin' });
     act(() => root.unmount());
   });
+
+  it('sends a POST with its headers and body, and labels a JSON body', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() => root.render(<ConnTestDialog target={target} onClose={() => {}} />));
+    await act(async () => { button('POST').click(); });
+    const [url] = [...document.querySelectorAll('input')] as HTMLInputElement[];
+    type(url, 'https://orders.internal/v1/orders');
+    await act(async () => { button('Body').click(); });
+    const body = document.querySelector('textarea[aria-label="Request body"]') as HTMLTextAreaElement;
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(body, '{"id":1}');
+      body.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => { button('Test').click(); });
+    const sent = posted.find(m => m.type === 'py:conn')!;
+    expect(sent).toMatchObject({ url: 'https://orders.internal/v1/orders', method: 'POST', body: '{"id":1}', headers: [{ key: 'Content-Type', value: 'application/json' }] });
+    expect(JSON.stringify(audited)).not.toContain('orders.internal');
+    expect(JSON.stringify(audited)).toContain('POST');
+    act(() => root.unmount());
+  });
+
+  it('opens a TCP connection and shows the TLS handshake', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() => root.render(<ConnTestDialog target={target} onClose={() => {}} />));
+    await act(async () => { button('TCP connection').click(); });
+    const [hp] = [...document.querySelectorAll('input[type="text"], input:not([type])')] as HTMLInputElement[];
+    type(hp, 'postgres.db:5432');
+    await act(async () => { button('Test').click(); });
+    const sent = posted.find(m => m.type === 'py:conn')!;
+    expect(sent).toMatchObject({ kind: 'tcp', url: 'postgres.db:5432' });
+    expect(sent).not.toHaveProperty('method');
+    await reply({ type: 'py:conn', reqId: sent.reqId, result: {
+      kind: 'tcp', url: 'postgres.db:5432', ok: true,
+      dns: { ok: true, ms: 2, host: 'postgres.db', addresses: ['10.1.2.3'] },
+      tcp: { ok: true, ms: 4, to: 'postgres.db:5432' },
+      http: { ok: false },
+    } });
+    expect(document.body.textContent).toContain('Connected to postgres.db:5432');
+    expect(document.body.textContent).toContain('TCPok4 ms');
+    expect(document.body.textContent).not.toContain('HTTPok');
+    act(() => root.unmount());
+  });
 });

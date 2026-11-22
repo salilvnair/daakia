@@ -63,10 +63,37 @@ export function unregisterShortcut(id: string): void {
   if (idx >= 0) registry.splice(idx, 1);
 }
 
+/*
+  Shortcuts that belong to a focused field, not to the window — Ctrl+Enter in
+  a bulk-edit box means "done", while everywhere else it sends the request.
+  The global listener never matches these; the field asks `matchesShortcut`
+  in its own keydown and stops the event there. Declaring them here is what
+  puts them on the Keymap page, rebindable like the rest.
+*/
+const declared = new Map<string, { combo: KeyCombo; description?: string }>();
+
+export function declareShortcut(id: string, combo: KeyCombo, description?: string): void {
+  declared.set(id, { combo, description });
+}
+
+/* Declared here, not in the field's module, so the Keymap page lists it before any such field has loaded. */
+declareShortcut('kv.bulk-done', { key: 'Enter', ctrlKey: true }, 'Bulk edit: done, back to rows');
+
+/** True when `e` is the combo in force for a declared (or registered) shortcut. */
+export function matchesShortcut(e: KeyboardEvent | { key: string; code?: string; altKey: boolean; ctrlKey: boolean; shiftKey: boolean; metaKey: boolean }, id: string): boolean {
+  const fallback = declared.get(id)?.combo ?? registry.find(s => s.id === id)?.combo;
+  if (!fallback) return false;
+  const active = resolveCombo(id, fallback);
+  return !!active && matchesCombo(e as KeyboardEvent, active);
+}
+
 /** Every registered shortcut with the DEFAULT combo it registered under — the Keymap
  *  settings section lists these and layers user overrides on top. */
 export function getRegisteredShortcuts(): ReadonlyArray<{ id: string; combo: KeyCombo; description?: string }> {
-  return registry.map(({ id, combo, description }) => ({ id, combo, description }));
+  return [
+    ...registry.map(({ id, combo, description }) => ({ id, combo, description })),
+    ...[...declared].filter(([id]) => !registry.some(s => s.id === id)).map(([id, d]) => ({ id, ...d })),
+  ];
 }
 
 /*

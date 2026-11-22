@@ -4,6 +4,61 @@ All notable changes to the Daakia API Client extension are documented here.
 
 ---
 
+## [3.4.5] — 2026-11-21
+
+Headers bulk edit that finishes your lines like a URL bar, Add all that adds
+all, a connectivity test that can POST or just open a port, and a pod file
+search that walks with the pod's own python.
+
+### Added
+
+- **Suggestions in headers bulk edit**, like the URL bar: type a header and
+  whole `Key: value` lines appear under the caret, your own headers from open
+  tabs and saved requests first, then the common ones. After the colon it
+  offers values for that header. Arrows to move, Enter or Tab to take one,
+  Escape to close, Ctrl+Space to ask again. In REST, GraphQL and SOAP headers
+  and a collection's headers.
+- **Leave bulk edit with Ctrl+Enter or a click outside the table**; the text
+  goes back into rows. Ctrl+Enter in the box does not send the request. The
+  combo is "Bulk edit: done, back to rows" in Settings → Keymap.
+- **Connectivity test: any method, headers and a body.** POST, PUT, PATCH,
+  DELETE, HEAD and OPTIONS as well as GET; headers with the same suggestions;
+  a JSON body without a Content-Type is sent as application/json. The answer
+  shows the first 4 KB of the response. A box skips the certificate check for
+  an internal https service.
+- **Connectivity test: TCP connection** to host:port, for a database, a broker
+  or a cache — anything that does not speak HTTP. A URL such as
+  `redis://cache:6379` works too. Optionally shakes hands over TLS and shows
+  the version, cipher and certificate.
+- **Connectivity test: DNS lookup** — every address the pod's own resolver
+  gives for a name.
+- **Show in its folder** on a pod file search hit: the Explorer opens the
+  folder it lives in with the file selected.
+
+### Changed
+
+- **Pod file search walks with the pod's own python** when it has one, and
+  with `find` when it does not. One process tests names as it walks instead of
+  starting `ls` for every hit — about six times faster on a search with
+  thousands of hits — and network and FUSE volumes (Azure Files, blobfuse)
+  are left out unless the search starts inside one. The results say which
+  volumes were left out, and how many entries were walked in how long. Quick
+  Search's Files box searches the same way.
+- **Suggested headers** from AI are a panel of rows — the header, its value
+  and why — with Add all and a close button. It closes itself once everything
+  is added.
+
+### Fixed
+
+- **Add all on suggested headers added only one.** Each header was written
+  over the rows as they were before the click, so only the last survived. All
+  are now added in one go, in REST, GraphQL, SOAP and gRPC, and a header
+  already present gets the suggested value instead of a duplicate row.
+- The suggestions strip left its close mark behind, alone, after everything
+  in it had been added.
+
+---
+
 ## [3.4.4] — 2026-11-18
 
 Tab groups, a tab bar that copes with a hundred tabs, Ctrl+N that makes
