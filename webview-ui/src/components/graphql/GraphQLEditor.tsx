@@ -25,6 +25,7 @@ import { AiGqlQueryBuilderDrawer, type AiGqlQueryBuilderDrawerHandle } from '../
 import { AiGqlSchemaExplainerModal } from '../ai/AiGqlSchemaExplainerModal';
 import { logUiEvent, isAuditEventEnabled } from '../../store/ui-audit-store';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
+import { BulkEditAssist } from '../shared/controls/BulkEditAssist';
 
 type EditorTab = 'query' | 'variables' | 'headers' | 'authorization' | 'scripts' | 'subscription' | 'settings';
 
@@ -278,32 +279,34 @@ export function GraphQLEditor() {
           <div className="h-full flex flex-col overflow-hidden"
                data-menu="kv" data-table="headers" data-label="the headers">
             {/* Headers — ditto same as REST HeadersTab: KVT with toolbarExtra sparkle + headless AiHeaderSuggest */}
-            <KeyValueTableView
-              highlightVars
-              rows={activeTab.headers}
-              onChange={(rows) => updateTab(activeTab.id, { headers: rows })}
-              placeholder={{ key: 'Header', value: 'Value' }}
-              autocompleteKeys
-              maskSensitive
-              label="Headers"
-              accentColor={ACCENT}
-              toolbarExtra={
-                aiEnabled('headerAutocomplete') ? (
-                  <IconButtonView
-                    icon={<SparkleIcon size={13} />}
-                    size="md"
-                    title="Suggest headers"
-                    accentColor="var(--color-protocol-ai)"
-                    disabled={aiHeaderLoading}
-                    onClick={() => {
-                      setAiHeaderLoading(true);
-                      aiHeaderSuggestRef.current?.trigger();
-                      setTimeout(() => setAiHeaderLoading(false), 300);
-                    }}
-                  />
-                ) : undefined
-              }
-            />
+            <BulkEditAssist suggest="headers">
+              <KeyValueTableView
+                highlightVars
+                rows={activeTab.headers}
+                onChange={(rows) => updateTab(activeTab.id, { headers: rows })}
+                placeholder={{ key: 'Header', value: 'Value' }}
+                autocompleteKeys
+                maskSensitive
+                label="Headers"
+                accentColor={ACCENT}
+                toolbarExtra={
+                  aiEnabled('headerAutocomplete') ? (
+                    <IconButtonView
+                      icon={<SparkleIcon size={13} />}
+                      size="md"
+                      title="Suggest headers"
+                      accentColor="var(--color-protocol-ai)"
+                      disabled={aiHeaderLoading}
+                      onClick={() => {
+                        setAiHeaderLoading(true);
+                        aiHeaderSuggestRef.current?.trigger();
+                        setTimeout(() => setAiHeaderLoading(false), 300);
+                      }}
+                    />
+                  ) : undefined
+                }
+              />
+            </BulkEditAssist>
             {aiEnabled('headerAutocomplete') && (
               <AiHeaderSuggest
                 ref={aiHeaderSuggestRef}
@@ -313,13 +316,16 @@ export function GraphQLEditor() {
                 bodyContentType="application/json"
                 authType={activeTab.authType}
                 existingHeaders={activeTab.headers}
-                onAddHeader={(key, value) => {
+                onAddHeaders={(pairs) => {
                   const rows = [...activeTab.headers];
-                  const empty = rows.findIndex(r => !r.key);
-                  if (empty >= 0) {
-                    rows[empty] = { ...rows[empty], key, value, enabled: true };
-                  } else {
-                    rows.push({ id: crypto.randomUUID(), key, value, enabled: true });
+                  /* All at once: one write, or each pair would start again from the rows before the click. */
+                  for (const { key, value } of pairs) {
+                    const at = rows.findIndex(r => !r.key || r.key.toLowerCase() === key.toLowerCase());
+                    if (at >= 0) {
+                      rows[at] = { ...rows[at], key, value, enabled: true };
+                    } else {
+                      rows.push({ id: crypto.randomUUID(), key, value, enabled: true });
+                    }
                   }
                   updateTab(activeTab.id, { headers: rows });
                 }}

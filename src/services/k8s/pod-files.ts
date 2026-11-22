@@ -469,6 +469,13 @@ export interface SearchResult {
   capped: boolean;
   command: string;
   error?: string;
+  /** Which walk answered: the pod's python, or `find`. */
+  engine?: 'python' | 'find';
+  /** Network and FUSE volumes the python walk left out — search inside one to include it. */
+  skipped?: { path: string; fs: string }[];
+  /** Entries the walk looked at, and how long it took — python only. */
+  scanned?: number;
+  ms?: number;
 }
 
 /**
@@ -568,8 +575,29 @@ export function searchScript(o: SearchOptions): string {
 export async function searchFiles(
   t: PodTarget, o: SearchOptions, onHits?: (hits: SearchHit[]) => void,
 ): Promise<SearchResult> {
-  const limit = o.limit ?? 500;
   const args = execArgs(t, ['sh', '-c', searchScript(o)]);
+  return streamSearch(args, o, line => {
+    const e = parseLsLine(line, '');
+    return e && {
+      path: e.name,
+      name: e.name.slice(e.name.lastIndexOf('/') + 1),
+      kind: e.kind,
+      size: e.kind === 'dir' ? undefined : e.size,
+      modified: e.modified,
+    };
+  }, onHits);
+}
+
+/**
+ * Run a search command and read its hits as they print — shared by the `find`
+ * search and the python one (pod-search-py), which differ only in what a line
+ * means. `read` turns a line into a hit, or into nothing; a line that is not a
+ * hit can still be noted by the caller inside `read`.
+ */
+export async function streamSearch(
+  args: string[], o: SearchOptions, read: (line: string) => SearchHit | undefined, onHits?: (hits: SearchHit[]) => void,
+): Promise<SearchResult> {
+  const limit = o.limit ?? 500;
   const command = showCommand(args);
   const hits: SearchHit[] = [];
   let capped = false;
@@ -602,16 +630,9 @@ export async function searchFiles(
 
     const take = (line: string) => {
       if (!line || capped) return;
-      const e = parseLsLine(line, '');
-      if (!e) return;
+      const hit = read(line);
+      if (!hit) return;
       if (hits.length >= limit) { capped = true; stop(); return; }
-      const hit: SearchHit = {
-        path: e.name,
-        name: e.name.slice(e.name.lastIndexOf('/') + 1),
-        kind: e.kind,
-        size: e.kind === 'dir' ? undefined : e.size,
-        modified: e.modified,
-      };
       hits.push(hit);
       pending.push(hit);
       // A few at a time, not one message per line and not one at the end.

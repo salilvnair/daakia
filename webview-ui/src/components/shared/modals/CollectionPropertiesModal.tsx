@@ -6,6 +6,7 @@ import { getMethodColors } from '../../../colors/daakia-colors';
 import { ExecutionSettingsEditor } from '../settings/ExecutionSettingsEditor';
 import { useEffectiveSettings } from '../settings/use-effective-settings';
 import type { ExecutionSettings } from '../settings/execution-settings';
+import { BulkEditAssist } from '../controls/BulkEditAssist';
 
 export interface CollectionProperties {
   headers: KeyValueTableRow[];
@@ -162,16 +163,18 @@ export function CollectionPropertiesModal({ open, collectionId, collectionName, 
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: '16px 18px' }}>
         {activeTab === 'headers' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, minHeight: 0, overflowY: 'auto' }}>
-            <KeyValueTableView
-              highlightVars
-              rows={headers}
-              onChange={setHeaders}
-              placeholder={{ key: 'Header', value: 'Value' }}
-              label="Headers"
-              maskSensitive
-              autocompleteKeys
-              showDescription
-            />
+            <BulkEditAssist suggest="headers">
+              <KeyValueTableView
+                highlightVars
+                rows={headers}
+                onChange={setHeaders}
+                placeholder={{ key: 'Header', value: 'Value' }}
+                label="Headers"
+                maskSensitive
+                autocompleteKeys
+                showDescription
+              />
+            </BulkEditAssist>
             <p className="text-[11px] text-[var(--color-text-muted)] flex items-center gap-1.5 px-1">
               <InfoCircleIcon size={12} className="shrink-0" />
               This header will be sent with every request in this collection.

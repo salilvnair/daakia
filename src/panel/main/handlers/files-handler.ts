@@ -15,8 +15,35 @@ import {
 } from '../../../services/k8s/pod-files';
 import { podMounts } from '../../../services/k8s/pod-mounts';
 import { run, spawnKubectl } from '../../../services/k8s/kubectl';
+import { probeCapabilities } from '../../../services/k8s/pod-classify';
+import { pythonVerdict } from '../../../services/k8s/pod-python';
+import { searchFilesPy } from '../../../services/k8s/pod-search-py';
+import type { SearchHit, SearchOptions, SearchResult } from '../../../services/k8s/pod-files';
 
 type PostMessage = (msg: Record<string, unknown>) => void;
+
+/*
+  A search by the fastest walk the pod has.
+
+  The pod's python when it has one — a single process that tests names as it
+  walks and leaves network volumes out (pod-search-py) — and `find` when it
+  does not, or when python could not run the search at all. The capability
+  probe is cached, so asking costs nothing after the pod's first search.
+  `engine: 'find'` asks for find whatever the pod has.
+*/
+async function searchPod(
+  t: PodTarget, o: SearchOptions & { skipNetwork?: boolean }, engine: unknown, onHits: (hits: SearchHit[]) => void,
+): Promise<SearchResult> {
+  if (engine !== 'find') {
+    const caps = await probeCapabilities(t.context, t.namespace, t.pod, t.container).catch(() => undefined);
+    const verdict = caps && !caps.unreachable ? pythonVerdict(caps) : undefined;
+    if (verdict?.ok && verdict.interpreter) {
+      const r = await searchFilesPy(t, verdict.interpreter, o, onHits);
+      if (!r.error || r.hits.length || o.signal?.aborted) return r;
+    }
+  }
+  return { ...(await searchFiles(t, o, onHits)), engine: 'find' };
+}
 
 function targetOf(msg: Record<string, unknown>): PodTarget {
   return {
@@ -89,15 +116,16 @@ export async function handleFilesSearch(msg: Record<string, unknown>, post: Post
   const requestId = msg.requestId as string;
   const op = begin(requestId, 'files:search');
   try {
-    const r = await searchFiles(targetOf(msg), {
+    const r = await searchPod(targetOf(msg), {
       root: String(msg.root ?? '/'),
       pattern: String(msg.pattern ?? ''),
       maxDepth: typeof msg.maxDepth === 'number' ? msg.maxDepth : undefined,
       limit: typeof msg.limit === 'number' ? msg.limit : undefined,
       caseSensitive: !!msg.caseSensitive,
       kind: msg.kind === 'dir' || msg.kind === 'any' ? msg.kind : 'file',
+      skipNetwork: msg.skipNetwork !== false,
       signal: op.signal,
-    }, hits => post({ type: 'files:search:hits', requestId, hits }));
+    }, msg.engine, hits => post({ type: 'files:search:hits', requestId, hits }));
     post({ type: 'files:search', requestId, ...r, stopped: op.cancelled() });
   } catch (err) {
     post({
@@ -397,14 +425,15 @@ export async function handleFilesSearchMany(msg: Record<string, unknown>, post: 
     if (op.cancelled()) break;
     const t = targetOf(raw);
     try {
-      const r = await searchFiles(t, {
+      const r = await searchPod(t, {
         root,
         pattern,
         limit: typeof msg.limit === 'number' ? msg.limit : 200,
         maxDepth: typeof msg.maxDepth === 'number' ? msg.maxDepth : undefined,
         caseSensitive: !!msg.caseSensitive,
+        skipNetwork: msg.skipNetwork !== false,
         signal: op.signal,
-      }, hits => {
+      }, msg.engine, hits => {
         /* As they are found, so a slow pod shows its file before its walk ends. */
         if (!op.cancelled()) post({ type: 'files:searchMany:hits', requestId, pod: t.pod, namespace: t.namespace, context: t.context, hits });
       });
@@ -431,6 +460,8 @@ export async function handleFilesSearchMany(msg: Record<string, unknown>, post: 
         capped: r.capped,
         command: r.command,
         error: r.error,
+        engine: r.engine,
+        skipped: r.skipped,
       });
     } catch (err) {
       if (op.cancelled()) break;
